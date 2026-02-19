@@ -8,9 +8,11 @@
 #include "style/panelinheritstyle.h"
 
 #include <QLoggingCategory>
+
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QScreen>
+#include <cmath>
 
 Q_LOGGING_CATEGORY(lcDockView, "krema.shell.dockview")
 
@@ -119,6 +121,7 @@ void DockView::setMaxZoomFactor(qreal factor)
         return;
     }
     m_maxZoomFactor = factor;
+    updateSize();
     Q_EMIT maxZoomFactorChanged();
 }
 
@@ -160,15 +163,22 @@ DockPlatform *DockView::platform() const
 void DockView::updateSize()
 {
     const int dockHeight = m_iconSize + s_padding * 2;
+    const int surfaceHeight = dockHeight + zoomOverflowHeight();
     const int screenWidth = screen() ? screen()->geometry().width() : 0;
 
     setWidth(screenWidth);
-    setHeight(dockHeight);
+    setHeight(surfaceHeight);
 
     // Tell layer-shell the desired size.
     // Use screen width explicitly for QWindow; layer-shell will
     // auto-stretch width when left+right anchors are set.
-    m_platform->setSize(QSize(screenWidth, dockHeight));
+    // Surface height includes extra space above the panel for zoomed icons.
+    m_platform->setSize(QSize(screenWidth, surfaceHeight));
+}
+
+int DockView::zoomOverflowHeight() const
+{
+    return static_cast<int>(std::ceil(m_iconSize * (m_maxZoomFactor - 1.0)));
 }
 
 void DockView::applyBackgroundStyle()

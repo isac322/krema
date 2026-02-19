@@ -26,7 +26,7 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
 
     m_layerWindow->setLayer(LayerShellQt::Window::LayerTop);
     m_layerWindow->setScope(QStringLiteral("krema-dock"));
-    m_layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
+    m_layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     m_layerWindow->setCloseOnDismissed(false);
 
     applyAnchors();

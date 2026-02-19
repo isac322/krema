@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 import QtQuick
-import QtQuick.Controls
 
 /**
  * A single dock item (app icon + indicator).
@@ -16,6 +15,9 @@ Item {
     // Properties set by the Repeater delegate
     required property int index
     required property var model
+
+    // Display name for tooltip (readable by parent)
+    readonly property string displayName: model.display || ""
 
     // Configuration from DockView
     property int iconSize: 48
@@ -79,7 +81,7 @@ Item {
             }
             return ""
         }
-        sourceSize: Qt.size(iconSize, iconSize)
+        sourceSize: Qt.size(Math.ceil(iconSize * maxZoomFactor), Math.ceil(iconSize * maxZoomFactor))
         smooth: true
 
         // Highlight for active window
@@ -148,7 +150,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-        hoverEnabled: true
+        hoverEnabled: false
 
         onClicked: function(mouse) {
             if (mouse.button === Qt.LeftButton) {
@@ -159,14 +161,5 @@ Item {
                 // TODO: context menu
             }
         }
-    }
-
-    // Tooltip
-    ToolTip {
-        id: tooltip
-        visible: dockItem.panelMouseInside
-                 && Math.abs(dockItem.panelMouseX - dockItem.itemCenterX) < dockItem.iconSize / 2
-        text: dockItem.model.display || ""
-        delay: 200
     }
 }

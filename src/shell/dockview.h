@@ -76,6 +76,9 @@ private:
     void updateSize();
     void applyBackgroundStyle();
 
+    /// Extra height above the panel needed for zoomed icons.
+    [[nodiscard]] int zoomOverflowHeight() const;
+
     std::unique_ptr<DockPlatform> m_platform;
     std::unique_ptr<BackgroundStyle> m_backgroundStyle;
     class DockVisibilityController *m_visibilityController = nullptr;

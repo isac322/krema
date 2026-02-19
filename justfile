@@ -14,8 +14,8 @@ release:
 test:
     ctest --preset dev
 
-run:
-    ./build/dev/src/krema
+run: build
+    ./build/dev/bin/krema
 
 format:
     ninja -C build/dev clang-format

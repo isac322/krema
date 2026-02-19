@@ -63,6 +63,12 @@ int Application::run()
 
     m_dockView->initialize(m_dockModel->tasksModel());
 
+    // The dock window is now created with layer-shell.
+    // Unset the env var so child processes (launched apps) don't inherit it.
+    // Otherwise launched apps create layer-shell surfaces → no decorations,
+    // not visible in task switcher (Ctrl+Tab), etc.
+    qunsetenv("QT_WAYLAND_SHELL_INTEGRATION");
+
     return exec();
 }
 

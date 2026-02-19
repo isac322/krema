@@ -106,6 +106,15 @@ void DockVisibilityController::evaluateVisibility()
     }
 }
 
+void DockVisibilityController::setPanelRect(qreal x, qreal width)
+{
+    m_panelX = static_cast<int>(x);
+    m_panelWidth = static_cast<int>(width);
+
+    // Reapply input region with the updated panel geometry
+    applyInputRegion();
+}
+
 void DockVisibilityController::setVisible(bool visible)
 {
     if (m_visible == visible) {
@@ -115,21 +124,36 @@ void DockVisibilityController::setVisible(bool visible)
     m_visible = visible;
     qCDebug(lcVisibility) << "Dock visible:" << visible;
 
-    // Update input region:
-    // When hidden, set a thin 2px strip at the edge for hover detection.
-    // When visible, clear the mask to accept full input.
-    if (visible) {
-        m_platform->setInputRegion(QRegion());
-    } else {
-        // 2px strip at the bottom edge for hover detection
-        if (m_dockWindow) {
-            const int w = m_dockWindow->width();
-            const int h = m_dockWindow->height();
-            m_platform->setInputRegion(QRegion(0, h - 2, w, 2));
-        }
-    }
+    applyInputRegion();
 
     Q_EMIT dockVisibleChanged();
+}
+
+void DockVisibilityController::applyInputRegion()
+{
+    if (!m_dockWindow) {
+        return;
+    }
+
+    if (m_visible) {
+        if (m_panelWidth > 0) {
+            // Only accept input over the panel area (+ margin for hover detection).
+            // Clicks outside this region pass through to windows behind.
+            constexpr int margin = 16;
+            const int regionX = qMax(0, m_panelX - margin);
+            const int regionW = m_panelWidth + 2 * margin;
+            const int surfaceH = m_dockWindow->height();
+            m_platform->setInputRegion(QRegion(regionX, 0, regionW, surfaceH));
+        } else {
+            // Panel geometry not yet reported; accept all input as fallback
+            m_platform->setInputRegion(QRegion());
+        }
+    } else {
+        // 2px strip at the bottom edge for hover detection (full width for hidden dock trigger)
+        const int w = m_dockWindow->width();
+        const int h = m_dockWindow->height();
+        m_platform->setInputRegion(QRegion(0, h - 2, w, 2));
+    }
 }
 
 bool DockVisibilityController::hasOverlappingWindow() const

@@ -51,6 +51,10 @@ public:
     /// Called when the mouse enters/leaves the dock area.
     Q_INVOKABLE void setHovered(bool hovered);
 
+    /// Called from QML when the panel geometry changes.
+    /// Used to restrict the input region to the visible panel area.
+    Q_INVOKABLE void setPanelRect(qreal x, qreal width);
+
 Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();
@@ -71,9 +75,15 @@ private:
     TaskManager::TasksModel *m_tasksModel;
     QWindow *m_dockWindow;
 
+    void applyInputRegion();
+
     DockPlatform::VisibilityMode m_mode = DockPlatform::VisibilityMode::AlwaysVisible;
     bool m_visible = true;
     bool m_hovered = false;
+
+    // Panel geometry (reported from QML) for input region calculation
+    int m_panelX = 0;
+    int m_panelWidth = 0;
 
     // Debounce timer to avoid rapid show/hide flickering
     QTimer m_evaluateTimer;

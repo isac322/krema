@@ -1,0 +1,56 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "dev",
+            "displayName": "Development",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/dev",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+                "BUILD_TESTING": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+                "BUILD_TESTING": "OFF"
+            }
+        },
+        {
+            "name": "asan",
+            "displayName": "AddressSanitizer",
+            "inherits": "dev",
+            "binaryDir": "${sourceDir}/build/asan",
+            "cacheVariables": {
+                "ECM_ENABLE_SANITIZERS": "address;undefined"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "dev",
+            "configurePreset": "dev"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "dev",
+            "configurePreset": "dev",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}

@@ -1,0 +1,24 @@
+# Build directories
+build/
+
+# CMake generated
+CMakeUserPresets.json
+compile_commands.json
+
+# ECM auto-generated
+.clang-format
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Compiled
+*.o
+*.so
+*.a
+
+# OS
+.DS_Store

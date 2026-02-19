@@ -1,0 +1,25 @@
+Source: krema
+Section: kde
+Priority: optional
+Maintainer: Krema Contributors <noreply@example.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.22),
+               ninja-build,
+               extra-cmake-modules (>= 6.0.0),
+               qt6-base-dev (>= 6.6.0),
+               qt6-declarative-dev (>= 6.6.0),
+               libkf6windowsystem-dev (>= 6.0.0),
+               libkf6config-dev (>= 6.0.0),
+               libkf6coreaddons-dev (>= 6.0.0),
+               libkf6i18n-dev (>= 6.0.0),
+               layer-shell-qt-dev (>= 6.0.0),
+               libwayland-dev (>= 1.22)
+Standards-Version: 4.7.0
+
+Package: krema
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Latte Dock replacement for KDE Plasma 6
+ Krema is a dock application for KDE Plasma 6, designed as a replacement
+ for the discontinued Latte Dock. It features parabolic zoom animations,
+ Wayland native support via LayerShellQt, and deep KDE integration.

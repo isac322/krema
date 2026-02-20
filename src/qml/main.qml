@@ -16,30 +16,70 @@ Item {
 
     // C++ context properties: dockView, dockModel, dockVisibility
 
-    // Hovered item tracking (for custom tooltip)
+    // Hovered item tracking (for custom tooltip and click targeting)
     property int hoveredIndex: -1
     property string hoveredName: ""
+
+    // Hysteresis flag: once zoom activates (mouse on an icon), it stays active
+    // until the mouse leaves the panel zone entirely. This prevents rapid zoom
+    // on/off flickering when moving between icons through tiny gaps.
+    property bool _zoomActive: false
 
     function updateHoveredItem() {
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
             hoveredName = ""
+            _zoomActive = false
             return
         }
-        for (let i = 0; i < dockRow.children.length; i++) {
-            let item = dockRow.children[i]
-            if (item.itemCenterX === undefined) continue
-            if (Math.abs(dockPanel.mouseX - item.itemCenterX) < item.width / 2) {
-                if (hoveredIndex !== i) {
-                    hoveredIndex = i
-                    hoveredName = item.displayName
-                    tooltipTimer.restart()
-                }
-                return
-            }
+
+        // Rough vertical check: outside the dockRow + zoom extension → reset zoom
+        let rowTop = dockRow.y
+        let rowBottom = dockRow.y + dockRow.height
+        let maxExt = dockView.iconSize * (dockView.maxZoomFactor - 1.0)
+        if (dockPanel.mouseY < rowTop - maxExt || dockPanel.mouseY > rowBottom) {
+            hoveredIndex = -1
+            hoveredName = ""
+            _zoomActive = false
+            return
         }
-        hoveredIndex = -1
-        hoveredName = ""
+
+        // Find the closest icon whose SCALED 2D bounds contain the mouse.
+        // Use Repeater.itemAt() for correct model-index-to-delegate mapping.
+        let bestIndex = -1
+        let bestDist = Infinity
+        for (let i = 0; i < dockRepeater.count; i++) {
+            let item = dockRepeater.itemAt(i)
+            if (!item) continue
+
+            // Horizontal check: scaled width
+            let dist = Math.abs(dockPanel.mouseX - item.itemCenterX)
+            let scaledHalfWidth = (item.width * item.currentScale) / 2
+            if (dist >= scaledHalfWidth) continue
+
+            // Vertical check: Scale origin.y = height → bottom fixed, grows upward
+            let itemBottom = dockRow.y + item.y + item.height
+            let itemTop = itemBottom - item.height * item.currentScale
+            if (dockPanel.mouseY < itemTop || dockPanel.mouseY > itemBottom) continue
+
+            if (dist < bestDist) { bestIndex = i; bestDist = dist }
+        }
+
+        if (bestIndex >= 0) {
+            _zoomActive = true  // Activate zoom; stays until mouse leaves panel
+            if (hoveredIndex !== bestIndex) {
+                hoveredIndex = bestIndex
+                hoveredName = dockRepeater.itemAt(bestIndex).displayName
+                tooltipTimer.restart()
+            }
+        } else {
+            hoveredIndex = -1
+            hoveredName = ""
+            // _zoomActive intentionally NOT reset here for horizontal gap hysteresis.
+            // When mouse crosses tiny gaps between icons, zoom stays active to prevent
+            // flickering. Zoom deactivates only when mouse leaves the vertical zone
+            // (rough check above) or the panel zone entirely (mouseX becomes -1).
+        }
     }
 
     MouseArea {
@@ -52,29 +92,49 @@ Item {
         onEntered: dockVisibility.setHovered(true)
         onExited: {
             dockPanel.mouseX = -1
+            dockPanel.mouseY = -1
             root.hoveredIndex = -1
             root.hoveredName = ""
+            root._zoomActive = false
             dockVisibility.setHovered(false)
         }
 
-        // Mouse wheel: cycle focus between running apps
+        // Click handling: uses hoveredIndex from scaled hit testing
+        // so clicks work correctly on zoomed icons
+        onClicked: function(mouse) {
+            if (root.hoveredIndex < 0) return
+            if (mouse.button === Qt.LeftButton) {
+                dockModel.activate(root.hoveredIndex)
+            } else if (mouse.button === Qt.MiddleButton) {
+                dockModel.newInstance(root.hoveredIndex)
+            } else if (mouse.button === Qt.RightButton) {
+                dockModel.showContextMenu(root.hoveredIndex)
+            }
+        }
+
+        // Mouse wheel: cycle through child windows of the hovered app
         onWheel: function(wheel) {
+            if (root.hoveredIndex < 0) return
             if (wheel.angleDelta.y > 0) {
-                dockModel.activatePreviousTask()
+                dockModel.cycleWindows(root.hoveredIndex, false)
             } else if (wheel.angleDelta.y < 0) {
-                dockModel.activateNextTask()
+                dockModel.cycleWindows(root.hoveredIndex, true)
             }
         }
 
         // Track mouse position for parabolic zoom
         onPositionChanged: function(mouse) {
-            // Only activate zoom when mouse is near the panel vertically
+            // Only activate zoom when mouse is near the panel vertically.
+            // Tight zone: panel area + zoom extension above (icons grow upward).
             let panelTop = dockPanel.y
             let panelBottom = dockPanel.y + dockPanel.height
-            if (mouse.y >= panelTop - dockView.iconSize && mouse.y <= panelBottom) {
+            let zoomExtension = dockView.iconSize * (dockView.maxZoomFactor - 1.0)
+            if (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom) {
                 dockPanel.mouseX = mouse.x - dockPanel.x
+                dockPanel.mouseY = mouse.y - dockPanel.y
             } else {
                 dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
             }
             root.updateHoveredItem()
         }
@@ -113,9 +173,13 @@ Item {
             NumberAnimation { duration: 200 }
         }
 
-        // Mouse X position relative to the panel, -1 when outside
+        // Mouse position relative to the panel, -1 when outside
         property real mouseX: -1
-        property bool mouseInside: mouseX >= 0
+        property real mouseY: -1
+        // Zoom activates when mouse hits an icon (_zoomActive=true) and stays
+        // active until mouse leaves the panel zone (mouseX=-1). This hysteresis
+        // prevents zoom flickering when crossing tiny gaps between icons.
+        property bool mouseInside: mouseX >= 0 && root._zoomActive
 
         // Report panel geometry to visibility controller for input region
         onXChanged: dockVisibility.setPanelRect(x, width)
@@ -128,6 +192,7 @@ Item {
             spacing: dockView.iconSpacing
 
             Repeater {
+                id: dockRepeater
                 model: dockModel.tasksModel
 
                 DockItem {
@@ -142,7 +207,20 @@ Item {
 
                     // Compute this item's center X relative to the panel
                     itemCenterX: x + width / 2 + dockRow.x
+
                 }
+            }
+        }
+    }
+
+    // Handle launch bounce trigger from C++ signal
+    Connections {
+        target: dockModel
+        function onTaskLaunching(index) {
+            let item = dockRepeater.itemAt(index)
+            if (item) {
+                item.manualLaunching = true
+                item.launchFallbackTimer.restart()
             }
         }
     }
@@ -165,9 +243,9 @@ Item {
 
         // Position above the hovered icon
         x: {
-            if (root.hoveredIndex < 0 || root.hoveredIndex >= dockRow.children.length)
+            if (root.hoveredIndex < 0 || root.hoveredIndex >= dockRepeater.count)
                 return 0
-            let item = dockRow.children[root.hoveredIndex]
+            let item = dockRepeater.itemAt(root.hoveredIndex)
             if (!item) return 0
             return dockPanel.x + dockRow.x + item.x + item.width / 2 - width / 2
         }
@@ -198,4 +276,5 @@ Item {
             }
         }
     }
+
 }

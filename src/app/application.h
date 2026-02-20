@@ -11,6 +11,7 @@ namespace krema
 {
 
 class DockModel;
+class DockSettings;
 class DockView;
 
 class Application : public QApplication
@@ -24,6 +25,9 @@ public:
     int run();
 
 private:
+    void registerGlobalShortcuts();
+
+    std::unique_ptr<DockSettings> m_settings;
     std::unique_ptr<DockView> m_dockView;
     std::unique_ptr<DockModel> m_dockModel;
 };

@@ -24,6 +24,9 @@ add_library(krema_lib STATIC
     style/panelinheritstyle.h
     style/panelinheritstyle.cpp
 
+    config/docksettings.h
+    config/docksettings.cpp
+
     models/dockmodel.h
     models/dockmodel.cpp
     models/taskiconprovider.h
@@ -41,6 +44,7 @@ target_link_libraries(krema_lib PUBLIC
     KF6::ConfigCore
     KF6::CoreAddons
     KF6::I18n
+    KF6::GlobalAccel
     LayerShellQt::Interface
     PW::LibTaskManager
     Wayland::Client
@@ -54,3 +58,14 @@ add_executable(krema main.cpp)
 target_link_libraries(krema PRIVATE krema_lib)
 
 install(TARGETS krema ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+
+# Generate .desktop file with resolved install paths for KWin Wayland protocol access
+configure_file(
+    org.krema.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/org.krema.desktop
+    @ONLY
+)
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/org.krema.desktop
+    DESTINATION ${KDE_INSTALL_APPDIR}
+)

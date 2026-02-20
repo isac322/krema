@@ -32,3 +32,16 @@ obs-build-rpm distro="openSUSE_Tumbleweed" arch="x86_64":
 
 obs-build-deb distro="Debian_13" arch="x86_64":
     osc build {{distro}} {{arch}} packaging/obs/debian.control
+
+# Install .desktop file for development (KWin Wayland protocol access)
+dev-desktop:
+    @mkdir -p ~/.local/share/applications
+    @sed 's|@KDE_INSTALL_FULL_BINDIR@/krema|'$PWD'/build/dev/bin/krema|' \
+        src/org.krema.desktop.in > ~/.local/share/applications/org.krema.dev.desktop
+    @echo "Installed dev .desktop file to ~/.local/share/applications/org.krema.dev.desktop"
+    @echo "Run: kbuildsycoca6 --noincremental"
+
+# Remove dev .desktop file
+dev-desktop-clean:
+    @rm -f ~/.local/share/applications/org.krema.dev.desktop
+    @echo "Removed dev .desktop file"

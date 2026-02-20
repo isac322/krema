@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Krema
+GenericName=Dock
+Comment=A dock application for KDE Plasma 6
+Exec=@KDE_INSTALL_FULL_BINDIR@/krema
+Icon=krema
+Terminal=false
+Categories=Qt;KDE;Utility;
+NoDisplay=true
+X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_plasma_activation_feedback

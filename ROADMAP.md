@@ -1,6 +1,9 @@
 # Krema 개발 로드맵
 
-> KDE Plasma 6를 위한 경량 독(Dock). Latte Dock의 정신적 후속작.
+> KDE Plasma 6 전용 경량 독(Dock). Latte Dock의 정신적 후속작.
+>
+> **핵심 원칙:** Qt/Wayland 범용 프로그램이 아닌, **KDE Plasma에 종속된** 프로그램.
+> KDE Frameworks, LibTaskManager, Kirigami 등 KDE/Plasma 공식 라이브러리를 적극 활용한다.
 
 ---
 
@@ -8,7 +11,7 @@
 
 - [x] 프로젝트 구조 (CMake + ECM + C++23)
 - [x] Wayland 플랫폼 백엔드 (LayerShellQt — wlr-layer-shell)
-- [x] DockPlatform 추상화 레이어 (Wayland/X11 분리 설계)
+- [x] DockPlatform 추상화 레이어 (Plasma Wayland 전용)
 - [x] BackgroundStyle 추상화 (PanelInheritStyle — Plasma 패널 스타일 상속)
 - [x] DockModel (LibTaskManager 래퍼 — TasksModel 기반)
 - [x] QML 독 UI (패러볼릭 줌, 인디케이터 점, 툴팁)
@@ -20,53 +23,67 @@
 
 ---
 
-## Milestone 2: 컨텍스트 메뉴 + 설정 영속화 ⬅️ 다음
+## Milestone 2: 컨텍스트 메뉴 + 설정 영속화 ✅
 
 독을 실제로 사용할 수 있게 만드는 첫 번째 단계.
 우클릭 메뉴로 기본 조작을 제공하고, 설정을 파일에 저장하여 재시작 후에도 유지.
 
-- [ ] 우클릭 컨텍스트 메뉴 (QML Popup/Menu)
-  - [ ] 핀/언핀 토글
-  - [ ] 닫기 (모든 윈도우)
-  - [ ] 새 인스턴스 실행
-  - [ ] 앱 이름 + 구분선 표시
-- [ ] KConfig 기반 설정 관리
-  - [ ] 핀 런처 목록 영속 저장/불러오기
-  - [ ] 가시성 모드 저장
-  - [ ] 아이콘 크기, 줌 배율, 간격, 모서리 반경 저장
-  - [ ] 독 위치 (Bottom/Top/Left/Right) 저장
-- [ ] 시작 시 설정 파일에서 복원
+- [x] 우클릭 컨텍스트 메뉴 (C++ QMenu — KDE Breeze 네이티브)
+  - [x] 핀/언핀 토글
+  - [x] 닫기 (모든 윈도우)
+  - [x] 새 인스턴스 실행
+  - [x] 앱 이름 + 구분선 표시
+- [x] KWin Wayland 프로토콜 접근 (.desktop 파일 + X-KDE-Wayland-Interfaces)
+- [x] 마우스 휠: 앱 아이콘 호버 시 동일 앱 창 간 전환 (단일 창은 포커스)
+- [x] KConfig 기반 설정 관리
+  - [x] 핀 런처 목록 영속 저장/불러오기
+  - [x] 가시성 모드 저장/복원
+  - [x] 아이콘 크기, 줌 배율, 간격, 모서리 반경 저장/복원
+  - [x] 독 위치 (Bottom/Top/Left/Right) 저장/복원
+- [x] 시작 시 설정 파일에서 복원
 
 ---
 
-## Milestone 3: 키보드 단축키 + 실행 애니메이션
+## Milestone 3: 키보드 단축키 + 실행 애니메이션 ⬅️ 현재
 
 전역 단축키로 독을 제어하고, 앱 실행 시 시각적 피드백 제공.
+KDE Plasma의 글로벌 단축키 프레임워크를 활용.
 
-- [ ] 전역 단축키 등록 (KGlobalAccel)
-  - [ ] 독 표시/숨기기 토글
-  - [ ] Super+숫자(1-9)로 N번째 앱 활성화
-  - [ ] Super+Shift+숫자로 새 인스턴스 실행
-- [ ] 앱 실행 바운스 애니메이션 (런처 클릭 시 아이콘 튀어오름)
-- [ ] 스타트업 노티피케이션 연동 (실행 중 표시)
+- [x] 전역 단축키 등록 (KF6::KGlobalAccel)
+  - [x] 독 표시/숨기기 토글 (Meta+`)
+  - [x] Meta+숫자(1-9)로 N번째 앱 활성화
+  - [x] Meta+Shift+숫자로 새 인스턴스 실행
+- [x] 앱 실행 바운스 애니메이션 (런처 클릭 시 아이콘 튀어오름)
+- [x] 스타트업 노티피케이션 연동 (TasksModel IsStartup role 활용)
 
 ---
 
 ## Milestone 4: 드래그 앤 드롭
 
 독 아이템 재정렬과 파일 드래그 지원.
+Pin/Unpin 후 독 내 위치가 즉시 변경되지 않는 문제는 드래그 재정렬 구현 시 함께 해결.
 
-- [ ] 독 아이템 순서 드래그 재정렬
+- [ ] 독 아이템 순서 드래그 재정렬 (Pin 후 위치 이동 포함)
 - [ ] 파일 드래그: 앱 위에 드롭하면 해당 앱으로 열기
 - [ ] URL/데스크톱 파일 드래그로 런처 추가
 
 ---
 
-## Milestone 5: 설정 UI
+## Milestone 5: 설정 UI + KDE Plasma 네이티브 통합
 
 사용자가 GUI로 독을 커스터마이즈할 수 있는 설정 다이얼로그.
+QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강화.
 
-- [ ] QML 설정 다이얼로그 (별도 윈도우)
+- [ ] Kirigami 도입 (QML 하드코딩 → Kirigami.Units/Theme 교체)
+- [ ] KColorScheme 적용 (QPalette → KDE 색상 체계)
+- [ ] KDE 테마 색상 전면 반영
+  - [ ] 인디케이터 점 색상 (light/dark mode 대응)
+  - [ ] 툴팁 배경/텍스트 색상
+  - [ ] 독 배경 색상
+  - [ ] 모든 하드코딩된 색상을 KColorScheme/Kirigami.Theme으로 교체
+- [ ] KIconThemes 적용 (QIcon::fromTheme → KIconLoader)
+- [ ] i18n 적용 (모든 사용자 표시 문자열에 KLocalizedString)
+- [ ] Kirigami 기반 설정 다이얼로그 (별도 윈도우)
   - [ ] 아이콘 크기, 줌 배율, 간격 슬라이더
   - [ ] 가시성 모드 선택 (라디오 버튼)
   - [ ] 독 위치 선택
@@ -86,7 +103,7 @@
 
 ---
 
-## Milestone 7: 배경 스타일 + 주의 애니메이션
+## Milestone 7: 배경 스타일 + 시각 개선
 
 시각적 완성도 향상.
 
@@ -99,6 +116,9 @@
   - [ ] 아이콘 흔들기 (IsDemandingAttention)
   - [ ] 배지 카운트 표시 (알림 수)
   - [ ] 강조 글로우 효과
+- [ ] 아이콘 크기 정규화 옵션
+  - [ ] 아이콘 내부 패딩 자동 감지 및 스케일링 (기본값: 활성)
+  - [ ] 원본 크기 그대로 사용 옵션
 
 ---
 
@@ -116,17 +136,7 @@
 
 ---
 
-## Milestone 9: X11 플랫폼 백엔드
-
-X11 세션에서도 독을 사용할 수 있게.
-
-- [ ] X11 DockPlatform 구현 (NET_WM hints)
-- [ ] X11 스트럿(strut) 기반 공간 예약
-- [ ] X11 입력 영역 관리
-
----
-
-## Milestone 10: 위젯 시스템 + 시스템 트레이
+## Milestone 9: 위젯 시스템 + 시스템 트레이
 
 확장 가능한 위젯 아키텍처.
 
@@ -143,6 +153,7 @@ X11 세션에서도 독을 사용할 수 있게.
 
 ## 미래 탐색 과제
 
+- [ ] X11 플랫폼 백엔드 (NET_WM hints, strut, 입력 영역) — KDE Plasma 6는 Wayland 퍼스트이므로 우선순위 낮음
 - [ ] Plasmoid 호스팅 가능성 조사
 - [ ] Liquid Glass 배경 효과 (다중 레이어 굴절)
 - [ ] 앱 메뉴 / 휴지통 위젯
@@ -156,10 +167,11 @@ X11 세션에서도 독을 사용할 수 있게.
 | 항목 | 기술 |
 |------|------|
 | 언어 | C++23 |
+| 데스크톱 환경 | **KDE Plasma 6** (Wayland 전용) |
 | UI 프레임워크 | Qt 6.6+ / Qt Quick |
-| KDE 프레임워크 | KDE Frameworks 6.0+ |
-| 윈도우 관리 | LibTaskManager (Plasma) |
-| Wayland | LayerShellQt 6.0+ (wlr-layer-shell) |
+| KDE 프레임워크 | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, GlobalAccel) |
+| KDE Plasma 라이브러리 | LibTaskManager, LayerShellQt |
+| 향후 추가 예정 | Kirigami, KIconThemes, KColorScheme, KService |
 | 렌더링 | QRhi (Vulkan/OpenGL 자동 선택) |
 | 빌드 시스템 | CMake + ECM + Ninja |
 | 패키징 | CPack (Arch/RPM/DEB), OBS |
@@ -170,6 +182,7 @@ X11 세션에서도 독을 사용할 수 있게.
 
 | 의존성 | 최소 버전 |
 |---------|----------|
+| **KDE Plasma** | **6.0.0** |
 | Qt | 6.6.0 |
 | KDE Frameworks | 6.0.0 |
 | LayerShellQt | 6.0.0 |
@@ -181,26 +194,28 @@ X11 세션에서도 독을 사용할 수 있게.
 
 ```
 ┌─────────────────────────────────────────┐
-│                QML UI                    │
-│  (main.qml, DockItem.qml, animations)   │
+│           QML UI (Qt Quick)              │
+│  main.qml, DockItem.qml, animations     │
+│  (향후 Kirigami.Units/Theme 도입 예정)    │
 ├─────────────────────────────────────────┤
 │           C++ Backend Layer              │
 │  ┌──────────┐  ┌───────────────────┐    │
 │  │ DockModel│  │DockVisibility     │    │
-│  │(TasksModel│  │Controller         │    │
-│  │ wrapper) │  │(4 visibility modes)│    │
+│  │(LibTask  │  │Controller         │    │
+│  │ Manager) │  │(4 visibility modes)│    │
 │  └──────────┘  └───────────────────┘    │
+│  ┌──────────────┐ ┌────────────────┐    │
+│  │ DockSettings │ │TaskIconProvider│    │
+│  │ (KConfig)    │ │(QIcon→Pixmap)  │    │
+│  └──────────────┘ └────────────────┘    │
 ├─────────────────────────────────────────┤
-│         DockView (QQuickView)            │
+│     DockView (QQuickView)                │
 │  ┌───────────────┐ ┌────────────────┐   │
-│  │ BackgroundStyle│ │TaskIconProvider│   │
-│  │(PanelInherit)  │ │(QIcon→Pixmap)  │   │
+│  │ BackgroundStyle│ │KWindowEffects  │   │
+│  │(PanelInherit)  │ │(blur/contrast) │   │
 │  └───────────────┘ └────────────────┘   │
 ├─────────────────────────────────────────┤
-│     DockPlatform (Abstract Interface)    │
-│  ┌──────────────────┐ ┌──────────────┐  │
-│  │WaylandDockPlatform│ │X11DockPlatform│ │
-│  │(LayerShellQt)     │ │(NET_WM hints) │ │
-│  └──────────────────┘ └──────────────┘  │
+│   WaylandDockPlatform (LayerShellQt)     │
+│   KDE Plasma 6 Wayland 전용              │
 └─────────────────────────────────────────┘
 ```

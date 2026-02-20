@@ -19,6 +19,10 @@ Item {
     // Display name for tooltip (readable by parent)
     readonly property string displayName: model.display || ""
 
+    // Launch animation state
+    property bool manualLaunching: false
+    readonly property bool launching: manualLaunching || (model.IsStartup ?? false)
+
     // Configuration from DockView
     property int iconSize: 48
     property real maxZoomFactor: 1.6
@@ -43,9 +47,40 @@ Item {
         return 1.0 + (maxZoomFactor - 1.0) * Math.exp(-(distance * distance) / sigma2)
     }
 
+    // Track ChildCount to detect new instances appearing from ANY source:
+    // dock middle-click, keyboard shortcuts (Ctrl+Alt+T), app menus, etc.
+    // When ChildCount increases, start a bounce animation.
+    // A timer ensures the bounce is visible for at least ~2 cycles (800ms)
+    // before stopping gracefully.
+    readonly property int _childCount: model.ChildCount || 0
+    property int _prevChildCount: 0
+
+    Timer {
+        id: bounceStopTimer
+        interval: 800  // ~2 full bounce cycles (400ms each)
+        onTriggered: dockItem.manualLaunching = false
+    }
+
+    on_ChildCountChanged: {
+        if (_childCount > _prevChildCount) {
+            if (!launching) {
+                // New instance from any source — start bounce
+                manualLaunching = true
+                launchFallbackTimer.restart()  // 3s safety net
+            }
+            // Schedule graceful bounce stop after visible duration.
+            // restart() extends the timer if multiple instances spawn quickly.
+            bounceStopTimer.restart()
+        }
+        _prevChildCount = _childCount
+    }
+
     // Animated scale
     property real currentScale: 1.0
+    property bool _zoomAnimReady: false
+
     Behavior on currentScale {
+        enabled: dockItem._zoomAnimReady
         NumberAnimation {
             duration: 150
             easing.type: Easing.OutCubic
@@ -54,6 +89,32 @@ Item {
 
     // Update currentScale when zoomFactor changes
     onZoomFactorChanged: currentScale = zoomFactor
+
+    // When item position shifts due to model reorganization (e.g. hideActivatedLaunchers
+    // merges a launcher with its window, causing other delegates to shift), suppress
+    // zoom animation to prevent the visual glitch where shifted icons animate their scale.
+    // Normal mouse-driven zoom doesn't change itemCenterX, so this only fires during
+    // model/layout changes.
+    onItemCenterXChanged: {
+        if (_zoomAnimReady) {
+            _zoomAnimReady = false
+            currentScale = zoomFactor
+            Qt.callLater(function() { _zoomAnimReady = true })
+        }
+    }
+
+    // On delegate creation: apply zoom instantly (no animation) to avoid glitch
+    // when Repeater recreates delegates due to model changes.
+    // Qt.callLater() defers _zoomAnimReady until AFTER Row layout has set the
+    // delegate's x position, ensuring itemCenterX and zoomFactor are correct.
+    Component.onCompleted: {
+        _prevChildCount = _childCount
+        currentScale = zoomFactor  // best guess pre-layout
+        Qt.callLater(function() {
+            currentScale = zoomFactor  // correct value after layout
+            _zoomAnimReady = true
+        })
+    }
 
     // Size: base icon size, scaled by zoom
     width: iconSize
@@ -83,6 +144,9 @@ Item {
         }
         sourceSize: Qt.size(Math.ceil(iconSize * maxZoomFactor), Math.ceil(iconSize * maxZoomFactor))
         smooth: true
+
+        // Bounce transform for launch animation
+        transform: Translate { id: bounceTranslate; y: 0 }
 
         // Highlight for active window
         opacity: {
@@ -116,6 +180,57 @@ Item {
         }
     }
 
+    // Launch bounce animation — finishes current cycle gracefully when launching ends
+    property bool _finishingBounce: false
+
+    SequentialAnimation {
+        id: bounceAnim
+        loops: 1
+
+        NumberAnimation {
+            target: bounceTranslate; property: "y"
+            to: -8
+            duration: dockItem._finishingBounce ? 170 : 200
+            easing.type: Easing.OutQuad
+        }
+        NumberAnimation {
+            target: bounceTranslate; property: "y"
+            to: 0
+            duration: dockItem._finishingBounce ? 170 : 200
+            easing.type: Easing.InQuad
+        }
+
+        onFinished: {
+            if (dockItem._finishingBounce) {
+                // Finished the wind-down cycle
+                dockItem._finishingBounce = false
+                bounceTranslate.y = 0
+            } else if (dockItem.launching) {
+                // Still launching — bounce again
+                bounceAnim.start()
+            } else {
+                bounceTranslate.y = 0
+            }
+        }
+    }
+
+    onLaunchingChanged: {
+        if (launching) {
+            _finishingBounce = false
+            bounceAnim.start()
+        } else if (bounceAnim.running) {
+            // Let the current cycle finish at faster speed
+            _finishingBounce = true
+        }
+    }
+
+    // Fallback timer: clear manualLaunching after 3s if IsStartup never fires
+    Timer {
+        id: launchFallbackTimer
+        interval: 3000
+        onTriggered: dockItem.manualLaunching = false
+    }
+
     // Status indicator dots
     Row {
         id: indicatorRow
@@ -146,20 +261,6 @@ Item {
         }
     }
 
-    // Click handling
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-        hoverEnabled: false
-
-        onClicked: function(mouse) {
-            if (mouse.button === Qt.LeftButton) {
-                dockModel.activate(dockItem.index)
-            } else if (mouse.button === Qt.MiddleButton) {
-                dockModel.newInstance(dockItem.index)
-            } else if (mouse.button === Qt.RightButton) {
-                // TODO: context menu
-            }
-        }
-    }
+    // Click handling is done in main.qml's dockMouseArea using
+    // hoveredIndex-based hit testing to match the zoomed icon geometry.
 }

@@ -24,6 +24,7 @@ BuildRequires:  cmake(KF6WindowSystem) >= 6.0.0
 BuildRequires:  cmake(KF6Config) >= 6.0.0
 BuildRequires:  cmake(KF6CoreAddons) >= 6.0.0
 BuildRequires:  cmake(KF6I18n) >= 6.0.0
+BuildRequires:  cmake(KF6GlobalAccel) >= 6.0.0
 
 BuildRequires:  cmake(LayerShellQt) >= 6.0.0
 BuildRequires:  pkgconfig(wayland-client) >= 1.22
@@ -46,3 +47,4 @@ Wayland native support via LayerShellQt, and deep KDE integration.
 %files
 %license LICENSES/GPL-3.0-or-later.txt
 %{_bindir}/krema
+%{_datadir}/applications/org.krema.desktop

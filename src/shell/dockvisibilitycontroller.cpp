@@ -61,6 +61,15 @@ void DockVisibilityController::setMode(DockPlatform::VisibilityMode mode)
     Q_EMIT modeChanged();
 }
 
+void DockVisibilityController::toggleVisibility()
+{
+    if (m_mode == DockPlatform::VisibilityMode::AlwaysVisible) {
+        return;
+    }
+
+    setVisible(!m_visible);
+}
+
 void DockVisibilityController::setHovered(bool hovered)
 {
     if (m_hovered == hovered) {

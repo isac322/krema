@@ -9,6 +9,7 @@
 #include "platform/dockplatformfactory.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
+#include "shell/settingswindow.h"
 
 #include <KAboutData>
 #include <KGlobalAccel>
@@ -18,6 +19,7 @@
 #include <QAction>
 #include <QLoggingCategory>
 #include <QQmlContext>
+#include <QQuickStyle>
 
 Q_LOGGING_CATEGORY(lcApp, "krema.app")
 
@@ -40,6 +42,11 @@ Application::~Application() = default;
 
 int Application::run()
 {
+    // Ensure Qt Quick Controls use the KDE Plasma style (needed for Kirigami theming)
+    if (QQuickStyle::name().isEmpty()) {
+        QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
+    }
+
     // Set up KDE application metadata (required for KGlobalAccel, D-Bus, etc.)
     KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral("0.1.0"), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
     KAboutData::setApplicationData(aboutData);
@@ -77,6 +84,8 @@ int Application::run()
     m_dockView->setFloating(m_settings->floating());
 
     m_dockView->initialize(m_dockModel->tasksModel(),
+                           m_dockModel->virtualDesktopInfo(),
+                           m_dockModel->activityInfo(),
                            static_cast<DockPlatform::Edge>(m_settings->edge()),
                            static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
 
@@ -84,6 +93,25 @@ int Application::run()
     connect(m_dockModel.get(), &DockModel::pinnedLaunchersChanged, this, [this]() {
         m_settings->setPinnedLaunchers(m_dockModel->pinnedLaunchers());
     });
+
+    // Apply initial delay settings to visibility controller
+    m_dockView->visibilityController()->setShowDelay(m_settings->showDelay());
+    m_dockView->visibilityController()->setHideDelay(m_settings->hideDelay());
+
+    // Context menu interaction lock: dock stays visible while menu is open
+    connect(m_dockModel.get(), &DockModel::contextMenuVisibleChanged, m_dockView->visibilityController(), &DockVisibilityController::setInteracting);
+
+    // Settings dialog (lazy-loaded on first open)
+    m_settingsWindow = std::make_unique<SettingsWindow>(m_settings.get(), this);
+    connect(m_dockModel.get(), &DockModel::settingsRequested, this, [this]() {
+        m_settingsWindow->show();
+    });
+
+    // Settings window interaction lock: dock stays visible while settings is open
+    connect(m_settingsWindow.get(), &SettingsWindow::visibleChanged, m_dockView->visibilityController(), &DockVisibilityController::setInteracting);
+
+    // Apply settings changes to dock view in real time
+    connect(m_settings.get(), &DockSettings::settingsChanged, this, &Application::applySettings);
 
     // The dock window is now created with layer-shell.
     // Unset the env var so child processes (launched apps) don't inherit it.
@@ -95,6 +123,23 @@ int Application::run()
     registerGlobalShortcuts();
 
     return exec();
+}
+
+void Application::applySettings()
+{
+    m_dockView->setIconSize(m_settings->iconSize());
+    m_dockView->setIconSpacing(m_settings->iconSpacing());
+    m_dockView->setMaxZoomFactor(m_settings->maxZoomFactor());
+    m_dockView->setCornerRadius(m_settings->cornerRadius());
+    m_dockView->setFloating(m_settings->floating());
+
+    // Edge and visibility mode require platform-level changes
+    m_dockView->platform()->setEdge(static_cast<DockPlatform::Edge>(m_settings->edge()));
+    m_dockView->visibilityController()->setMode(static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
+
+    // Apply delay settings
+    m_dockView->visibilityController()->setShowDelay(m_settings->showDelay());
+    m_dockView->visibilityController()->setHideDelay(m_settings->hideDelay());
 }
 
 void Application::registerGlobalShortcuts()

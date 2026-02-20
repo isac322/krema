@@ -30,6 +30,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Widgets
     DBus
     Quick
+    QuickControls2
 )
 find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     WindowSystem
@@ -37,7 +38,10 @@ find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     CoreAddons
     I18n
     GlobalAccel
+    ColorScheme
+    IconThemes
 )
+find_package(KF6Kirigami ${KF6_MIN_VERSION} REQUIRED)
 find_package(LayerShellQt ${LAYER_SHELL_QT_MIN_VERSION} REQUIRED)
 find_package(LibTaskManager REQUIRED)
 find_package(Wayland 1.22 REQUIRED COMPONENTS Client)

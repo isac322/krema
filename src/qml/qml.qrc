@@ -2,5 +2,6 @@
     <qresource prefix="/qml">
         <file>main.qml</file>
         <file>DockItem.qml</file>
+        <file>SettingsDialog.qml</file>
     </qresource>
 </RCC>

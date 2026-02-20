@@ -19,6 +19,8 @@ add_library(krema_lib STATIC
     shell/dockvisibilitycontroller.cpp
     shell/dockwidget.h
     shell/dockwidget.cpp
+    shell/settingswindow.h
+    shell/settingswindow.cpp
 
     style/backgroundstyle.h
     style/panelinheritstyle.h
@@ -40,11 +42,14 @@ target_link_libraries(krema_lib PUBLIC
     Qt6::Widgets
     Qt6::DBus
     Qt6::Quick
+    Qt6::QuickControls2
     KF6::WindowSystem
     KF6::ConfigCore
     KF6::CoreAddons
     KF6::I18n
     KF6::GlobalAccel
+    KF6::ColorScheme
+    KF6::IconThemes
     LayerShellQt::Interface
     PW::LibTaskManager
     Wayland::Client

@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 import QtQuick
+import org.kde.kirigami as Kirigami
 
 /**
  * A single dock item (app icon + indicator).
@@ -274,7 +275,7 @@ Item {
                 }
                 font.pixelSize: iconSize * 0.4
                 font.bold: true
-                color: "white"
+                color: Kirigami.Theme.highlightedTextColor
             }
         }
     }
@@ -285,7 +286,7 @@ Item {
         anchors.margins: -3
         radius: 10
         color: "transparent"
-        border.color: "#4fc3f7"
+        border.color: Kirigami.Theme.highlightColor
         border.width: 2
         visible: dockItem.isExternalDropTarget
         opacity: 0.9
@@ -355,7 +356,7 @@ Item {
                 width: dockItem.model.IsActive ? 4 : 3
                 height: width
                 radius: width / 2
-                color: "white"
+                color: Kirigami.Theme.textColor
                 opacity: dockItem.model.IsMinimized ? 0.4 : 0.8
 
                 Behavior on opacity {

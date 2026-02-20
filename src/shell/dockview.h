@@ -12,7 +12,9 @@
 
 namespace TaskManager
 {
+class ActivityInfo;
 class TasksModel;
+class VirtualDesktopInfo;
 }
 
 namespace krema
@@ -37,13 +39,18 @@ class DockView : public QQuickView
     Q_PROPERTY(qreal maxZoomFactor READ maxZoomFactor WRITE setMaxZoomFactor NOTIFY maxZoomFactorChanged)
     Q_PROPERTY(int cornerRadius READ cornerRadius WRITE setCornerRadius NOTIFY cornerRadiusChanged)
     Q_PROPERTY(bool floating READ isFloating WRITE setFloating NOTIFY floatingChanged)
+    Q_PROPERTY(int floatingPadding READ floatingPadding NOTIFY floatingPaddingChanged)
 
 public:
     explicit DockView(std::unique_ptr<DockPlatform> platform, QWindow *parent = nullptr);
     ~DockView() override;
 
     /// Initialize the dock view. @p tasksModel is used for visibility control.
-    void initialize(TaskManager::TasksModel *tasksModel, DockPlatform::Edge edge, DockPlatform::VisibilityMode visibilityMode);
+    void initialize(TaskManager::TasksModel *tasksModel,
+                    TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
+                    TaskManager::ActivityInfo *activityInfo,
+                    DockPlatform::Edge edge,
+                    DockPlatform::VisibilityMode visibilityMode);
 
     // --- Properties ---
     [[nodiscard]] QColor backgroundColor() const;
@@ -63,6 +70,8 @@ public:
     [[nodiscard]] bool isFloating() const;
     void setFloating(bool floating);
 
+    [[nodiscard]] int floatingPadding() const;
+
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
@@ -74,6 +83,7 @@ Q_SIGNALS:
     void maxZoomFactorChanged();
     void cornerRadiusChanged();
     void floatingChanged();
+    void floatingPaddingChanged();
 
 private:
     void updateSize();

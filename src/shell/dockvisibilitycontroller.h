@@ -10,7 +10,10 @@
 
 namespace TaskManager
 {
+class ActivityInfo;
 class TasksModel;
+class VirtualDesktopInfo;
+class WindowTasksModel;
 }
 
 class QWindow;
@@ -29,7 +32,7 @@ namespace krema
  *  - AlwaysVisible: dock is always shown
  *  - AlwaysHidden: dock is hidden, shown on edge hover
  *  - DodgeWindows: dock hides when a window overlaps its geometry
- *  - SmartHide: dock hides when any maximized/fullscreen window exists
+ *  - SmartHide: dock hides when any window overlaps its geometry
  */
 class DockVisibilityController : public QObject
 {
@@ -39,7 +42,12 @@ class DockVisibilityController : public QObject
     Q_PROPERTY(int mode READ mode WRITE setMode NOTIFY modeChanged)
 
 public:
-    explicit DockVisibilityController(DockPlatform *platform, TaskManager::TasksModel *tasksModel, QWindow *dockWindow, QObject *parent = nullptr);
+    explicit DockVisibilityController(DockPlatform *platform,
+                                      TaskManager::TasksModel *tasksModel,
+                                      TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
+                                      TaskManager::ActivityInfo *activityInfo,
+                                      QWindow *dockWindow,
+                                      QObject *parent = nullptr);
     ~DockVisibilityController() override;
 
     [[nodiscard]] bool isDockVisible() const;
@@ -57,7 +65,17 @@ public:
 
     /// Called from QML when the panel geometry changes.
     /// Used to restrict the input region to the visible panel area.
-    Q_INVOKABLE void setPanelRect(qreal x, qreal width);
+    Q_INVOKABLE void setPanelRect(qreal x, qreal y, qreal width, qreal height);
+
+    /// Set the delay before the dock appears when the mouse enters the trigger area.
+    void setShowDelay(int ms);
+
+    /// Set the delay before the dock hides when the mouse leaves the dock area.
+    void setHideDelay(int ms);
+
+    /// Increment/decrement interaction lock (context menu, settings window open).
+    /// While interacting, the dock will never hide.
+    void setInteracting(bool interacting);
 
 Q_SIGNALS:
     void dockVisibleChanged();
@@ -67,19 +85,27 @@ private:
     void evaluateVisibility();
     void setVisible(bool visible);
 
-    /// Check if any window overlaps the dock geometry. (DodgeWindows)
+    /// Check if any window overlaps the dock geometry. (DodgeWindows / SmartHide)
     [[nodiscard]] bool hasOverlappingWindow() const;
 
-    /// Check if any window is maximized or fullscreen. (SmartHide)
+    /// Check if any window is maximized or fullscreen.
     [[nodiscard]] bool hasMaximizedOrFullscreenWindow() const;
 
     void connectModelSignals();
 
     DockPlatform *m_platform;
     TaskManager::TasksModel *m_tasksModel;
+    TaskManager::WindowTasksModel *m_windowModel = nullptr;
+    TaskManager::VirtualDesktopInfo *m_virtualDesktopInfo = nullptr;
+    TaskManager::ActivityInfo *m_activityInfo = nullptr;
     QWindow *m_dockWindow;
 
     void applyInputRegion();
+
+    /// Calculate the dock panel rect in screen coordinates.
+    /// Layer-shell surfaces don't report screen position via QWindow::geometry(),
+    /// so we compute it from screen geometry + edge + panel position.
+    [[nodiscard]] QRect dockScreenRect() const;
 
     DockPlatform::VisibilityMode m_mode = DockPlatform::VisibilityMode::AlwaysVisible;
     bool m_visible = true;
@@ -87,9 +113,24 @@ private:
 
     // Panel geometry (reported from QML) for input region calculation
     int m_panelX = 0;
+    int m_panelY = 0;
     int m_panelWidth = 0;
+    int m_panelHeight = 0;
 
-    // Debounce timer to avoid rapid show/hide flickering
+    // 독이 보이는 상태에서의 패널 Y 좌표 (겹침 판정용).
+    // 애니메이션 중 m_panelY가 화면 밖으로 이동해도 이 값은 유지됨.
+    int m_panelRefY = 0;
+
+    // Interaction lock: dock stays visible while context menu / settings window is open
+    int m_interactingCount = 0;
+
+    // Show timer: fires after mouse dwells in trigger area for showDelay ms
+    QTimer m_showTimer;
+
+    // Hide timer: fires after mouse leaves dock area for hideDelay ms
+    QTimer m_hideTimer;
+
+    // Debounce timer for window state changes (fixed 300ms)
     QTimer m_evaluateTimer;
 };
 

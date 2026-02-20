@@ -6,6 +6,8 @@
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
+#include <KLocalizedString>
+
 #include <QCursor>
 #include <QGuiApplication>
 #include <QIcon>
@@ -94,6 +96,16 @@ DockModel::~DockModel() = default;
 TaskManager::TasksModel *DockModel::tasksModel() const
 {
     return m_tasksModel.get();
+}
+
+TaskManager::VirtualDesktopInfo *DockModel::virtualDesktopInfo() const
+{
+    return m_virtualDesktopInfo.get();
+}
+
+TaskManager::ActivityInfo *DockModel::activityInfo() const
+{
+    return m_activityInfo.get();
 }
 
 QStringList DockModel::pinnedLaunchers() const
@@ -243,27 +255,39 @@ void DockModel::showContextMenu(int index)
 
     // Pin / Unpin
     if (isPinned) {
-        menu->addAction(QStringLiteral("Unpin from Dock"), this, [this, index]() {
+        menu->addAction(i18n("Unpin from Dock"), this, [this, index]() {
             togglePinned(index);
         });
     } else {
-        menu->addAction(QStringLiteral("Pin to Dock"), this, [this, index]() {
+        menu->addAction(i18n("Pin to Dock"), this, [this, index]() {
             togglePinned(index);
         });
     }
 
     // New Instance
-    menu->addAction(QStringLiteral("New Instance"), this, [this, index]() {
+    menu->addAction(i18n("New Instance"), this, [this, index]() {
         newInstance(index);
     });
 
     // Close (only for running windows)
     if (isWindow) {
         menu->addSeparator();
-        menu->addAction(QStringLiteral("Close"), this, [this, index]() {
+        menu->addAction(i18n("Close"), this, [this, index]() {
             closeTask(index);
         });
     }
+
+    // Settings
+    menu->addSeparator();
+    menu->addAction(i18n("Settings..."), this, [this]() {
+        Q_EMIT settingsRequested();
+    });
+
+    // Track menu visibility for interaction lock (dock stays visible while menu is open)
+    Q_EMIT contextMenuVisibleChanged(true);
+    connect(menu, &QMenu::aboutToHide, this, [this]() {
+        Q_EMIT contextMenuVisibleChanged(false);
+    });
 
     menu->popup(QCursor::pos());
 }

@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 import QtQuick
+import org.kde.kirigami as Kirigami
 
 /**
  * Main dock container.
@@ -286,9 +287,11 @@ Item {
         radius: dockView.cornerRadius
         color: dockView.backgroundColor
 
-        // Slide animation: y position controlled by visibility
+        // Slide animation: y position controlled by visibility.
+        // floatingPadding creates a visual gap between the panel and the screen edge
+        // without using layer-shell margin (which would cause surface repositioning).
         y: dockVisibility.dockVisible
-           ? parent.height - height
+           ? parent.height - height - dockView.floatingPadding
            : parent.height + 8
 
         // Delay enabling animations until after initial layout to avoid startup flicker
@@ -320,8 +323,10 @@ Item {
         property bool mouseInside: mouseX >= 0 && root._zoomActive && !root._dragActive
 
         // Report panel geometry to visibility controller for input region
-        onXChanged: dockVisibility.setPanelRect(x, width)
-        onWidthChanged: dockVisibility.setPanelRect(x, width)
+        onXChanged: dockVisibility.setPanelRect(x, y, width, height)
+        onWidthChanged: dockVisibility.setPanelRect(x, y, width, height)
+        onYChanged: dockVisibility.setPanelRect(x, y, width, height)
+        onHeightChanged: dockVisibility.setPanelRect(x, y, width, height)
 
         // Main icon row
         Row {
@@ -430,7 +435,7 @@ Item {
                  && root._dragTargetIndex !== root._dragSourceIndex
         width: 2
         height: dockView.iconSize
-        color: "#4fc3f7"
+        color: Kirigami.Theme.highlightColor
         radius: 1
         z: 150
 
@@ -494,18 +499,21 @@ Item {
         }
         y: dockPanel.y - height - 8
 
+        Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip
+        Kirigami.Theme.inherit: false
+
         width: tooltipLabel.implicitWidth + 16
         height: tooltipLabel.implicitHeight + 8
         radius: 4
-        color: "#cc000000"
+        color: Kirigami.Theme.backgroundColor
         z: 100
 
         Text {
             id: tooltipLabel
             anchors.centerIn: parent
             text: root.hoveredName
-            color: "white"
-            font.pixelSize: 12
+            color: Kirigami.Theme.textColor
+            font: Kirigami.Theme.defaultFont
         }
 
         // Hide tooltip when mouse leaves dock area

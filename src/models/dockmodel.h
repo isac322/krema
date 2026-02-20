@@ -34,6 +34,8 @@ public:
     ~DockModel() override;
 
     [[nodiscard]] TaskManager::TasksModel *tasksModel() const;
+    [[nodiscard]] TaskManager::VirtualDesktopInfo *virtualDesktopInfo() const;
+    [[nodiscard]] TaskManager::ActivityInfo *activityInfo() const;
 
     [[nodiscard]] QStringList pinnedLaunchers() const;
     void setPinnedLaunchers(const QStringList &launchers);
@@ -82,6 +84,8 @@ public:
 Q_SIGNALS:
     void pinnedLaunchersChanged();
     void taskLaunching(int index);
+    void settingsRequested();
+    void contextMenuVisibleChanged(bool visible);
 
 private:
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;

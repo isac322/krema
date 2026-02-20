@@ -31,7 +31,7 @@ public:
         AlwaysVisible, ///< Dock is always shown, reserves exclusive zone
         AlwaysHidden, ///< Dock is always hidden, revealed by edge hover
         DodgeWindows, ///< Dock hides when a window overlaps it
-        SmartHide, ///< Dock hides when a maximized/fullscreen window exists
+        SmartHide, ///< Dock hides when any window overlaps it
     };
 
     virtual ~DockPlatform() = default;

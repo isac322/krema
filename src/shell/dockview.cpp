@@ -33,18 +33,18 @@ DockView::DockView(std::unique_ptr<DockPlatform> platform, QWindow *parent)
 
 DockView::~DockView() = default;
 
-void DockView::initialize(TaskManager::TasksModel *tasksModel, DockPlatform::Edge edge, DockPlatform::VisibilityMode visibilityMode)
+void DockView::initialize(TaskManager::TasksModel *tasksModel,
+                          TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
+                          TaskManager::ActivityInfo *activityInfo,
+                          DockPlatform::Edge edge,
+                          DockPlatform::VisibilityMode visibilityMode)
 {
     // Configure the platform layer (LayerShellQt on Wayland)
     m_platform->setupWindow(this);
     m_platform->setEdge(edge);
 
-    if (m_floating) {
-        m_platform->setMargin(s_floatingMargin);
-    }
-
     // Create visibility controller (manages show/hide logic for all modes)
-    m_visibilityController = new DockVisibilityController(m_platform.get(), tasksModel, this, this);
+    m_visibilityController = new DockVisibilityController(m_platform.get(), tasksModel, virtualDesktopInfo, activityInfo, this, this);
     m_visibilityController->setMode(visibilityMode);
 
     // Register the icon image provider for QML
@@ -151,8 +151,17 @@ void DockView::setFloating(bool floating)
         return;
     }
     m_floating = floating;
-    m_platform->setMargin(floating ? s_floatingMargin : 0);
+
+    // Surface size changes because floatingPadding changed
+    updateSize();
+
     Q_EMIT floatingChanged();
+    Q_EMIT floatingPaddingChanged();
+}
+
+int DockView::floatingPadding() const
+{
+    return m_floating ? s_floatingMargin : 0;
 }
 
 DockPlatform *DockView::platform() const
@@ -168,7 +177,7 @@ DockVisibilityController *DockView::visibilityController() const
 void DockView::updateSize()
 {
     const int dockHeight = m_iconSize + s_padding * 2;
-    const int surfaceHeight = dockHeight + zoomOverflowHeight();
+    const int surfaceHeight = dockHeight + zoomOverflowHeight() + floatingPadding();
     const int screenWidth = screen() ? screen()->geometry().width() : 0;
 
     setWidth(screenWidth);

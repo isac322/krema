@@ -21,6 +21,16 @@ class DockSettings : public QObject
 {
     Q_OBJECT
 
+    Q_PROPERTY(int iconSize READ iconSize WRITE setIconSize NOTIFY settingsChanged)
+    Q_PROPERTY(int iconSpacing READ iconSpacing WRITE setIconSpacing NOTIFY settingsChanged)
+    Q_PROPERTY(qreal maxZoomFactor READ maxZoomFactor WRITE setMaxZoomFactor NOTIFY settingsChanged)
+    Q_PROPERTY(int cornerRadius READ cornerRadius WRITE setCornerRadius NOTIFY settingsChanged)
+    Q_PROPERTY(bool floating READ floating WRITE setFloating NOTIFY settingsChanged)
+    Q_PROPERTY(int visibilityMode READ visibilityMode WRITE setVisibilityMode NOTIFY settingsChanged)
+    Q_PROPERTY(int edge READ edge WRITE setEdge NOTIFY settingsChanged)
+    Q_PROPERTY(int showDelay READ showDelay WRITE setShowDelay NOTIFY settingsChanged)
+    Q_PROPERTY(int hideDelay READ hideDelay WRITE setHideDelay NOTIFY settingsChanged)
+
 public:
     explicit DockSettings(QObject *parent = nullptr);
 
@@ -50,6 +60,12 @@ public:
 
     [[nodiscard]] int edge() const;
     void setEdge(int edge);
+
+    [[nodiscard]] int showDelay() const;
+    void setShowDelay(int ms);
+
+    [[nodiscard]] int hideDelay() const;
+    void setHideDelay(int ms);
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();

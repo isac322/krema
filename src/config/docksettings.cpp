@@ -136,6 +136,30 @@ void DockSettings::setEdge(int edge)
     Q_EMIT settingsChanged();
 }
 
+int DockSettings::showDelay() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("ShowDelay"), 200);
+}
+
+void DockSettings::setShowDelay(int ms)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("ShowDelay"), ms);
+    save();
+    Q_EMIT settingsChanged();
+}
+
+int DockSettings::hideDelay() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("HideDelay"), 400);
+}
+
+void DockSettings::setHideDelay(int ms)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("HideDelay"), ms);
+    save();
+    Q_EMIT settingsChanged();
+}
+
 void DockSettings::save()
 {
     m_config->sync();

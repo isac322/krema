@@ -36,6 +36,10 @@ public:
             // Fallback: try the id as-is (might be an absolute path)
             icon = QIcon(id);
         }
+        if (icon.isNull()) {
+            // Generic application icon as last resort
+            icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
+        }
 
         QPixmap pixmap = icon.pixmap(pixmapSize);
 

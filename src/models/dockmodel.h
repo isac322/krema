@@ -5,7 +5,9 @@
 
 #include <QObject>
 
+#include <taskmanager/activityinfo.h>
 #include <taskmanager/tasksmodel.h>
+#include <taskmanager/virtualdesktopinfo.h>
 
 #include <memory>
 
@@ -50,20 +52,22 @@ public:
     /// Toggle pinned state for the task at @p index.
     Q_INVOKABLE void togglePinned(int index);
 
-    /// Activate the next running task (for mouse wheel cycling).
-    Q_INVOKABLE void activateNextTask();
+    /// Show the native context menu for the task at @p index.
+    Q_INVOKABLE void showContextMenu(int index);
 
-    /// Activate the previous running task (for mouse wheel cycling).
-    Q_INVOKABLE void activatePreviousTask();
+    /// Cycle through child windows of the grouped task at @p index.
+    /// When hovering an app icon with multiple windows, wheel scrolls
+    /// switch focus between that app's windows (not between different apps).
+    Q_INVOKABLE void cycleWindows(int index, bool forward);
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();
+    void taskLaunching(int index);
 
 private:
-    /// Find the next/previous running (non-launcher-only) task index.
-    int findAdjacentRunningTask(int fromIndex, bool forward) const;
-
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
+    std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
+    std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;
 };
 
 } // namespace krema

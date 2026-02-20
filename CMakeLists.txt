@@ -36,6 +36,7 @@ find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     Config
     CoreAddons
     I18n
+    GlobalAccel
 )
 find_package(LayerShellQt ${LAYER_SHELL_QT_MIN_VERSION} REQUIRED)
 find_package(LibTaskManager REQUIRED)

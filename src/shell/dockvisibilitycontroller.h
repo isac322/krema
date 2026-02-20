@@ -48,6 +48,10 @@ public:
     void setMode(int mode);
     void setMode(DockPlatform::VisibilityMode mode);
 
+    /// Toggle dock visibility. Used by global shortcut.
+    /// In AlwaysVisible mode this is a no-op.
+    Q_INVOKABLE void toggleVisibility();
+
     /// Called when the mouse enters/leaves the dock area.
     Q_INVOKABLE void setHovered(bool hovered);
 

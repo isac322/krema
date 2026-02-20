@@ -18,6 +18,8 @@ class TasksModel;
 namespace krema
 {
 
+class DockVisibilityController;
+
 /**
  * Main dock window.
  *
@@ -41,7 +43,7 @@ public:
     ~DockView() override;
 
     /// Initialize the dock view. @p tasksModel is used for visibility control.
-    void initialize(TaskManager::TasksModel *tasksModel);
+    void initialize(TaskManager::TasksModel *tasksModel, DockPlatform::Edge edge, DockPlatform::VisibilityMode visibilityMode);
 
     // --- Properties ---
     [[nodiscard]] QColor backgroundColor() const;
@@ -63,6 +65,7 @@ public:
 
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
+    [[nodiscard]] DockVisibilityController *visibilityController() const;
 
 Q_SIGNALS:
     void backgroundColorChanged();
@@ -81,7 +84,7 @@ private:
 
     std::unique_ptr<DockPlatform> m_platform;
     std::unique_ptr<BackgroundStyle> m_backgroundStyle;
-    class DockVisibilityController *m_visibilityController = nullptr;
+    DockVisibilityController *m_visibilityController = nullptr;
 
     int m_iconSize = 48;
     int m_iconSpacing = 4;

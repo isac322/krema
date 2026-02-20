@@ -25,6 +25,69 @@ Item {
     // on/off flickering when moving between icons through tiny gaps.
     property bool _zoomActive: false
 
+    // --- Internal drag state ---
+    property bool _dragActive: false
+    property int _dragSourceIndex: -1
+    property int _dragTargetIndex: -1
+    property real _dragCurrentX: 0
+    property real _dragCurrentY: 0
+    property real _dragStartX: 0
+    property real _dragStartY: 0
+    property bool _dragPending: false      // press-hold started but not yet moved enough
+    property bool _dragWasActive: false     // was drag active during this press cycle (suppress click)
+    readonly property real _dragThreshold: 10
+
+    Timer {
+        id: dragHoldTimer
+        interval: 300
+        onTriggered: {
+            if (root.hoveredIndex >= 0) {
+                root._dragPending = true
+                root._dragSourceIndex = root.hoveredIndex
+            }
+        }
+    }
+
+    // Compute the target index where the dragged item would be inserted.
+    // Compares mouse X with each icon's center X (including the source so
+    // that dropping near the original position keeps the item in place).
+    function computeDropIndex(globalMouseX) {
+        let panelRelX = globalMouseX - dockPanel.x
+        let items = []
+        for (let i = 0; i < dockRepeater.count; i++) {
+            let item = dockRepeater.itemAt(i)
+            if (!item) continue
+            items.push({ idx: i, cx: item.x + item.width / 2 + dockRow.x })
+        }
+        if (items.length === 0) return -1
+
+        // Find closest icon center
+        let bestIdx = items[0].idx
+        let bestDist = Math.abs(panelRelX - items[0].cx)
+        for (let j = 1; j < items.length; j++) {
+            let d = Math.abs(panelRelX - items[j].cx)
+            if (d < bestDist) { bestDist = d; bestIdx = items[j].idx }
+        }
+        return bestIdx
+    }
+
+    // Compute which icon is under an external drop cursor (unscaled hit test).
+    function computeExternalDropIndex(dropX) {
+        for (let i = 0; i < dockRepeater.count; i++) {
+            let item = dockRepeater.itemAt(i)
+            if (!item) continue
+            let itemLeft = dockRow.x + item.x
+            let itemRight = itemLeft + item.width
+            if (dropX >= itemLeft && dropX <= itemRight) return i
+        }
+        return -1
+    }
+
+    function isDesktopFileUrl(url) {
+        let str = url.toString()
+        return str.endsWith(".desktop") || str.startsWith("applications:")
+    }
+
     function updateHoveredItem() {
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
@@ -45,24 +108,36 @@ Item {
         }
 
         // Find the closest icon whose SCALED 2D bounds contain the mouse.
-        // Use Repeater.itemAt() for correct model-index-to-delegate mapping.
+        // Uses Schmitt-trigger hysteresis: the currently-hovered icon has a wider
+        // effective claim radius (exit threshold), so small mouse movements toward
+        // a neighbor don't immediately switch the selection. This prevents
+        // accidental clicks on the wrong icon when the hovered icon is largest.
+        // Ref: Grossman & Balakrishnan (CHI 2005, Bubble Cursor), Amazon mega-menu.
         let bestIndex = -1
-        let bestDist = Infinity
+        let bestNormDist = Infinity
+        // Hysteresis factor: 0.15 (light) – 0.35 (strong). Default 0.25.
+        let hysteresisFactor = 0.25
         for (let i = 0; i < dockRepeater.count; i++) {
             let item = dockRepeater.itemAt(i)
             if (!item) continue
 
-            // Horizontal check: scaled width
+            // Horizontal: normalized distance (0 = center, 1 = edge of scaled icon)
             let dist = Math.abs(dockPanel.mouseX - item.itemCenterX)
             let scaledHalfWidth = (item.width * item.currentScale) / 2
-            if (dist >= scaledHalfWidth) continue
+            let normDist = dist / scaledHalfWidth
+
+            // Hysteresis: currently-hovered icon uses wider exit threshold
+            let maxNorm = (i === hoveredIndex) ? (1.0 + hysteresisFactor) : 1.0
+            if (normDist >= maxNorm) continue
 
             // Vertical check: Scale origin.y = height → bottom fixed, grows upward
             let itemBottom = dockRow.y + item.y + item.height
             let itemTop = itemBottom - item.height * item.currentScale
             if (dockPanel.mouseY < itemTop || dockPanel.mouseY > itemBottom) continue
 
-            if (dist < bestDist) { bestIndex = i; bestDist = dist }
+            // Comparison: currently-hovered icon gets distance bonus (sticky)
+            let effectiveDist = (i === hoveredIndex) ? normDist * (1.0 - hysteresisFactor) : normDist
+            if (effectiveDist < bestNormDist) { bestIndex = i; bestNormDist = effectiveDist }
         }
 
         if (bestIndex >= 0) {
@@ -96,12 +171,54 @@ Item {
             root.hoveredIndex = -1
             root.hoveredName = ""
             root._zoomActive = false
+            // Cancel any in-progress drag if mouse leaves the dock
+            if (root._dragActive || root._dragPending) {
+                root._dragActive = false
+                root._dragPending = false
+                root._dragWasActive = false
+                root._dragSourceIndex = -1
+                root._dragTargetIndex = -1
+                dragHoldTimer.stop()
+            }
             dockVisibility.setHovered(false)
+        }
+
+        // Start drag hold timer on left-button press
+        onPressed: function(mouse) {
+            if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
+                root._dragStartX = mouse.x
+                root._dragStartY = mouse.y
+                root._dragWasActive = false
+                dragHoldTimer.restart()
+            }
+        }
+
+        onReleased: function(mouse) {
+            dragHoldTimer.stop()
+
+            if (root._dragActive) {
+                // Execute reorder
+                if (root._dragTargetIndex >= 0 && root._dragTargetIndex !== root._dragSourceIndex) {
+                    dockModel.moveTask(root._dragSourceIndex, root._dragTargetIndex)
+                }
+                // Reset drag state
+                root._dragActive = false
+                root._dragPending = false
+                root._dragSourceIndex = -1
+                root._dragTargetIndex = -1
+            } else {
+                root._dragPending = false
+            }
         }
 
         // Click handling: uses hoveredIndex from scaled hit testing
         // so clicks work correctly on zoomed icons
         onClicked: function(mouse) {
+            // Suppress click if drag was active during this press cycle
+            if (root._dragWasActive) {
+                root._dragWasActive = false
+                return
+            }
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
                 dockModel.activate(root.hoveredIndex)
@@ -122,8 +239,28 @@ Item {
             }
         }
 
-        // Track mouse position for parabolic zoom
+        // Track mouse position for parabolic zoom + drag handling
         onPositionChanged: function(mouse) {
+            // --- Drag handling ---
+            if (root._dragPending && !root._dragActive) {
+                let dx = mouse.x - root._dragStartX
+                let dy = mouse.y - root._dragStartY
+                if (Math.sqrt(dx * dx + dy * dy) > root._dragThreshold) {
+                    root._dragActive = true
+                    root._dragWasActive = true
+                    tooltipItem.show = false
+                    tooltipTimer.stop()
+                }
+            }
+
+            if (root._dragActive) {
+                root._dragCurrentX = mouse.x
+                root._dragCurrentY = mouse.y
+                root._dragTargetIndex = computeDropIndex(mouse.x)
+                return  // Skip normal zoom handling during drag
+            }
+
+            // --- Normal zoom tracking ---
             // Only activate zoom when mouse is near the panel vertically.
             // Tight zone: panel area + zoom extension above (icons grow upward).
             let panelTop = dockPanel.y
@@ -179,7 +316,8 @@ Item {
         // Zoom activates when mouse hits an icon (_zoomActive=true) and stays
         // active until mouse leaves the panel zone (mouseX=-1). This hysteresis
         // prevents zoom flickering when crossing tiny gaps between icons.
-        property bool mouseInside: mouseX >= 0 && root._zoomActive
+        // Zoom is disabled during drag so all icons return to base scale.
+        property bool mouseInside: mouseX >= 0 && root._zoomActive && !root._dragActive
 
         // Report panel geometry to visibility controller for input region
         onXChanged: dockVisibility.setPanelRect(x, width)
@@ -208,20 +346,125 @@ Item {
                     // Compute this item's center X relative to the panel
                     itemCenterX: x + width / 2 + dockRow.x
 
+                    // Drag and drop visual feedback
+                    isDragSource: root._dragActive && root._dragSourceIndex === index
+                    isExternalDropTarget: externalDropArea.containsDrag
+                                          && externalDropArea.dropTargetIndex === index
                 }
+            }
+        }
+
+        // External drag and drop (files, .desktop, URLs from other apps)
+        DropArea {
+            id: externalDropArea
+            anchors.fill: parent
+            property int dropTargetIndex: -1
+
+            onEntered: function(drag) {
+                drag.accepted = true
+            }
+
+            onPositionChanged: function(drag) {
+                dropTargetIndex = root.computeExternalDropIndex(drag.x)
+            }
+
+            onDropped: function(drop) {
+                let urls = []
+                if (drop.hasUrls) {
+                    for (let i = 0; i < drop.urls.length; i++) {
+                        urls.push(drop.urls[i])
+                    }
+                }
+
+                if (urls.length === 0) {
+                    drop.accepted = false
+                    dropTargetIndex = -1
+                    return
+                }
+
+                // Check first URL to classify the drop
+                let firstUrl = urls[0]
+                let isLauncher = dockModel.isDesktopFile(firstUrl)
+
+                if (isLauncher) {
+                    // .desktop file → add as pinned launcher
+                    dockModel.addLauncher(firstUrl)
+                } else if (dropTargetIndex >= 0) {
+                    // Regular file(s) on an app icon → open with that app
+                    dockModel.openUrlsWithTask(dropTargetIndex, urls)
+                }
+                // else: regular file on dock background → no action
+
+                drop.accepted = true
+                dropTargetIndex = -1
+            }
+
+            onExited: {
+                dropTargetIndex = -1
             }
         }
     }
 
-    // Handle launch bounce trigger from C++ signal
+    // Floating drag ghost icon (follows cursor during internal reorder drag)
+    Image {
+        id: dragGhost
+        visible: root._dragActive && root._dragSourceIndex >= 0
+        width: dockView.iconSize
+        height: dockView.iconSize
+        source: {
+            if (!visible) return ""
+            let name = dockModel.iconName(root._dragSourceIndex)
+            return (name && name.length > 0) ? "image://icon/" + name : ""
+        }
+        sourceSize: Qt.size(dockView.iconSize, dockView.iconSize)
+        x: root._dragCurrentX - width / 2
+        y: root._dragCurrentY - height / 2
+        opacity: 0.8
+        z: 200
+    }
+
+    // Drop position indicator line (shown during internal reorder drag)
+    Rectangle {
+        id: dropIndicator
+        visible: root._dragActive && root._dragTargetIndex >= 0
+                 && root._dragTargetIndex !== root._dragSourceIndex
+        width: 2
+        height: dockView.iconSize
+        color: "#4fc3f7"
+        radius: 1
+        z: 150
+
+        x: {
+            if (!visible || root._dragTargetIndex < 0) return 0
+            let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
+            if (!targetItem) return 0
+            let itemX = dockPanel.x + dockRow.x + targetItem.x
+            // Show line on the side where the item will be inserted
+            if (root._dragTargetIndex > root._dragSourceIndex) {
+                return itemX + targetItem.width + dockView.iconSpacing / 2 - 1
+            } else {
+                return itemX - dockView.iconSpacing / 2 - 1
+            }
+        }
+        y: dockPanel.y + dockRow.y
+    }
+
+    // Handle launch bounce trigger from C++ signal.
+    // Only sets manualLaunching for already-running apps (IsWindow): their
+    // delegate stays alive, so manualLaunching persists through the bounce.
+    // For launchers (first launch), we skip manualLaunching entirely:
+    // IsStartup fires within ~5ms and, being model data, survives the
+    // delegate recreation caused by hideActivatedLaunchers.
     Connections {
         target: dockModel
         function onTaskLaunching(index) {
             let item = dockRepeater.itemAt(index)
-            if (item) {
-                item.manualLaunching = true
-                item.launchFallbackTimer.restart()
-            }
+            if (!item) return
+
+            // Skip for launcher items — IsStartup will drive the bounce.
+            if (!item.model.IsWindow) return
+
+            item.manualLaunching = true
         }
     }
 

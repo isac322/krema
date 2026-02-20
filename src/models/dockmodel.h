@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QObject>
+#include <QUrl>
 
 #include <taskmanager/activityinfo.h>
 #include <taskmanager/tasksmodel.h>
@@ -59,6 +60,24 @@ public:
     /// When hovering an app icon with multiple windows, wheel scrolls
     /// switch focus between that app's windows (not between different apps).
     Q_INVOKABLE void cycleWindows(int index, bool forward);
+
+    // --- Drag and Drop ---
+
+    /// Move the task at @p fromIndex to @p toIndex. Returns true on success.
+    /// Calls syncLaunchers() internally to persist the new order.
+    Q_INVOKABLE bool moveTask(int fromIndex, int toIndex);
+
+    /// Add a pinned launcher from a URL (.desktop file or applications: URL).
+    Q_INVOKABLE bool addLauncher(const QUrl &url);
+
+    /// Open the given URLs with the application at @p index.
+    Q_INVOKABLE void openUrlsWithTask(int index, const QList<QUrl> &urls);
+
+    /// Return the launcher URL for the task at @p index.
+    Q_INVOKABLE QUrl launcherUrl(int index) const;
+
+    /// Check whether the given URL refers to a .desktop file or applications: scheme.
+    Q_INVOKABLE bool isDesktopFile(const QUrl &url) const;
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();

@@ -21,7 +21,14 @@ Item {
 
     // Launch animation state
     property bool manualLaunching: false
-    readonly property bool launching: manualLaunching || (model.IsStartup ?? false)
+    readonly property bool launching:
+        manualLaunching
+        || (_isStartup && !_noOpOverride)
+        || _waitingForWindow
+
+    // Drag and drop visual feedback (driven from main.qml)
+    property bool isDragSource: false
+    property bool isExternalDropTarget: false
 
     // Configuration from DockView
     property int iconSize: 48
@@ -31,10 +38,11 @@ Item {
     property int spacing: 4
     property real itemCenterX: 0
 
-    // Parabolic zoom: number of neighboring icons affected
-    readonly property int zoomNeighbors: 3
-    // Gaussian sigma for the zoom curve
-    readonly property real zoomSigma: zoomNeighbors * (iconSize + spacing) / 2.5
+    // Gaussian sigma factor for the zoom curve (sigma = iconSize * factor).
+    // Controls how many neighboring icons are visibly affected by zoom.
+    // Recommended range: 0.8 (tight) – 1.8 (wide). Default 1.2 ≈ macOS Dock.
+    property real zoomSigmaFactor: 1.2
+    readonly property real zoomSigma: iconSize * zoomSigmaFactor
 
     // Computed zoom factor for this item
     readonly property real zoomFactor: {
@@ -47,32 +55,116 @@ Item {
         return 1.0 + (maxZoomFactor - 1.0) * Math.exp(-(distance * distance) / sigma2)
     }
 
-    // Track ChildCount to detect new instances appearing from ANY source:
-    // dock middle-click, keyboard shortcuts (Ctrl+Alt+T), app menus, etc.
-    // When ChildCount increases, start a bounce animation.
-    // A timer ensures the bounce is visible for at least ~2 cycles (800ms)
-    // before stopping gracefully.
+    // --- KDE state-driven launch tracking ---
+    //
+    // Launch animation lifecycle:
+    //   1. manualLaunching: click → IsStartup handoff bridge (a few ms)
+    //   2. _isStartup: KDE startup notification drives bounce (until window or timeout)
+    //   3. _waitingForWindow: keeps bounce alive after KDE's 5s timeout for slow apps
+    //
+    // Bounce stops when any of:
+    //   - ChildCount increases (new window created)
+    //   - IsActive changes (single-instance app raised its existing window)
+    //   - noOpDetectionTimer fires (already-active app, no new window in 2s → no-op)
+    //   - launchSafetyTimer fires (IsStartup never arrived within 500ms)
+    //   - maxLaunchTimer fires (30s absolute safety net)
+
+    readonly property bool _isStartup: model.IsStartup ?? false
+    readonly property bool _isActive: model.IsActive ?? false
     readonly property int _childCount: model.ChildCount || 0
     property int _prevChildCount: 0
 
-    Timer {
-        id: bounceStopTimer
-        interval: 800  // ~2 full bounce cycles (400ms each)
-        onTriggered: dockItem.manualLaunching = false
+    property bool _noOpOverride: false
+    property bool _waitingForWindow: false
+    property int _childCountAtLaunch: 0
+
+    // --- State change handlers ---
+
+    on_IsStartupChanged: {
+        if (_isStartup) {
+            // KDE acknowledged the launch → release manualLaunching bridge
+            if (manualLaunching) manualLaunching = false
+        } else {
+            // IsStartup went false (window matched, cancelled, or KDE timeout).
+            // If no new window appeared and not already active → slow app,
+            // keep bouncing via _waitingForWindow.
+            if (!_noOpOverride
+                    && _childCount === _childCountAtLaunch
+                    && !_isActive) {
+                _waitingForWindow = true
+                maxLaunchTimer.restart()
+            }
+        }
+    }
+
+    on_IsActiveChanged: {
+        if (_isActive && manualLaunching) manualLaunching = false
+        if (_isActive && _waitingForWindow) {
+            _waitingForWindow = false
+            maxLaunchTimer.stop()
+        }
     }
 
     on_ChildCountChanged: {
         if (_childCount > _prevChildCount) {
-            if (!launching) {
-                // New instance from any source — start bounce
-                manualLaunching = true
-                launchFallbackTimer.restart()  // 3s safety net
-            }
-            // Schedule graceful bounce stop after visible duration.
-            // restart() extends the timer if multiple instances spawn quickly.
-            bounceStopTimer.restart()
+            if (manualLaunching) manualLaunching = false
+            _noOpOverride = false
+            _waitingForWindow = false
+            noOpDetectionTimer.stop()
+            maxLaunchTimer.stop()
         }
         _prevChildCount = _childCount
+    }
+
+    // --- Timers ---
+
+    // 500ms: fallback for the edge case where IsStartup never fires
+    // (e.g. single-instance app silently ignores D-Bus activation)
+    Timer {
+        id: launchSafetyTimer
+        interval: 500
+        onTriggered: {
+            if (dockItem.manualLaunching) dockItem.manualLaunching = false
+        }
+    }
+
+    // 2s: detects no-op for already-active apps. If no new window appeared
+    // within 2s after middle-click, override _isStartup to stop bounce.
+    Timer {
+        id: noOpDetectionTimer
+        interval: 2000
+        onTriggered: {
+            if (dockItem._childCount === dockItem._childCountAtLaunch) {
+                dockItem._noOpOverride = true
+            }
+        }
+    }
+
+    // 30s: absolute safety net for _waitingForWindow mode
+    // (handles app crash/failure where window never appears)
+    Timer {
+        id: maxLaunchTimer
+        interval: 30000
+        onTriggered: {
+            dockItem._waitingForWindow = false
+        }
+    }
+
+    onManualLaunchingChanged: {
+        if (manualLaunching) {
+            _childCountAtLaunch = _childCount
+            _noOpOverride = false
+            _waitingForWindow = false
+            launchSafetyTimer.restart()
+            maxLaunchTimer.stop()
+
+            // Start no-op detection only if app is already active
+            if (_isActive) {
+                noOpDetectionTimer.restart()
+            }
+        } else {
+            launchSafetyTimer.stop()
+        }
     }
 
     // Animated scale
@@ -136,6 +228,12 @@ Item {
         width: iconSize
         height: iconSize
         source: {
+            // IMPORTANT: Read model.display to create a reactive dependency on
+            // model data. After model reordering (move), the Repeater may update
+            // delegate model data without changing index (position unchanged).
+            // Without this, the binding only tracks dockItem.index and won't
+            // re-evaluate when different data appears at the same position.
+            let _dep = model.display
             let name = dockModel.iconName(dockItem.index)
             if (name && name.length > 0) {
                 return "image://icon/" + name
@@ -148,8 +246,9 @@ Item {
         // Bounce transform for launch animation
         transform: Translate { id: bounceTranslate; y: 0 }
 
-        // Highlight for active window
+        // Highlight for active window / drag source dimming
         opacity: {
+            if (dockItem.isDragSource) return 0.3
             if (dockItem.model.IsActive) return 1.0
             if (dockItem.model.IsMinimized) return 0.5
             return 0.8
@@ -178,6 +277,18 @@ Item {
                 color: "white"
             }
         }
+    }
+
+    // External drop target highlight (shown when dragging a file over this icon)
+    Rectangle {
+        anchors.fill: iconImage
+        anchors.margins: -3
+        radius: 10
+        color: "transparent"
+        border.color: "#4fc3f7"
+        border.width: 2
+        visible: dockItem.isExternalDropTarget
+        opacity: 0.9
     }
 
     // Launch bounce animation — finishes current cycle gracefully when launching ends
@@ -222,13 +333,6 @@ Item {
             // Let the current cycle finish at faster speed
             _finishingBounce = true
         }
-    }
-
-    // Fallback timer: clear manualLaunching after 3s if IsStartup never fires
-    Timer {
-        id: launchFallbackTimer
-        interval: 3000
-        onTriggered: dockItem.manualLaunching = false
     }
 
     // Status indicator dots

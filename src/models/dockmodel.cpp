@@ -268,4 +268,66 @@ void DockModel::showContextMenu(int index)
     menu->popup(QCursor::pos());
 }
 
+bool DockModel::moveTask(int fromIndex, int toIndex)
+{
+    if (fromIndex == toIndex) {
+        return false;
+    }
+    if (fromIndex < 0 || fromIndex >= m_tasksModel->rowCount()) {
+        return false;
+    }
+    if (toIndex < 0 || toIndex >= m_tasksModel->rowCount()) {
+        return false;
+    }
+
+    const bool ok = m_tasksModel->move(fromIndex, toIndex);
+    if (ok) {
+        m_tasksModel->syncLaunchers();
+        Q_EMIT pinnedLaunchersChanged();
+    }
+    return ok;
+}
+
+bool DockModel::addLauncher(const QUrl &url)
+{
+    if (!url.isValid()) {
+        return false;
+    }
+
+    const bool ok = m_tasksModel->requestAddLauncher(url);
+    if (ok) {
+        Q_EMIT pinnedLaunchersChanged();
+    }
+    return ok;
+}
+
+void DockModel::openUrlsWithTask(int index, const QList<QUrl> &urls)
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid() || urls.isEmpty()) {
+        return;
+    }
+    m_tasksModel->requestOpenUrls(idx, urls);
+}
+
+QUrl DockModel::launcherUrl(int index) const
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return {};
+    }
+    return idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+}
+
+bool DockModel::isDesktopFile(const QUrl &url) const
+{
+    if (url.scheme() == QLatin1String("applications")) {
+        return true;
+    }
+    if (url.isLocalFile() && url.toLocalFile().endsWith(QLatin1String(".desktop"))) {
+        return true;
+    }
+    return false;
+}
+
 } // namespace krema

@@ -30,6 +30,7 @@ class DockSettings : public QObject
     Q_PROPERTY(int edge READ edge WRITE setEdge NOTIFY settingsChanged)
     Q_PROPERTY(int showDelay READ showDelay WRITE setShowDelay NOTIFY settingsChanged)
     Q_PROPERTY(int hideDelay READ hideDelay WRITE setHideDelay NOTIFY settingsChanged)
+    Q_PROPERTY(qreal backgroundOpacity READ backgroundOpacity WRITE setBackgroundOpacity NOTIFY settingsChanged)
 
 public:
     explicit DockSettings(QObject *parent = nullptr);
@@ -66,6 +67,9 @@ public:
 
     [[nodiscard]] int hideDelay() const;
     void setHideDelay(int ms);
+
+    [[nodiscard]] qreal backgroundOpacity() const;
+    void setBackgroundOpacity(qreal opacity);
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();

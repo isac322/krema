@@ -75,7 +75,19 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
 
 QColor DockView::backgroundColor() const
 {
-    return m_backgroundStyle->backgroundColor();
+    QColor color = m_backgroundStyle->backgroundColor();
+    color.setAlphaF(m_backgroundOpacity);
+    return color;
+}
+
+void DockView::setBackgroundOpacity(qreal opacity)
+{
+    opacity = qBound(0.1, opacity, 1.0);
+    if (qFuzzyCompare(m_backgroundOpacity, opacity)) {
+        return;
+    }
+    m_backgroundOpacity = opacity;
+    Q_EMIT backgroundColorChanged();
 }
 
 int DockView::iconSize() const

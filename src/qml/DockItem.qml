@@ -176,7 +176,7 @@ Item {
     Behavior on currentScale {
         enabled: dockItem._zoomAnimReady
         NumberAnimation {
-            duration: 150
+            duration: Kirigami.Units.shortDuration
             easing.type: Easing.OutCubic
         }
     }
@@ -257,7 +257,7 @@ Item {
         }
 
         Behavior on opacity {
-            NumberAnimation { duration: 100 }
+            NumberAnimation { duration: Kirigami.Units.shortDuration }
         }
 
         // Fallback placeholder when icon is not available
@@ -265,7 +265,7 @@ Item {
             id: iconPlaceholder
             anchors.fill: parent
             radius: Kirigami.Units.largeSpacing
-            color: Qt.hsla((dockItem.index * 0.15) % 1.0, 0.6, 0.4, 1.0)
+            color: Kirigami.Theme.highlightColor
             visible: iconImage.status !== Image.Ready
 
             QQC2.Label {
@@ -361,7 +361,7 @@ Item {
                 opacity: dockItem.model.IsMinimized ? 0.4 : 0.8
 
                 Behavior on opacity {
-                    NumberAnimation { duration: 100 }
+                    NumberAnimation { duration: Kirigami.Units.shortDuration }
                 }
             }
         }

@@ -89,6 +89,7 @@ int Application::run()
     m_dockView->setMaxZoomFactor(m_settings->maxZoomFactor());
     m_dockView->setCornerRadius(m_settings->cornerRadius());
     m_dockView->setFloating(m_settings->floating());
+    m_dockView->setBackgroundOpacity(m_settings->backgroundOpacity());
 
     m_dockView->initialize(m_dockModel->tasksModel(),
                            m_dockModel->virtualDesktopInfo(),
@@ -146,6 +147,7 @@ void Application::applySettings()
     m_dockView->setMaxZoomFactor(m_settings->maxZoomFactor());
     m_dockView->setCornerRadius(m_settings->cornerRadius());
     m_dockView->setFloating(m_settings->floating());
+    m_dockView->setBackgroundOpacity(m_settings->backgroundOpacity());
 
     // Edge and visibility mode require platform-level changes
     m_dockView->platform()->setEdge(static_cast<DockPlatform::Edge>(m_settings->edge()));

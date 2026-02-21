@@ -12,6 +12,9 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | [taskmanager-models.md](taskmanager-models.md) | TaskManager — model hierarchy, proxy chain, roles, Q_PROPERTIES, task interaction |
 | [virtual-desktops.md](virtual-desktops.md) | VirtualDesktopInfo — desktop/activity tracking |
 | [multi-monitor.md](multi-monitor.md) | QScreen API, LayerShellQt ScreenConfiguration, multi-monitor architecture |
+| [kconfig.md](kconfig.md) | KConfig/KSharedConfig/KConfigGroup — persistent configuration, read/write, watchers |
+| [kglobalaccel.md](kglobalaccel.md) | KGlobalAccel — global keyboard shortcuts, registration, conflict handling |
+| [kaboutdata.md](kaboutdata.md) | KAboutData — application metadata, license, D-Bus/KGlobalAccel integration |
 
 ### M4: Drag & Drop
 

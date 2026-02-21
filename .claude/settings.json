@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/bhyoo/projects/c++/krema/.claude/hooks/auto-build.sh",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '## Critical Rules\n- NEVER use QML animation values in C++ business logic\n- ALWAYS null-check screen() before using\n- ALWAYS build after each file edit\n- Check docs/kde/ before using any KDE API\n- Surface height MUST include animation overflow\n- Input region: empty QRegion = accept ALL input, not none\n- ONE authoritative mouse tracking level (panel, not item)'"
+          }
+        ]
+      }
+    ]
+  }
+}

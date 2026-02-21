@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.kirigamiaddons.formcard as FormCard
 
 Kirigami.ApplicationWindow {
     id: settingsWindow
@@ -21,46 +22,59 @@ Kirigami.ApplicationWindow {
         onActivated: settingsWindow.close()
     }
 
-    pageStack.initialPage: Kirigami.ScrollablePage {
+    pageStack.initialPage: FormCard.FormCardPage {
         title: i18n("Settings")
 
-        ColumnLayout {
-            spacing: Kirigami.Units.largeSpacing
+        // --- Appearance Section ---
 
-            // --- Appearance Section ---
-            Kirigami.Heading {
-                text: i18n("Appearance")
-                level: 4
-                Layout.fillWidth: true
+        FormCard.FormHeader {
+            title: i18n("Appearance")
+        }
+
+        FormCard.FormCard {
+            FormCard.FormSpinBoxDelegate {
+                label: i18n("Icon size")
+                from: 24; to: 96; stepSize: 4
+                value: dockSettings.iconSize
+                onValueChanged: dockSettings.iconSize = value
             }
 
-            Kirigami.Separator { Layout.fillWidth: true }
+            FormCard.FormDelegateSeparator {}
 
-            GridLayout {
-                columns: 2
-                columnSpacing: Kirigami.Units.largeSpacing
-                rowSpacing: Kirigami.Units.smallSpacing
-                Layout.fillWidth: true
+            FormCard.FormSpinBoxDelegate {
+                label: i18n("Icon spacing")
+                from: 0; to: 16
+                value: dockSettings.iconSpacing
+                onValueChanged: dockSettings.iconSpacing = value
+            }
 
-                QQC2.Label { text: i18n("Icon size:") }
-                QQC2.SpinBox {
-                    Layout.fillWidth: false
-                    from: 24; to: 96; stepSize: 4
-                    value: dockSettings.iconSize
-                    onValueModified: dockSettings.iconSize = value
-                }
+            FormCard.FormDelegateSeparator {}
 
-                QQC2.Label { text: i18n("Icon spacing:") }
-                QQC2.SpinBox {
-                    Layout.fillWidth: false
-                    from: 0; to: 16
-                    value: dockSettings.iconSpacing
-                    onValueModified: dockSettings.iconSpacing = value
-                }
-
-                QQC2.Label { text: i18n("Zoom factor:") }
-                RowLayout {
+            FormCard.AbstractFormDelegate {
+                id: zoomDelegate
+                background: null
+                contentItem: ColumnLayout {
                     spacing: Kirigami.Units.smallSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: i18n("Zoom factor")
+                            elide: Text.ElideRight
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            color: zoomDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                        }
+
+                        QQC2.Label {
+                            text: zoomSlider.value.toFixed(1) + "x"
+                            color: Kirigami.Theme.disabledTextColor
+                        }
+                    }
+
                     QQC2.Slider {
                         id: zoomSlider
                         Layout.fillWidth: true
@@ -68,98 +82,89 @@ Kirigami.ApplicationWindow {
                         value: dockSettings.maxZoomFactor
                         onMoved: dockSettings.maxZoomFactor = value
                     }
-                    QQC2.Label {
-                        text: zoomSlider.value.toFixed(1) + "x"
-                        Layout.minimumWidth: Kirigami.Units.gridUnit * 2
-                    }
-                }
-
-                QQC2.Label { text: i18n("Corner radius:") }
-                QQC2.SpinBox {
-                    Layout.fillWidth: false
-                    from: 0; to: 24
-                    value: dockSettings.cornerRadius
-                    onValueModified: dockSettings.cornerRadius = value
-                }
-
-                QQC2.Label { text: i18n("Floating:") }
-                QQC2.CheckBox {
-                    checked: dockSettings.floating
-                    onToggled: dockSettings.floating = checked
                 }
             }
 
-            // --- Behavior Section ---
-            Item { height: Kirigami.Units.largeSpacing }
+            FormCard.FormDelegateSeparator {}
 
-            Kirigami.Heading {
-                text: i18n("Behavior")
-                level: 4
-                Layout.fillWidth: true
+            FormCard.FormSpinBoxDelegate {
+                label: i18n("Corner radius")
+                from: 0; to: 24
+                value: dockSettings.cornerRadius
+                onValueChanged: dockSettings.cornerRadius = value
             }
 
-            Kirigami.Separator { Layout.fillWidth: true }
+            FormCard.FormDelegateSeparator {}
 
-            GridLayout {
-                columns: 2
-                columnSpacing: Kirigami.Units.largeSpacing
-                rowSpacing: Kirigami.Units.smallSpacing
-                Layout.fillWidth: true
+            FormCard.FormSwitchDelegate {
+                text: i18n("Floating")
+                checked: dockSettings.floating
+                onToggled: dockSettings.floating = checked
+            }
+        }
 
-                QQC2.Label { text: i18n("Visibility mode:") }
-                QQC2.ComboBox {
-                    Layout.fillWidth: true
-                    model: [
-                        i18n("Always visible"),
-                        i18n("Always hidden"),
-                        i18n("Dodge windows"),
-                        i18n("Smart hide")
-                    ]
-                    currentIndex: dockSettings.visibilityMode
-                    onActivated: function(index) {
-                        dockSettings.visibilityMode = index
-                    }
-                }
+        // --- Behavior Section ---
 
-                QQC2.Label { text: i18n("Screen edge:") }
-                QQC2.ComboBox {
-                    Layout.fillWidth: true
-                    model: [
-                        i18n("Top"),
-                        i18n("Bottom"),
-                        i18n("Left"),
-                        i18n("Right")
-                    ]
-                    currentIndex: dockSettings.edge
-                    onActivated: function(index) {
-                        dockSettings.edge = index
-                    }
-                }
+        FormCard.FormHeader {
+            title: i18n("Behavior")
+        }
 
-                // Show/hide delay controls — only visible in hide-capable modes
-                QQC2.Label {
-                    text: i18n("Show delay (ms):")
-                    visible: dockSettings.visibilityMode !== 0
+        FormCard.FormCard {
+            FormCard.FormComboBoxDelegate {
+                text: i18n("Visibility mode")
+                displayMode: FormCard.FormComboBoxDelegate.Dialog
+                model: [
+                    i18n("Always visible"),
+                    i18n("Always hidden"),
+                    i18n("Dodge windows"),
+                    i18n("Smart hide")
+                ]
+                currentIndex: dockSettings.visibilityMode
+                onActivated: function(index) {
+                    dockSettings.visibilityMode = index
                 }
-                QQC2.SpinBox {
-                    Layout.fillWidth: false
-                    from: 0; to: 2000; stepSize: 50
-                    value: dockSettings.showDelay
-                    onValueModified: dockSettings.showDelay = value
-                    visible: dockSettings.visibilityMode !== 0
-                }
+            }
 
-                QQC2.Label {
-                    text: i18n("Hide delay (ms):")
-                    visible: dockSettings.visibilityMode !== 0
+            FormCard.FormDelegateSeparator {}
+
+            FormCard.FormComboBoxDelegate {
+                text: i18n("Screen edge")
+                displayMode: FormCard.FormComboBoxDelegate.Dialog
+                model: [
+                    i18n("Top"),
+                    i18n("Bottom"),
+                    i18n("Left"),
+                    i18n("Right")
+                ]
+                currentIndex: dockSettings.edge
+                onActivated: function(index) {
+                    dockSettings.edge = index
                 }
-                QQC2.SpinBox {
-                    Layout.fillWidth: false
-                    from: 0; to: 2000; stepSize: 50
-                    value: dockSettings.hideDelay
-                    onValueModified: dockSettings.hideDelay = value
-                    visible: dockSettings.visibilityMode !== 0
-                }
+            }
+
+            // Show/hide delay controls — only visible in hide-capable modes
+            FormCard.FormDelegateSeparator {
+                visible: dockSettings.visibilityMode !== 0
+            }
+
+            FormCard.FormSpinBoxDelegate {
+                label: i18n("Show delay (ms)")
+                from: 0; to: 2000; stepSize: 50
+                value: dockSettings.showDelay
+                onValueChanged: dockSettings.showDelay = value
+                visible: dockSettings.visibilityMode !== 0
+            }
+
+            FormCard.FormDelegateSeparator {
+                visible: dockSettings.visibilityMode !== 0
+            }
+
+            FormCard.FormSpinBoxDelegate {
+                label: i18n("Hide delay (ms)")
+                from: 0; to: 2000; stepSize: 50
+                value: dockSettings.hideDelay
+                onValueChanged: dockSettings.hideDelay = value
+                visible: dockSettings.visibilityMode !== 0
             }
         }
     }

@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 import QtQuick
+import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 
 /**
@@ -211,7 +212,7 @@ Item {
 
     // Size: base icon size, scaled by zoom
     width: iconSize
-    height: iconSize + indicatorRow.height + 4  // icon + gap + indicators
+    height: iconSize + indicatorRow.height + Kirigami.Units.smallSpacing  // icon + gap + indicators
 
     // Scaled transform (icon grows upward from bottom)
     transform: Scale {
@@ -263,11 +264,11 @@ Item {
         Rectangle {
             id: iconPlaceholder
             anchors.fill: parent
-            radius: 8
+            radius: Kirigami.Units.largeSpacing
             color: Qt.hsla((dockItem.index * 0.15) % 1.0, 0.6, 0.4, 1.0)
             visible: iconImage.status !== Image.Ready
 
-            Text {
+            QQC2.Label {
                 anchors.centerIn: parent
                 text: {
                     let name = dockItem.model.display || ""
@@ -283,8 +284,8 @@ Item {
     // External drop target highlight (shown when dragging a file over this icon)
     Rectangle {
         anchors.fill: iconImage
-        anchors.margins: -3
-        radius: 10
+        anchors.margins: -Kirigami.Units.smallSpacing
+        radius: Kirigami.Units.largeSpacing + Kirigami.Units.smallSpacing / 2
         color: "transparent"
         border.color: Kirigami.Theme.highlightColor
         border.width: 2
@@ -340,9 +341,9 @@ Item {
     Row {
         id: indicatorRow
         anchors.top: iconImage.bottom
-        anchors.topMargin: 4
+        anchors.topMargin: Kirigami.Units.smallSpacing
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 3
+        spacing: Kirigami.Units.smallSpacing
 
         Repeater {
             // Show dots based on window count (max 3)

@@ -5,19 +5,18 @@
 
 #include <KWindowEffects>
 
-#include <QGuiApplication>
-#include <QPalette>
+#include <KColorScheme>
 
 namespace krema
 {
 
 PanelInheritStyle::PanelInheritStyle()
 {
-    // Read panel background color from the system palette.
-    // On Plasma, QPalette::Window gives the panel/widget background color
-    // which follows the global color scheme (light/dark).
-    const QPalette palette = QGuiApplication::palette();
-    m_panelColor = palette.color(QPalette::Window);
+    // Read panel background color from the Plasma Header color set.
+    // Header matches Plasma panel/header backgrounds and responds to
+    // runtime theme changes (unlike QPalette which is static at startup).
+    KColorScheme scheme(QPalette::Normal, KColorScheme::Header);
+    m_panelColor = scheme.background(KColorScheme::NormalBackground).color();
     m_panelColor.setAlphaF(0.6); // 60% opacity default
 
     m_blurAvailable = KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind);

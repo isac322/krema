@@ -52,6 +52,7 @@ target_link_libraries(krema_lib PUBLIC
     KF6::IconThemes
     KF6::Crash
     KF6::XmlGui
+    KF6::Service
     LayerShellQt::Interface
     PW::LibTaskManager
     Wayland::Client

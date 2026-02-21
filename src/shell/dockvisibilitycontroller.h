@@ -79,7 +79,7 @@ public:
 
     /// Increment/decrement interaction lock (context menu, settings window open).
     /// While interacting, the dock will never hide.
-    void setInteracting(bool interacting);
+    Q_INVOKABLE void setInteracting(bool interacting);
 
 Q_SIGNALS:
     void dockVisibleChanged();

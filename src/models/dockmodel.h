@@ -81,6 +81,12 @@ public:
     /// Check whether the given URL refers to a .desktop file or applications: scheme.
     Q_INVOKABLE bool isDesktopFile(const QUrl &url) const;
 
+    /// Return true if the task at @p index is a pinned launcher.
+    Q_INVOKABLE bool isPinned(int index) const;
+
+    /// Remove the pinned launcher at @p index. Returns true on success.
+    Q_INVOKABLE bool removeLauncher(int index);
+
 Q_SIGNALS:
     void pinnedLaunchersChanged();
     void taskLaunching(int index);

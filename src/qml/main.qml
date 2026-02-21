@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 import QtQuick
+import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 
 /**
@@ -172,9 +173,18 @@ Item {
             root.hoveredIndex = -1
             root.hoveredName = ""
             root._zoomActive = false
-            // Cancel any in-progress drag if mouse leaves the dock
-            if (root._dragActive || root._dragPending) {
+            // Drag-out: if an active drag leaves the dock, unpin the launcher
+            if (root._dragActive) {
+                if (dockModel.isPinned(root._dragSourceIndex)) {
+                    dockModel.removeLauncher(root._dragSourceIndex)
+                }
                 root._dragActive = false
+                root._dragPending = false
+                root._dragWasActive = false
+                root._dragSourceIndex = -1
+                root._dragTargetIndex = -1
+                dockVisibility.setInteracting(false)
+            } else if (root._dragPending) {
                 root._dragPending = false
                 root._dragWasActive = false
                 root._dragSourceIndex = -1
@@ -207,6 +217,7 @@ Item {
                 root._dragPending = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
+                dockVisibility.setInteracting(false)
             } else {
                 root._dragPending = false
             }
@@ -249,6 +260,7 @@ Item {
                 if (Math.sqrt(dx * dx + dy * dy) > root._dragThreshold) {
                     root._dragActive = true
                     root._dragWasActive = true
+                    dockVisibility.setInteracting(true)  // Prevent dock hide during drag
                     tooltipItem.show = false
                     tooltipTimer.stop()
                 }
@@ -282,8 +294,8 @@ Item {
     Rectangle {
         id: dockPanel
         anchors.horizontalCenter: parent.horizontalCenter
-        height: dockView.iconSize + 16  // icon + padding
-        width: Math.max(dockRow.implicitWidth + 16, 100)  // content + padding, min 100px
+        height: dockView.iconSize + Kirigami.Units.largeSpacing * 2  // icon + padding
+        width: Math.max(dockRow.implicitWidth + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)  // content + padding, min width
         radius: dockView.cornerRadius
         color: dockView.backgroundColor
 
@@ -292,7 +304,7 @@ Item {
         // without using layer-shell margin (which would cause surface repositioning).
         y: dockVisibility.dockVisible
            ? parent.height - height - dockView.floatingPadding
-           : parent.height + 8
+           : parent.height + Kirigami.Units.largeSpacing
 
         // Delay enabling animations until after initial layout to avoid startup flicker
         property bool animationsReady: false
@@ -497,23 +509,21 @@ Item {
             if (!item) return 0
             return dockPanel.x + dockRow.x + item.x + item.width / 2 - width / 2
         }
-        y: dockPanel.y - height - 8
+        y: dockPanel.y - height - Kirigami.Units.largeSpacing
 
         Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip
         Kirigami.Theme.inherit: false
 
-        width: tooltipLabel.implicitWidth + 16
-        height: tooltipLabel.implicitHeight + 8
-        radius: 4
+        width: tooltipLabel.implicitWidth + Kirigami.Units.largeSpacing * 2
+        height: tooltipLabel.implicitHeight + Kirigami.Units.largeSpacing
+        radius: Kirigami.Units.smallSpacing
         color: Kirigami.Theme.backgroundColor
         z: 100
 
-        Text {
+        QQC2.Label {
             id: tooltipLabel
             anchors.centerIn: parent
             text: root.hoveredName
-            color: Kirigami.Theme.textColor
-            font: Kirigami.Theme.defaultFont
         }
 
         // Hide tooltip when mouse leaves dock area

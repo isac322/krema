@@ -13,7 +13,7 @@ case "$FILE_PATH" in
     ;;
 esac
 
-cd /home/bhyoo/projects/c++/krema
+cd "$(git rev-parse --show-toplevel)"
 
 # Build (merge stderr into stdout)
 BUILD_OUTPUT=$(cmake --build build/dev --parallel 2>&1)

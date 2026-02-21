@@ -28,3 +28,54 @@
 cmake --preset default
 cmake --build build
 ```
+
+## Token Efficiency
+
+### Read Only What You Need
+- docs/kde/: Read ONLY the specific doc relevant to the current task, not all 17 files
+- Use docs/kde/README.md index to identify which doc to read
+- For source files: use Grep to find relevant sections instead of reading entire files
+- Do NOT re-read files that haven't changed since your last read
+
+### Session Discipline
+- After completing each logical unit of work (feature, bug fix, refactor): suggest running /compact
+- If context is getting large, proactively summarize what's been done and what remains
+
+### Subagent Efficiency
+- Use model: "haiku" for Task agents doing simple searches, file reads, or pattern matching
+- Reserve default model for complex reasoning tasks only
+- Keep subagent prompts focused — avoid dumping entire context into subagents
+
+## Anti-Patterns (MUST AVOID)
+
+### QML ↔ C++ State Boundary
+- NEVER use QML animation values (y, x, opacity) in C++ business logic
+- C++ must have independent "reference state" separate from animated display state
+- If C++ needs position: snapshot at animation START/END only, not during
+
+### Wayland Surface Lifecycle
+- ALWAYS null-check screen() — it can be nullptr on virtual compositors
+- Layer-shell width=0 means "fill screen", not error
+- Popup surfaces intercept pointer events — use in-scene rendering for tooltips
+- Unset QT_WAYLAND_SHELL_INTEGRATION after dock initialization
+
+### Surface Sizing
+- Surface height MUST include animation overflow (zoom, bounce, etc.)
+- Formula: surfaceHeight = panelHeight + ceil(iconSize * (maxZoomFactor - 1.0))
+- Input region MUST be explicitly set — empty QRegion = accept ALL input, not none
+
+### Mouse/Input Hierarchy
+- ONE authoritative level for mouse tracking (panel level, not item level)
+- Hover detection MUST check ALL dimensions (X and Y), never single-axis
+- DockItem.hoverEnabled must be false — panel handles all hover
+
+### Icon Resources
+- sourceSize MUST use max zoom resolution: iconSize * maxZoomFactor
+- Never load at resting size when zoom exists
+
+## Architecture Decisions
+
+- Visibility logic owner: DockVisibilityController (C++)
+- Mouse tracking owner: main.qml panel-level MouseArea
+- Animation state: QML only — never feeds back to C++ logic
+- Input region: WaylandDockPlatform manages exclusively

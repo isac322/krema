@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kwin-mcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/home/bhyoo/projects/python/kwin-mcp", "python", "-m", "kwin_mcp.server"]
+    }
+  }
+}

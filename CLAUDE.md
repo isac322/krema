@@ -22,6 +22,29 @@
 - English commit messages following Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, etc.)
 - Documentation in English
 
+## KDE Plasma-First (Mandatory)
+
+Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지 않는다.
+
+### 원칙
+- Qt API와 KDE API가 모두 존재할 때, 항상 KDE API를 우선 사용
+- KDE HIG(Human Interface Guidelines)를 따를 것
+- Kirigami / Kirigami Addons 컴포넌트를 plain QQC2보다 우선 사용
+
+### Settings UI
+- 설정 다이얼로그는 반드시 `FormCard` (`org.kde.kirigamiaddons.formcard`) 사용
+- `FormCardPage` + `FormHeader` + `FormCard` + 빌트인 delegates 패턴
+- 빌트인 delegate가 없는 컨트롤(e.g. slider)은 `AbstractFormDelegate` 확장
+- 수동 `GridLayout + QQC2.Label` 조합 금지
+
+### Color & Theming
+- 하드코딩된 색상 금지 — 항상 `Kirigami.Theme` 색상 사용
+- 간격/크기는 `Kirigami.Units` 사용 (gridUnit, smallSpacing, largeSpacing)
+
+### Configuration
+- 설정 저장: KConfig (현재) → 향후 KConfigXT(.kcfg) 마이그레이션 예정
+- 번역: 모든 사용자 대면 문자열에 `i18n()` 사용
+
 ## Build
 
 ```sh
@@ -61,7 +84,7 @@ cmake --build build
 
 ### Surface Sizing
 - Surface height MUST include animation overflow (zoom, bounce, etc.)
-- Formula: surfaceHeight = panelHeight + ceil(iconSize * (maxZoomFactor - 1.0))
+- Formula: surfaceHeight = panelHeight + max(ceil(iconSize * (maxZoomFactor - 1.0)), tooltipReserve) + floatingPadding
 - Input region MUST be explicitly set — empty QRegion = accept ALL input, not none
 
 ### Mouse/Input Hierarchy

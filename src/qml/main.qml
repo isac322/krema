@@ -313,7 +313,7 @@ Item {
         Behavior on y {
             enabled: dockPanel.animationsReady
             NumberAnimation {
-                duration: 200
+                duration: Kirigami.Units.longDuration
                 easing.type: Easing.InOutQuad
             }
         }
@@ -322,7 +322,7 @@ Item {
         opacity: dockVisibility.dockVisible ? 1.0 : 0.0
 
         Behavior on opacity {
-            NumberAnimation { duration: 200 }
+            NumberAnimation { duration: Kirigami.Units.longDuration }
         }
 
         // Mouse position relative to the panel, -1 when outside

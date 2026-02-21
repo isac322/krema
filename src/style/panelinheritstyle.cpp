@@ -17,7 +17,6 @@ PanelInheritStyle::PanelInheritStyle()
     // runtime theme changes (unlike QPalette which is static at startup).
     KColorScheme scheme(QPalette::Normal, KColorScheme::Header);
     m_panelColor = scheme.background(KColorScheme::NormalBackground).color();
-    m_panelColor.setAlphaF(0.6); // 60% opacity default
 
     m_blurAvailable = KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind);
 }
@@ -36,9 +35,6 @@ void PanelInheritStyle::applyToWindow(QWindow *window)
     if (m_blurAvailable) {
         KWindowEffects::enableBlurBehind(window, true);
         KWindowEffects::enableBackgroundContrast(window, true, 1.0, 1.0, 1.0);
-    } else {
-        // Fallback: use fully opaque background
-        m_panelColor.setAlphaF(1.0);
     }
 }
 

@@ -160,6 +160,18 @@ void DockSettings::setHideDelay(int ms)
     Q_EMIT settingsChanged();
 }
 
+qreal DockSettings::backgroundOpacity() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("BackgroundOpacity"), 0.6);
+}
+
+void DockSettings::setBackgroundOpacity(qreal opacity)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("BackgroundOpacity"), opacity);
+    save();
+    Q_EMIT settingsChanged();
+}
+
 void DockSettings::save()
 {
     m_config->sync();

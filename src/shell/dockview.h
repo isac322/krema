@@ -72,6 +72,8 @@ public:
 
     [[nodiscard]] int floatingPadding() const;
 
+    void setBackgroundOpacity(qreal opacity);
+
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
@@ -101,6 +103,7 @@ private:
     qreal m_maxZoomFactor = 1.6;
     int m_cornerRadius = 12;
     bool m_floating = true;
+    qreal m_backgroundOpacity = 0.6;
     static constexpr int s_padding = 8;
     static constexpr int s_floatingMargin = 8;
     static constexpr int s_tooltipReserve = 36;

@@ -101,6 +101,43 @@ Kirigami.ApplicationWindow {
                 checked: dockSettings.floating
                 onToggled: dockSettings.floating = checked
             }
+
+            FormCard.FormDelegateSeparator {}
+
+            FormCard.AbstractFormDelegate {
+                id: opacityDelegate
+                background: null
+                contentItem: ColumnLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: i18n("Background opacity")
+                            elide: Text.ElideRight
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            color: opacityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                        }
+
+                        QQC2.Label {
+                            text: Math.round(opacitySlider.value * 100) + "%"
+                            color: Kirigami.Theme.disabledTextColor
+                        }
+                    }
+
+                    QQC2.Slider {
+                        id: opacitySlider
+                        Layout.fillWidth: true
+                        from: 0.1; to: 1.0; stepSize: 0.05
+                        value: dockSettings.backgroundOpacity
+                        onMoved: dockSettings.backgroundOpacity = value
+                    }
+                }
+            }
         }
 
         // --- Behavior Section ---

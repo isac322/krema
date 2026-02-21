@@ -5,9 +5,11 @@
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
+#include <taskmanager/tasktools.h>
 
 #include <KLocalizedString>
 
+#include <QApplication>
 #include <QCursor>
 #include <QGuiApplication>
 #include <QIcon>
@@ -236,10 +238,7 @@ void DockModel::showContextMenu(int index)
     const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
     const QString name = idx.data(Qt::DisplayRole).toString();
 
-    // Check pinned state via launcher list directly, not IsLauncher role.
-    // IsLauncher doesn't update immediately for running apps with hideActivatedLaunchers.
-    const QUrl launcherUrl = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
-    const bool isPinned = launcherUrl.isValid() && m_tasksModel->launcherList().contains(launcherUrl.toString());
+    const bool pinned = isPinned(index);
 
     auto *menu = new QMenu();
     menu->setAttribute(Qt::WA_DeleteOnClose);
@@ -254,34 +253,41 @@ void DockModel::showContextMenu(int index)
     menu->addSeparator();
 
     // Pin / Unpin
-    if (isPinned) {
-        menu->addAction(i18n("Unpin from Dock"), this, [this, index]() {
+    if (pinned) {
+        menu->addAction(i18nc("@action:inmenu", "Unpin from Dock"), this, [this, index]() {
             togglePinned(index);
         });
     } else {
-        menu->addAction(i18n("Pin to Dock"), this, [this, index]() {
+        menu->addAction(i18nc("@action:inmenu", "Pin to Dock"), this, [this, index]() {
             togglePinned(index);
         });
     }
 
     // New Instance
-    menu->addAction(i18n("New Instance"), this, [this, index]() {
+    menu->addAction(i18nc("@action:inmenu", "New Instance"), this, [this, index]() {
         newInstance(index);
     });
 
     // Close (only for running windows)
     if (isWindow) {
         menu->addSeparator();
-        menu->addAction(i18n("Close"), this, [this, index]() {
+        menu->addAction(i18nc("@action:inmenu", "Close"), this, [this, index]() {
             closeTask(index);
         });
     }
 
     // Settings
     menu->addSeparator();
-    menu->addAction(i18n("Settings..."), this, [this]() {
+    menu->addAction(i18nc("@action:inmenu", "Settings..."), this, [this]() {
         Q_EMIT settingsRequested();
     });
+
+    // Standard KDE actions
+    menu->addSeparator();
+    menu->addAction(i18nc("@action:inmenu", "About Krema"), this, [this]() {
+        Q_EMIT aboutRequested();
+    });
+    menu->addAction(i18nc("@action:inmenu", "Quit"), qApp, &QApplication::quit);
 
     // Track menu visibility for interaction lock (dock stays visible while menu is open)
     Q_EMIT contextMenuVisibleChanged(true);
@@ -318,7 +324,15 @@ bool DockModel::addLauncher(const QUrl &url)
         return false;
     }
 
-    const bool ok = m_tasksModel->requestAddLauncher(url);
+    // Validate that the URL resolves to a real application
+    const auto appData = TaskManager::appDataFromUrl(url);
+    if (appData.id.isEmpty()) {
+        return false;
+    }
+
+    // Use the resolved URL (handles preferred:// and other special schemes)
+    const QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
+    const bool ok = m_tasksModel->requestAddLauncher(resolvedUrl);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();
     }
@@ -352,6 +366,36 @@ bool DockModel::isDesktopFile(const QUrl &url) const
         return true;
     }
     return false;
+}
+
+bool DockModel::isPinned(int index) const
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return false;
+    }
+
+    const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    return url.isValid() && m_tasksModel->launcherList().contains(url.toString());
+}
+
+bool DockModel::removeLauncher(int index)
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return false;
+    }
+
+    const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    if (!url.isValid()) {
+        return false;
+    }
+
+    const bool ok = m_tasksModel->requestRemoveLauncher(url);
+    if (ok) {
+        Q_EMIT pinnedLaunchersChanged();
+    }
+    return ok;
 }
 
 } // namespace krema

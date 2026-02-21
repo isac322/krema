@@ -42,6 +42,7 @@ find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     IconThemes
     Crash
     XmlGui
+    Service
 )
 find_package(KF6Kirigami ${KF6_MIN_VERSION} REQUIRED)
 find_package(KF6KirigamiAddons REQUIRED)

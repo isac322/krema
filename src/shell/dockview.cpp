@@ -177,7 +177,8 @@ DockVisibilityController *DockView::visibilityController() const
 void DockView::updateSize()
 {
     const int dockHeight = m_iconSize + s_padding * 2;
-    const int surfaceHeight = dockHeight + zoomOverflowHeight() + floatingPadding();
+    const int overflowHeight = std::max(zoomOverflowHeight(), s_tooltipReserve);
+    const int surfaceHeight = dockHeight + overflowHeight + floatingPadding();
     const int screenWidth = screen() ? screen()->geometry().width() : 0;
 
     setWidth(screenWidth);
@@ -188,6 +189,10 @@ void DockView::updateSize()
     // auto-stretch width when left+right anchors are set.
     // Surface height includes extra space above the panel for zoomed icons.
     m_platform->setSize(QSize(screenWidth, surfaceHeight));
+
+    if (m_visibilityController) {
+        m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
+    }
 }
 
 int DockView::zoomOverflowHeight() const

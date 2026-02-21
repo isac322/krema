@@ -85,6 +85,7 @@ Q_SIGNALS:
     void pinnedLaunchersChanged();
     void taskLaunching(int index);
     void settingsRequested();
+    void aboutRequested();
     void contextMenuVisibleChanged(bool visible);
 
 private:

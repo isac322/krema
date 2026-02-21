@@ -50,6 +50,8 @@ target_link_libraries(krema_lib PUBLIC
     KF6::GlobalAccel
     KF6::ColorScheme
     KF6::IconThemes
+    KF6::Crash
+    KF6::XmlGui
     LayerShellQt::Interface
     PW::LibTaskManager
     Wayland::Client

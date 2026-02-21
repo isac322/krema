@@ -11,7 +11,10 @@
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/settingswindow.h"
 
+#include <KAboutApplicationDialog>
 #include <KAboutData>
+#include <KActionCollection>
+#include <KCrash>
 #include <KGlobalAccel>
 #include <KLocalizedString>
 #include <LayerShellQt/Shell>
@@ -47,8 +50,12 @@ int Application::run()
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
     }
 
+    // Initialize KDE crash handler (must be called early)
+    KCrash::initialize();
+
     // Set up KDE application metadata (required for KGlobalAccel, D-Bus, etc.)
     KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral("0.1.0"), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
+    aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
     KAboutData::setApplicationData(aboutData);
     setDesktopFileName(QStringLiteral("org.krema"));
 
@@ -101,6 +108,13 @@ int Application::run()
     // Context menu interaction lock: dock stays visible while menu is open
     connect(m_dockModel.get(), &DockModel::contextMenuVisibleChanged, m_dockView->visibilityController(), &DockVisibilityController::setInteracting);
 
+    // About dialog
+    connect(m_dockModel.get(), &DockModel::aboutRequested, this, []() {
+        auto *dialog = new KAboutApplicationDialog(KAboutData::applicationData(), nullptr);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->show();
+    });
+
     // Settings dialog (lazy-loaded on first open)
     m_settingsWindow = std::make_unique<SettingsWindow>(m_settings.get(), this);
     connect(m_dockModel.get(), &DockModel::settingsRequested, this, [this]() {
@@ -144,21 +158,20 @@ void Application::applySettings()
 
 void Application::registerGlobalShortcuts()
 {
+    m_actionCollection = new KActionCollection(this, QStringLiteral("krema"));
     auto *kga = KGlobalAccel::self();
 
     // Toggle dock visibility: Meta+`
-    auto *toggleAction = new QAction(this);
-    toggleAction->setObjectName(QStringLiteral("toggle-dock"));
-    toggleAction->setText(i18n("Toggle Dock"));
+    auto *toggleAction = m_actionCollection->addAction(QStringLiteral("toggle-dock"));
+    toggleAction->setText(i18nc("@action global shortcut", "Toggle Dock"));
     kga->setDefaultShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     connect(toggleAction, &QAction::triggered, m_dockView->visibilityController(), &DockVisibilityController::toggleVisibility);
 
     // Meta+1..9: Activate N-th app
     for (int i = 1; i <= 9; ++i) {
-        auto *activateAction = new QAction(this);
-        activateAction->setObjectName(QStringLiteral("activate-entry-%1").arg(i));
-        activateAction->setText(i18n("Activate Entry %1", i));
+        auto *activateAction = m_actionCollection->addAction(QStringLiteral("activate-entry-%1").arg(i));
+        activateAction->setText(i18nc("@action global shortcut", "Activate Entry %1", i));
         const auto seq = QKeySequence(Qt::META | static_cast<Qt::Key>(Qt::Key_1 + i - 1));
         kga->setDefaultShortcut(activateAction, {seq});
         kga->setShortcut(activateAction, {seq});
@@ -169,9 +182,8 @@ void Application::registerGlobalShortcuts()
 
     // Meta+Shift+1..9: New instance of N-th app
     for (int i = 1; i <= 9; ++i) {
-        auto *newInstanceAction = new QAction(this);
-        newInstanceAction->setObjectName(QStringLiteral("new-instance-entry-%1").arg(i));
-        newInstanceAction->setText(i18n("New Instance of Entry %1", i));
+        auto *newInstanceAction = m_actionCollection->addAction(QStringLiteral("new-instance-entry-%1").arg(i));
+        newInstanceAction->setText(i18nc("@action global shortcut", "New Instance of Entry %1", i));
         const auto seq = QKeySequence(Qt::META | Qt::SHIFT | static_cast<Qt::Key>(Qt::Key_1 + i - 1));
         kga->setDefaultShortcut(newInstanceAction, {seq});
         kga->setShortcut(newInstanceAction, {seq});

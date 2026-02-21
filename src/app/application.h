@@ -7,6 +7,8 @@
 
 #include <memory>
 
+class KActionCollection;
+
 namespace krema
 {
 
@@ -33,6 +35,7 @@ private:
     std::unique_ptr<DockView> m_dockView;
     std::unique_ptr<DockModel> m_dockModel;
     std::unique_ptr<SettingsWindow> m_settingsWindow;
+    KActionCollection *m_actionCollection = nullptr;
 };
 
 } // namespace krema

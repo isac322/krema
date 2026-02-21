@@ -73,6 +73,10 @@ public:
     /// Set the delay before the dock hides when the mouse leaves the dock area.
     void setHideDelay(int ms);
 
+    /// Set the zoom overflow height so the hovered input region excludes
+    /// non-interactive space above the zoom area (e.g. tooltip reserve).
+    void setZoomOverflowHeight(int height);
+
     /// Increment/decrement interaction lock (context menu, settings window open).
     /// While interacting, the dock will never hide.
     void setInteracting(bool interacting);
@@ -117,9 +121,13 @@ private:
     int m_panelWidth = 0;
     int m_panelHeight = 0;
 
-    // 독이 보이는 상태에서의 패널 Y 좌표 (겹침 판정용).
-    // 애니메이션 중 m_panelY가 화면 밖으로 이동해도 이 값은 유지됨.
+    // Panel Y coordinate when the dock is visible (for overlap detection).
+    // This value persists even while m_panelY moves off-screen during hide animation.
     int m_panelRefY = 0;
+
+    // Zoom overflow height (pixels above the panel that zoomed icons occupy).
+    // Used to restrict hovered input region to only the interactive area.
+    int m_zoomOverflowHeight = 0;
 
     // Interaction lock: dock stays visible while context menu / settings window is open
     int m_interactingCount = 0;

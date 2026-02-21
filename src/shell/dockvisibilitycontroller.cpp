@@ -201,10 +201,10 @@ void DockVisibilityController::setPanelRect(qreal x, qreal y, qreal width, qreal
     m_panelWidth = static_cast<int>(width);
     m_panelHeight = static_cast<int>(height);
 
-    // 독이 보이는 상태의 Y 좌표만 기록 (겹침 판정용).
-    // 숨김 애니메이션 중 m_panelY는 화면 밖으로 이동하지만,
-    // hasOverlappingWindow()는 "독이 보인다면 겹칠까?"를 판단해야 하므로
-    // 마지막 보이는 상태의 Y를 사용해야 함.
+    // Record the Y coordinate only while the dock is visible (for overlap detection).
+    // During hide animation m_panelY moves off-screen, but hasOverlappingWindow()
+    // needs to answer "would there be overlap if the dock were visible?",
+    // so we must use the last visible-state Y.
     if (m_visible) {
         m_panelRefY = m_panelY;
     }
@@ -225,6 +225,15 @@ void DockVisibilityController::setHideDelay(int ms)
 {
     m_hideTimer.setInterval(ms);
     qCDebug(lcVisibility) << "Hide delay set to:" << ms << "ms";
+}
+
+void DockVisibilityController::setZoomOverflowHeight(int height)
+{
+    if (m_zoomOverflowHeight == height) {
+        return;
+    }
+    m_zoomOverflowHeight = height;
+    applyInputRegion();
 }
 
 void DockVisibilityController::setInteracting(bool interacting)
@@ -287,9 +296,10 @@ void DockVisibilityController::applyInputRegion()
             int regionY;
             int regionH;
             if (m_hovered) {
-                // Include everything: zoom overflow + panel + floating gap
-                regionY = 0;
-                regionH = h;
+                // Include zoom overflow + panel + floating gap, but exclude
+                // non-interactive space above the zoom area (tooltip reserve).
+                regionY = qMax(0, m_panelY - m_zoomOverflowHeight - margin);
+                regionH = h - regionY;
             } else {
                 // Include panel + floating gap below
                 regionY = qMax(0, m_panelY - margin);
@@ -345,7 +355,7 @@ QRect DockVisibilityController::dockScreenRect() const
     }
 
     // Panel's screen position = surface origin + panel's local offset.
-    // m_panelRefY를 사용: 숨김 애니메이션 중에도 "보이는 상태의 위치"로 겹침 판정.
+    // Use m_panelRefY: overlap detection uses the visible-state position even during hide animation.
     return QRect(surfaceX + m_panelX, surfaceY + m_panelRefY, m_panelWidth, m_panelHeight);
 }
 

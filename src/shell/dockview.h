@@ -103,6 +103,7 @@ private:
     bool m_floating = true;
     static constexpr int s_padding = 8;
     static constexpr int s_floatingMargin = 8;
+    static constexpr int s_tooltipReserve = 36;
 };
 
 } // namespace krema

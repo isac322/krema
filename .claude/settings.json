@@ -17,7 +17,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '## Critical Rules\n- NEVER use QML animation values in C++ business logic\n- ALWAYS null-check screen() before using\n- ALWAYS build after each file edit\n- Check docs/kde/ before using any KDE API\n- Surface height MUST include animation overflow\n- Input region: empty QRegion = accept ALL input, not none\n- ONE authoritative mouse tracking level (panel, not item)'"
+            "command": "echo '## Critical Rules\n- NEVER use QML animation values in C++ business logic\n- ALWAYS null-check screen() before using\n- ALWAYS build after each file edit\n- Check docs/kde/ before using any KDE API\n- Surface height MUST include animation overflow\n- Input region: empty QRegion = accept ALL input, not none\n- ONE authoritative mouse tracking level (panel, not item)\n- Performance: GPU acceleration mandatory when available\n- Feature planning: consult specialist agents first\n\n## Session State Preservation\n- MUST preserve .claude/work-state.md content across compaction\n- MUST preserve current task objective, progress, and test scenarios\n- MUST preserve product-quality test results if in testing phase'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/bhyoo/projects/c++/krema/.claude/hooks/session-end-check.sh",
+            "timeout": 5000
           }
         ]
       }

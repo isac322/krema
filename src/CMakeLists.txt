@@ -29,8 +29,7 @@ add_library(krema_lib STATIC
     shell/settingswindow.cpp
 
     style/backgroundstyle.h
-    style/panelinheritstyle.h
-    style/panelinheritstyle.cpp
+    style/backgroundstyle.cpp
 
     models/dockmodel.h
     models/dockmodel.cpp
@@ -47,6 +46,12 @@ add_library(krema_lib STATIC
 
     ${KREMA_KCFG_SRCS}
     ${QML_RESOURCES}
+)
+
+qt6_add_shaders(krema_lib "acrylic_shaders"
+    BATCHABLE PRECOMPILE OPTIMIZED
+    PREFIX "/"
+    FILES qml/shaders/acrylic_overlay.frag
 )
 
 target_link_libraries(krema_lib PUBLIC

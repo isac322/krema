@@ -40,7 +40,6 @@ class DockVisibilityController : public QObject
 
     Q_PROPERTY(bool dockVisible READ isDockVisible NOTIFY dockVisibleChanged)
     Q_PROPERTY(int mode READ mode WRITE setMode NOTIFY modeChanged)
-
 public:
     explicit DockVisibilityController(DockPlatform *platform,
                                       TaskManager::TasksModel *tasksModel,
@@ -81,12 +80,16 @@ public:
     /// While interacting, the dock will never hide.
     Q_INVOKABLE void setInteracting(bool interacting);
 
+    /// Current panel rectangle (surface-local coordinates).
+    [[nodiscard]] QRect panelRect() const;
+
     /// Request a deferred visibility re-evaluation (e.g. after screen change).
     void requestEvaluate();
 
 Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();
+    void panelRectChanged();
 
 private:
     void evaluateVisibility();

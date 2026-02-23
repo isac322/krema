@@ -107,8 +107,18 @@ void DockShell::connectSettingsSignals()
         Q_EMIT m_view->floatingPaddingChanged();
     });
 
-    // Background color depends on opacity
-    connect(s, &KremaSettings::BackgroundOpacityChanged, m_view.get(), &DockView::backgroundColorChanged);
+    // Background style changes — applyBackgroundStyle re-applies both compositor effects
+    // (blur/contrast region) and emits backgroundColorChanged, so it's the single entry point.
+    // Opacity changes must also re-apply because blur is disabled at opacity=0.
+    connect(s, &KremaSettings::BackgroundOpacityChanged, m_view.get(), &DockView::applyBackgroundStyle);
+    connect(s, &KremaSettings::BackgroundStyleChanged, m_view.get(), &DockView::applyBackgroundStyle);
+    connect(s, &KremaSettings::TintColorChanged, m_view.get(), &DockView::applyBackgroundStyle);
+    connect(s, &KremaSettings::UseAccentColorChanged, m_view.get(), &DockView::applyBackgroundStyle);
+    connect(s, &KremaSettings::UseSystemColorChanged, m_view.get(), &DockView::applyBackgroundStyle);
+
+    // Re-apply blur region when panel geometry or corner radius changes
+    connect(m_view->visibilityController(), &DockVisibilityController::panelRectChanged, m_view.get(), &DockView::applyBackgroundStyle);
+    connect(s, &KremaSettings::CornerRadiusChanged, m_view.get(), &DockView::applyBackgroundStyle);
 
     // Platform-level changes
     connect(s, &KremaSettings::EdgeChanged, this, [this]() {

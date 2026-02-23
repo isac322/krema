@@ -108,11 +108,13 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 
 시각적 완성도 향상.
 
-- [ ] 추가 배경 스타일
-  - [ ] 반투명 (Semi-transparent)
-  - [ ] 투명 (Transparent)
-  - [ ] Tinted (사용자 지정 색상 + 투명도)
-  - [ ] Acrylic/Frosted Glass (흐림 + 노이즈 텍스처)
+- [x] 추가 배경 스타일
+  - [x] 반투명 (Semi-transparent)
+  - [x] 투명 (Transparent)
+  - [x] Tinted (사용자 지정 색상 + 투명도)
+  - [x] Acrylic/Frosted Glass (흐림 + 노이즈 텍스처)
+  - [x] Mica (시스템 강조색 기반)
+  - [x] Adaptive Opacity (창 겹침 시 불투명 전환)
 - [ ] 주의 요구 애니메이션
   - [ ] 아이콘 흔들기 (IsDemandingAttention)
   - [ ] 배지 카운트 표시 (알림 수)
@@ -217,7 +219,8 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 │     DockView (QQuickView)                │
 │  ┌───────────────┐ ┌────────────────┐   │
 │  │ BackgroundStyle│ │KWindowEffects  │   │
-│  │(PanelInherit)  │ │(blur/contrast) │   │
+│  │(6 styles+     │ │(blur/contrast) │   │
+│  │ adaptive)     │ │                │   │
 │  └───────────────┘ └────────────────┘   │
 ├─────────────────────────────────────────┤
 │   WaylandDockPlatform (LayerShellQt)     │

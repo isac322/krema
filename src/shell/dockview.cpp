@@ -6,10 +6,10 @@
 #include "dockvisibilitycontroller.h"
 #include "krema.h"
 #include "models/taskiconprovider.h"
-#include "style/panelinheritstyle.h"
 #include "utils/surfacegeometry.h"
 
 #include <QLoggingCategory>
+#include <QPainterPath>
 
 #include <QQmlEngine>
 #include <QScreen>
@@ -23,7 +23,6 @@ namespace krema
 DockView::DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settings, QWindow *parent)
     : QQuickView(parent)
     , m_platform(std::move(platform))
-    , m_backgroundStyle(std::make_unique<PanelInheritStyle>())
     , m_settings(settings)
 {
     setColor(Qt::transparent);
@@ -55,6 +54,36 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
         return visibility;
     });
 
+    // Config migration: merge SemiTransparent into Tinted, renumber styles
+    if (m_settings->configVersion() < 2) {
+        int old = m_settings->backgroundStyle();
+        // First: Mica (5) → old SemiTransparent (1) + accent color
+        if (old == 5) {
+            old = 1;
+            m_settings->setUseAccentColor(true);
+        }
+        // Now remap old numbering to new
+        switch (old) {
+        case 1: // Old SemiTransparent → Tinted + UseSystemColor
+            m_settings->setBackgroundStyle(2);
+            m_settings->setUseSystemColor(true);
+            break;
+        case 2: // Old Transparent → new 1
+            m_settings->setBackgroundStyle(1);
+            break;
+        case 3: // Old Tinted → new 2
+            m_settings->setBackgroundStyle(2);
+            break;
+        case 4: // Old Acrylic → new 3
+            m_settings->setBackgroundStyle(3);
+            break;
+        default: // PanelInherit (0) stays the same
+            break;
+        }
+        m_settings->setConfigVersion(2);
+        m_settings->save();
+    }
+
     // Apply background effects (blur, contrast)
     applyBackgroundStyle();
 
@@ -83,9 +112,15 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
 
 QColor DockView::backgroundColor() const
 {
-    QColor color = m_backgroundStyle->backgroundColor();
-    color.setAlphaF(m_settings->backgroundOpacity());
-    return color;
+    auto type = static_cast<BackgroundStyleType>(m_settings->backgroundStyle());
+    qreal opacity = m_settings->backgroundOpacity();
+
+    return computeBackgroundColor(type, m_settings->tintColor(), opacity, m_settings->useAccentColor(), m_settings->useSystemColor());
+}
+
+int DockView::backgroundStyleType() const
+{
+    return m_settings->backgroundStyle();
 }
 
 int DockView::floatingPadding() const
@@ -96,6 +131,11 @@ int DockView::floatingPadding() const
 int DockView::panelBarHeight() const
 {
     return krema::panelBarHeight(m_settings->iconSize(), s_padding, floatingPadding());
+}
+
+bool DockView::isStyleAvailable(int styleType) const
+{
+    return krema::isStyleAvailable(static_cast<BackgroundStyleType>(styleType));
 }
 
 DockPlatform *DockView::platform() const
@@ -180,8 +220,40 @@ void DockView::handleScreenGeometryChanged()
 
 void DockView::applyBackgroundStyle()
 {
-    m_backgroundStyle->applyToWindow(this);
+    auto type = static_cast<BackgroundStyleType>(m_settings->backgroundStyle());
+    qreal opacity = m_settings->backgroundOpacity();
+
+    // When opacity is 0, compositor effects (blur/contrast) must also be disabled.
+    // Otherwise KWindowEffects creates a visible frosted layer even with transparent QML color.
+    if (styleUsesBlur(type) && qFuzzyIsNull(opacity)) {
+        removeBackgroundFromWindow(this);
+        Q_EMIT backgroundColorChanged();
+        Q_EMIT backgroundStyleTypeChanged();
+        return;
+    }
+
+    // Restrict blur/contrast to the panel rectangle only.
+    // Without a region, KWindowEffects applies effects to the entire layer-shell surface,
+    // which covers the full screen width and causes a colored bar across the bottom.
+    // Use a rounded rectangle to match the panel's corner radius.
+    QRegion region;
+    if (m_visibilityController) {
+        const QRect panel = m_visibilityController->panelRect();
+        if (panel.width() > 0) {
+            const int radius = m_settings->cornerRadius();
+            if (radius > 0) {
+                QPainterPath path;
+                path.addRoundedRect(QRectF(panel), radius, radius);
+                region = QRegion(path.toFillPolygon().toPolygon());
+            } else {
+                region = QRegion(panel);
+            }
+        }
+    }
+
+    applyBackgroundToWindow(this, type, region);
     Q_EMIT backgroundColorChanged();
+    Q_EMIT backgroundStyleTypeChanged();
 }
 
 } // namespace krema

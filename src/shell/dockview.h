@@ -28,14 +28,15 @@ class DockVisibilityController;
  * Main dock window.
  *
  * DockView is a QQuickView that displays the dock QML UI.
- * It owns the platform backend and background style, and exposes
- * configuration properties to QML via Q_PROPERTY.
+ * It owns the platform backend and exposes configuration
+ * properties to QML via Q_PROPERTY.
  */
 class DockView : public QQuickView
 {
     Q_OBJECT
 
     Q_PROPERTY(QColor backgroundColor READ backgroundColor NOTIFY backgroundColorChanged)
+    Q_PROPERTY(int backgroundStyleType READ backgroundStyleType NOTIFY backgroundStyleTypeChanged)
     Q_PROPERTY(int floatingPadding READ floatingPadding NOTIFY floatingPaddingChanged)
 
 public:
@@ -51,6 +52,7 @@ public:
 
     // --- Properties ---
     [[nodiscard]] QColor backgroundColor() const;
+    [[nodiscard]] int backgroundStyleType() const;
     [[nodiscard]] int floatingPadding() const;
 
     /// Height of the visible panel bar + floating padding (excludes zoom overflow).
@@ -60,17 +62,22 @@ public:
     /// Recalculate surface size (called when iconSize/maxZoomFactor/floating change).
     void updateSize();
 
+    /// Check if a style is available on this system (for settings UI).
+    Q_INVOKABLE bool isStyleAvailable(int styleType) const;
+
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
 
+public Q_SLOTS:
+    void applyBackgroundStyle();
+
 Q_SIGNALS:
     void backgroundColorChanged();
+    void backgroundStyleTypeChanged();
     void floatingPaddingChanged();
 
 private:
-    void applyBackgroundStyle();
-
     /// Extra height above the panel needed for zoomed icons.
     [[nodiscard]] int zoomOverflowHeight() const;
 
@@ -78,7 +85,6 @@ private:
     void handleScreenGeometryChanged();
 
     std::unique_ptr<DockPlatform> m_platform;
-    std::unique_ptr<BackgroundStyle> m_backgroundStyle;
     KremaSettings *m_settings = nullptr;
     DockVisibilityController *m_visibilityController = nullptr;
     QMetaObject::Connection m_screenGeometryConnection;

@@ -93,7 +93,7 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 
 ---
 
-## Milestone 6: 윈도우 프리뷰 ⬅️ 현재
+## Milestone 6: 윈도우 프리뷰 ✅
 
 마우스 호버 시 윈도우 썸네일을 보여주는 프리뷰 팝업.
 
@@ -104,7 +104,7 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 
 ---
 
-## Milestone 7: 배경 스타일 + 시각 개선
+## Milestone 7: 배경 스타일 + 시각 개선 ⬅️ 현재
 
 시각적 완성도 향상.
 

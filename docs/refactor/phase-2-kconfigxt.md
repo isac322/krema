@@ -1,6 +1,6 @@
 # Phase 2: KConfigXT 마이그레이션
 
-> 상태: `pending`
+> 상태: `done`
 > 선행 조건: Phase 1 완료
 > 예상 소요: 1~2일
 

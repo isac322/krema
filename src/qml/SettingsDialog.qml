@@ -56,7 +56,4 @@ Kirigami.ApplicationWindow {
         ]
     }
 
-    Component.onCompleted: {
-        configuration.open()
-    }
 }

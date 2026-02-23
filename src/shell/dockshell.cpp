@@ -33,10 +33,28 @@ DockShell::~DockShell() = default;
 void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode visibilityMode)
 {
     // Register QML singletons for shell-owned objects (must be before QML loading)
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockView", m_view.get());
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockActions", m_actions.get());
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockContextMenu", m_contextMenu.get());
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "PreviewController", m_previewController);
+    // Use qmlRegisterSingletonType (not qmlRegisterSingletonInstance) so multiple
+    // QML engines (dock + settings window) can access the same C++ objects.
+    auto *view = m_view.get();
+    qmlRegisterSingletonType<DockView>("com.bhyoo.krema", 1, 0, "DockView", [view](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(view, QQmlEngine::CppOwnership);
+        return view;
+    });
+    auto *actions = m_actions.get();
+    qmlRegisterSingletonType<DockActions>("com.bhyoo.krema", 1, 0, "DockActions", [actions](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(actions, QQmlEngine::CppOwnership);
+        return actions;
+    });
+    auto *contextMenu = m_contextMenu.get();
+    qmlRegisterSingletonType<DockContextMenu>("com.bhyoo.krema", 1, 0, "DockContextMenu", [contextMenu](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(contextMenu, QQmlEngine::CppOwnership);
+        return contextMenu;
+    });
+    auto *preview = m_previewController;
+    qmlRegisterSingletonType<PreviewController>("com.bhyoo.krema", 1, 0, "PreviewController", [preview](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(preview, QQmlEngine::CppOwnership);
+        return preview;
+    });
 
     // Initialize dock view (creates DockVisibility, registers it, loads QML, shows window)
     m_view->initialize(m_model->tasksModel(), m_model->virtualDesktopInfo(), m_model->activityInfo(), edge, visibilityMode);

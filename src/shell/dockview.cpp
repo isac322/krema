@@ -49,7 +49,11 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     // Register the icon image provider for QML
     engine()->addImageProvider(QStringLiteral("icon"), new TaskIconProvider());
 
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockVisibility", m_visibilityController);
+    auto *visibility = m_visibilityController;
+    qmlRegisterSingletonType<DockVisibilityController>("com.bhyoo.krema", 1, 0, "DockVisibility", [visibility](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(visibility, QQmlEngine::CppOwnership);
+        return visibility;
+    });
 
     // Apply background effects (blur, contrast)
     applyBackgroundStyle();

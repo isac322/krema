@@ -6,13 +6,12 @@
 #include <QObject>
 #include <QPointer>
 
+class KremaSettings;
 class QQmlApplicationEngine;
 class QQuickWindow;
 
 namespace krema
 {
-
-class DockSettings;
 
 /**
  * Settings dialog window.
@@ -26,7 +25,7 @@ class SettingsWindow : public QObject
     Q_OBJECT
 
 public:
-    explicit SettingsWindow(DockSettings *settings, QObject *parent = nullptr);
+    explicit SettingsWindow(KremaSettings *settings, QObject *parent = nullptr);
     ~SettingsWindow() override;
 
     /// Show the settings dialog, or raise it if already visible.
@@ -42,7 +41,7 @@ private:
     void ensureEngine();
     void findAndTrackConfigWindow();
 
-    DockSettings *m_settings;
+    KremaSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;
     QPointer<QQuickWindow> m_configWindow;
 };

@@ -5,6 +5,7 @@
 
 #include "dockview.h"
 #include "dockvisibilitycontroller.h"
+#include "krema.h"
 #include "models/dockmodel.h"
 
 #include <LayerShellQt/Window>
@@ -15,7 +16,6 @@
 #include <cmath>
 
 #include <QLoggingCategory>
-#include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickView>
 #include <QScreen>
@@ -25,10 +25,11 @@ Q_LOGGING_CATEGORY(lcPreview, "krema.shell.preview")
 namespace krema
 {
 
-PreviewController::PreviewController(DockModel *model, DockView *dockView, QObject *parent)
+PreviewController::PreviewController(DockModel *model, DockView *dockView, KremaSettings *settings, QObject *parent)
     : QObject(parent)
     , m_model(model)
     , m_dockView(dockView)
+    , m_settings(settings)
 {
     m_hideTimer.setSingleShot(true);
     m_hideTimer.setInterval(200);
@@ -67,13 +68,11 @@ void PreviewController::initialize()
 
         // Margin: position above the dock panel + zoom overflow + extra gap
         QMargins margins;
-        margins.setBottom(m_dockView->panelBarHeight() + static_cast<int>(std::ceil(m_dockView->iconSize() * (m_dockView->maxZoomFactor() - 1.0))) + 4);
+        margins.setBottom(m_dockView->panelBarHeight() + static_cast<int>(std::ceil(m_settings->iconSize() * (m_settings->maxZoomFactor() - 1.0))) + 4);
         layerWindow->setMargins(margins);
     }
 
-    // Expose controller and model to the preview QML
-    m_previewView->rootContext()->setContextProperty(QStringLiteral("previewController"), this);
-    m_previewView->rootContext()->setContextProperty(QStringLiteral("dockModel"), m_model);
+    // Singletons are registered globally, no need for per-engine context properties.
 
     // Set initial size (full screen width, reasonable height)
     const int screenWidth = m_dockView->screen() ? m_dockView->screen()->geometry().width() : 1920;
@@ -271,7 +270,7 @@ void PreviewController::doShow()
     auto *layerWindow = LayerShellQt::Window::get(m_previewView);
     if (layerWindow) {
         QMargins margins;
-        margins.setBottom(m_dockView->panelBarHeight() + static_cast<int>(std::ceil(m_dockView->iconSize() * (m_dockView->maxZoomFactor() - 1.0))) + 4);
+        margins.setBottom(m_dockView->panelBarHeight() + static_cast<int>(std::ceil(m_settings->iconSize() * (m_settings->maxZoomFactor() - 1.0))) + 4);
         layerWindow->setMargins(margins);
     }
 

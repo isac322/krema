@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component type="desktop-application">
+  <id>com.bhyoo.krema</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Krema</name>
+  <summary>A dock application for KDE Plasma 6</summary>
+  <description>
+    <p>
+      Krema is a lightweight dock for KDE Plasma 6, designed as a spiritual successor
+      to Latte Dock. It provides quick access to your favorite applications with
+      smooth parabolic zoom animations, window previews via PipeWire, and deep
+      integration with KDE Plasma desktop features.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.bhyoo.krema.desktop</launchable>
+  <url type="homepage">https://github.com/isac322/krema</url>
+  <url type="bugtracker">https://github.com/isac322/krema/issues</url>
+  <developer id="com.bhyoo">
+    <name>Byeonghoon Yoo</name>
+  </developer>
+  <provides>
+    <binary>krema</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.2.1" date="2026-02-23"/>
+  </releases>
+</component>

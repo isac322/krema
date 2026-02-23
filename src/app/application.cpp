@@ -3,14 +3,14 @@
 
 #include "application.h"
 
-#include "config/docksettings.h"
+#include "krema.h"
+#include "models/dockactions.h"
 #include "models/dockmodel.h"
 #include "platform/dockplatform.h"
 #include "platform/dockplatformfactory.h"
+#include "shell/dockshell.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
-#include "shell/previewcontroller.h"
-#include "shell/settingswindow.h"
 
 #include <KAboutData>
 #include <KActionCollection>
@@ -21,8 +21,8 @@
 
 #include <QAction>
 #include <QLoggingCategory>
-#include <QQmlContext>
 #include <QQuickStyle>
+#include <QtQml>
 
 Q_LOGGING_CATEGORY(lcApp, "krema.app")
 
@@ -54,10 +54,11 @@ int Application::run()
     KCrash::initialize();
 
     // Set up KDE application metadata (required for KGlobalAccel, D-Bus, etc.)
-    KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral("0.2.0"), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
+    KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral(KREMA_VERSION_STRING), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
     aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
+    aboutData.setOrganizationDomain(QByteArrayLiteral("bhyoo.com"));
     KAboutData::setApplicationData(aboutData);
-    setDesktopFileName(QStringLiteral("org.krema"));
+    setDesktopFileName(QStringLiteral("com.bhyoo.krema"));
 
     // Initialize Qt resources from static library
     initResources();
@@ -73,102 +74,54 @@ int Application::run()
     }
 
     // Load settings from KConfig (~/.config/kremarc)
-    m_settings = std::make_unique<DockSettings>();
+    m_settings = std::make_unique<KremaSettings>();
 
     // Create data model
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
 
-    // Create the dock view
-    m_dockView = std::make_unique<DockView>(std::move(platform));
-    m_dockView->rootContext()->setContextProperty(QStringLiteral("dockModel"), m_dockModel.get());
-    m_dockView->rootContext()->setContextProperty(QStringLiteral("dockSettings"), m_settings.get());
+    // Register global QML singletons (must be before any QML loading)
+    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockModel", m_dockModel.get());
+    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockSettings", m_settings.get());
 
-    // Apply saved settings to dock view
-    m_dockView->setIconSize(m_settings->iconSize());
-    m_dockView->setIconSpacing(m_settings->iconSpacing());
-    m_dockView->setMaxZoomFactor(m_settings->maxZoomFactor());
-    m_dockView->setCornerRadius(m_settings->cornerRadius());
-    m_dockView->setFloating(m_settings->floating());
-    m_dockView->setBackgroundOpacity(m_settings->backgroundOpacity());
+    // Create and initialize the dock shell (creates all sub-objects, loads QML)
+    m_shell = std::make_unique<DockShell>(m_settings.get(), m_dockModel.get(), std::move(platform), this);
+    m_shell->initialize(static_cast<DockPlatform::Edge>(m_settings->edge()), static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
 
-    // Create the preview popup controller before loading QML so previewController
-    // is available as a context property when main.qml is first evaluated.
-    m_previewController = new PreviewController(m_dockModel.get(), m_dockView.get(), m_dockView.get());
-    m_dockView->rootContext()->setContextProperty(QStringLiteral("previewController"), m_previewController);
-
-    m_dockView->initialize(m_dockModel->tasksModel(),
-                           m_dockModel->virtualDesktopInfo(),
-                           m_dockModel->activityInfo(),
-                           static_cast<DockPlatform::Edge>(m_settings->edge()),
-                           static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
-
-    // Apply initial preview hide delay from settings
-    m_previewController->setHideDelay(m_settings->previewHideDelay());
-
-    // Initialize preview surface after dock is set up (needs dock height for margins)
-    m_previewController->initialize();
-
-    // Auto-save pinned launchers when they change (pin/unpin from context menu)
-    connect(m_dockModel.get(), &DockModel::pinnedLaunchersChanged, this, [this]() {
+    // Auto-save pinned launchers when they change (pin/unpin, drag reorder, add/remove)
+    connect(m_shell->actions(), &DockActions::pinnedLaunchersChanged, this, [this]() {
         m_settings->setPinnedLaunchers(m_dockModel->pinnedLaunchers());
+        m_settings->save();
     });
 
-    // Apply initial delay settings to visibility controller
-    m_dockView->visibilityController()->setShowDelay(m_settings->showDelay());
-    m_dockView->visibilityController()->setHideDelay(m_settings->hideDelay());
-
-    // Context menu interaction lock: dock stays visible while menu is open
-    connect(m_dockModel.get(), &DockModel::contextMenuVisibleChanged, m_dockView->visibilityController(), &DockVisibilityController::setInteracting);
-
-    // Settings dialog (lazy-loaded on first open)
-    m_settingsWindow = std::make_unique<SettingsWindow>(m_settings.get(), this);
-    connect(m_dockModel.get(), &DockModel::settingsRequested, this, [this]() {
-        m_settingsWindow->show();
-    });
-
-    // About dialog → open settings window at the About page
-    connect(m_dockModel.get(), &DockModel::aboutRequested, this, [this]() {
-        m_settingsWindow->show(QStringLiteral("about"));
-    });
-
-    // Settings window interaction lock: dock stays visible while settings is open
-    connect(m_settingsWindow.get(), &SettingsWindow::visibleChanged, m_dockView->visibilityController(), &DockVisibilityController::setInteracting);
-
-    // Apply settings changes to dock view in real time
-    connect(m_settings.get(), &DockSettings::settingsChanged, this, &Application::applySettings);
+    // Auto-save on any setting change
+    auto *s = m_settings.get();
+    auto saveSettings = [this]() {
+        m_settings->save();
+    };
+    connect(s, &KremaSettings::IconSizeChanged, this, saveSettings);
+    connect(s, &KremaSettings::IconSpacingChanged, this, saveSettings);
+    connect(s, &KremaSettings::MaxZoomFactorChanged, this, saveSettings);
+    connect(s, &KremaSettings::CornerRadiusChanged, this, saveSettings);
+    connect(s, &KremaSettings::FloatingChanged, this, saveSettings);
+    connect(s, &KremaSettings::BackgroundOpacityChanged, this, saveSettings);
+    connect(s, &KremaSettings::VisibilityModeChanged, this, saveSettings);
+    connect(s, &KremaSettings::EdgeChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShowDelayChanged, this, saveSettings);
+    connect(s, &KremaSettings::HideDelayChanged, this, saveSettings);
+    connect(s, &KremaSettings::PreviewEnabledChanged, this, saveSettings);
+    connect(s, &KremaSettings::PreviewThumbnailSizeChanged, this, saveSettings);
+    connect(s, &KremaSettings::PreviewHoverDelayChanged, this, saveSettings);
+    connect(s, &KremaSettings::PreviewHideDelayChanged, this, saveSettings);
 
     // The dock window is now created with layer-shell.
     // Unset the env var so child processes (launched apps) don't inherit it.
-    // Otherwise launched apps create layer-shell surfaces → no decorations,
-    // not visible in task switcher (Ctrl+Tab), etc.
     qunsetenv("QT_WAYLAND_SHELL_INTEGRATION");
 
     // Register global shortcuts (KGlobalAccel)
     registerGlobalShortcuts();
 
     return exec();
-}
-
-void Application::applySettings()
-{
-    m_dockView->setIconSize(m_settings->iconSize());
-    m_dockView->setIconSpacing(m_settings->iconSpacing());
-    m_dockView->setMaxZoomFactor(m_settings->maxZoomFactor());
-    m_dockView->setCornerRadius(m_settings->cornerRadius());
-    m_dockView->setFloating(m_settings->floating());
-    m_dockView->setBackgroundOpacity(m_settings->backgroundOpacity());
-
-    // Edge and visibility mode require platform-level changes
-    m_dockView->platform()->setEdge(static_cast<DockPlatform::Edge>(m_settings->edge()));
-    m_dockView->visibilityController()->setMode(static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
-
-    // Apply delay settings
-    m_dockView->visibilityController()->setShowDelay(m_settings->showDelay());
-    m_dockView->visibilityController()->setHideDelay(m_settings->hideDelay());
-
-    // Apply preview settings
-    m_previewController->setHideDelay(m_settings->previewHideDelay());
 }
 
 void Application::registerGlobalShortcuts()
@@ -181,7 +134,7 @@ void Application::registerGlobalShortcuts()
     toggleAction->setText(i18nc("@action global shortcut", "Toggle Dock"));
     kga->setDefaultShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
-    connect(toggleAction, &QAction::triggered, m_dockView->visibilityController(), &DockVisibilityController::toggleVisibility);
+    connect(toggleAction, &QAction::triggered, m_shell->view()->visibilityController(), &DockVisibilityController::toggleVisibility);
 
     // Meta+1..9: Activate N-th app
     for (int i = 1; i <= 9; ++i) {
@@ -191,7 +144,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(activateAction, {seq});
         kga->setShortcut(activateAction, {seq});
         connect(activateAction, &QAction::triggered, this, [this, i]() {
-            m_dockModel->activate(i - 1);
+            m_shell->actions()->activate(i - 1);
         });
     }
 
@@ -203,7 +156,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(newInstanceAction, {seq});
         kga->setShortcut(newInstanceAction, {seq});
         connect(newInstanceAction, &QAction::triggered, this, [this, i]() {
-            m_dockModel->newInstance(i - 1);
+            m_shell->actions()->newInstance(i - 1);
         });
     }
 

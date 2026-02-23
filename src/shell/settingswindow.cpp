@@ -3,9 +3,9 @@
 
 #include "settingswindow.h"
 
-#include "config/docksettings.h"
+#include "krema.h"
 
-#include <KLocalizedContext>
+#include <KLocalizedQmlContext>
 
 #include <QGuiApplication>
 #include <QLoggingCategory>
@@ -19,7 +19,7 @@ Q_LOGGING_CATEGORY(lcSettingsWindow, "krema.settings.window")
 namespace krema
 {
 
-SettingsWindow::SettingsWindow(DockSettings *settings, QObject *parent)
+SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
     : QObject(parent)
     , m_settings(settings)
 {
@@ -104,8 +104,7 @@ void SettingsWindow::ensureEngine()
     }
 
     m_engine = new QQmlApplicationEngine(this);
-    m_engine->rootContext()->setContextObject(new KLocalizedContext(m_engine));
-    m_engine->rootContext()->setContextProperty(QStringLiteral("dockSettings"), m_settings);
+    KLocalization::setupLocalizedContext(m_engine);
 }
 
 void SettingsWindow::findAndTrackConfigWindow()

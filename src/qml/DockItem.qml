@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
+import com.bhyoo.krema 1.0
 
 /**
  * A single dock item (app icon + indicator).
@@ -236,7 +237,7 @@ Item {
             // Without this, the binding only tracks dockItem.index and won't
             // re-evaluate when different data appears at the same position.
             let _dep = model.display
-            let name = dockModel.iconName(dockItem.index)
+            let name = DockModel.iconName(dockItem.index)
             if (name && name.length > 0) {
                 return "image://icon/" + name
             }

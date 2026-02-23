@@ -6,6 +6,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
+import com.bhyoo.krema 1.0
 
 FormCard.FormCardPage {
     title: i18n("Behavior")
@@ -24,9 +25,9 @@ FormCard.FormCardPage {
                 i18n("Dodge windows"),
                 i18n("Smart hide")
             ]
-            currentIndex: dockSettings.visibilityMode
+            currentIndex: DockSettings.visibilityMode
             onActivated: function(index) {
-                dockSettings.visibilityMode = index
+                DockSettings.visibilityMode = index
             }
         }
 
@@ -41,35 +42,35 @@ FormCard.FormCardPage {
                 i18n("Left"),
                 i18n("Right")
             ]
-            currentIndex: dockSettings.edge
+            currentIndex: DockSettings.edge
             onActivated: function(index) {
-                dockSettings.edge = index
+                DockSettings.edge = index
             }
         }
 
         // Show/hide delay controls — only visible in hide-capable modes
         FormCard.FormDelegateSeparator {
-            visible: dockSettings.visibilityMode !== 0
+            visible: DockSettings.visibilityMode !== 0
         }
 
         FormCard.FormSpinBoxDelegate {
             label: i18n("Show delay (ms)")
             from: 0; to: 2000; stepSize: 50
-            value: dockSettings.showDelay
-            onValueChanged: dockSettings.showDelay = value
-            visible: dockSettings.visibilityMode !== 0
+            value: DockSettings.showDelay
+            onValueChanged: DockSettings.showDelay = value
+            visible: DockSettings.visibilityMode !== 0
         }
 
         FormCard.FormDelegateSeparator {
-            visible: dockSettings.visibilityMode !== 0
+            visible: DockSettings.visibilityMode !== 0
         }
 
         FormCard.FormSpinBoxDelegate {
             label: i18n("Hide delay (ms)")
             from: 0; to: 2000; stepSize: 50
-            value: dockSettings.hideDelay
-            onValueChanged: dockSettings.hideDelay = value
-            visible: dockSettings.visibilityMode !== 0
+            value: DockSettings.hideDelay
+            onValueChanged: DockSettings.hideDelay = value
+            visible: DockSettings.visibilityMode !== 0
         }
     }
 }

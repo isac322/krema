@@ -4,32 +4,30 @@
 #include "dockview.h"
 
 #include "dockvisibilitycontroller.h"
+#include "krema.h"
 #include "models/taskiconprovider.h"
-#include "previewcontroller.h"
 #include "style/panelinheritstyle.h"
+#include "utils/surfacegeometry.h"
 
 #include <QLoggingCategory>
 
-#include <QQmlContext>
 #include <QQmlEngine>
 #include <QScreen>
-#include <cmath>
+#include <QtQml>
 
 Q_LOGGING_CATEGORY(lcDockView, "krema.shell.dockview")
 
 namespace krema
 {
 
-DockView::DockView(std::unique_ptr<DockPlatform> platform, QWindow *parent)
+DockView::DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settings, QWindow *parent)
     : QQuickView(parent)
     , m_platform(std::move(platform))
     , m_backgroundStyle(std::make_unique<PanelInheritStyle>())
+    , m_settings(settings)
 {
     setColor(Qt::transparent);
     setResizeMode(QQuickView::SizeRootObjectToView);
-
-    // Expose this object to QML as "dockView"
-    rootContext()->setContextProperty(QStringLiteral("dockView"), this);
 }
 
 DockView::~DockView() = default;
@@ -51,8 +49,7 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     // Register the icon image provider for QML
     engine()->addImageProvider(QStringLiteral("icon"), new TaskIconProvider());
 
-    // Expose visibility controller to QML
-    rootContext()->setContextProperty(QStringLiteral("dockVisibility"), m_visibilityController);
+    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockVisibility", m_visibilityController);
 
     // Apply background effects (blur, contrast)
     applyBackgroundStyle();
@@ -77,109 +74,18 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
 QColor DockView::backgroundColor() const
 {
     QColor color = m_backgroundStyle->backgroundColor();
-    color.setAlphaF(m_backgroundOpacity);
+    color.setAlphaF(m_settings->backgroundOpacity());
     return color;
-}
-
-void DockView::setBackgroundOpacity(qreal opacity)
-{
-    opacity = qBound(0.1, opacity, 1.0);
-    if (qFuzzyCompare(m_backgroundOpacity, opacity)) {
-        return;
-    }
-    m_backgroundOpacity = opacity;
-    Q_EMIT backgroundColorChanged();
-}
-
-int DockView::iconSize() const
-{
-    return m_iconSize;
-}
-
-void DockView::setIconSize(int size)
-{
-    size = qBound(24, size, 96);
-    if (m_iconSize == size) {
-        return;
-    }
-    m_iconSize = size;
-    updateSize();
-    Q_EMIT iconSizeChanged();
-}
-
-int DockView::iconSpacing() const
-{
-    return m_iconSpacing;
-}
-
-void DockView::setIconSpacing(int spacing)
-{
-    spacing = qBound(0, spacing, 16);
-    if (m_iconSpacing == spacing) {
-        return;
-    }
-    m_iconSpacing = spacing;
-    Q_EMIT iconSpacingChanged();
-}
-
-qreal DockView::maxZoomFactor() const
-{
-    return m_maxZoomFactor;
-}
-
-void DockView::setMaxZoomFactor(qreal factor)
-{
-    factor = qBound(1.0, factor, 2.0);
-    if (qFuzzyCompare(m_maxZoomFactor, factor)) {
-        return;
-    }
-    m_maxZoomFactor = factor;
-    updateSize();
-    Q_EMIT maxZoomFactorChanged();
-}
-
-int DockView::cornerRadius() const
-{
-    return m_cornerRadius;
-}
-
-void DockView::setCornerRadius(int radius)
-{
-    radius = qBound(0, radius, 24);
-    if (m_cornerRadius == radius) {
-        return;
-    }
-    m_cornerRadius = radius;
-    Q_EMIT cornerRadiusChanged();
-}
-
-bool DockView::isFloating() const
-{
-    return m_floating;
-}
-
-void DockView::setFloating(bool floating)
-{
-    if (m_floating == floating) {
-        return;
-    }
-    m_floating = floating;
-
-    // Surface size changes because floatingPadding changed
-    updateSize();
-
-    Q_EMIT floatingChanged();
-    Q_EMIT floatingPaddingChanged();
 }
 
 int DockView::floatingPadding() const
 {
-    return m_floating ? s_floatingMargin : 0;
+    return m_settings->floating() ? s_floatingMargin : 0;
 }
 
 int DockView::panelBarHeight() const
 {
-    return m_iconSize + s_padding * 2 + floatingPadding();
+    return krema::panelBarHeight(m_settings->iconSize(), s_padding, floatingPadding());
 }
 
 DockPlatform *DockView::platform() const
@@ -192,26 +98,16 @@ DockVisibilityController *DockView::visibilityController() const
     return m_visibilityController;
 }
 
-PreviewController *DockView::previewController() const
-{
-    return m_previewController;
-}
-
 void DockView::updateSize()
 {
-    const int dockHeight = m_iconSize + s_padding * 2;
-    const int overflowHeight = std::max(zoomOverflowHeight(), s_tooltipReserve);
-    const int surfaceHeight = dockHeight + overflowHeight + floatingPadding();
+    const int h = krema::surfaceHeight(m_settings->iconSize(), s_padding, m_settings->maxZoomFactor(), s_tooltipReserve, floatingPadding());
     const int screenWidth = screen() ? screen()->geometry().width() : 0;
 
     setWidth(screenWidth);
-    setHeight(surfaceHeight);
+    setHeight(h);
 
     // Tell layer-shell the desired size.
-    // Use screen width explicitly for QWindow; layer-shell will
-    // auto-stretch width when left+right anchors are set.
-    // Surface height includes extra space above the panel for zoomed icons.
-    m_platform->setSize(QSize(screenWidth, surfaceHeight));
+    m_platform->setSize(QSize(screenWidth, h));
 
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
@@ -220,7 +116,7 @@ void DockView::updateSize()
 
 int DockView::zoomOverflowHeight() const
 {
-    return static_cast<int>(std::ceil(m_iconSize * (m_maxZoomFactor - 1.0)));
+    return krema::zoomOverflowHeight(m_settings->iconSize(), m_settings->maxZoomFactor());
 }
 
 void DockView::applyBackgroundStyle()

@@ -324,7 +324,26 @@ Item {
         height: DockSettings.iconSize + Kirigami.Units.largeSpacing * 2  // icon + padding
         width: Math.max(dockRow.implicitWidth + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)  // content + padding, min width
         radius: DockSettings.cornerRadius
-        color: DockView.backgroundColor
+        color: DockView.backgroundStyleType === 3
+               ? "transparent"
+               : DockView.backgroundColor
+
+        // Acrylic overlay: tint + noise via GPU shader, composited over KWin blur.
+        // Shader handles rounded corners via SDF mask — no clip wrapper needed.
+        ShaderEffect {
+            anchors.fill: parent
+            z: 0
+            visible: DockView.backgroundStyleType === 3
+            property real tintR: DockView.backgroundColor.r
+            property real tintG: DockView.backgroundColor.g
+            property real tintB: DockView.backgroundColor.b
+            property real tintOpacity: DockView.backgroundColor.a
+            property real noiseStrength: 0.02
+            property real resX: width
+            property real resY: height
+            property real cornerRadius: dockPanel.radius
+            fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
+        }
 
         // Slide animation: y position controlled by visibility.
         // floatingPadding creates a visual gap between the panel and the screen edge

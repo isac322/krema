@@ -66,6 +66,33 @@
       <max>1.0</max>
     </entry>
 
+    <entry name="BackgroundStyle" type="Int">
+      <label>Background style (0=PanelInherit, 1=Transparent, 2=Tinted, 3=Acrylic)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>3</max>
+    </entry>
+
+    <entry name="UseAccentColor" type="Bool">
+      <label>Use accent/selection color instead of header color for background</label>
+      <default>false</default>
+    </entry>
+
+    <entry name="UseSystemColor" type="Bool">
+      <label>Use system header color for Tinted style instead of custom tint color</label>
+      <default>true</default>
+    </entry>
+
+    <entry name="ConfigVersion" type="Int">
+      <label>Configuration migration version</label>
+      <default>0</default>
+    </entry>
+
+    <entry name="TintColor" type="String">
+      <label>Custom tint color for Tinted style (hex RGB)</label>
+      <default>#1e3a5f</default>
+    </entry>
+
     <entry name="PreviewEnabled" type="Bool">
       <label>Enable window preview on hover</label>
       <default>true</default>

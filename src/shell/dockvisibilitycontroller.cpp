@@ -181,6 +181,8 @@ void DockVisibilityController::evaluateVisibility()
         return;
     }
 
+    const bool overlapping = hasOverlappingWindow();
+
     switch (m_mode) {
     case DockPlatform::VisibilityMode::AlwaysVisible:
         setVisible(true);
@@ -191,11 +193,11 @@ void DockVisibilityController::evaluateVisibility()
         break;
 
     case DockPlatform::VisibilityMode::DodgeWindows:
-        setVisible(!hasOverlappingWindow());
+        setVisible(!overlapping);
         break;
 
     case DockPlatform::VisibilityMode::SmartHide:
-        setVisible(!hasOverlappingWindow());
+        setVisible(!overlapping);
         break;
     }
 }
@@ -219,6 +221,8 @@ void DockVisibilityController::setPanelRect(qreal x, qreal y, qreal width, qreal
 
     // Reapply input region with the updated panel geometry
     applyInputRegion();
+
+    Q_EMIT panelRectChanged();
 }
 
 void DockVisibilityController::setShowDelay(int ms)
@@ -277,6 +281,11 @@ void DockVisibilityController::setVisible(bool visible)
     applyInputRegion();
 
     Q_EMIT dockVisibleChanged();
+}
+
+QRect DockVisibilityController::panelRect() const
+{
+    return {m_panelX, m_panelY, m_panelWidth, m_panelHeight};
 }
 
 void DockVisibilityController::requestEvaluate()

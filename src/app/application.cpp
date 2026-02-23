@@ -116,6 +116,8 @@ int Application::run()
     connect(s, &KremaSettings::CornerRadiusChanged, this, saveSettings);
     connect(s, &KremaSettings::FloatingChanged, this, saveSettings);
     connect(s, &KremaSettings::BackgroundOpacityChanged, this, saveSettings);
+    connect(s, &KremaSettings::BackgroundStyleChanged, this, saveSettings);
+    connect(s, &KremaSettings::TintColorChanged, this, saveSettings);
     connect(s, &KremaSettings::VisibilityModeChanged, this, saveSettings);
     connect(s, &KremaSettings::EdgeChanged, this, saveSettings);
     connect(s, &KremaSettings::ShowDelayChanged, this, saveSettings);

@@ -1,51 +1,42 @@
 # Krema
 
-KDE Plasma 6용 Latte Dock 대체 독(dock).
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6-1d99f3.svg)](https://kde.org/plasma-desktop/)
+[![Qt 6](https://img.shields.io/badge/Qt-6.6+-41cd52.svg)](https://www.qt.io/)
 
-## 빌드 의존성 (Arch Linux / Manjaro)
+A lightweight, high-performance dock for KDE Plasma 6 — spiritual successor to [Latte Dock](https://github.com/KDE/latte-dock).
 
-### 빌드 도구
+Krema brings back the beloved dock experience for KDE Plasma users who miss Latte Dock. Built from scratch with C++23, Qt 6, and KDE Frameworks 6, it delivers smooth parabolic zoom animations, live window previews via PipeWire, and deep native integration with the Plasma desktop.
 
-| 패키지 | 용도 |
-|--------|------|
-| `cmake` | 빌드 시스템 |
-| `extra-cmake-modules` | KDE CMake 모듈 (ECM) |
-| `ninja` | CMake 백엔드 (Make 대비 빠른 증분 빌드) |
-| `ccache` | 컴파일 캐시 (재빌드 속도 향상) |
-| `just` | 명령 실행기 (npm scripts / Makefile 대체) |
-| `gcc` | C++23 컴파일러 (>= 14) |
+<!-- TODO: Add screenshots here -->
 
-### Qt6
+## Features
 
-| 패키지 | 용도 |
-|--------|------|
-| `qt6-base` | Qt6 Core, GUI, Widgets, DBus, Network |
-| `qt6-declarative` | QML 엔진 (Qt Quick) |
-| `qt6-wayland` | Qt6 Wayland 플랫폼 플러그인 |
+- **Parabolic Zoom** — macOS-style icon magnification on hover
+- **Window Previews** — Live PipeWire-based thumbnails on hover with multi-window support
+- **Background Styles** — Panel-inherit, transparent, tinted, and acrylic (frosted glass) backgrounds
+- **KDE Native Integration** — Kirigami UI, KDE color schemes, global shortcuts, and Plasma theme colors
+- **Drag & Drop** — Reorder dock items, drop files onto apps, add launchers by dragging .desktop files
+- **Smart Visibility** — Always visible, auto-hide, dodge windows, or smart hide modes
+- **Global Shortcuts** — Meta+\` to toggle, Meta+1-9 to activate apps
+- **Wayland Native** — Built on Layer Shell protocol for proper dock behavior
+- **Settings UI** — Kirigami-based settings dialog for easy customization
 
-### KDE Frameworks 6
+## Installation
 
-| 패키지 | 용도 |
-|--------|------|
-| `kwindowsystem` | 창 목록 추적, 활성 창 감지, 가상 데스크톱 |
-| `kconfig` | 독 설정 저장/로드 |
-| `kcoreaddons` | KDE 핵심 유틸리티 |
-| `ki18n` | 다국어 지원 (i18n) |
+Krema packages are available via [Open Build Service (OBS)](https://build.opensuse.org/).
 
-### Wayland
+| Distribution | Architecture | Package Format |
+|---|---|---|
+| Arch Linux | x86_64, aarch64 | .pkg.tar.zst |
+| Fedora 40, 41, 42 | x86_64, aarch64 | RPM |
+| openSUSE Tumbleweed | x86_64, aarch64 | RPM |
+| Ubuntu 24.04, 24.10 | amd64, arm64 | DEB |
+| Debian Trixie (13) | amd64, arm64 | DEB |
 
-| 패키지 | 용도 |
-|--------|------|
-| `layer-shell-qt` | Wayland layer-shell 프로토콜 (독 위치 고정) |
-| `wayland` | Wayland 클라이언트 라이브러리 |
+## Building from Source
 
-### 테스트
-
-| 패키지 | 용도 |
-|--------|------|
-| `catch2` | C++ 단위 테스트 프레임워크 |
-
-### 전체 설치 명령
+### Dependencies (Arch Linux / Manjaro)
 
 ```bash
 sudo pacman -S --needed \
@@ -56,81 +47,33 @@ sudo pacman -S --needed \
     catch2
 ```
 
-### 전체 제거 명령
+### Minimum Versions
 
-위 명령으로 **새로 설치된** 패키지만 제거하려면, 설치 전에 `pacman -Qqe` 목록을 저장해두고 diff로 비교:
-
-```bash
-# 설치 전 (설치 전에 실행)
-pacman -Qqe > ~/krema-before-packages.txt
-
-# 설치 후, 새로 추가된 패키지만 제거
-comm -13 ~/krema-before-packages.txt <(pacman -Qqe | sort) | xargs sudo pacman -Rns
-```
-
-## 최소 버전 요구사항
-
-| 의존성 | 최소 버전 |
-|--------|----------|
-| C++ | C++23 (GCC >= 14, Clang >= 18) |
-| CMake | 3.22 |
-| Qt6 | 6.6.0 |
+| Dependency | Minimum Version |
+|---|---|
+| KDE Plasma | 6.0.0 |
+| Qt 6 | 6.6.0 |
 | KDE Frameworks 6 | 6.0.0 |
-| LayerShellQt | 6.0.0 |
-| Wayland | 1.22 |
+| CMake | 3.22 |
+| C++ Compiler | GCC 14+ / Clang 18+ |
 
-## 로컬 빌드
+### Build & Run
 
 ```bash
 just configure    # cmake --preset dev
 just build        # cmake --build --preset dev
 just test         # ctest --preset dev
-just run          # 실행
-just format       # 코드 포맷
-just clean        # 빌드 디렉토리 삭제
+just run          # run krema
 ```
 
-## 크로스 빌드 / 멀티 배포판 빌드 (OBS)
+## Roadmap
 
-[Open Build Service (OBS)](https://build.opensuse.org/)를 사용하여 여러 배포판 및 아키텍처(x86_64, aarch64 등)의 패키지를 자동으로 빌드합니다.
+See [ROADMAP.md](ROADMAP.md) for the full development roadmap.
 
-### 지원 타겟
+## Contributing
 
-| 배포판 | 아키텍처 | 패키지 형식 |
-|--------|---------|-----------|
-| Arch Linux | x86_64, aarch64 | PKGBUILD (.pkg.tar.zst) |
-| Fedora 40, 41, 42 | x86_64, aarch64 | RPM (.spec) |
-| openSUSE Tumbleweed | x86_64, aarch64 | RPM (.spec) |
-| Ubuntu 24.04, 24.10 | amd64, arm64 | DEB (debian.*) |
-| Debian Trixie (13) | amd64, arm64 | DEB (debian.*) |
+Contributions are welcome! Please open an issue to discuss your idea before submitting a pull request.
 
-### 패키징 파일 위치
+## License
 
-```
-packaging/
-├── obs/
-│   ├── _service           # OBS 소스 자동 가져오기 설정
-│   ├── krema.spec         # RPM 빌드 (Fedora, openSUSE)
-│   ├── debian.control     # DEB 메타데이터 (Ubuntu, Debian)
-│   └── debian.rules       # DEB 빌드 규칙
-└── arch/
-    └── PKGBUILD           # Arch Linux 패키지
-```
-
-### OBS 프로젝트 셋업
-
-```bash
-# osc 설치 (Arch)
-sudo pacman -S osc
-
-# 프로젝트 체크아웃 및 패키징 파일 업로드
-osc checkout home:<username>/krema
-cp packaging/obs/* home:<username>/krema/
-cd home:<username>/krema
-osc add *
-osc commit -m "Initial packaging"
-```
-
-## 라이선스
-
-GPL-3.0-or-later
+Krema is licensed under [GPL-3.0-or-later](LICENSES/GPL-3.0-or-later.txt).

@@ -87,6 +87,17 @@ public:
     /// Remove the pinned launcher at @p index. Returns true on success.
     Q_INVOKABLE bool removeLauncher(int index);
 
+    // --- Window Preview ---
+
+    /// Return window IDs (UUIDs on Wayland) for the task at @p index.
+    Q_INVOKABLE QVariantList windowIds(int index) const;
+
+    /// Return the number of child windows for the task at @p index.
+    Q_INVOKABLE int childCount(int index) const;
+
+    /// Return a QModelIndex for use as DelegateModel.rootIndex.
+    Q_INVOKABLE QModelIndex taskModelIndex(int index) const;
+
 Q_SIGNALS:
     void pinnedLaunchersChanged();
     void taskLaunching(int index);

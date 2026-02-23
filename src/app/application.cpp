@@ -9,9 +9,9 @@
 #include "platform/dockplatformfactory.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
+#include "shell/previewcontroller.h"
 #include "shell/settingswindow.h"
 
-#include <KAboutApplicationDialog>
 #include <KAboutData>
 #include <KActionCollection>
 #include <KCrash>
@@ -54,7 +54,7 @@ int Application::run()
     KCrash::initialize();
 
     // Set up KDE application metadata (required for KGlobalAccel, D-Bus, etc.)
-    KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral("0.1.0"), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
+    KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral("0.2.0"), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
     aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
     KAboutData::setApplicationData(aboutData);
     setDesktopFileName(QStringLiteral("org.krema"));
@@ -82,6 +82,7 @@ int Application::run()
     // Create the dock view
     m_dockView = std::make_unique<DockView>(std::move(platform));
     m_dockView->rootContext()->setContextProperty(QStringLiteral("dockModel"), m_dockModel.get());
+    m_dockView->rootContext()->setContextProperty(QStringLiteral("dockSettings"), m_settings.get());
 
     // Apply saved settings to dock view
     m_dockView->setIconSize(m_settings->iconSize());
@@ -91,11 +92,22 @@ int Application::run()
     m_dockView->setFloating(m_settings->floating());
     m_dockView->setBackgroundOpacity(m_settings->backgroundOpacity());
 
+    // Create the preview popup controller before loading QML so previewController
+    // is available as a context property when main.qml is first evaluated.
+    m_previewController = new PreviewController(m_dockModel.get(), m_dockView.get(), m_dockView.get());
+    m_dockView->rootContext()->setContextProperty(QStringLiteral("previewController"), m_previewController);
+
     m_dockView->initialize(m_dockModel->tasksModel(),
                            m_dockModel->virtualDesktopInfo(),
                            m_dockModel->activityInfo(),
                            static_cast<DockPlatform::Edge>(m_settings->edge()),
                            static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
+
+    // Apply initial preview hide delay from settings
+    m_previewController->setHideDelay(m_settings->previewHideDelay());
+
+    // Initialize preview surface after dock is set up (needs dock height for margins)
+    m_previewController->initialize();
 
     // Auto-save pinned launchers when they change (pin/unpin from context menu)
     connect(m_dockModel.get(), &DockModel::pinnedLaunchersChanged, this, [this]() {
@@ -109,17 +121,15 @@ int Application::run()
     // Context menu interaction lock: dock stays visible while menu is open
     connect(m_dockModel.get(), &DockModel::contextMenuVisibleChanged, m_dockView->visibilityController(), &DockVisibilityController::setInteracting);
 
-    // About dialog
-    connect(m_dockModel.get(), &DockModel::aboutRequested, this, []() {
-        auto *dialog = new KAboutApplicationDialog(KAboutData::applicationData(), nullptr);
-        dialog->setAttribute(Qt::WA_DeleteOnClose);
-        dialog->show();
-    });
-
     // Settings dialog (lazy-loaded on first open)
     m_settingsWindow = std::make_unique<SettingsWindow>(m_settings.get(), this);
     connect(m_dockModel.get(), &DockModel::settingsRequested, this, [this]() {
         m_settingsWindow->show();
+    });
+
+    // About dialog → open settings window at the About page
+    connect(m_dockModel.get(), &DockModel::aboutRequested, this, [this]() {
+        m_settingsWindow->show(QStringLiteral("about"));
     });
 
     // Settings window interaction lock: dock stays visible while settings is open
@@ -156,6 +166,9 @@ void Application::applySettings()
     // Apply delay settings
     m_dockView->visibilityController()->setShowDelay(m_settings->showDelay());
     m_dockView->visibilityController()->setHideDelay(m_settings->hideDelay());
+
+    // Apply preview settings
+    m_previewController->setHideDelay(m_settings->previewHideDelay());
 }
 
 void Application::registerGlobalShortcuts()

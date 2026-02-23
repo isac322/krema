@@ -140,3 +140,18 @@ Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지
 
 ### Icon Resources
 - sourceSize MUST use max zoom resolution: iconSize * maxZoomFactor
+
+### QML Repeater Model Lifecycle
+- Repeater.model에 JS 배열 할당 후 교체하면 delegate가 전부 파괴/재생성됨
+- GPU 리소스(PipeWire 스트림) delegate에는 ListModel + set()/append()/remove() 사용
+- JS 배열 교체가 허용되는 경우: delegate에 비싼 리소스가 없을 때만
+
+### Input Region / Hit Box
+- 입력 영역(QRegion mask, MouseArea, HoverHandler 등)은 반드시 실제 UI 컴포넌트의 시각적 크기와 일치해야 함
+- "편의를 위해" 입력 영역을 UI보다 크게 설정하면 다른 앱/UI와의 클릭 충돌 발생
+- 마진이 필요하면 최소한으로 (40px 이내), 반드시 주석으로 이유 명시
+
+### Async State Handling
+- 비동기 상태 대기에 Timer(polling) 금지 → KDE/Qt 시그널(dataChanged, rowsInserted 등) 구독
+- KDE API가 one-shot(재시도 없음)이면, 관련 시그널 핸들러에서 명시적 재요청
+- Timer가 허용되는 유일한 경우: UI 딜레이(debounce, hide delay 등) — 비즈니스 로직용 아님

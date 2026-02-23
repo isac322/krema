@@ -17,6 +17,8 @@ add_library(krema_lib STATIC
     shell/dockview.cpp
     shell/dockvisibilitycontroller.h
     shell/dockvisibilitycontroller.cpp
+    shell/previewcontroller.h
+    shell/previewcontroller.cpp
     shell/dockwidget.h
     shell/dockwidget.cpp
     shell/settingswindow.h

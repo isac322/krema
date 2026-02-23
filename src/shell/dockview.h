@@ -21,6 +21,7 @@ namespace krema
 {
 
 class DockVisibilityController;
+class PreviewController;
 
 /**
  * Main dock window.
@@ -72,11 +73,16 @@ public:
 
     [[nodiscard]] int floatingPadding() const;
 
+    /// Height of the visible panel bar + floating padding (excludes zoom overflow).
+    /// Used for preview surface margin to ensure seamless input region adjacency.
+    [[nodiscard]] int panelBarHeight() const;
+
     void setBackgroundOpacity(qreal opacity);
 
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
+    [[nodiscard]] PreviewController *previewController() const;
 
 Q_SIGNALS:
     void backgroundColorChanged();
@@ -97,6 +103,7 @@ private:
     std::unique_ptr<DockPlatform> m_platform;
     std::unique_ptr<BackgroundStyle> m_backgroundStyle;
     DockVisibilityController *m_visibilityController = nullptr;
+    PreviewController *m_previewController = nullptr;
 
     int m_iconSize = 48;
     int m_iconSpacing = 4;

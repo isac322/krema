@@ -15,6 +15,7 @@ namespace krema
 class DockModel;
 class DockSettings;
 class DockView;
+class PreviewController;
 class SettingsWindow;
 
 class Application : public QApplication
@@ -35,6 +36,7 @@ private:
     std::unique_ptr<DockView> m_dockView;
     std::unique_ptr<DockModel> m_dockModel;
     std::unique_ptr<SettingsWindow> m_settingsWindow;
+    PreviewController *m_previewController = nullptr;
     KActionCollection *m_actionCollection = nullptr;
 };
 

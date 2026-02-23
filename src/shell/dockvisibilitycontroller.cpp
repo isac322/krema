@@ -127,8 +127,12 @@ void DockVisibilityController::setHovered(bool hovered)
 
     m_hovered = hovered;
 
-    // Update input region: hovered → include zoom overflow, unhovered → panel only
-    applyInputRegion();
+    // Update input region: hovered → include zoom overflow, unhovered → panel only.
+    // When interacting (e.g. preview open) and mouse leaves dock, skip input region
+    // shrink to prevent compositor pointer-focus oscillation between surfaces.
+    if (m_interactingCount == 0 || hovered) {
+        applyInputRegion();
+    }
 
     if (hovered) {
         // Mouse entered dock/trigger area

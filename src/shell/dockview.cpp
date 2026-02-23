@@ -5,6 +5,7 @@
 
 #include "dockvisibilitycontroller.h"
 #include "models/taskiconprovider.h"
+#include "previewcontroller.h"
 #include "style/panelinheritstyle.h"
 
 #include <QLoggingCategory>
@@ -176,6 +177,11 @@ int DockView::floatingPadding() const
     return m_floating ? s_floatingMargin : 0;
 }
 
+int DockView::panelBarHeight() const
+{
+    return m_iconSize + s_padding * 2 + floatingPadding();
+}
+
 DockPlatform *DockView::platform() const
 {
     return m_platform.get();
@@ -184,6 +190,11 @@ DockPlatform *DockView::platform() const
 DockVisibilityController *DockView::visibilityController() const
 {
     return m_visibilityController;
+}
+
+PreviewController *DockView::previewController() const
+{
+    return m_previewController;
 }
 
 void DockView::updateSize()

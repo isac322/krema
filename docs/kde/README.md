@@ -54,3 +54,4 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | Document | Description |
 |----------|-------------|
 | [lessons-learned.md](lessons-learned.md) | Bug-fix lessons and debugging insights |
+| [tasksmodel-virtual-session.md](tasksmodel-virtual-session.md) | Why TasksModel cannot detect windows in kwin-mcp virtual sessions — protocol chain, permission checks, workarounds |

@@ -8,4 +8,4 @@ Icon=krema
 Terminal=false
 Categories=Qt;KDE;Utility;
 NoDisplay=true
-X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_plasma_activation_feedback
+X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_plasma_activation_feedback,zkde_screencast_unstable_v1

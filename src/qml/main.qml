@@ -380,6 +380,7 @@ Item {
                     // index and model are injected by Repeater into
                     // DockItem's own required properties
 
+                    z: (root.hoveredIndex === index) ? 1 : 0
                     iconSize: dockView.iconSize
                     maxZoomFactor: dockView.maxZoomFactor
                     panelMouseX: dockPanel.mouseX

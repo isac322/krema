@@ -6,7 +6,7 @@ Version:        0.1.0
 Release:        1%{?dist}
 Summary:        Latte Dock replacement for KDE Plasma 6
 License:        GPL-3.0-or-later
-URL:            https://github.com/user/krema
+URL:            https://github.com/isac322/krema
 Source0:        %{name}-%{version}.tar.xz
 
 BuildRequires:  cmake >= 3.22

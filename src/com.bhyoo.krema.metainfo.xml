@@ -4,13 +4,22 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Krema</name>
-  <summary>A dock application for KDE Plasma 6</summary>
+  <summary>A lightweight dock for KDE Plasma 6 — spiritual successor to Latte Dock</summary>
   <description>
     <p>
       Krema is a lightweight dock for KDE Plasma 6, designed as a spiritual successor
       to Latte Dock. It provides quick access to your favorite applications with
       smooth parabolic zoom animations, window previews via PipeWire, and deep
       integration with KDE Plasma desktop features.
+    </p>
+    <p>
+      Features include multiple background styles (transparent, tinted, acrylic frosted
+      glass), drag-and-drop reordering, smart visibility modes that dodge or hide behind
+      windows, and global keyboard shortcuts for quick app launching.
+    </p>
+    <p>
+      Built from scratch with C++23 and KDE Frameworks 6, Krema is Wayland-native and
+      uses Kirigami for its settings UI, ensuring a fully native KDE Plasma experience.
     </p>
   </description>
   <launchable type="desktop-id">com.bhyoo.krema.desktop</launchable>
@@ -22,8 +31,24 @@
   <provides>
     <binary>krema</binary>
   </provides>
+  <keywords>
+    <keyword>dock</keyword>
+    <keyword>launcher</keyword>
+    <keyword>taskbar</keyword>
+    <keyword>panel</keyword>
+    <keyword>latte</keyword>
+    <keyword>kde</keyword>
+    <keyword>plasma</keyword>
+    <keyword>wayland</keyword>
+  </keywords>
+  <categories>
+    <category>Qt</category>
+    <category>KDE</category>
+    <category>Utility</category>
+  </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-02-24"/>
     <release version="0.2.1" date="2026-02-23"/>
   </releases>
 </component>

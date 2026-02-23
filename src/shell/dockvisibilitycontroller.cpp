@@ -3,6 +3,8 @@
 
 #include "dockvisibilitycontroller.h"
 
+#include "utils/inputregion.h"
+
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/activityinfo.h>
 #include <taskmanager/tasksmodel.h>
@@ -283,45 +285,18 @@ void DockVisibilityController::applyInputRegion()
         return;
     }
 
-    const int w = m_dockWindow->width();
-    const int h = m_dockWindow->height();
+    InputRegionParams params;
+    params.surfaceWidth = m_dockWindow->width();
+    params.surfaceHeight = m_dockWindow->height();
+    params.panelX = m_panelX;
+    params.panelY = m_panelY;
+    params.panelWidth = m_panelWidth;
+    params.panelHeight = m_panelHeight;
+    params.zoomOverflowHeight = m_zoomOverflowHeight;
+    params.visible = m_visible;
+    params.hovered = m_hovered;
 
-    // Full-width trigger strip at the bottom edge of the surface.
-    // Always present so the mouse at the screen edge never loses focus
-    // (the surface bottom IS the screen edge because layer-shell margin is always 0).
-    const QRegion triggerStrip(0, h - 4, w, 4);
-
-    if (m_visible) {
-        if (m_panelWidth > 0) {
-            constexpr int margin = 4;
-            const int regionX = qMax(0, m_panelX - margin);
-            const int regionW = m_panelWidth + 2 * margin;
-
-            int regionY;
-            int regionH;
-            if (m_hovered) {
-                // Include zoom overflow + panel + floating gap, but exclude
-                // non-interactive space above the zoom area (tooltip reserve).
-                regionY = qMax(0, m_panelY - m_zoomOverflowHeight - margin);
-                regionH = h - regionY;
-            } else {
-                // Include panel + floating gap below
-                regionY = qMax(0, m_panelY - margin);
-                regionH = h - regionY;
-            }
-
-            // Union with full-width trigger strip so the mouse at the screen
-            // edge is never kicked out by the narrower panel-width region.
-            QRegion region(regionX, regionY, regionW, regionH);
-            region = region.united(triggerStrip);
-            m_platform->setInputRegion(region);
-        } else {
-            // Panel geometry not yet reported; accept all input as fallback
-            m_platform->setInputRegion(QRegion());
-        }
-    } else {
-        m_platform->setInputRegion(triggerStrip);
-    }
+    m_platform->setInputRegion(computeDockInputRegion(params));
 }
 
 QRect DockVisibilityController::dockScreenRect() const
@@ -331,36 +306,21 @@ QRect DockVisibilityController::dockScreenRect() const
     }
 
     const QRect screenGeo = m_dockWindow->screen()->geometry();
-    const int surfaceW = m_dockWindow->width();
-    const int surfaceH = m_dockWindow->height();
 
-    // Calculate the surface's top-left corner in screen coordinates.
-    // Layer-shell anchors the surface to the specified edge. Margin is always 0.
-    int surfaceX = 0;
-    int surfaceY = 0;
+    DockScreenRectParams params;
+    params.screenX = screenGeo.x();
+    params.screenY = screenGeo.y();
+    params.screenWidth = screenGeo.width();
+    params.screenHeight = screenGeo.height();
+    params.surfaceWidth = m_dockWindow->width();
+    params.surfaceHeight = m_dockWindow->height();
+    params.panelX = m_panelX;
+    params.panelRefY = m_panelRefY;
+    params.panelWidth = m_panelWidth;
+    params.panelHeight = m_panelHeight;
+    params.edge = static_cast<int>(m_platform->edge());
 
-    switch (m_platform->edge()) {
-    case DockPlatform::Edge::Bottom:
-        surfaceX = screenGeo.x();
-        surfaceY = screenGeo.y() + screenGeo.height() - surfaceH;
-        break;
-    case DockPlatform::Edge::Top:
-        surfaceX = screenGeo.x();
-        surfaceY = screenGeo.y();
-        break;
-    case DockPlatform::Edge::Left:
-        surfaceX = screenGeo.x();
-        surfaceY = screenGeo.y();
-        break;
-    case DockPlatform::Edge::Right:
-        surfaceX = screenGeo.x() + screenGeo.width() - surfaceW;
-        surfaceY = screenGeo.y();
-        break;
-    }
-
-    // Panel's screen position = surface origin + panel's local offset.
-    // Use m_panelRefY: overlap detection uses the visible-state position even during hide animation.
-    return QRect(surfaceX + m_panelX, surfaceY + m_panelRefY, m_panelWidth, m_panelHeight);
+    return computeDockScreenRect(params);
 }
 
 bool DockVisibilityController::hasOverlappingWindow() const

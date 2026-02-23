@@ -4,6 +4,7 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.settings as KirigamiSettings
+import com.bhyoo.krema 1.0
 
 // Minimal host window for ConfigurationView.
 // ConfigurationView.open() creates its own ConfigWindow on desktop,

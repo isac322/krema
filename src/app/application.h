@@ -8,15 +8,13 @@
 #include <memory>
 
 class KActionCollection;
+class KremaSettings;
 
 namespace krema
 {
 
 class DockModel;
-class DockSettings;
-class DockView;
-class PreviewController;
-class SettingsWindow;
+class DockShell;
 
 class Application : public QApplication
 {
@@ -30,13 +28,10 @@ public:
 
 private:
     void registerGlobalShortcuts();
-    void applySettings();
 
-    std::unique_ptr<DockSettings> m_settings;
-    std::unique_ptr<DockView> m_dockView;
+    std::unique_ptr<KremaSettings> m_settings;
     std::unique_ptr<DockModel> m_dockModel;
-    std::unique_ptr<SettingsWindow> m_settingsWindow;
-    PreviewController *m_previewController = nullptr;
+    std::unique_ptr<DockShell> m_shell;
     KActionCollection *m_actionCollection = nullptr;
 };
 

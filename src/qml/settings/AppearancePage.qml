@@ -6,6 +6,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
+import com.bhyoo.krema 1.0
 
 FormCard.FormCardPage {
     title: i18n("Appearance")
@@ -18,8 +19,8 @@ FormCard.FormCardPage {
         FormCard.FormSpinBoxDelegate {
             label: i18n("Icon size")
             from: 24; to: 96; stepSize: 4
-            value: dockSettings.iconSize
-            onValueChanged: dockSettings.iconSize = value
+            value: DockSettings.iconSize
+            onValueChanged: DockSettings.iconSize = value
         }
 
         FormCard.FormDelegateSeparator {}
@@ -27,8 +28,8 @@ FormCard.FormCardPage {
         FormCard.FormSpinBoxDelegate {
             label: i18n("Icon spacing")
             from: 0; to: 16
-            value: dockSettings.iconSpacing
-            onValueChanged: dockSettings.iconSpacing = value
+            value: DockSettings.iconSpacing
+            onValueChanged: DockSettings.iconSpacing = value
         }
 
         FormCard.FormDelegateSeparator {}
@@ -62,8 +63,8 @@ FormCard.FormCardPage {
                     id: zoomSlider
                     Layout.fillWidth: true
                     from: 1.0; to: 2.0; stepSize: 0.1
-                    value: dockSettings.maxZoomFactor
-                    onMoved: dockSettings.maxZoomFactor = value
+                    value: DockSettings.maxZoomFactor
+                    onMoved: DockSettings.maxZoomFactor = value
                 }
             }
         }
@@ -73,16 +74,16 @@ FormCard.FormCardPage {
         FormCard.FormSpinBoxDelegate {
             label: i18n("Corner radius")
             from: 0; to: 24
-            value: dockSettings.cornerRadius
-            onValueChanged: dockSettings.cornerRadius = value
+            value: DockSettings.cornerRadius
+            onValueChanged: DockSettings.cornerRadius = value
         }
 
         FormCard.FormDelegateSeparator {}
 
         FormCard.FormSwitchDelegate {
             text: i18n("Floating")
-            checked: dockSettings.floating
-            onToggled: dockSettings.floating = checked
+            checked: DockSettings.floating
+            onToggled: DockSettings.floating = checked
         }
 
         FormCard.FormDelegateSeparator {}
@@ -116,8 +117,8 @@ FormCard.FormCardPage {
                     id: opacitySlider
                     Layout.fillWidth: true
                     from: 0.1; to: 1.0; stepSize: 0.05
-                    value: dockSettings.backgroundOpacity
-                    onMoved: dockSettings.backgroundOpacity = value
+                    value: DockSettings.backgroundOpacity
+                    onMoved: DockSettings.backgroundOpacity = value
                 }
             }
         }

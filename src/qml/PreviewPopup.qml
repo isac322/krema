@@ -6,6 +6,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
+import com.bhyoo.krema 1.0
 
 /**
  * Preview popup root component.
@@ -17,7 +18,7 @@ Item {
     id: root
     anchors.fill: parent
 
-    // C++ context properties: previewController, dockModel
+    // C++ singletons: PreviewController, DockModel
 
     // Surface-level hover detection: keep preview visible when mouse is anywhere
     // on this surface. The C++ input region (updateInputRegion) already constrains
@@ -27,7 +28,7 @@ Item {
     // on popup geometry, which can shift during layout.
     HoverHandler {
         id: surfaceHover
-        onHoveredChanged: previewController.setPreviewHovered(hovered)
+        onHoveredChanged: PreviewController.setPreviewHovered(hovered)
     }
 
     // Parent's window IDs — used by both grouped and single preview.
@@ -43,7 +44,7 @@ Item {
     }
 
     function rebuildChildModel() {
-        let parentIdx = previewController.parentIndex
+        let parentIdx = PreviewController.parentIndex
         if (parentIdx < 0) {
             // Keep delegates alive so PipeWire streams pause/resume naturally
             // via visibility cascade. Destroying delegates triggers
@@ -53,12 +54,12 @@ Item {
         }
 
         // Get ALL window IDs from the parent task (like Plasma does).
-        let parentModelIdx = dockModel.tasksModel.index(parentIdx, 0)
-        let allWinIds = dockModel.tasksModel.data(
+        let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
+        let allWinIds = DockModel.tasksModel.data(
             parentModelIdx, TaskManager.AbstractTasksModel.WinIdList) || []
         parentWinIds = allWinIds
 
-        let childCount = dockModel.childCount(parentIdx)
+        let childCount = DockModel.childCount(parentIdx)
 
         // === Single window (not grouped): parent row IS the window ===
         // KDE TasksModel tree: single window → rowCount(idx) = 0 (no children)
@@ -66,12 +67,12 @@ Item {
         if (childCount === 0) {
             if (allWinIds.length > 0) {
                 let entry = {
-                    title: dockModel.tasksModel.data(
+                    title: DockModel.tasksModel.data(
                         parentModelIdx, Qt.DisplayRole) || "",
-                    isMinimized: dockModel.tasksModel.data(
+                    isMinimized: DockModel.tasksModel.data(
                         parentModelIdx,
                         TaskManager.AbstractTasksModel.IsMinimized) || false,
-                    isActive: dockModel.tasksModel.data(
+                    isActive: DockModel.tasksModel.data(
                         parentModelIdx,
                         TaskManager.AbstractTasksModel.IsActive) || false,
                     childIndex: -1  // sentinel: use parent row directly
@@ -100,12 +101,12 @@ Item {
             // Incremental update: set() preserves existing delegates (and their
             // PipeWire streams), append() adds new ones, remove() trims excess.
             for (let i = 0; i < maxCount; i++) {
-                let childModelIndex = dockModel.tasksModel.makeModelIndex(parentIdx, i)
+                let childModelIndex = DockModel.tasksModel.makeModelIndex(parentIdx, i)
                 let entry = {
-                    title: dockModel.tasksModel.data(childModelIndex, Qt.DisplayRole) || "",
-                    isMinimized: dockModel.tasksModel.data(
+                    title: DockModel.tasksModel.data(childModelIndex, Qt.DisplayRole) || "",
+                    isMinimized: DockModel.tasksModel.data(
                         childModelIndex, TaskManager.AbstractTasksModel.IsMinimized) || false,
-                    isActive: dockModel.tasksModel.data(
+                    isActive: DockModel.tasksModel.data(
                         childModelIndex, TaskManager.AbstractTasksModel.IsActive) || false,
                     childIndex: i
                 }
@@ -133,9 +134,9 @@ Item {
     }
 
     Connections {
-        target: previewController
+        target: PreviewController
         function onParentIndexChanged() {
-            if (previewController.parentIndex >= 0) {
+            if (PreviewController.parentIndex >= 0) {
                 // Different app = different PipeWire streams, must recreate delegates
                 childWindowModel.clear()
             }
@@ -145,24 +146,24 @@ Item {
 
     // Also rebuild when the underlying model data changes (window close, title change)
     Connections {
-        target: dockModel.tasksModel
+        target: DockModel.tasksModel
         function onDataChanged() {
-            if (previewController.visible && previewController.parentIndex >= 0) {
+            if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 root.rebuildChildModel()
             }
         }
         function onRowsInserted() {
-            if (previewController.visible && previewController.parentIndex >= 0) {
+            if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 root.rebuildChildModel()
             }
         }
         function onRowsRemoved() {
-            if (previewController.visible && previewController.parentIndex >= 0) {
+            if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 // Child removed: check if parent still valid
-                let parentIdx = previewController.parentIndex
-                let parentModelIdx = dockModel.tasksModel.index(parentIdx, 0)
+                let parentIdx = PreviewController.parentIndex
+                let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
                 if (!parentModelIdx.valid) {
-                    previewController.hidePreview()
+                    PreviewController.hidePreview()
                 } else {
                     root.rebuildChildModel()
                 }
@@ -173,8 +174,8 @@ Item {
     // The visible popup container
     Rectangle {
         id: popup
-        visible: previewController.visible && previewController.parentIndex >= 0
-        x: previewController.contentX
+        visible: PreviewController.visible && PreviewController.parentIndex >= 0
+        x: PreviewController.contentX
         width: popupContent.implicitWidth + 2 * Kirigami.Units.largeSpacing
         height: popupContent.implicitHeight + 2 * Kirigami.Units.largeSpacing
         // Anchor to bottom of the surface (which sits above the dock)
@@ -190,8 +191,8 @@ Item {
         border.width: 1
 
         // Report size to controller for input region + positioning
-        onWidthChanged: previewController.setContentSize(width, height)
-        onHeightChanged: previewController.setContentSize(width, height)
+        onWidthChanged: PreviewController.setContentSize(width, height)
+        onHeightChanged: PreviewController.setContentSize(width, height)
 
         ColumnLayout {
             id: popupContent
@@ -203,7 +204,7 @@ Item {
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.maximumWidth: groupedRow.implicitWidth
-                text: previewController.appName
+                text: PreviewController.appName
                 font.weight: Font.Bold
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
@@ -219,7 +220,7 @@ Item {
                 id: groupedRow
                 Layout.alignment: Qt.AlignHCenter
                 spacing: Kirigami.Units.smallSpacing
-                visible: previewController.visible && previewController.parentIndex >= 0
+                visible: PreviewController.visible && PreviewController.parentIndex >= 0
 
                 Repeater {
                     id: thumbnailRepeater
@@ -232,7 +233,7 @@ Item {
                         title: model.title
                         isMinimized: model.isMinimized
                         isActive: model.isActive
-                        parentIndex: previewController.parentIndex
+                        parentIndex: PreviewController.parentIndex
                         childIndex: model.childIndex
                     }
                 }

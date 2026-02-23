@@ -56,6 +56,8 @@ ecm_set_disabled_deprecation_versions(
     KF ${KF6_MIN_VERSION}
 )
 
+add_compile_definitions(KREMA_VERSION_STRING="${PROJECT_VERSION}")
+
 add_subdirectory(src)
 
 if(BUILD_TESTING)

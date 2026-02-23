@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name="kremarc"/>
+
+  <group name="General">
+    <entry name="IconSize" type="Int">
+      <label>Icon size in pixels</label>
+      <default>48</default>
+      <min>24</min>
+      <max>96</max>
+    </entry>
+
+    <entry name="IconSpacing" type="Int">
+      <label>Spacing between icons</label>
+      <default>4</default>
+      <min>0</min>
+      <max>16</max>
+    </entry>
+
+    <entry name="MaxZoomFactor" type="Double">
+      <label>Maximum parabolic zoom factor</label>
+      <default>1.6</default>
+      <min>1.0</min>
+      <max>2.0</max>
+    </entry>
+
+    <entry name="CornerRadius" type="Int">
+      <label>Panel corner radius</label>
+      <default>12</default>
+      <min>0</min>
+      <max>24</max>
+    </entry>
+
+    <entry name="Floating" type="Bool">
+      <label>Whether the dock floats above the screen edge</label>
+      <default>true</default>
+    </entry>
+
+    <entry name="VisibilityMode" type="Int">
+      <label>Dock visibility mode (0=Always, 1=Hidden, 2=Dodge, 3=Smart)</label>
+      <default>0</default>
+    </entry>
+
+    <entry name="Edge" type="Int">
+      <label>Screen edge (0=Top, 1=Bottom, 2=Left, 3=Right)</label>
+      <default>1</default>
+    </entry>
+
+    <entry name="ShowDelay" type="Int">
+      <label>Delay before showing dock (ms)</label>
+      <default>200</default>
+    </entry>
+
+    <entry name="HideDelay" type="Int">
+      <label>Delay before hiding dock (ms)</label>
+      <default>400</default>
+    </entry>
+
+    <entry name="BackgroundOpacity" type="Double">
+      <label>Background opacity</label>
+      <default>0.6</default>
+      <min>0.1</min>
+      <max>1.0</max>
+    </entry>
+
+    <entry name="PreviewEnabled" type="Bool">
+      <label>Enable window preview on hover</label>
+      <default>true</default>
+    </entry>
+
+    <entry name="PreviewThumbnailSize" type="Int">
+      <label>Preview thumbnail width</label>
+      <default>200</default>
+      <min>120</min>
+      <max>320</max>
+    </entry>
+
+    <entry name="PreviewHoverDelay" type="Int">
+      <label>Delay before showing preview (ms)</label>
+      <default>500</default>
+    </entry>
+
+    <entry name="PreviewHideDelay" type="Int">
+      <label>Delay before hiding preview (ms)</label>
+      <default>200</default>
+    </entry>
+
+    <entry name="PinnedLaunchers" type="StringList">
+      <label>Pinned launcher URLs</label>
+      <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>
+    </entry>
+  </group>
+</kcfg>

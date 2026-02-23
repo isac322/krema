@@ -5,19 +5,20 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
+import com.bhyoo.krema 1.0
 
 /**
  * Main dock container.
  *
  * The root item fills the layer-shell surface. The visible dock panel
  * is a centered rounded rectangle that hugs its content.
- * The panel slides in/out based on dockVisibility.dockVisible.
+ * The panel slides in/out based on DockVisibility.dockVisible.
  */
 Item {
     id: root
     anchors.fill: parent
 
-    // C++ context properties: dockView, dockModel, dockVisibility
+    // C++ singletons: DockView, DockModel, DockActions, DockContextMenu, DockVisibility, DockSettings, PreviewController
 
     // Hovered item tracking (for custom tooltip and click targeting)
     property int hoveredIndex: -1
@@ -92,10 +93,10 @@ Item {
     }
 
     function _tryAutoPreview() {
-        if (!dockSettings.previewEnabled) return
-        if (hoveredIndex < 0 || previewController.visible) return
-        let idx = dockModel.tasksModel.index(hoveredIndex, 0)
-        let isWindow = dockModel.tasksModel.data(
+        if (!DockSettings.previewEnabled) return
+        if (hoveredIndex < 0 || PreviewController.visible) return
+        let idx = DockModel.tasksModel.index(hoveredIndex, 0)
+        let isWindow = DockModel.tasksModel.data(
             idx, TaskManager.AbstractTasksModel.IsWindow)
         if (isWindow) {
             tooltipItem.show = false
@@ -103,7 +104,7 @@ Item {
             let item = dockRepeater.itemAt(hoveredIndex)
             if (item) {
                 let globalPos = item.mapToGlobal(0, 0)
-                previewController.showPreview(hoveredIndex, globalPos.x, item.width)
+                PreviewController.showPreview(hoveredIndex, globalPos.x, item.width)
             }
         }
     }
@@ -119,7 +120,7 @@ Item {
         // Rough vertical check: outside the dockRow + zoom extension → reset zoom
         let rowTop = dockRow.y
         let rowBottom = dockRow.y + dockRow.height
-        let maxExt = dockView.iconSize * (dockView.maxZoomFactor - 1.0)
+        let maxExt = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
         if (dockPanel.mouseY < rowTop - maxExt || dockPanel.mouseY > rowBottom) {
             hoveredIndex = -1
             hoveredName = ""
@@ -184,10 +185,10 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
 
         // Track hover state for visibility controller
-        onEntered: dockVisibility.setHovered(true)
+        onEntered: DockVisibility.setHovered(true)
         onExited: {
             // Keep zoom state when preview is visible (dock→preview mouse transition)
-            if (!previewController.visible) {
+            if (!PreviewController.visible) {
                 dockPanel.mouseX = -1
                 dockPanel.mouseY = -1
                 root._zoomActive = false
@@ -195,18 +196,18 @@ Item {
             root.hoveredIndex = -1
             root.hoveredName = ""
             // Hide preview with delay (allows mouse to move to preview surface)
-            previewController.hidePreviewDelayed()
+            PreviewController.hidePreviewDelayed()
             // Drag-out: if an active drag leaves the dock, unpin the launcher
             if (root._dragActive) {
-                if (dockModel.isPinned(root._dragSourceIndex)) {
-                    dockModel.removeLauncher(root._dragSourceIndex)
+                if (DockModel.isPinned(root._dragSourceIndex)) {
+                    DockActions.removeLauncher(root._dragSourceIndex)
                 }
                 root._dragActive = false
                 root._dragPending = false
                 root._dragWasActive = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
-                dockVisibility.setInteracting(false)
+                DockVisibility.setInteracting(false)
             } else if (root._dragPending) {
                 root._dragPending = false
                 root._dragWasActive = false
@@ -215,8 +216,8 @@ Item {
                 dragHoldTimer.stop()
             }
             // preview visible이면 dock hover 상태 유지 (입력 영역 축소 방지)
-            if (!previewController.visible) {
-                dockVisibility.setHovered(false)
+            if (!PreviewController.visible) {
+                DockVisibility.setHovered(false)
             }
         }
 
@@ -236,14 +237,14 @@ Item {
             if (root._dragActive) {
                 // Execute reorder
                 if (root._dragTargetIndex >= 0 && root._dragTargetIndex !== root._dragSourceIndex) {
-                    dockModel.moveTask(root._dragSourceIndex, root._dragTargetIndex)
+                    DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)
                 }
                 // Reset drag state
                 root._dragActive = false
                 root._dragPending = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
-                dockVisibility.setInteracting(false)
+                DockVisibility.setInteracting(false)
             } else {
                 root._dragPending = false
             }
@@ -259,11 +260,11 @@ Item {
             }
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
-                dockModel.activate(root.hoveredIndex)
+                DockActions.activate(root.hoveredIndex)
             } else if (mouse.button === Qt.MiddleButton) {
-                dockModel.newInstance(root.hoveredIndex)
+                DockActions.newInstance(root.hoveredIndex)
             } else if (mouse.button === Qt.RightButton) {
-                dockModel.showContextMenu(root.hoveredIndex)
+                DockContextMenu.showForTask(root.hoveredIndex)
             }
         }
 
@@ -271,9 +272,9 @@ Item {
         onWheel: function(wheel) {
             if (root.hoveredIndex < 0) return
             if (wheel.angleDelta.y > 0) {
-                dockModel.cycleWindows(root.hoveredIndex, false)
+                DockActions.cycleWindows(root.hoveredIndex, false)
             } else if (wheel.angleDelta.y < 0) {
-                dockModel.cycleWindows(root.hoveredIndex, true)
+                DockActions.cycleWindows(root.hoveredIndex, true)
             }
         }
 
@@ -286,7 +287,7 @@ Item {
                 if (Math.sqrt(dx * dx + dy * dy) > root._dragThreshold) {
                     root._dragActive = true
                     root._dragWasActive = true
-                    dockVisibility.setInteracting(true)  // Prevent dock hide during drag
+                    DockVisibility.setInteracting(true)  // Prevent dock hide during drag
                     tooltipItem.show = false
                     tooltipTimer.stop()
                 }
@@ -304,7 +305,7 @@ Item {
             // Tight zone: panel area + zoom extension above (icons grow upward).
             let panelTop = dockPanel.y
             let panelBottom = dockPanel.y + dockPanel.height
-            let zoomExtension = dockView.iconSize * (dockView.maxZoomFactor - 1.0)
+            let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
             if (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom) {
                 dockPanel.mouseX = mouse.x - dockPanel.x
                 dockPanel.mouseY = mouse.y - dockPanel.y
@@ -320,16 +321,16 @@ Item {
     Rectangle {
         id: dockPanel
         anchors.horizontalCenter: parent.horizontalCenter
-        height: dockView.iconSize + Kirigami.Units.largeSpacing * 2  // icon + padding
+        height: DockSettings.iconSize + Kirigami.Units.largeSpacing * 2  // icon + padding
         width: Math.max(dockRow.implicitWidth + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)  // content + padding, min width
-        radius: dockView.cornerRadius
-        color: dockView.backgroundColor
+        radius: DockSettings.cornerRadius
+        color: DockView.backgroundColor
 
         // Slide animation: y position controlled by visibility.
         // floatingPadding creates a visual gap between the panel and the screen edge
         // without using layer-shell margin (which would cause surface repositioning).
-        y: dockVisibility.dockVisible
-           ? parent.height - height - dockView.floatingPadding
+        y: DockVisibility.dockVisible
+           ? parent.height - height - DockView.floatingPadding
            : parent.height + Kirigami.Units.largeSpacing
 
         // Delay enabling animations until after initial layout to avoid startup flicker
@@ -345,7 +346,7 @@ Item {
         }
 
         // Fade animation
-        opacity: dockVisibility.dockVisible ? 1.0 : 0.0
+        opacity: DockVisibility.dockVisible ? 1.0 : 0.0
 
         Behavior on opacity {
             NumberAnimation { duration: Kirigami.Units.longDuration }
@@ -361,31 +362,31 @@ Item {
         property bool mouseInside: mouseX >= 0 && root._zoomActive && !root._dragActive
 
         // Report panel geometry to visibility controller for input region
-        onXChanged: dockVisibility.setPanelRect(x, y, width, height)
-        onWidthChanged: dockVisibility.setPanelRect(x, y, width, height)
-        onYChanged: dockVisibility.setPanelRect(x, y, width, height)
-        onHeightChanged: dockVisibility.setPanelRect(x, y, width, height)
+        onXChanged: DockVisibility.setPanelRect(x, y, width, height)
+        onWidthChanged: DockVisibility.setPanelRect(x, y, width, height)
+        onYChanged: DockVisibility.setPanelRect(x, y, width, height)
+        onHeightChanged: DockVisibility.setPanelRect(x, y, width, height)
 
         // Main icon row
         Row {
             id: dockRow
             anchors.centerIn: parent
-            spacing: dockView.iconSpacing
+            spacing: DockSettings.iconSpacing
 
             Repeater {
                 id: dockRepeater
-                model: dockModel.tasksModel
+                model: DockModel.tasksModel
 
                 DockItem {
                     // index and model are injected by Repeater into
                     // DockItem's own required properties
 
                     z: (root.hoveredIndex === index) ? 1 : 0
-                    iconSize: dockView.iconSize
-                    maxZoomFactor: dockView.maxZoomFactor
+                    iconSize: DockSettings.iconSize
+                    maxZoomFactor: DockSettings.maxZoomFactor
                     panelMouseX: dockPanel.mouseX
                     panelMouseInside: dockPanel.mouseInside
-                    spacing: dockView.iconSpacing
+                    spacing: DockSettings.iconSpacing
 
                     // Compute this item's center X relative to the panel
                     itemCenterX: x + width / 2 + dockRow.x
@@ -428,14 +429,14 @@ Item {
 
                 // Check first URL to classify the drop
                 let firstUrl = urls[0]
-                let isLauncher = dockModel.isDesktopFile(firstUrl)
+                let isLauncher = DockModel.isDesktopFile(firstUrl)
 
                 if (isLauncher) {
                     // .desktop file → add as pinned launcher
-                    dockModel.addLauncher(firstUrl)
+                    DockActions.addLauncher(firstUrl)
                 } else if (dropTargetIndex >= 0) {
                     // Regular file(s) on an app icon → open with that app
-                    dockModel.openUrlsWithTask(dropTargetIndex, urls)
+                    DockActions.openUrlsWithTask(dropTargetIndex, urls)
                 }
                 // else: regular file on dock background → no action
 
@@ -453,14 +454,14 @@ Item {
     Image {
         id: dragGhost
         visible: root._dragActive && root._dragSourceIndex >= 0
-        width: dockView.iconSize
-        height: dockView.iconSize
+        width: DockSettings.iconSize
+        height: DockSettings.iconSize
         source: {
             if (!visible) return ""
-            let name = dockModel.iconName(root._dragSourceIndex)
+            let name = DockModel.iconName(root._dragSourceIndex)
             return (name && name.length > 0) ? "image://icon/" + name : ""
         }
-        sourceSize: Qt.size(dockView.iconSize, dockView.iconSize)
+        sourceSize: Qt.size(DockSettings.iconSize, DockSettings.iconSize)
         x: root._dragCurrentX - width / 2
         y: root._dragCurrentY - height / 2
         opacity: 0.8
@@ -473,7 +474,7 @@ Item {
         visible: root._dragActive && root._dragTargetIndex >= 0
                  && root._dragTargetIndex !== root._dragSourceIndex
         width: 2
-        height: dockView.iconSize
+        height: DockSettings.iconSize
         color: Kirigami.Theme.highlightColor
         radius: 1
         z: 150
@@ -485,9 +486,9 @@ Item {
             let itemX = dockPanel.x + dockRow.x + targetItem.x
             // Show line on the side where the item will be inserted
             if (root._dragTargetIndex > root._dragSourceIndex) {
-                return itemX + targetItem.width + dockView.iconSpacing / 2 - 1
+                return itemX + targetItem.width + DockSettings.iconSpacing / 2 - 1
             } else {
-                return itemX - dockView.iconSpacing / 2 - 1
+                return itemX - DockSettings.iconSpacing / 2 - 1
             }
         }
         y: dockPanel.y + dockRow.y
@@ -500,7 +501,7 @@ Item {
     // IsStartup fires within ~5ms and, being model data, survives the
     // delegate recreation caused by hideActivatedLaunchers.
     Connections {
-        target: dockModel
+        target: DockActions
         function onTaskLaunching(index) {
             let item = dockRepeater.itemAt(index)
             if (!item) return
@@ -519,7 +520,7 @@ Item {
         id: autoPreviewTimer
         interval: 200
         repeat: true
-        running: tooltipItem.visible && !previewController.visible
+        running: tooltipItem.visible && !PreviewController.visible
         onTriggered: root._tryAutoPreview()
     }
 
@@ -527,14 +528,14 @@ Item {
     // If preview was keeping dock hovered and mouse is no longer on dock,
     // release hover so dock can hide.
     Connections {
-        target: previewController
+        target: PreviewController
         function onVisibleChanged() {
-            if (!previewController.visible && !dockMouseArea.containsMouse) {
+            if (!PreviewController.visible && !dockMouseArea.containsMouse) {
                 // Preview closed and mouse not on dock → release zoom smoothly
                 dockPanel.mouseX = -1
                 dockPanel.mouseY = -1
                 root._zoomActive = false
-                dockVisibility.setHovered(false)
+                DockVisibility.setHovered(false)
             }
         }
     }
@@ -544,18 +545,18 @@ Item {
     // For launcher-only tasks: shows the in-scene text tooltip.
     Timer {
         id: tooltipTimer
-        interval: dockSettings.previewHoverDelay
+        interval: DockSettings.previewHoverDelay
         onTriggered: {
             if (root.hoveredIndex < 0) return
-            let idx = dockModel.tasksModel.index(root.hoveredIndex, 0)
-            let isWindow = dockModel.tasksModel.data(
+            let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
+            let isWindow = DockModel.tasksModel.data(
                 idx, TaskManager.AbstractTasksModel.IsWindow)
-            if (isWindow && dockSettings.previewEnabled) {
+            if (isWindow && DockSettings.previewEnabled) {
                 // Window task → show preview popup
                 let item = dockRepeater.itemAt(root.hoveredIndex)
                 if (item) {
                     let globalPos = item.mapToGlobal(0, 0)
-                    previewController.showPreview(
+                    PreviewController.showPreview(
                         root.hoveredIndex, globalPos.x, item.width)
                 }
             } else {
@@ -606,11 +607,11 @@ Item {
                 tooltipTimer.stop()
                 if (root.hoveredIndex < 0) {
                     // Mouse left dock: start delayed preview hide
-                    previewController.hidePreviewDelayed()
+                    PreviewController.hidePreviewDelayed()
                 } else {
                     // Moved to different icon: restart tooltip timer,
                     // hide preview with delay (allows moving to adjacent icon)
-                    previewController.hidePreviewDelayed()
+                    PreviewController.hidePreviewDelayed()
                     tooltipTimer.restart()
                 }
             }
@@ -620,19 +621,19 @@ Item {
     // Auto-trigger preview when a hovered launcher's window appears.
     // Reacts to TasksModel row insertion — more responsive than polling.
     Connections {
-        target: dockModel.tasksModel
+        target: DockModel.tasksModel
         function onRowsInserted() {
             if (root.hoveredIndex < 0) return
-            if (previewController.visible) return
-            let idx = dockModel.tasksModel.index(root.hoveredIndex, 0)
-            let isWindow = dockModel.tasksModel.data(
+            if (PreviewController.visible) return
+            let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
+            let isWindow = DockModel.tasksModel.data(
                 idx, TaskManager.AbstractTasksModel.IsWindow)
             if (isWindow) {
                 tooltipItem.show = false
                 let item = dockRepeater.itemAt(root.hoveredIndex)
                 if (item) {
                     let globalPos = item.mapToGlobal(0, 0)
-                    previewController.showPreview(
+                    PreviewController.showPreview(
                         root.hoveredIndex, globalPos.x, item.width)
                 }
             }

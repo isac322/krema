@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QTimer>
 
+class KremaSettings;
 class QQuickView;
 
 namespace krema
@@ -37,7 +38,7 @@ class PreviewController : public QObject
     Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
 
 public:
-    explicit PreviewController(DockModel *model, DockView *dockView, QObject *parent = nullptr);
+    explicit PreviewController(DockModel *model, DockView *dockView, KremaSettings *settings, QObject *parent = nullptr);
     ~PreviewController() override;
 
     /// Create the preview QQuickView and configure layer-shell.
@@ -87,6 +88,7 @@ private:
 
     DockModel *m_model;
     DockView *m_dockView;
+    KremaSettings *m_settings;
     QQuickView *m_previewView = nullptr;
 
     bool m_visible = false;

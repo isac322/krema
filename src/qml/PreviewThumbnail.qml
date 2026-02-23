@@ -7,6 +7,7 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.pipewire as PipeWire
 import org.kde.taskmanager as TaskManager
+import com.bhyoo.krema 1.0
 
 /**
  * A single window thumbnail in the preview popup.
@@ -24,7 +25,7 @@ Item {
     property int parentIndex: -1
     property int childIndex: 0
 
-    readonly property real thumbnailWidth: dockSettings ? dockSettings.previewThumbnailSize : 200
+    readonly property real thumbnailWidth: DockSettings.previewThumbnailSize
     readonly property real thumbnailHeight: thumbnailWidth * 0.7
 
     implicitWidth: thumbnailWidth + 2 * Kirigami.Units.smallSpacing
@@ -92,7 +93,7 @@ Item {
             width: Kirigami.Units.iconSizes.large
             height: Kirigami.Units.iconSizes.large
             source: {
-                let name = dockModel.iconName(root.parentIndex)
+                let name = DockModel.iconName(root.parentIndex)
                 return (name && name.length > 0) ? name : "application-x-executable"
             }
             visible: !pipeWireItem.ready
@@ -135,9 +136,9 @@ Item {
             onClicked: {
                 // childIndex < 0 = single window (parent row IS the window)
                 let modelIndex = (root.childIndex < 0)
-                    ? dockModel.tasksModel.index(root.parentIndex, 0)
-                    : dockModel.tasksModel.makeModelIndex(root.parentIndex, root.childIndex)
-                dockModel.tasksModel.requestClose(modelIndex)
+                    ? DockModel.tasksModel.index(root.parentIndex, 0)
+                    : DockModel.tasksModel.makeModelIndex(root.parentIndex, root.childIndex)
+                DockModel.tasksModel.requestClose(modelIndex)
             }
 
             background: Rectangle {
@@ -165,10 +166,10 @@ Item {
             onClicked: {
                 // childIndex < 0 = single window (parent row IS the window)
                 let modelIndex = (root.childIndex < 0)
-                    ? dockModel.tasksModel.index(root.parentIndex, 0)
-                    : dockModel.tasksModel.makeModelIndex(root.parentIndex, root.childIndex)
-                dockModel.tasksModel.requestActivate(modelIndex)
-                previewController.hidePreview()
+                    ? DockModel.tasksModel.index(root.parentIndex, 0)
+                    : DockModel.tasksModel.makeModelIndex(root.parentIndex, root.childIndex)
+                DockModel.tasksModel.requestActivate(modelIndex)
+                PreviewController.hidePreview()
             }
         }
     }

@@ -1,0 +1,7 @@
+File=krema.kcfg
+ClassName=KremaSettings
+Mutators=true
+DefaultValueGetters=true
+GenerateProperties=true
+ParentInConstructor=true
+Singleton=false

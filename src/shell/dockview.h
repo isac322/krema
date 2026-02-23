@@ -17,11 +17,12 @@ class TasksModel;
 class VirtualDesktopInfo;
 }
 
+class KremaSettings;
+
 namespace krema
 {
 
 class DockVisibilityController;
-class PreviewController;
 
 /**
  * Main dock window.
@@ -35,15 +36,10 @@ class DockView : public QQuickView
     Q_OBJECT
 
     Q_PROPERTY(QColor backgroundColor READ backgroundColor NOTIFY backgroundColorChanged)
-    Q_PROPERTY(int iconSize READ iconSize WRITE setIconSize NOTIFY iconSizeChanged)
-    Q_PROPERTY(int iconSpacing READ iconSpacing WRITE setIconSpacing NOTIFY iconSpacingChanged)
-    Q_PROPERTY(qreal maxZoomFactor READ maxZoomFactor WRITE setMaxZoomFactor NOTIFY maxZoomFactorChanged)
-    Q_PROPERTY(int cornerRadius READ cornerRadius WRITE setCornerRadius NOTIFY cornerRadiusChanged)
-    Q_PROPERTY(bool floating READ isFloating WRITE setFloating NOTIFY floatingChanged)
     Q_PROPERTY(int floatingPadding READ floatingPadding NOTIFY floatingPaddingChanged)
 
 public:
-    explicit DockView(std::unique_ptr<DockPlatform> platform, QWindow *parent = nullptr);
+    explicit DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settings, QWindow *parent = nullptr);
     ~DockView() override;
 
     /// Initialize the dock view. @p tasksModel is used for visibility control.
@@ -55,46 +51,24 @@ public:
 
     // --- Properties ---
     [[nodiscard]] QColor backgroundColor() const;
-
-    [[nodiscard]] int iconSize() const;
-    void setIconSize(int size);
-
-    [[nodiscard]] int iconSpacing() const;
-    void setIconSpacing(int spacing);
-
-    [[nodiscard]] qreal maxZoomFactor() const;
-    void setMaxZoomFactor(qreal factor);
-
-    [[nodiscard]] int cornerRadius() const;
-    void setCornerRadius(int radius);
-
-    [[nodiscard]] bool isFloating() const;
-    void setFloating(bool floating);
-
     [[nodiscard]] int floatingPadding() const;
 
     /// Height of the visible panel bar + floating padding (excludes zoom overflow).
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;
 
-    void setBackgroundOpacity(qreal opacity);
+    /// Recalculate surface size (called when iconSize/maxZoomFactor/floating change).
+    void updateSize();
 
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
-    [[nodiscard]] PreviewController *previewController() const;
 
 Q_SIGNALS:
     void backgroundColorChanged();
-    void iconSizeChanged();
-    void iconSpacingChanged();
-    void maxZoomFactorChanged();
-    void cornerRadiusChanged();
-    void floatingChanged();
     void floatingPaddingChanged();
 
 private:
-    void updateSize();
     void applyBackgroundStyle();
 
     /// Extra height above the panel needed for zoomed icons.
@@ -102,15 +76,9 @@ private:
 
     std::unique_ptr<DockPlatform> m_platform;
     std::unique_ptr<BackgroundStyle> m_backgroundStyle;
+    KremaSettings *m_settings = nullptr;
     DockVisibilityController *m_visibilityController = nullptr;
-    PreviewController *m_previewController = nullptr;
 
-    int m_iconSize = 48;
-    int m_iconSpacing = 4;
-    qreal m_maxZoomFactor = 1.6;
-    int m_cornerRadius = 12;
-    bool m_floating = true;
-    qreal m_backgroundOpacity = 0.6;
     static constexpr int s_padding = 8;
     static constexpr int s_floatingMargin = 8;
     static constexpr int s_tooltipReserve = 36;

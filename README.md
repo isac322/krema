@@ -1,8 +1,11 @@
 # Krema
 
+[![WIP](https://img.shields.io/badge/Status-Work_in_Progress-yellow.svg)](#roadmap)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6-1d99f3.svg)](https://kde.org/plasma-desktop/)
 [![Qt 6](https://img.shields.io/badge/Qt-6.6+-41cd52.svg)](https://www.qt.io/)
+
+> **Note:** Krema is under active development. Core features (parabolic zoom, window previews, background styles, drag & drop, settings UI) are functional, but some features are still in progress. See the [Roadmap](ROADMAP.md) for details.
 
 A lightweight, high-performance dock for KDE Plasma 6 — spiritual successor to [Latte Dock](https://github.com/KDE/latte-dock).
 

@@ -279,6 +279,11 @@ void DockVisibilityController::setVisible(bool visible)
     Q_EMIT dockVisibleChanged();
 }
 
+void DockVisibilityController::requestEvaluate()
+{
+    m_evaluateTimer.start();
+}
+
 void DockVisibilityController::applyInputRegion()
 {
     if (!m_dockWindow) {

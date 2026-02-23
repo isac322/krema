@@ -74,10 +74,14 @@ private:
     /// Extra height above the panel needed for zoomed icons.
     [[nodiscard]] int zoomOverflowHeight() const;
 
+    void handleScreenChanged(QScreen *newScreen);
+    void handleScreenGeometryChanged();
+
     std::unique_ptr<DockPlatform> m_platform;
     std::unique_ptr<BackgroundStyle> m_backgroundStyle;
     KremaSettings *m_settings = nullptr;
     DockVisibilityController *m_visibilityController = nullptr;
+    QMetaObject::Connection m_screenGeometryConnection;
 
     static constexpr int s_padding = 8;
     static constexpr int s_floatingMargin = 8;

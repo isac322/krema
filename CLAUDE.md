@@ -115,7 +115,7 @@ Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지
 - 간격/크기: `Kirigami.Units` (gridUnit, smallSpacing, largeSpacing)
 
 ### Configuration
-- 설정 저장: KConfig → 향후 KConfigXT(.kcfg) 마이그레이션 예정
+- 설정 저장: KConfigXT (.kcfg 스키마, 자동 생성 KremaSettings 클래스)
 - 번역: 모든 사용자 대면 문자열에 `i18n()` 사용
 
 ## Anti-Patterns (MUST AVOID)
@@ -150,6 +150,11 @@ Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지
 - 입력 영역(QRegion mask, MouseArea, HoverHandler 등)은 반드시 실제 UI 컴포넌트의 시각적 크기와 일치해야 함
 - "편의를 위해" 입력 영역을 UI보다 크게 설정하면 다른 앱/UI와의 클릭 충돌 발생
 - 마진이 필요하면 최소한으로 (40px 이내), 반드시 주석으로 이유 명시
+
+### KConfigXT / QML Singleton
+- KConfigSkeleton(Singleton=false)는 생성자에서 load()를 호출하지 않음 → 반드시 수동 load() 필요
+- qmlRegisterSingletonInstance는 단일 QML 엔진에서만 접근 가능 (두 번째 엔진에서 null 반환)
+- 멀티 엔진 환경(독 + 설정 창)에서는 qmlRegisterSingletonType + 팩토리 콜백 + CppOwnership 사용
 
 ### Async State Handling
 - 비동기 상태 대기에 Timer(polling) 금지 → KDE/Qt 시그널(dataChanged, rowsInserted 등) 구독

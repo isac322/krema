@@ -1,6 +1,6 @@
 # Phase 3: DockView 속성 중복 제거 + applySettings 제거
 
-> 상태: `pending`
+> 상태: `done`
 > 선행 조건: Phase 2 완료
 > 예상 소요: 1일
 

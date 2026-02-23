@@ -75,14 +75,25 @@ int Application::run()
 
     // Load settings from KConfig (~/.config/kremarc)
     m_settings = std::make_unique<KremaSettings>();
+    m_settings->load();
 
     // Create data model
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
 
     // Register global QML singletons (must be before any QML loading)
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockModel", m_dockModel.get());
-    qmlRegisterSingletonInstance("com.bhyoo.krema", 1, 0, "DockSettings", m_settings.get());
+    // Use qmlRegisterSingletonType (not qmlRegisterSingletonInstance) so multiple
+    // QML engines (dock + settings window) can access the same C++ objects.
+    auto *model = m_dockModel.get();
+    qmlRegisterSingletonType<DockModel>("com.bhyoo.krema", 1, 0, "DockModel", [model](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(model, QQmlEngine::CppOwnership);
+        return model;
+    });
+    auto *settings = m_settings.get();
+    qmlRegisterSingletonType<KremaSettings>("com.bhyoo.krema", 1, 0, "DockSettings", [settings](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(settings, QQmlEngine::CppOwnership);
+        return settings;
+    });
 
     // Create and initialize the dock shell (creates all sub-objects, loads QML)
     m_shell = std::make_unique<DockShell>(m_settings.get(), m_dockModel.get(), std::move(platform), this);

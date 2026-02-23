@@ -53,7 +53,7 @@ void SettingsWindow::show()
     auto *root = m_engine->rootObjects().first();
     auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
     if (configView) {
-        QMetaObject::invokeMethod(configView, "open");
+        QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, QVariant()));
 
         // Find the ConfigWindow created by ConfigurationView.open()
         // It's a top-level window created with createObject(null)

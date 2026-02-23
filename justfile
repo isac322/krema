@@ -37,13 +37,16 @@ obs-build-deb distro="Debian_13" arch="x86_64":
 dev-desktop:
     @mkdir -p ~/.local/share/applications
     @sed 's|@KDE_INSTALL_FULL_BINDIR@/krema|'$PWD'/build/dev/bin/krema|' \
-        src/org.krema.desktop.in > ~/.local/share/applications/org.krema.desktop
-    @echo "Installed dev .desktop file to ~/.local/share/applications/org.krema.desktop"
+        src/com.bhyoo.krema.desktop.in > ~/.local/share/applications/com.bhyoo.krema.desktop
+    @echo "Installed dev .desktop file to ~/.local/share/applications/com.bhyoo.krema.desktop"
     @echo "Run: kbuildsycoca6 --noincremental"
-    @# Clean up legacy dev desktop file if it exists
+    @# Clean up legacy dev desktop files if they exist
     @rm -f ~/.local/share/applications/org.krema.dev.desktop
+    @rm -f ~/.local/share/applications/org.krema.desktop
 
 # Remove dev .desktop file
 dev-desktop-clean:
+    @rm -f ~/.local/share/applications/org.krema.dev.desktop
     @rm -f ~/.local/share/applications/org.krema.desktop
+    @rm -f ~/.local/share/applications/com.bhyoo.krema.desktop
     @echo "Removed dev .desktop file"

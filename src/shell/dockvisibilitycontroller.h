@@ -81,6 +81,9 @@ public:
     /// While interacting, the dock will never hide.
     Q_INVOKABLE void setInteracting(bool interacting);
 
+    /// Request a deferred visibility re-evaluation (e.g. after screen change).
+    void requestEvaluate();
+
 Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();

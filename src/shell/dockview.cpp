@@ -72,6 +72,12 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     // Set initial window size
     updateSize();
 
+    // React to screen changes (e.g. DPMS off/on replaces QScreen objects)
+    connect(this, &QWindow::screenChanged, this, &DockView::handleScreenChanged);
+    if (screen()) {
+        m_screenGeometryConnection = connect(screen(), &QScreen::geometryChanged, this, &DockView::handleScreenGeometryChanged);
+    }
+
     show();
 }
 
@@ -121,6 +127,55 @@ void DockView::updateSize()
 int DockView::zoomOverflowHeight() const
 {
     return krema::zoomOverflowHeight(m_settings->iconSize(), m_settings->maxZoomFactor());
+}
+
+void DockView::handleScreenChanged(QScreen *newScreen)
+{
+    // Disconnect from old screen's geometry signal
+    disconnect(m_screenGeometryConnection);
+
+    if (!newScreen) {
+        qCDebug(lcDockView) << "Screen changed to nullptr (DPMS off / placeholder)";
+        return;
+    }
+
+    // Connect to new screen's geometry signal
+    m_screenGeometryConnection = connect(newScreen, &QScreen::geometryChanged, this, &DockView::handleScreenGeometryChanged);
+
+    const QRect geo = newScreen->geometry();
+    qCDebug(lcDockView) << "Screen changed:" << newScreen->name() << "geometry=" << geo;
+
+    // Skip recovery if geometry is invalid (placeholder screen during DPMS off)
+    if (geo.width() <= 0 || geo.height() <= 0) {
+        return;
+    }
+
+    // Real screen restored — recalculate everything
+    updateSize();
+    applyBackgroundStyle();
+    if (m_visibilityController) {
+        m_visibilityController->requestEvaluate();
+    }
+}
+
+void DockView::handleScreenGeometryChanged()
+{
+    if (!screen()) {
+        return;
+    }
+
+    const QRect geo = screen()->geometry();
+    qCDebug(lcDockView) << "Screen geometry changed:" << geo;
+
+    if (geo.width() <= 0 || geo.height() <= 0) {
+        return;
+    }
+
+    updateSize();
+    applyBackgroundStyle();
+    if (m_visibilityController) {
+        m_visibilityController->requestEvaluate();
+    }
 }
 
 void DockView::applyBackgroundStyle()

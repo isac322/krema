@@ -172,6 +172,56 @@ void DockSettings::setBackgroundOpacity(qreal opacity)
     Q_EMIT settingsChanged();
 }
 
+// --- Preview ---
+
+bool DockSettings::previewEnabled() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("PreviewEnabled"), true);
+}
+
+void DockSettings::setPreviewEnabled(bool enabled)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("PreviewEnabled"), enabled);
+    save();
+    Q_EMIT settingsChanged();
+}
+
+int DockSettings::previewThumbnailSize() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("PreviewThumbnailSize"), 200);
+}
+
+void DockSettings::setPreviewThumbnailSize(int size)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("PreviewThumbnailSize"), size);
+    save();
+    Q_EMIT settingsChanged();
+}
+
+int DockSettings::previewHoverDelay() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("PreviewHoverDelay"), 500);
+}
+
+void DockSettings::setPreviewHoverDelay(int ms)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("PreviewHoverDelay"), ms);
+    save();
+    Q_EMIT settingsChanged();
+}
+
+int DockSettings::previewHideDelay() const
+{
+    return m_config->group(s_group).readEntry(QStringLiteral("PreviewHideDelay"), 200);
+}
+
+void DockSettings::setPreviewHideDelay(int ms)
+{
+    m_config->group(s_group).writeEntry(QStringLiteral("PreviewHideDelay"), ms);
+    save();
+    Q_EMIT settingsChanged();
+}
+
 void DockSettings::save()
 {
     m_config->sync();

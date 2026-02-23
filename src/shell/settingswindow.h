@@ -4,8 +4,10 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
 
 class QQmlApplicationEngine;
+class QQuickWindow;
 
 namespace krema
 {
@@ -15,9 +17,9 @@ class DockSettings;
 /**
  * Settings dialog window.
  *
- * Opens a separate Kirigami-based QML window for configuring the dock.
- * Uses QQmlApplicationEngine (separate from the dock's QQuickView)
- * to support Kirigami.ApplicationWindow.
+ * Opens a ConfigurationView-based settings window with sidebar navigation.
+ * Uses QQmlApplicationEngine to load a host ApplicationWindow, which then
+ * opens a ConfigurationView (creates its own ConfigWindow on desktop).
  */
 class SettingsWindow : public QObject
 {
@@ -30,14 +32,19 @@ public:
     /// Show the settings dialog, or raise it if already visible.
     void show();
 
+    /// Show the settings dialog with a specific module pre-selected.
+    void show(const QString &defaultModule);
+
 Q_SIGNALS:
     void visibleChanged(bool visible);
 
 private:
     void ensureEngine();
+    void findAndTrackConfigWindow();
 
     DockSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;
+    QPointer<QQuickWindow> m_configWindow;
 };
 
 } // namespace krema

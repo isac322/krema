@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(krema VERSION 0.1.0 LANGUAGES CXX)
+project(krema VERSION 0.2.0 LANGUAGES CXX)
 
 set(QT_MIN_VERSION "6.6.0")
 set(KF6_MIN_VERSION "6.0.0")
@@ -48,6 +48,7 @@ find_package(KF6Kirigami ${KF6_MIN_VERSION} REQUIRED)
 find_package(KF6KirigamiAddons REQUIRED)
 find_package(LayerShellQt ${LAYER_SHELL_QT_MIN_VERSION} REQUIRED)
 find_package(LibTaskManager REQUIRED)
+find_package(KPipeWire REQUIRED)
 find_package(Wayland 1.22 REQUIRED COMPONENTS Client)
 
 ecm_set_disabled_deprecation_versions(

@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
+import org.kde.taskmanager as TaskManager
 
 /**
  * Main dock container.
@@ -90,6 +91,23 @@ Item {
         return str.endsWith(".desktop") || str.startsWith("applications:")
     }
 
+    function _tryAutoPreview() {
+        if (!dockSettings.previewEnabled) return
+        if (hoveredIndex < 0 || previewController.visible) return
+        let idx = dockModel.tasksModel.index(hoveredIndex, 0)
+        let isWindow = dockModel.tasksModel.data(
+            idx, TaskManager.AbstractTasksModel.IsWindow)
+        if (isWindow) {
+            tooltipItem.show = false
+            tooltipTimer.stop()
+            let item = dockRepeater.itemAt(hoveredIndex)
+            if (item) {
+                let globalPos = item.mapToGlobal(0, 0)
+                previewController.showPreview(hoveredIndex, globalPos.x, item.width)
+            }
+        }
+    }
+
     function updateHoveredItem() {
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
@@ -168,11 +186,16 @@ Item {
         // Track hover state for visibility controller
         onEntered: dockVisibility.setHovered(true)
         onExited: {
-            dockPanel.mouseX = -1
-            dockPanel.mouseY = -1
+            // Keep zoom state when preview is visible (dock→preview mouse transition)
+            if (!previewController.visible) {
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+                root._zoomActive = false
+            }
             root.hoveredIndex = -1
             root.hoveredName = ""
-            root._zoomActive = false
+            // Hide preview with delay (allows mouse to move to preview surface)
+            previewController.hidePreviewDelayed()
             // Drag-out: if an active drag leaves the dock, unpin the launcher
             if (root._dragActive) {
                 if (dockModel.isPinned(root._dragSourceIndex)) {
@@ -191,7 +214,10 @@ Item {
                 root._dragTargetIndex = -1
                 dragHoldTimer.stop()
             }
-            dockVisibility.setHovered(false)
+            // preview visible이면 dock hover 상태 유지 (입력 영역 축소 방지)
+            if (!previewController.visible) {
+                dockVisibility.setHovered(false)
+            }
         }
 
         // Start drag hold timer on left-button press
@@ -485,12 +511,57 @@ Item {
         }
     }
 
-    // Custom tooltip (rendered within the scene, not as a Popup/Window)
-    // Avoids Wayland popup surface that intercepts hover events.
+    // Auto-trigger preview when a hovered launcher becomes a window.
+    // Polls only while the text tooltip is visible (launcher hover state).
+    // When IsWindow becomes true → switches from text tooltip to preview popup.
+    Timer {
+        id: autoPreviewTimer
+        interval: 200
+        repeat: true
+        running: tooltipItem.visible && !previewController.visible
+        onTriggered: root._tryAutoPreview()
+    }
+
+    // Sync dock hover state when preview closes:
+    // If preview was keeping dock hovered and mouse is no longer on dock,
+    // release hover so dock can hide.
+    Connections {
+        target: previewController
+        function onVisibleChanged() {
+            if (!previewController.visible && !dockMouseArea.containsMouse) {
+                // Preview closed and mouse not on dock → release zoom smoothly
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+                root._zoomActive = false
+                dockVisibility.setHovered(false)
+            }
+        }
+    }
+
+    // Custom tooltip / preview trigger timer.
+    // For window tasks: shows the preview popup (separate layer-shell surface).
+    // For launcher-only tasks: shows the in-scene text tooltip.
     Timer {
         id: tooltipTimer
-        interval: 500
-        onTriggered: tooltipItem.show = true
+        interval: dockSettings.previewHoverDelay
+        onTriggered: {
+            if (root.hoveredIndex < 0) return
+            let idx = dockModel.tasksModel.index(root.hoveredIndex, 0)
+            let isWindow = dockModel.tasksModel.data(
+                idx, TaskManager.AbstractTasksModel.IsWindow)
+            if (isWindow && dockSettings.previewEnabled) {
+                // Window task → show preview popup
+                let item = dockRepeater.itemAt(root.hoveredIndex)
+                if (item) {
+                    let globalPos = item.mapToGlobal(0, 0)
+                    previewController.showPreview(
+                        root.hoveredIndex, globalPos.x, item.width)
+                }
+            } else {
+                // Launcher-only → show text tooltip
+                tooltipItem.show = true
+            }
+        }
     }
 
     Rectangle {
@@ -526,13 +597,42 @@ Item {
             text: root.hoveredName
         }
 
-        // Hide tooltip when mouse leaves dock area
+        // Hide tooltip and manage preview when hover changes
         Connections {
             target: root
             function onHoveredIndexChanged() {
+                tooltipItem.show = false
+                tooltipTimer.stop()
                 if (root.hoveredIndex < 0) {
-                    tooltipItem.show = false
-                    tooltipTimer.stop()
+                    // Mouse left dock: start delayed preview hide
+                    previewController.hidePreviewDelayed()
+                } else {
+                    // Moved to different icon: restart tooltip timer,
+                    // hide preview with delay (allows moving to adjacent icon)
+                    previewController.hidePreviewDelayed()
+                    tooltipTimer.restart()
+                }
+            }
+        }
+    }
+
+    // Auto-trigger preview when a hovered launcher's window appears.
+    // Reacts to TasksModel row insertion — more responsive than polling.
+    Connections {
+        target: dockModel.tasksModel
+        function onRowsInserted() {
+            if (root.hoveredIndex < 0) return
+            if (previewController.visible) return
+            let idx = dockModel.tasksModel.index(root.hoveredIndex, 0)
+            let isWindow = dockModel.tasksModel.data(
+                idx, TaskManager.AbstractTasksModel.IsWindow)
+            if (isWindow) {
+                tooltipItem.show = false
+                let item = dockRepeater.itemAt(root.hoveredIndex)
+                if (item) {
+                    let globalPos = item.mapToGlobal(0, 0)
+                    previewController.showPreview(
+                        root.hoveredIndex, globalPos.x, item.width)
                 }
             }
         }

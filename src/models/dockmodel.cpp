@@ -398,4 +398,27 @@ bool DockModel::removeLauncher(int index)
     return ok;
 }
 
+QVariantList DockModel::windowIds(int index) const
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return {};
+    }
+    return idx.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+}
+
+int DockModel::childCount(int index) const
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return 0;
+    }
+    return m_tasksModel->rowCount(idx);
+}
+
+QModelIndex DockModel::taskModelIndex(int index) const
+{
+    return m_tasksModel->index(index, 0);
+}
+
 } // namespace krema

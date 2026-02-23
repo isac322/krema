@@ -31,6 +31,10 @@ class DockSettings : public QObject
     Q_PROPERTY(int showDelay READ showDelay WRITE setShowDelay NOTIFY settingsChanged)
     Q_PROPERTY(int hideDelay READ hideDelay WRITE setHideDelay NOTIFY settingsChanged)
     Q_PROPERTY(qreal backgroundOpacity READ backgroundOpacity WRITE setBackgroundOpacity NOTIFY settingsChanged)
+    Q_PROPERTY(bool previewEnabled READ previewEnabled WRITE setPreviewEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int previewThumbnailSize READ previewThumbnailSize WRITE setPreviewThumbnailSize NOTIFY settingsChanged)
+    Q_PROPERTY(int previewHoverDelay READ previewHoverDelay WRITE setPreviewHoverDelay NOTIFY settingsChanged)
+    Q_PROPERTY(int previewHideDelay READ previewHideDelay WRITE setPreviewHideDelay NOTIFY settingsChanged)
 
 public:
     explicit DockSettings(QObject *parent = nullptr);
@@ -70,6 +74,19 @@ public:
 
     [[nodiscard]] qreal backgroundOpacity() const;
     void setBackgroundOpacity(qreal opacity);
+
+    // --- Preview ---
+    [[nodiscard]] bool previewEnabled() const;
+    void setPreviewEnabled(bool enabled);
+
+    [[nodiscard]] int previewThumbnailSize() const;
+    void setPreviewThumbnailSize(int size);
+
+    [[nodiscard]] int previewHoverDelay() const;
+    void setPreviewHoverDelay(int ms);
+
+    [[nodiscard]] int previewHideDelay() const;
+    void setPreviewHideDelay(int ms);
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();

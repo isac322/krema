@@ -44,7 +44,7 @@
 
 ---
 
-## Milestone 3: 키보드 단축키 + 실행 애니메이션 ⬅️ 현재
+## Milestone 3: 키보드 단축키 + 실행 애니메이션 ✅
 
 전역 단축키로 독을 제어하고, 앱 실행 시 시각적 피드백 제공.
 KDE Plasma의 글로벌 단축키 프레임워크를 활용.
@@ -58,48 +58,49 @@ KDE Plasma의 글로벌 단축키 프레임워크를 활용.
 
 ---
 
-## Milestone 4: 드래그 앤 드롭
+## Milestone 4: 드래그 앤 드롭 ✅
 
 독 아이템 재정렬과 파일 드래그 지원.
 Pin/Unpin 후 독 내 위치가 즉시 변경되지 않는 문제는 드래그 재정렬 구현 시 함께 해결.
 
-- [ ] 독 아이템 순서 드래그 재정렬 (Pin 후 위치 이동 포함)
-- [ ] 파일 드래그: 앱 위에 드롭하면 해당 앱으로 열기
-- [ ] URL/데스크톱 파일 드래그로 런처 추가
+- [x] 독 아이템 순서 드래그 재정렬 (Pin 후 위치 이동 포함)
+- [x] 파일 드래그: 앱 위에 드롭하면 해당 앱으로 열기
+- [x] URL/데스크톱 파일 드래그로 런처 추가
 
 ---
 
-## Milestone 5: 설정 UI + KDE Plasma 네이티브 통합
+## Milestone 5: 설정 UI + KDE Plasma 네이티브 통합 ✅
 
 사용자가 GUI로 독을 커스터마이즈할 수 있는 설정 다이얼로그.
 QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강화.
 
-- [ ] Kirigami 도입 (QML 하드코딩 → Kirigami.Units/Theme 교체)
-- [ ] KColorScheme 적용 (QPalette → KDE 색상 체계)
-- [ ] KDE 테마 색상 전면 반영
-  - [ ] 인디케이터 점 색상 (light/dark mode 대응)
-  - [ ] 툴팁 배경/텍스트 색상
-  - [ ] 독 배경 색상
-  - [ ] 모든 하드코딩된 색상을 KColorScheme/Kirigami.Theme으로 교체
-- [ ] KIconThemes 적용 (QIcon::fromTheme → KIconLoader)
-- [ ] i18n 적용 (모든 사용자 표시 문자열에 KLocalizedString)
-- [ ] Kirigami 기반 설정 다이얼로그 (별도 윈도우)
-  - [ ] 아이콘 크기, 줌 배율, 간격 슬라이더
-  - [ ] 가시성 모드 선택 (라디오 버튼)
-  - [ ] 독 위치 선택
-  - [ ] 배경 스타일 선택
-- [ ] 독 컨텍스트 메뉴에서 "설정..." 항목 추가
+- [x] Kirigami 도입 (QML 하드코딩 → Kirigami.Units/Theme 교체)
+- [x] KColorScheme 적용 (QPalette → KDE 색상 체계)
+- [x] KDE 테마 색상 전면 반영
+  - [x] 인디케이터 점 색상 (light/dark mode 대응)
+  - [x] 툴팁 배경/텍스트 색상
+  - [x] 독 배경 색상
+  - [x] 모든 하드코딩된 색상을 KColorScheme/Kirigami.Theme으로 교체
+- [x] ~~KIconThemes 적용~~ (불필요 — QIcon::fromTheme이 KDE Plasma에서 KIconThemes 플러그인을 통해 이미 올바르게 동작)
+- [x] i18n 적용 (모든 사용자 표시 문자열에 KLocalizedString)
+- [x] Kirigami 기반 설정 다이얼로그 (별도 윈도우)
+  - [x] 아이콘 크기, 줌 배율, 간격 슬라이더
+  - [x] 가시성 모드 선택 (라디오 버튼)
+  - [x] 독 위치 선택
+  - [x] 배경 불투명도 슬라이더
+  - [ ] 배경 스타일 선택 → M7로 이동
+- [x] 독 컨텍스트 메뉴에서 "설정..." 항목 추가
 
 ---
 
-## Milestone 6: 윈도우 프리뷰
+## Milestone 6: 윈도우 프리뷰 ⬅️ 현재
 
 마우스 호버 시 윈도우 썸네일을 보여주는 프리뷰 팝업.
 
-- [ ] 마우스 호버 시 윈도우 썸네일 프리뷰 (PipeWire 기반)
-- [ ] 그룹화된 앱의 멀티 윈도우 프리뷰 목록
-- [ ] 프리뷰에서 클릭하여 윈도우 활성화
-- [ ] 프리뷰에서 닫기 버튼
+- [x] 마우스 호버 시 윈도우 썸네일 프리뷰 (PipeWire 기반)
+- [x] 그룹화된 앱의 멀티 윈도우 프리뷰 목록
+- [x] 프리뷰에서 클릭하여 윈도우 활성화
+- [x] 프리뷰에서 닫기 버튼
 
 ---
 
@@ -170,8 +171,8 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 | 데스크톱 환경 | **KDE Plasma 6** (Wayland 전용) |
 | UI 프레임워크 | Qt 6.6+ / Qt Quick |
 | KDE 프레임워크 | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, GlobalAccel) |
-| KDE Plasma 라이브러리 | LibTaskManager, LayerShellQt |
-| 향후 추가 예정 | Kirigami, KIconThemes, KColorScheme, KService |
+| KDE Plasma 라이브러리 | LibTaskManager, LayerShellQt, KPipeWire |
+| KDE 추가 라이브러리 | Kirigami, Kirigami Addons, KColorScheme, KService, KCrash, KXmlGui |
 | 렌더링 | QRhi (Vulkan/OpenGL 자동 선택) |
 | 빌드 시스템 | CMake + ECM + Ninja |
 | 패키징 | CPack (Arch/RPM/DEB), OBS |
@@ -196,7 +197,7 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 ┌─────────────────────────────────────────┐
 │           QML UI (Qt Quick)              │
 │  main.qml, DockItem.qml, animations     │
-│  (향후 Kirigami.Units/Theme 도입 예정)    │
+│  Kirigami.Units/Theme, FormCard 설정 UI  │
 ├─────────────────────────────────────────┤
 │           C++ Backend Layer              │
 │  ┌──────────┐  ┌───────────────────┐    │
@@ -208,6 +209,10 @@ QML UI 전반에 Kirigami/KDE Plasma API를 도입하여 네이티브 통합 강
 │  │ DockSettings │ │TaskIconProvider│    │
 │  │ (KConfig)    │ │(QIcon→Pixmap)  │    │
 │  └──────────────┘ └────────────────┘    │
+│  ┌──────────────────────────────────┐   │
+│  │PreviewController (KPipeWire)     │   │
+│  │Layer-shell overlay + PipeWire    │   │
+│  └──────────────────────────────────┘   │
 ├─────────────────────────────────────────┤
 │     DockView (QQuickView)                │
 │  ┌───────────────┐ ┌────────────────┐   │

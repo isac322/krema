@@ -3,5 +3,10 @@
         <file>main.qml</file>
         <file>DockItem.qml</file>
         <file>SettingsDialog.qml</file>
+        <file>PreviewPopup.qml</file>
+        <file>PreviewThumbnail.qml</file>
+        <file>settings/AppearancePage.qml</file>
+        <file>settings/BehaviorPage.qml</file>
+        <file>settings/PreviewPage.qml</file>
     </qresource>
 </RCC>

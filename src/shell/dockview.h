@@ -84,6 +84,10 @@ private:
     void handleScreenChanged(QScreen *newScreen);
     void handleScreenGeometryChanged();
 
+private Q_SLOTS:
+    void handleScreenLockChanged(bool active);
+
+private:
     std::unique_ptr<DockPlatform> m_platform;
     KremaSettings *m_settings = nullptr;
     DockVisibilityController *m_visibilityController = nullptr;

@@ -8,6 +8,7 @@
 #include "models/taskiconprovider.h"
 #include "utils/surfacegeometry.h"
 
+#include <QDBusConnection>
 #include <QLoggingCategory>
 #include <QPainterPath>
 
@@ -107,6 +108,14 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
         m_screenGeometryConnection = connect(screen(), &QScreen::geometryChanged, this, &DockView::handleScreenGeometryChanged);
     }
 
+    // React to screen lock/unlock (QScreen object stays the same, so screenChanged doesn't fire)
+    QDBusConnection::sessionBus().connect(QStringLiteral("org.freedesktop.ScreenSaver"),
+                                          QStringLiteral("/ScreenSaver"),
+                                          QStringLiteral("org.freedesktop.ScreenSaver"),
+                                          QStringLiteral("ActiveChanged"),
+                                          this,
+                                          SLOT(handleScreenLockChanged(bool)));
+
     show();
 }
 
@@ -190,9 +199,12 @@ void DockView::handleScreenChanged(QScreen *newScreen)
         return;
     }
 
-    // Real screen restored — recalculate everything
+    // Force surface re-creation: the compositor destroys the layer-shell surface
+    // when the associated output is removed. hide()+show() creates a fresh surface.
+    hide();
     updateSize();
     applyBackgroundStyle();
+    show();
     if (m_visibilityController) {
         m_visibilityController->requestEvaluate();
     }
@@ -213,6 +225,24 @@ void DockView::handleScreenGeometryChanged()
 
     updateSize();
     applyBackgroundStyle();
+    if (m_visibilityController) {
+        m_visibilityController->requestEvaluate();
+    }
+}
+
+void DockView::handleScreenLockChanged(bool active)
+{
+    if (active) {
+        return;
+    }
+
+    qCDebug(lcDockView) << "Screen unlocked — recovering dock";
+    // Surface may have been destroyed during DPMS-off while locked.
+    // hide()+show() ensures a fresh surface on the current screen.
+    hide();
+    updateSize();
+    applyBackgroundStyle();
+    show();
     if (m_visibilityController) {
         m_visibilityController->requestEvaluate();
     }

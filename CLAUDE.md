@@ -160,3 +160,8 @@ Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지
 - 비동기 상태 대기에 Timer(polling) 금지 → KDE/Qt 시그널(dataChanged, rowsInserted 등) 구독
 - KDE API가 one-shot(재시도 없음)이면, 관련 시그널 핸들러에서 명시적 재요청
 - Timer가 허용되는 유일한 경우: UI 딜레이(debounce, hide delay 등) — 비즈니스 로직용 아님
+
+### Layer-shell Keyboard Focus
+- Layer-shell 서피스 간 키보드 포커스 전환은 신뢰할 수 없음 (Wayland 비동기 round-trip)
+- 멀티 서피스 앱(독 + 프리뷰)에서는 단일 서피스가 KeyboardInteractivityExclusive를 보유
+- 다른 서피스의 키보드 네비게이션은 C++ 프로퍼티 + QML 바인딩으로 구동 (포커스 전환 아님)

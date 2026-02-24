@@ -80,6 +80,9 @@ public:
     /// While interacting, the dock will never hide.
     Q_INVOKABLE void setInteracting(bool interacting);
 
+    /// Set keyboard navigation active state. Prevents dock from hiding.
+    Q_INVOKABLE void setKeyboardActive(bool active);
+
     /// Current panel rectangle (surface-local coordinates).
     [[nodiscard]] QRect panelRect() const;
 
@@ -137,6 +140,9 @@ private:
 
     // Interaction lock: dock stays visible while context menu / settings window is open
     int m_interactingCount = 0;
+
+    // Keyboard navigation active: dock stays visible while keyboard-navigating
+    bool m_keyboardActive = false;
 
     // Show timer: fires after mouse dwells in trigger area for showDelay ms
     QTimer m_showTimer;

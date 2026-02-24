@@ -14,23 +14,35 @@ M7: 배경 스타일 + 시각 개선 (⬅️ 현재)
 - [x] 설정 리그레션 수정 (KConfigXT load() 누락 + 멀티 엔진 싱글톤 수정)
 - [x] 문서 최신화 (phase-2/3 상태, CLAUDE.md KConfigXT, ROADMAP M6→M7)
 - [x] M7 배경 스타일 구현 + 검증 완료
+- [x] 접근성 대폭 개선 (5단계 전체 구현 + kwin-mcp 검증 완료)
 
-## M7 배경 스타일 구현 상세
+## 접근성 구현 상세
 
-4개 배경 스타일(PanelInherit, Transparent, Tinted, Acrylic) + Adaptive Opacity 구현.
-SemiTransparent를 Tinted에 통합 (UseSystemColor bool 추가).
-Mica는 이전에 SemiTransparent로 마이그레이션 완료.
-ConfigVersion=2 기반 통합 마이그레이션으로 기존 설정 호환.
+5단계 접근성 구현 완료 + kwin-mcp 라이브 테스트 통과:
+- Phase 1: AT-SPI Accessible 속성 (main.qml, DockItem, PreviewPopup, PreviewThumbnail)
+- Phase 2: 키보드 내비게이션 (Meta+F5 진입, 좌우 화살표, Enter/Escape, Down→프리뷰)
+- Phase 3: 시각적 포커스 링 + 바운스 애니메이션 Kirigami.Units.longDuration 전환
+- Phase 4: Accessible.announce() 스크린 리더 공지 (QT_MIN_VERSION 6.8.0)
+- Phase 5: 프리뷰 팝업 키보드 접근 (좌우 썸네일 이동, Enter 활성화, Delete 닫기)
 
-### 검증 결과
-- 빌드 + 유닛 테스트 통과
-- 4개 스타일 kwin-mcp 시각 검증 통과
-- Tinted+UseSystemColor ON/OFF 전환 정상
-- Transparent, Acrylic, PanelInherit 리그레션 없음
-- 호버 줌 리그레션 없음
-- 설정 UI: 드롭다운 4개 항목, 조건부 토글 표시 정상
+문서: docs/kde/accessibility-guide.md, docs/kde/accessibility-audit.md
+
+### 아키텍처 결정
+- Layer-shell 서피스 간 포커스 전환은 Wayland 비동기 특성으로 신뢰할 수 없음
+- 해결: 독 서피스가 KeyboardInteractivityExclusive를 항상 보유, 프리뷰 키보드 네비게이션도 독에서 처리
+- PreviewController C++ 프로퍼티 (previewKeyboardActive, focusedThumbnailIndex)로 프리뷰 QML 바인딩
+
+### C++ 변경
+- DockPlatform: setKeyboardInteractivity(bool) 추가
+- WaylandDockPlatform: Exclusive/None 토글 구현
+- DockVisibilityController: setKeyboardActive() — 키보드 활성 시 숨김 방지
+- DockShell: focusDock() — Meta+F5 글로벌 단축키 핸들러
+- PreviewController: startPreviewKeyboardNav(), navigatePreviewThumbnail(delta), activatePreviewThumbnail(), closePreviewThumbnail() 등 키보드 네비게이션 메서드
+- application.cpp: "focus-dock" KGlobalAccel 단축키 (Meta+F5) 등록
+- dockview.cpp: KLocalization::setupLocalizedContext() 추가 (i18n() QML 지원)
+- CMakeLists.txt: QT_MIN_VERSION 6.6.0 → 6.8.0
 
 ## 다음 작업
 
-- M7 배경 스타일 커밋
+- 접근성 커밋
 - M7 나머지 항목 (주의 요구 애니메이션, 아이콘 크기 정규화)

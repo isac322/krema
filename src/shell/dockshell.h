@@ -44,6 +44,9 @@ public:
     [[nodiscard]] DockContextMenu *contextMenu() const;
     [[nodiscard]] PreviewController *previewController() const;
 
+    /// Activate keyboard focus on the dock (called from global shortcut).
+    void focusDock();
+
 private:
     void connectSettingsSignals();
     void connectMenuSignals();

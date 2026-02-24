@@ -12,6 +12,7 @@
 #include "previewcontroller.h"
 #include "settingswindow.h"
 
+#include <QQuickItem>
 #include <QtQml>
 
 namespace krema
@@ -93,6 +94,22 @@ DockContextMenu *DockShell::contextMenu() const
 PreviewController *DockShell::previewController() const
 {
     return m_previewController;
+}
+
+void DockShell::focusDock()
+{
+    // Enable layer-shell keyboard interactivity so key events reach the surface
+    m_view->platform()->setKeyboardInteractivity(true);
+
+    // Ensure dock is visible and request keyboard focus on the QQuickView
+    m_view->visibilityController()->setKeyboardActive(true);
+    m_view->requestActivate();
+
+    // Call QML startKeyboardNavigation() via the root object
+    auto *rootObj = m_view->rootObject();
+    if (rootObj) {
+        QMetaObject::invokeMethod(rootObj, "startKeyboardNavigation", Qt::AutoConnection);
+    }
 }
 
 void DockShell::connectSettingsSignals()

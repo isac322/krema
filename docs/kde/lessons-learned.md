@@ -104,3 +104,24 @@
 - z-order가 있는 레이아웃에서 hover 감지에는 HoverHandler 사용 (MouseArea.containsMouse 아님)
 - HoverHandler는 passive → 자식 아이템의 이벤트 처리에 간섭하지 않음
 - 같은 패턴: surface-level hover도 MouseArea 대신 HoverHandler로 해결됨
+
+## 5. Layer-shell 서피스 간 키보드 포커스 전환 불가 (2026-02)
+
+**증상:** 독에서 Down 키로 프리뷰 팝업을 열고 `requestKeyboardFocus()` 호출 → 프리뷰 QML의 `forceActiveFocus()`가 실패 (`activeFocus: false`), 키보드 이벤트가 프리뷰에 전달되지 않음.
+
+**근본 원인:**
+- Layer-shell `setKeyboardInteractivity()` + `requestActivate()`는 Wayland 비동기 프로토콜
+- `invokeMethod("startKeyboardNavigation")`가 동기적으로 실행되어 `forceActiveFocus()` 시점에 윈도우가 아직 active가 아님
+- `KeyboardInteractivityExclusive`를 사용해도 즉시 반영되지 않음 (compositor round-trip 필요)
+- 두 서피스가 동시에 `Exclusive`를 설정하면 충돌
+
+**해결:**
+- 프리뷰 키보드 네비게이션을 독 서피스에서 처리 (단일 서피스가 항상 키보드 보유)
+- PreviewController에 C++ 프로퍼티 (`previewKeyboardActive`, `focusedThumbnailIndex`) 추가
+- 독의 `Keys.onPressed`에서 `PreviewController.previewKeyboardActive` 여부로 분기
+- 프리뷰 QML은 C++ 프로퍼티 바인딩만 (포커스 링, 접근성)
+
+**핵심 교훈:**
+- Layer-shell 서피스 간 키보드 포커스 전환은 신뢰할 수 없음 — 항상 단일 서피스에서 키보드 처리
+- `QWindow::activeChanged` 시그널 + 재시도 패턴은 안전장치로만 사용 (주 로직에 의존 금지)
+- 멀티 서피스 앱에서는 키보드 이벤트를 하나의 "컨트롤러" 서피스에 집중시킬 것

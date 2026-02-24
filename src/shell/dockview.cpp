@@ -12,6 +12,8 @@
 #include <QLoggingCategory>
 #include <QPainterPath>
 
+#include <KLocalizedQmlContext>
+
 #include <QQmlEngine>
 #include <QScreen>
 #include <QtQml>
@@ -48,6 +50,9 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
 
     // Register the icon image provider for QML
     engine()->addImageProvider(QStringLiteral("icon"), new TaskIconProvider());
+
+    // Enable i18n() in QML (required for Accessible.name/description strings)
+    KLocalization::setupLocalizedContext(engine());
 
     auto *visibility = m_visibilityController;
     qmlRegisterSingletonType<DockVisibilityController>("com.bhyoo.krema", 1, 0, "DockVisibility", [visibility](QQmlEngine *, QJSEngine *) -> QObject * {

@@ -149,6 +149,14 @@ void Application::registerGlobalShortcuts()
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     connect(toggleAction, &QAction::triggered, m_shell->view()->visibilityController(), &DockVisibilityController::toggleVisibility);
 
+    // Focus dock for keyboard navigation: Meta+F5
+    // Note: Meta+D conflicts with KWin's "Show Desktop" default shortcut
+    auto *focusDockAction = m_actionCollection->addAction(QStringLiteral("focus-dock"));
+    focusDockAction->setText(i18nc("@action global shortcut", "Focus Dock"));
+    kga->setDefaultShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
+    kga->setShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
+    connect(focusDockAction, &QAction::triggered, m_shell.get(), &DockShell::focusDock);
+
     // Meta+1..9: Activate N-th app
     for (int i = 1; i <= 9; ++i) {
         auto *activateAction = m_actionCollection->addAction(QStringLiteral("activate-entry-%1").arg(i));

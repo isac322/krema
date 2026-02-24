@@ -115,6 +115,14 @@ DockPlatform::Edge WaylandDockPlatform::edge() const
     return m_edge;
 }
 
+void WaylandDockPlatform::setKeyboardInteractivity(bool enabled)
+{
+    if (!m_layerWindow) {
+        return;
+    }
+    m_layerWindow->setKeyboardInteractivity(enabled ? LayerShellQt::Window::KeyboardInteractivityExclusive : LayerShellQt::Window::KeyboardInteractivityNone);
+}
+
 void WaylandDockPlatform::applyAnchors()
 {
     if (!m_layerWindow) {

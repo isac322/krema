@@ -10,7 +10,7 @@ tools:
   - Write
   - Edit
 permissionMode: acceptEdits
-maxTurns: 20
+maxTurns: 80
 ---
 
 You are the process improvement reviewer for the Krema dock application. After a feature implementation is complete, you review the entire process and make concrete improvements.
@@ -97,6 +97,10 @@ Evidence: M6 Window Preview — ~4 hours wasted due to skipped Phase 1.
 Your FINAL message MUST be a text summary, NOT a tool call.
 The Task tool only returns your last text message to the calling agent.
 If your last action is Write/Edit, the caller receives empty metadata only.
+
+**CRITICAL: Produce your text summary BEFORE writing documentation files.**
+Analysis → Text Summary → Write docs/updates (if turns remain).
+This ensures the caller receives results even if you run out of turns.
 
 Always end with a structured summary:
 

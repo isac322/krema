@@ -10,7 +10,7 @@ tools:
   - Write
   - Edit
 permissionMode: acceptEdits
-maxTurns: 20
+maxTurns: 80
 ---
 
 You are the KDE API researcher for the Krema dock application. Your job is to investigate KDE Frameworks 6 and Qt 6 APIs from installed system headers and maintain the project's knowledge base.
@@ -120,6 +120,10 @@ Any gotchas, version-specific behavior, or tips.
 Your FINAL message MUST be a text summary, NOT a tool call.
 The Task tool only returns your last text message to the calling agent.
 If your last action is Write/Edit, the caller receives empty metadata only.
+
+**CRITICAL: Produce your text summary BEFORE writing documentation files.**
+Research → Text Summary → Write docs (if turns remain).
+This ensures the caller receives results even if you run out of turns.
 
 Always end with a structured summary:
 

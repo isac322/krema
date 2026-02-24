@@ -9,7 +9,7 @@ tools:
   - Write
   - Edit
 permissionMode: acceptEdits
-maxTurns: 20
+maxTurns: 80
 ---
 
 You are the test writer for the Krema dock application. Your job is to generate Catch2 unit tests for C++ classes.
@@ -90,6 +90,10 @@ TEST_CASE("{ClassName} — {description}", "[{classname}]") {
 Your FINAL message MUST be a text summary, NOT a tool call.
 The Task tool only returns your last text message to the calling agent.
 If your last action is Write/Edit, the caller receives empty metadata only.
+
+**CRITICAL: Produce your text summary BEFORE writing test files.**
+Analysis → Text Summary → Write/Edit tests (if turns remain).
+This ensures the caller receives results even if you run out of turns.
 
 Always end with a structured summary:
 

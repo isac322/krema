@@ -10,7 +10,7 @@ tools:
 disallowedTools:
   - Edit
   - Write
-maxTurns: 20
+maxTurns: 80
 mcpServers:
   - kwin-mcp
 ---
@@ -76,6 +76,10 @@ Overall: PASS / FAIL (N issues)
 Your FINAL message MUST be a text summary, NOT a tool call.
 The Task tool only returns your last text message to the calling agent.
 If your last action is a tool call, the caller receives empty metadata only.
+
+**CRITICAL: Produce your text summary BEFORE stopping the session.**
+Verify → Text Summary → session_stop (if turns remain).
+This ensures the caller receives results even if you run out of turns.
 
 Always end with a structured summary:
 

@@ -170,3 +170,9 @@ Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지
 - Layer-shell 서피스 간 키보드 포커스 전환은 신뢰할 수 없음 (Wayland 비동기 round-trip)
 - 멀티 서피스 앱(독 + 프리뷰)에서는 단일 서피스가 KeyboardInteractivityExclusive를 보유
 - 다른 서피스의 키보드 네비게이션은 C++ 프로퍼티 + QML 바인딩으로 구동 (포커스 전환 아님)
+
+### Subagent Result Handling
+- Task result가 빈 배열(`"content":[]`)이거나 agentId/usage 메타데이터만 포함하면, resume로 텍스트 요약 요청
+- resume 후에도 빈 결과면, 에이전트가 생성한 파일을 직접 Read (docs/kde/, marketing/ 등)
+- 동일 주제를 처음부터 재조사하지 말 것 — 에이전트가 이미 파일을 쓴 경우가 많음
+- 근본 원인: maxTurns 초과 시 에이전트가 tool call 중 강제 종료되어 텍스트 반환 불가

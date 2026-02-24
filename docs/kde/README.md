@@ -42,6 +42,8 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | Document | Description |
 |----------|-------------|
 | [kwindow-effects.md](kwindow-effects.md) | KWindowEffects (blur/contrast/slide), KWindowSystem, KWaylandExtras |
+| [attention-animation-reference.md](attention-animation-reference.md) | Attention animation options — wiggle/bounce/glow/badge comparison, Plasma reference, SmartLauncherItem API |
+| [icon-normalization-reference.md](icon-normalization-reference.md) | Icon size normalization algorithms — alpha bounding box, threshold trim, content-aware scale |
 
 ### M9: System Tray
 

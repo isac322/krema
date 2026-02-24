@@ -87,9 +87,8 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
         // Positive exclusive zone reserves space for the dock
         m_layerWindow->setExclusiveZone(m_exclusiveZone > 0 ? m_exclusiveZone : 0);
         break;
-    case VisibilityMode::AlwaysHidden:
+    case VisibilityMode::AutoHide:
     case VisibilityMode::DodgeWindows:
-    case VisibilityMode::SmartHide:
         // No exclusive zone — windows can use the full screen
         m_layerWindow->setExclusiveZone(0);
         break;

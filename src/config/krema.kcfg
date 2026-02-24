@@ -40,8 +40,13 @@
     </entry>
 
     <entry name="VisibilityMode" type="Int">
-      <label>Dock visibility mode (0=Always, 1=Hidden, 2=Dodge, 3=Smart)</label>
+      <label>Dock visibility mode (0=Always, 1=AutoHide, 2=Dodge)</label>
       <default>0</default>
+    </entry>
+
+    <entry name="DodgeActiveOnly" type="Bool">
+      <label>Only dodge the active window (false = dodge all overlapping windows)</label>
+      <default>false</default>
     </entry>
 
     <entry name="Edge" type="Int">
@@ -81,11 +86,6 @@
     <entry name="UseSystemColor" type="Bool">
       <label>Use system header color for Tinted style instead of custom tint color</label>
       <default>true</default>
-    </entry>
-
-    <entry name="ConfigVersion" type="Int">
-      <label>Configuration migration version</label>
-      <default>0</default>
     </entry>
 
     <entry name="TintColor" type="String">

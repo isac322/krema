@@ -29,9 +29,8 @@ namespace krema
  *
  * Modes:
  *  - AlwaysVisible: dock is always shown
- *  - AlwaysHidden: dock is hidden, shown on edge hover
+ *  - AutoHide: dock is hidden, shown on edge hover
  *  - DodgeWindows: dock hides when a window overlaps its geometry
- *  - SmartHide: dock hides when any window overlaps its geometry
  */
 class DockVisibilityController : public QObject
 {
@@ -88,6 +87,9 @@ public:
     /// Request a deferred visibility re-evaluation (e.g. after screen change).
     void requestEvaluate();
 
+    /// Set whether DodgeWindows mode only dodges the active window.
+    void setDodgeActiveOnly(bool activeOnly);
+
 Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();
@@ -97,8 +99,8 @@ private:
     void evaluateVisibility();
     void setVisible(bool visible);
 
-    /// Check if any window overlaps the dock geometry. (DodgeWindows / SmartHide)
-    /// @param activeOnly If true, only checks if an active window overlaps (DodgeWindows).
+    /// Check if any window overlaps the dock geometry.
+    /// @param activeOnly If true, only checks if an active window overlaps.
     [[nodiscard]] bool hasOverlappingWindow(bool activeOnly = false) const;
 
     /// Check if any window is maximized or fullscreen.
@@ -144,6 +146,9 @@ private:
 
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
+
+    // DodgeWindows sub-option: true = dodge active window only, false = dodge all
+    bool m_dodgeActiveOnly = false;
 
     // Show timer: fires after mouse dwells in trigger area for showDelay ms
     QTimer m_showTimer;

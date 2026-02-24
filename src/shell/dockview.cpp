@@ -60,36 +60,6 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
         return visibility;
     });
 
-    // Config migration: merge SemiTransparent into Tinted, renumber styles
-    if (m_settings->configVersion() < 2) {
-        int old = m_settings->backgroundStyle();
-        // First: Mica (5) → old SemiTransparent (1) + accent color
-        if (old == 5) {
-            old = 1;
-            m_settings->setUseAccentColor(true);
-        }
-        // Now remap old numbering to new
-        switch (old) {
-        case 1: // Old SemiTransparent → Tinted + UseSystemColor
-            m_settings->setBackgroundStyle(2);
-            m_settings->setUseSystemColor(true);
-            break;
-        case 2: // Old Transparent → new 1
-            m_settings->setBackgroundStyle(1);
-            break;
-        case 3: // Old Tinted → new 2
-            m_settings->setBackgroundStyle(2);
-            break;
-        case 4: // Old Acrylic → new 3
-            m_settings->setBackgroundStyle(3);
-            break;
-        default: // PanelInherit (0) stays the same
-            break;
-        }
-        m_settings->setConfigVersion(2);
-        m_settings->save();
-    }
-
     // Apply background effects (blur, contrast)
     applyBackgroundStyle();
 

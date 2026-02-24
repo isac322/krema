@@ -6,6 +6,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "/home/bhyoo/projects/c++/krema/.claude/hooks/auto-format.sh",
+            "timeout": 10000
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
             "command": "/home/bhyoo/projects/c++/krema/.claude/hooks/auto-build.sh",
             "timeout": 30000
           }

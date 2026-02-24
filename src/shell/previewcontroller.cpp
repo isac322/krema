@@ -300,6 +300,14 @@ void PreviewController::doHide()
     m_previewHovered = false;
     m_parentIndex = -1;
 
+    // End preview keyboard nav if active
+    if (m_previewKeyboardActive) {
+        m_previewKeyboardActive = false;
+        m_focusedThumbnailIndex = -1;
+        Q_EMIT previewKeyboardActiveChanged();
+        Q_EMIT focusedThumbnailIndexChanged();
+    }
+
     // Block input on the preview surface (keep it mapped for fast re-show)
     updateInputRegion();
 
@@ -310,6 +318,142 @@ void PreviewController::doHide()
 
     Q_EMIT visibleChanged(false);
     Q_EMIT parentIndexChanged();
+}
+
+// --- Preview keyboard navigation (driven from dock surface) ---
+
+bool PreviewController::isPreviewKeyboardActive() const
+{
+    return m_previewKeyboardActive;
+}
+
+int PreviewController::focusedThumbnailIndex() const
+{
+    return m_focusedThumbnailIndex;
+}
+
+void PreviewController::startPreviewKeyboardNav()
+{
+    if (!m_visible || m_parentIndex < 0) {
+        return;
+    }
+    m_previewKeyboardActive = true;
+    m_focusedThumbnailIndex = 0;
+    Q_EMIT previewKeyboardActiveChanged();
+    Q_EMIT focusedThumbnailIndexChanged();
+}
+
+void PreviewController::endPreviewKeyboardNav()
+{
+    if (!m_previewKeyboardActive) {
+        return;
+    }
+    m_previewKeyboardActive = false;
+    m_focusedThumbnailIndex = -1;
+    Q_EMIT previewKeyboardActiveChanged();
+    Q_EMIT focusedThumbnailIndexChanged();
+}
+
+void PreviewController::navigatePreviewThumbnail(int delta)
+{
+    if (!m_previewKeyboardActive) {
+        return;
+    }
+    const int count = previewThumbnailCount();
+    if (count == 0) {
+        return;
+    }
+    int newIndex = m_focusedThumbnailIndex + delta;
+    newIndex = qBound(0, newIndex, count - 1);
+    if (newIndex != m_focusedThumbnailIndex) {
+        m_focusedThumbnailIndex = newIndex;
+        Q_EMIT focusedThumbnailIndexChanged();
+    }
+}
+
+void PreviewController::activatePreviewThumbnail()
+{
+    const QModelIndex idx = focusedThumbnailModelIndex();
+    if (!idx.isValid()) {
+        return;
+    }
+    m_model->tasksModel()->requestActivate(idx);
+    hidePreview();
+}
+
+void PreviewController::closePreviewThumbnail()
+{
+    const QModelIndex idx = focusedThumbnailModelIndex();
+    if (!idx.isValid()) {
+        return;
+    }
+    m_model->tasksModel()->requestClose(idx);
+
+    // Adjust focus index if needed
+    const int count = previewThumbnailCount();
+    if (m_focusedThumbnailIndex >= count - 1) {
+        m_focusedThumbnailIndex = qMax(0, count - 2);
+        Q_EMIT focusedThumbnailIndexChanged();
+    }
+}
+
+int PreviewController::previewThumbnailCount() const
+{
+    if (m_parentIndex < 0) {
+        return 0;
+    }
+    // Single window (no children) counts as 1 thumbnail
+    int childCount = m_model->childCount(m_parentIndex);
+    if (childCount == 0) {
+        // Check if it's a window (not just a launcher)
+        const QModelIndex parentIdx = m_model->tasksModel()->index(m_parentIndex, 0);
+        bool isWindow = parentIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+        return isWindow ? 1 : 0;
+    }
+    return childCount;
+}
+
+QString PreviewController::focusedThumbnailTitle() const
+{
+    const QModelIndex idx = focusedThumbnailModelIndex();
+    if (!idx.isValid()) {
+        return {};
+    }
+    return idx.data(Qt::DisplayRole).toString();
+}
+
+bool PreviewController::focusedThumbnailIsActive() const
+{
+    const QModelIndex idx = focusedThumbnailModelIndex();
+    if (!idx.isValid()) {
+        return false;
+    }
+    return idx.data(TaskManager::AbstractTasksModel::IsActive).toBool();
+}
+
+bool PreviewController::focusedThumbnailIsMinimized() const
+{
+    const QModelIndex idx = focusedThumbnailModelIndex();
+    if (!idx.isValid()) {
+        return false;
+    }
+    return idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
+}
+
+QModelIndex PreviewController::focusedThumbnailModelIndex() const
+{
+    if (m_parentIndex < 0 || m_focusedThumbnailIndex < 0) {
+        return {};
+    }
+    int childCount = m_model->childCount(m_parentIndex);
+    if (childCount == 0) {
+        // Single window: use parent row directly
+        return m_model->tasksModel()->index(m_parentIndex, 0);
+    }
+    if (m_focusedThumbnailIndex >= childCount) {
+        return {};
+    }
+    return m_model->tasksModel()->makeModelIndex(m_parentIndex, m_focusedThumbnailIndex);
 }
 
 void PreviewController::setHideDelay(int ms)

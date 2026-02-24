@@ -13,12 +13,22 @@ import com.bhyoo.krema 1.0
  *
  * Loaded into a full-width layer-shell overlay surface.
  * Only the popup rectangle receives input (via input region in C++).
+ *
+ * Keyboard navigation is driven entirely from the dock surface via
+ * PreviewController C++ properties (previewKeyboardActive, focusedThumbnailIndex).
+ * This avoids unreliable focus transfer between layer-shell surfaces.
  */
 Item {
     id: root
     anchors.fill: parent
 
     // C++ singletons: PreviewController, DockModel
+
+    function announcePreviewOpen(appName, count) {
+        Accessible.announce(
+            i18n("Preview for %1, %2 windows", appName, count),
+            Accessible.Polite)
+    }
 
     // Surface-level hover detection: keep preview visible when mouse is anywhere
     // on this surface. The C++ input region (updateInputRegion) already constrains
@@ -28,7 +38,13 @@ Item {
     // on popup geometry, which can shift during layout.
     HoverHandler {
         id: surfaceHover
-        onHoveredChanged: PreviewController.setPreviewHovered(hovered)
+        onHoveredChanged: {
+            PreviewController.setPreviewHovered(hovered)
+            // Mouse movement cancels keyboard navigation in preview
+            if (hovered && PreviewController.previewKeyboardActive) {
+                PreviewController.endPreviewKeyboardNav()
+            }
+        }
     }
 
     // Parent's window IDs — used by both grouped and single preview.
@@ -142,6 +158,12 @@ Item {
             }
             root.rebuildChildModel()
         }
+        function onVisibleChanged() {
+            if (PreviewController.visible && PreviewController.parentIndex >= 0) {
+                let count = childWindowModel.count
+                root.announcePreviewOpen(PreviewController.appName, count)
+            }
+        }
     }
 
     // Also rebuild when the underlying model data changes (window close, title change)
@@ -175,6 +197,11 @@ Item {
     Rectangle {
         id: popup
         visible: PreviewController.visible && PreviewController.parentIndex >= 0
+
+        Accessible.role: Accessible.PopupMenu
+        Accessible.name: PreviewController.appName
+            ? i18n("Preview for %1", PreviewController.appName)
+            : ""
         x: PreviewController.contentX
         width: popupContent.implicitWidth + 2 * Kirigami.Units.largeSpacing
         height: popupContent.implicitHeight + 2 * Kirigami.Units.largeSpacing
@@ -235,6 +262,9 @@ Item {
                         isActive: model.isActive
                         parentIndex: PreviewController.parentIndex
                         childIndex: model.childIndex
+                        // Focus ring driven by C++ PreviewController state
+                        isKeyboardFocused: PreviewController.previewKeyboardActive
+                            && PreviewController.focusedThumbnailIndex === index
                     }
                 }
             }

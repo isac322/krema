@@ -67,6 +67,7 @@ FormCard.FormCardPage {
                     from: 1.0; to: 2.0; stepSize: 0.1
                     value: DockSettings.maxZoomFactor
                     onMoved: DockSettings.maxZoomFactor = value
+                    Accessible.name: i18n("Zoom factor")
                 }
             }
         }
@@ -147,6 +148,7 @@ FormCard.FormCardPage {
                     from: 0.0; to: 1.0; stepSize: 0.05
                     value: DockSettings.backgroundOpacity
                     onMoved: DockSettings.backgroundOpacity = value
+                    Accessible.name: i18n("Opacity")
                 }
             }
         }
@@ -191,6 +193,10 @@ FormCard.FormCardPage {
                     color: DockSettings.tintColor
                     border.color: Kirigami.Theme.disabledTextColor
                     border.width: 1
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: i18n("Tint color: %1", DockSettings.tintColor)
+                    Accessible.onPressAction: colorDialog.open()
 
                     MouseArea {
                         anchors.fill: parent

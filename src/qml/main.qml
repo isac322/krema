@@ -18,11 +18,199 @@ Item {
     id: root
     anchors.fill: parent
 
+    Accessible.role: Accessible.ToolBar
+    Accessible.name: i18n("Krema Dock")
+
     // C++ singletons: DockView, DockModel, DockActions, DockContextMenu, DockVisibility, DockSettings, PreviewController
 
     // Hovered item tracking (for custom tooltip and click targeting)
     property int hoveredIndex: -1
     property string hoveredName: ""
+
+    // Keyboard navigation state
+    property bool keyboardNavigating: false
+
+    focus: true
+
+    function announceLaunch(name) {
+        Accessible.announce(i18n("Starting %1", name), Accessible.Assertive)
+    }
+
+    function startKeyboardNavigation() {
+        keyboardNavigating = true
+        // Suppress tooltip and preview auto-triggers during keyboard nav
+        tooltipTimer.stop()
+        tooltipItem.show = false
+        if (dockRepeater.count > 0) {
+            if (hoveredIndex < 0)
+                hoveredIndex = 0
+            // Set zoom position to the focused item's center
+            let item = dockRepeater.itemAt(hoveredIndex)
+            if (item) {
+                dockPanel.mouseX = item.itemCenterX
+                dockPanel.mouseY = dockRow.y + item.height / 2
+                _zoomActive = true
+            }
+        }
+        root.forceActiveFocus()
+    }
+
+    // Retry forceActiveFocus when the window becomes active from compositor.
+    // Layer-shell keyboard interactivity is async (Wayland round-trip),
+    // so forceActiveFocus() may fail if called before the window is active.
+    Connections {
+        target: root.Window.window
+        function onActiveChanged() {
+            if (root.Window.window && root.Window.window.active
+                    && root.keyboardNavigating && !root.activeFocus) {
+                root.forceActiveFocus()
+            }
+        }
+    }
+
+    function endKeyboardNavigation() {
+        keyboardNavigating = false
+        hoveredIndex = -1
+        hoveredName = ""
+        _zoomActive = false
+        dockPanel.mouseX = -1
+        dockPanel.mouseY = -1
+        DockVisibility.setKeyboardActive(false)
+    }
+
+    function navigateItem(delta) {
+        keyboardNavigating = true
+        let count = dockRepeater.count
+        if (count === 0) return
+
+        if (hoveredIndex < 0) {
+            hoveredIndex = delta > 0 ? 0 : count - 1
+        } else {
+            hoveredIndex = Math.max(0, Math.min(count - 1, hoveredIndex + delta))
+        }
+        hoveredName = dockRepeater.itemAt(hoveredIndex)?.displayName ?? ""
+
+        // Reuse zoom logic: set panelMouseX to the focused item's center
+        let item = dockRepeater.itemAt(hoveredIndex)
+        if (item) {
+            dockPanel.mouseX = item.itemCenterX
+            dockPanel.mouseY = dockRow.y + item.height / 2
+            _zoomActive = true
+
+            // Announce to screen reader
+            let msg = item.displayName
+            if (item.accessibleDescription)
+                msg += ", " + item.accessibleDescription
+            msg += ", " + i18n("%1 of %2", hoveredIndex + 1, count)
+            Accessible.announce(msg, Accessible.Polite)
+        }
+    }
+
+    // Announce preview thumbnail navigation (called after C++ state changes)
+    function announcePreviewThumbnail() {
+        let title = PreviewController.focusedThumbnailTitle()
+        if (!title) return
+        let msg = title
+        if (PreviewController.focusedThumbnailIsActive())
+            msg += ", " + i18n("Active")
+        if (PreviewController.focusedThumbnailIsMinimized())
+            msg += ", " + i18n("Minimized")
+        msg += ", " + i18n("%1 of %2",
+            PreviewController.focusedThumbnailIndex + 1,
+            PreviewController.previewThumbnailCount())
+        Accessible.announce(msg, Accessible.Polite)
+    }
+
+    Keys.onPressed: function(event) {
+        if (!keyboardNavigating) return
+
+        // Preview keyboard mode: route keys to PreviewController
+        if (PreviewController.previewKeyboardActive) {
+            switch (event.key) {
+            case Qt.Key_Left:
+                PreviewController.navigatePreviewThumbnail(-1)
+                announcePreviewThumbnail()
+                event.accepted = true
+                break
+            case Qt.Key_Right:
+                PreviewController.navigatePreviewThumbnail(1)
+                announcePreviewThumbnail()
+                event.accepted = true
+                break
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                PreviewController.activatePreviewThumbnail()
+                endKeyboardNavigation()
+                event.accepted = true
+                break
+            case Qt.Key_Delete:
+                PreviewController.closePreviewThumbnail()
+                announcePreviewThumbnail()
+                event.accepted = true
+                break
+            case Qt.Key_Escape:
+            case Qt.Key_Up:
+                // Return to dock navigation (keep preview visible)
+                PreviewController.endPreviewKeyboardNav()
+                event.accepted = true
+                break
+            }
+            return
+        }
+
+        // Normal dock navigation
+        switch (event.key) {
+        case Qt.Key_Left:
+            navigateItem(-1)
+            event.accepted = true
+            break
+        case Qt.Key_Right:
+            navigateItem(1)
+            event.accepted = true
+            break
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+        case Qt.Key_Space:
+            if (hoveredIndex >= 0) {
+                DockActions.activate(hoveredIndex)
+                endKeyboardNavigation()
+            }
+            event.accepted = true
+            break
+        case Qt.Key_Escape:
+            // If preview is visible, hide it first
+            if (PreviewController.visible) {
+                PreviewController.hidePreview()
+            }
+            endKeyboardNavigation()
+            event.accepted = true
+            break
+        case Qt.Key_Down:
+            // Open preview for the focused item (if it has windows)
+            if (hoveredIndex >= 0) {
+                let idx = DockModel.tasksModel.index(hoveredIndex, 0)
+                let isWindow = DockModel.tasksModel.data(
+                    idx, TaskManager.AbstractTasksModel.IsWindow)
+                if (isWindow) {
+                    let item = dockRepeater.itemAt(hoveredIndex)
+                    if (item) {
+                        let globalPos = item.mapToGlobal(0, 0)
+                        PreviewController.showPreview(hoveredIndex, globalPos.x, item.width)
+                        PreviewController.startPreviewKeyboardNav()
+                        announcePreviewThumbnail()
+                    }
+                }
+            }
+            event.accepted = true
+            break
+        case Qt.Key_Menu:
+            if (hoveredIndex >= 0) {
+                DockContextMenu.showForTask(hoveredIndex)
+            }
+            event.accepted = true
+            break
+        }
+    }
 
     // Hysteresis flag: once zoom activates (mouse on an icon), it stays active
     // until the mouse leaves the panel zone entirely. This prevents rapid zoom
@@ -237,7 +425,12 @@ Item {
             if (root._dragActive) {
                 // Execute reorder
                 if (root._dragTargetIndex >= 0 && root._dragTargetIndex !== root._dragSourceIndex) {
+                    let item = dockRepeater.itemAt(root._dragSourceIndex)
+                    let name = item ? item.displayName : ""
                     DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)
+                    Accessible.announce(
+                        i18n("Moved %1 to position %2", name, root._dragTargetIndex + 1),
+                        Accessible.Polite)
                 }
                 // Reset drag state
                 root._dragActive = false
@@ -280,6 +473,12 @@ Item {
 
         // Track mouse position for parabolic zoom + drag handling
         onPositionChanged: function(mouse) {
+            // Mouse movement cancels keyboard navigation mode
+            if (root.keyboardNavigating) {
+                root.keyboardNavigating = false
+                DockVisibility.setKeyboardActive(false)
+            }
+
             // --- Drag handling ---
             if (root._dragPending && !root._dragActive) {
                 let dx = mouse.x - root._dragStartX
@@ -401,6 +600,7 @@ Item {
                     // DockItem's own required properties
 
                     z: (root.hoveredIndex === index) ? 1 : 0
+                    isKeyboardFocused: root.keyboardNavigating && root.hoveredIndex === index
                     iconSize: DockSettings.iconSize
                     maxZoomFactor: DockSettings.maxZoomFactor
                     panelMouseX: dockPanel.mouseX
@@ -472,6 +672,7 @@ Item {
     // Floating drag ghost icon (follows cursor during internal reorder drag)
     Image {
         id: dragGhost
+        Accessible.ignored: true
         visible: root._dragActive && root._dragSourceIndex >= 0
         width: DockSettings.iconSize
         height: DockSettings.iconSize
@@ -490,6 +691,7 @@ Item {
     // Drop position indicator line (shown during internal reorder drag)
     Rectangle {
         id: dropIndicator
+        Accessible.ignored: true
         visible: root._dragActive && root._dragTargetIndex >= 0
                  && root._dragTargetIndex !== root._dragSourceIndex
         width: 2
@@ -524,6 +726,9 @@ Item {
         function onTaskLaunching(index) {
             let item = dockRepeater.itemAt(index)
             if (!item) return
+
+            // Announce launch to screen reader (must call on root Item, not Connections)
+            root.announceLaunch(item.displayName)
 
             // Skip for launcher items — IsStartup will drive the bounce.
             if (!item.model.IsWindow) return
@@ -587,6 +792,7 @@ Item {
 
     Rectangle {
         id: tooltipItem
+        Accessible.ignored: true
         property bool show: false
         visible: show && root.hoveredName.length > 0
 
@@ -616,6 +822,7 @@ Item {
             id: tooltipLabel
             anchors.centerIn: parent
             text: root.hoveredName
+            Accessible.ignored: true
         }
 
         // Hide tooltip and manage preview when hover changes
@@ -627,12 +834,13 @@ Item {
                 if (root.hoveredIndex < 0) {
                     // Mouse left dock: start delayed preview hide
                     PreviewController.hidePreviewDelayed()
-                } else {
-                    // Moved to different icon: restart tooltip timer,
+                } else if (!root.keyboardNavigating) {
+                    // Moved to different icon (mouse): restart tooltip timer,
                     // hide preview with delay (allows moving to adjacent icon)
                     PreviewController.hidePreviewDelayed()
                     tooltipTimer.restart()
                 }
+                // In keyboard mode: don't auto-trigger tooltip/preview
             }
         }
     }

@@ -175,6 +175,12 @@ void DockVisibilityController::evaluateVisibility()
         return;
     }
 
+    // If keyboard navigation is active, always show
+    if (m_keyboardActive) {
+        setVisible(true);
+        return;
+    }
+
     // If hovered, always show
     if (m_hovered) {
         setVisible(true);
@@ -244,6 +250,31 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     }
     m_zoomOverflowHeight = height;
     applyInputRegion();
+}
+
+void DockVisibilityController::setKeyboardActive(bool active)
+{
+    if (m_keyboardActive == active) {
+        return;
+    }
+    m_keyboardActive = active;
+    qCDebug(lcVisibility) << "Keyboard navigation active:" << active;
+
+    // Toggle layer-shell keyboard interactivity with the navigation state
+    m_platform->setKeyboardInteractivity(active);
+
+    if (active) {
+        m_hideTimer.stop();
+        m_evaluateTimer.stop();
+        setVisible(true);
+    } else {
+        // When keyboard navigation ends and mouse is not hovering, start hide timer
+        if (m_interactingCount == 0 && !m_hovered) {
+            if (m_mode != DockPlatform::VisibilityMode::AlwaysVisible) {
+                m_hideTimer.start();
+            }
+        }
+    }
 }
 
 void DockVisibilityController::setInteracting(bool interacting)

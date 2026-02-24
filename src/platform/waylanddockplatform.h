@@ -32,6 +32,7 @@ public:
     void setSize(const QSize &size) override;
     void setInputRegion(const QRegion &region) override;
     [[nodiscard]] Edge edge() const override;
+    void setKeyboardInteractivity(bool enabled) override;
 
 private:
     void applyAnchors();

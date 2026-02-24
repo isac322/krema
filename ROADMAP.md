@@ -171,7 +171,7 @@ Extensible widget architecture.
 |---|---|
 | Language | C++23 |
 | Desktop Environment | **KDE Plasma 6** (Wayland only) |
-| UI Framework | Qt 6.6+ / Qt Quick |
+| UI Framework | Qt 6.8+ / Qt Quick |
 | KDE Frameworks | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, GlobalAccel) |
 | KDE Plasma Libraries | LibTaskManager, LayerShellQt, KPipeWire |
 | Additional KDE Libraries | Kirigami, Kirigami Addons, KColorScheme, KService, KCrash, KXmlGui |
@@ -186,7 +186,7 @@ Extensible widget architecture.
 | Dependency | Minimum Version |
 |---|---|
 | **KDE Plasma** | **6.0.0** |
-| Qt | 6.6.0 |
+| Qt | 6.8.0 |
 | KDE Frameworks | 6.0.0 |
 | LayerShellQt | 6.0.0 |
 | CMake | 3.22 |

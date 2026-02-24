@@ -3,9 +3,9 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(krema VERSION 0.3.0 LANGUAGES CXX)
+project(krema VERSION 0.4.0 LANGUAGES CXX)
 
-set(QT_MIN_VERSION "6.6.0")
+set(QT_MIN_VERSION "6.8.0")
 set(KF6_MIN_VERSION "6.0.0")
 set(LAYER_SHELL_QT_MIN_VERSION "6.0.0")
 

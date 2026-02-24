@@ -62,6 +62,11 @@ public:
 
     /// Current edge.
     [[nodiscard]] virtual Edge edge() const = 0;
+
+    /// Enable or disable keyboard interactivity on the dock surface.
+    /// When enabled, the surface can receive keyboard focus on demand.
+    /// Used for keyboard navigation mode.
+    virtual void setKeyboardInteractivity(bool enabled) = 0;
 };
 
 } // namespace krema

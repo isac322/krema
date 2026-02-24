@@ -49,6 +49,13 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [statusnotifieritem.md](statusnotifieritem.md) | KStatusNotifierItem — status/category/icon/tooltip/menu/activation |
 
+### Accessibility
+
+| Document | Description |
+|----------|-------------|
+| [accessibility-guide.md](accessibility-guide.md) | KDE/Qt accessibility best practices — QML Accessible API, AT-SPI2, keyboard navigation |
+| [accessibility-audit.md](accessibility-audit.md) | Krema accessibility audit baseline and implementation tracking |
+
 ### Reference
 
 | Document | Description |

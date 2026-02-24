@@ -24,6 +24,18 @@ Item {
     property bool isActive: false
     property int parentIndex: -1
     property int childIndex: 0
+    property bool isKeyboardFocused: false
+
+    Accessible.role: Accessible.Button
+    Accessible.name: {
+        let parts = [title]
+        if (isActive) parts.push(i18n("Active"))
+        if (isMinimized) parts.push(i18n("Minimized"))
+        return parts.join(", ")
+    }
+    Accessible.focusable: true
+    Accessible.focused: isKeyboardFocused
+    Accessible.onPressAction: thumbnailMouseArea.clicked(null)
 
     readonly property real thumbnailWidth: DockSettings.previewThumbnailSize
     readonly property real thumbnailHeight: thumbnailWidth * 0.7
@@ -49,6 +61,19 @@ Item {
             screencastRequest.uuid = ""
             screencastRequest.uuid = root.winId ?? ""
         }
+    }
+
+    // Keyboard focus ring for preview thumbnail
+    Rectangle {
+        id: previewFocusRing
+        anchors.fill: thumbnailContainer
+        anchors.margins: -2
+        radius: thumbnailContainer.radius + 2
+        color: "transparent"
+        border.color: Kirigami.Theme.focusColor
+        border.width: 2
+        visible: root.isKeyboardFocused
+        Accessible.ignored: true
     }
 
     // Thumbnail container
@@ -80,6 +105,7 @@ Item {
             nodeId: screencastRequest.nodeId
             allowDmaBuf: true
             visible: !root.isMinimized
+            Accessible.ignored: true
 
             onStateChanged: function() {
                 console.log("[krema.preview] PipeWire state:", pipeWireItem.state,
@@ -133,6 +159,8 @@ Item {
             icon.height: Kirigami.Units.iconSizes.small
             z: 10
 
+            Accessible.name: i18n("Close %1", root.title)
+
             onClicked: {
                 // childIndex < 0 = single window (parent row IS the window)
                 let modelIndex = (root.childIndex < 0)
@@ -162,6 +190,7 @@ Item {
             id: thumbnailMouseArea
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton
+            Accessible.ignored: true
 
             onClicked: {
                 // childIndex < 0 = single window (parent row IS the window)

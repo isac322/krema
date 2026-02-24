@@ -22,6 +22,28 @@ Item {
     // Display name for tooltip (readable by parent)
     readonly property string displayName: model.display || ""
 
+    // Accessible description for screen readers (state summary)
+    readonly property string accessibleDescription: {
+        let parts = []
+        if (DockModel.isPinned(index)) parts.push(i18n("Pinned"))
+        if (model.IsActive) parts.push(i18n("Active"))
+        if (model.IsMinimized) parts.push(i18n("Minimized"))
+        let count = model.ChildCount || 0
+        if (count > 1) parts.push(i18n("%1 windows", count))
+        if (launching) parts.push(i18n("Starting"))
+        return parts.join(", ")
+    }
+
+    // Keyboard focus state (set by main.qml during keyboard navigation)
+    property bool isKeyboardFocused: false
+
+    Accessible.role: Accessible.Button
+    Accessible.name: displayName
+    Accessible.description: accessibleDescription
+    Accessible.focusable: true
+    Accessible.focused: isKeyboardFocused
+    Accessible.onPressAction: DockActions.activate(index)
+
     // Launch animation state
     property bool manualLaunching: false
     readonly property bool launching:
@@ -223,6 +245,20 @@ Item {
         yScale: currentScale
     }
 
+    // Keyboard focus ring
+    Rectangle {
+        id: focusRing
+        anchors.centerIn: iconImage
+        width: iconImage.width + Kirigami.Units.smallSpacing * 2
+        height: width
+        radius: width / 2
+        color: "transparent"
+        border.color: Kirigami.Theme.focusColor
+        border.width: 2
+        visible: dockItem.isKeyboardFocused
+        Accessible.ignored: true
+    }
+
     // Application icon
     Image {
         id: iconImage
@@ -268,6 +304,7 @@ Item {
             radius: Kirigami.Units.largeSpacing
             color: Kirigami.Theme.highlightColor
             visible: iconImage.status !== Image.Ready
+            Accessible.ignored: true
 
             QQC2.Label {
                 anchors.centerIn: parent
@@ -278,6 +315,7 @@ Item {
                 font.pixelSize: iconSize * 0.4
                 font.bold: true
                 color: Kirigami.Theme.highlightedTextColor
+                Accessible.ignored: true
             }
         }
     }
@@ -304,13 +342,17 @@ Item {
         NumberAnimation {
             target: bounceTranslate; property: "y"
             to: -8
-            duration: dockItem._finishingBounce ? 170 : 200
+            duration: dockItem._finishingBounce
+                ? Kirigami.Units.longDuration * 0.85
+                : Kirigami.Units.longDuration
             easing.type: Easing.OutQuad
         }
         NumberAnimation {
             target: bounceTranslate; property: "y"
             to: 0
-            duration: dockItem._finishingBounce ? 170 : 200
+            duration: dockItem._finishingBounce
+                ? Kirigami.Units.longDuration * 0.85
+                : Kirigami.Units.longDuration
             easing.type: Easing.InQuad
         }
 
@@ -345,6 +387,7 @@ Item {
         anchors.topMargin: Kirigami.Units.smallSpacing
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: Kirigami.Units.smallSpacing
+        Accessible.ignored: true
 
         Repeater {
             // Show dots based on window count (max 3)

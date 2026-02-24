@@ -93,6 +93,19 @@ Also verify these ownership rules:
 - Animation state → QML only, never feeding back to C++
 - Input region → WaylandDockPlatform manages exclusively
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is a tool call, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **결과**: CLEAN / VIOLATIONS FOUND
+- **검사 파일**: list of files checked
+- **위반 사항**: violations with CAT-N categories (if any)
+- **검증 카테고리**: CAT-1 through CAT-5 status
+
 ## Memory Usage
 
 Track in your project memory:

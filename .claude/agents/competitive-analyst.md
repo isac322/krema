@@ -73,6 +73,20 @@ Summary of where Krema fits
 Key points to emphasize in marketing
 ```
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is a tool call, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **조사 대상**: competitors analyzed
+- **시장 포지션**: Krema's current position summary
+- **핵심 우위**: top competitive advantages
+- **위험/갭**: areas where Krema needs improvement
+- **추천 메시지**: recommended marketing angle
+
 ## Memory Usage
 
 Track in your project memory:

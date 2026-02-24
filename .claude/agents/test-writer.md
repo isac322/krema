@@ -85,6 +85,19 @@ TEST_CASE("{ClassName} — {description}", "[{classname}]") {
 - Test edge cases and error conditions, not just happy paths
 - Keep tests focused — one logical assertion per SECTION
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is Write/Edit, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **테스트 파일**: files created/modified with paths
+- **테스트 수**: number of TEST_CASEs and SECTIONs added
+- **커버리지**: classes/methods covered
+- **빌드/실행 결과**: PASS/FAIL with details
+
 ## Memory Usage
 
 Track in your project memory:

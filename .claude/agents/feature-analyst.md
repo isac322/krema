@@ -59,6 +59,19 @@ When analyzing features, note which are unique vs. common:
 - Plasma 6 specific features (activities, KWin effects)
 - Modern C++23 + Qt 6 codebase
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is a tool call, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **분석된 기능 수**: total features cataloged
+- **카테고리별 요약**: features per category (Core Dock, Visual Polish, etc.)
+- **고유 차별점**: unique-to-Krema features highlighted
+- **문서**: path to updated feature catalog
+
 ## Memory Usage
 
 Track in your project memory:

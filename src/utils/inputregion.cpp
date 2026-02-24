@@ -45,13 +45,13 @@ QRect computeDockScreenRect(const DockScreenRectParams &p)
     int surfaceY = 0;
 
     switch (p.edge) {
-    case 0: // Bottom
-        surfaceX = p.screenX;
-        surfaceY = p.screenY + p.screenHeight - p.surfaceHeight;
-        break;
-    case 1: // Top
+    case 0: // Top
         surfaceX = p.screenX;
         surfaceY = p.screenY;
+        break;
+    case 1: // Bottom
+        surfaceX = p.screenX;
+        surfaceY = p.screenY + p.screenHeight - p.surfaceHeight;
         break;
     case 2: // Left
         surfaceX = p.screenX;

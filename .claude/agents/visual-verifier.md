@@ -71,6 +71,19 @@ Issues Found:
 Overall: PASS / FAIL (N issues)
 ```
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is a tool call, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **빌드**: PASS / FAIL
+- **체크리스트**: passed / total items
+- **이슈**: list of issues found (if any)
+- **전체 결과**: PASS / FAIL (N issues)
+
 ## Memory Usage
 
 Track in your project memory:

@@ -68,6 +68,19 @@ Before creating content, you need:
 - `marketing/social/kde-discuss/{slug}.md`
 - `marketing/briefs/press-{slug}.md`
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is Write/Edit, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **생성된 콘텐츠**: list of files created/updated with paths
+- **대상 채널**: target channels (Reddit, Mastodon, etc.)
+- **핵심 메시지**: key messaging points used
+- **다음 단계**: what's needed next (screenshots, review, etc.)
+
 ## Memory Usage
 
 Track in your project memory:

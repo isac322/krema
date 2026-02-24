@@ -84,3 +84,16 @@ Krema is a dock application — it must be visually smooth and responsive at all
 - **Graceful degradation**: GPU unavailable → CPU fallback → placeholder, never crash/freeze
 - **Visual feedback**: loading states, fallback icons, smooth transitions
 - **Consistency**: follow KDE HIG for sizing, spacing, interaction patterns
+
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is Write/Edit, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **시나리오 수**: total test scenarios (new + regression)
+- **성능 우려**: performance concerns identified
+- **UX 이슈**: UX issues or recommendations
+- **레드 플래그**: critical concerns, if any

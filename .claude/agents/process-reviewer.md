@@ -91,3 +91,16 @@ Evidence: M6 Window Preview — ~4 hours wasted due to skipped Phase 1.
 - Focus on systemic improvements, not one-off fixes
 - Every improvement should prevent a class of problems, not just one instance
 - Track improvements in `docs/kde/lessons-learned.md`
+
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is Write/Edit, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **리뷰 대상**: feature/milestone name
+- **수정된 파일**: list of files modified
+- **추가된 규칙**: new rules or anti-patterns added
+- **교훈**: key lessons captured

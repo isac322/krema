@@ -115,6 +115,20 @@ Any gotchas, version-specific behavior, or tips.
 - Note any differences between KF5 and KF6 if relevant
 - Focus on APIs relevant to dock development (windowing, desktop, icons, theming, etc.)
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is Write/Edit, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **주제**: {topic}
+- **문서**: `docs/kde/{file}.md` (신규 생성 / 갱신)
+- **핵심 발견**: key findings
+- **Krema 적용 방법**: how to use in Krema
+- **주의사항**: caveats, version-specific notes
+
 ## Memory Usage
 
 Track in your project memory:

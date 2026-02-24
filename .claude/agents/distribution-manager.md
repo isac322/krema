@@ -87,6 +87,19 @@ Save distribution plans to: `marketing/distribution/`
 - `marketing/distribution/calendar.md` — Overall content calendar
 - `marketing/distribution/tracker.md` — Status tracking
 
+## Response Format (Mandatory)
+
+Your FINAL message MUST be a text summary, NOT a tool call.
+The Task tool only returns your last text message to the calling agent.
+If your last action is Write/Edit, the caller receives empty metadata only.
+
+Always end with a structured summary:
+
+- **생성된 계획**: distribution plan files created/updated
+- **대상 채널**: channels and schedule overview
+- **즉시 실행 가능**: items ready for posting
+- **대기 중**: items needing prerequisites (screenshots, review, etc.)
+
 ## Memory Usage
 
 Track in your project memory:

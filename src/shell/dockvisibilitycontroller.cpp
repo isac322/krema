@@ -209,17 +209,24 @@ void DockVisibilityController::evaluateVisibility()
         setVisible(true);
         break;
 
-    case DockPlatform::VisibilityMode::AlwaysHidden:
+    case DockPlatform::VisibilityMode::AutoHide:
         setVisible(false);
         break;
 
     case DockPlatform::VisibilityMode::DodgeWindows:
-        setVisible(!hasOverlappingWindow(/*activeOnly=*/true));
+        setVisible(!hasOverlappingWindow(m_dodgeActiveOnly));
         break;
+    }
+}
 
-    case DockPlatform::VisibilityMode::SmartHide:
-        setVisible(!hasOverlappingWindow(/*activeOnly=*/false));
-        break;
+void DockVisibilityController::setDodgeActiveOnly(bool activeOnly)
+{
+    if (m_dodgeActiveOnly == activeOnly) {
+        return;
+    }
+    m_dodgeActiveOnly = activeOnly;
+    if (m_mode == DockPlatform::VisibilityMode::DodgeWindows) {
+        m_evaluateTimer.start();
     }
 }
 

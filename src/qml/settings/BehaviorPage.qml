@@ -21,14 +21,25 @@ FormCard.FormCardPage {
             displayMode: FormCard.FormComboBoxDelegate.Dialog
             model: [
                 i18n("Always visible"),
-                i18n("Always hidden"),
-                i18n("Dodge windows"),
-                i18n("Smart hide")
+                i18n("Auto hide"),
+                i18n("Dodge windows")
             ]
             currentIndex: DockSettings.visibilityMode
             onActivated: function(index) {
                 DockSettings.visibilityMode = index
             }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.visibilityMode === 2
+        }
+
+        FormCard.FormSwitchDelegate {
+            text: i18n("Only dodge active window")
+            description: i18n("When off, hides for any overlapping window")
+            checked: DockSettings.dodgeActiveOnly
+            onCheckedChanged: DockSettings.dodgeActiveOnly = checked
+            visible: DockSettings.visibilityMode === 2
         }
 
         FormCard.FormDelegateSeparator {}

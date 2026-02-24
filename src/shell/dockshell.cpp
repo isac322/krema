@@ -67,6 +67,7 @@ void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode
     // Apply initial delay settings to visibility controller
     m_view->visibilityController()->setShowDelay(m_settings->showDelay());
     m_view->visibilityController()->setHideDelay(m_settings->hideDelay());
+    m_view->visibilityController()->setDodgeActiveOnly(m_settings->dodgeActiveOnly());
 
     // Settings window
     m_settingsWindow = std::make_unique<SettingsWindow>(m_settings, this);
@@ -143,6 +144,9 @@ void DockShell::connectSettingsSignals()
     });
     connect(s, &KremaSettings::VisibilityModeChanged, this, [this]() {
         m_view->visibilityController()->setMode(static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
+    });
+    connect(s, &KremaSettings::DodgeActiveOnlyChanged, this, [this]() {
+        m_view->visibilityController()->setDodgeActiveOnly(m_settings->dodgeActiveOnly());
     });
 
     // Delay settings

@@ -38,6 +38,7 @@ FormCard.FormCardPage {
 
         FormCard.AbstractFormDelegate {
             id: zoomDelegate
+            Accessible.name: i18n("Zoom factor")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -118,6 +119,7 @@ FormCard.FormCardPage {
         // Opacity slider (hidden for Transparent only)
         FormCard.AbstractFormDelegate {
             id: opacityDelegate
+            Accessible.name: i18n("Opacity")
             visible: DockSettings.backgroundStyle !== 1
             background: null
             contentItem: ColumnLayout {

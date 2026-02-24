@@ -42,7 +42,20 @@ M7: 배경 스타일 + 시각 개선 (⬅️ 현재)
 - dockview.cpp: KLocalization::setupLocalizedContext() 추가 (i18n() QML 지원)
 - CMakeLists.txt: QT_MIN_VERSION 6.6.0 → 6.8.0
 
+## E2E 테스트 인프라 (완료)
+
+10개 상호작용 메커니즘 PoC 완료. 결과:
+- 4개 완전 테스트 가능: 프리뷰 hover, 미들 클릭, 드래그 리오더, 설정 UI
+- 5개 대안 필요 (B): 에지 트리거→D-Bus, 메뉴→스크린샷 좌표, 스크롤→스크린샷, 썸네일 클릭→좌표 변환, Close→키보드
+- 1개 스크린샷 전용 (C): 툴팁
+
+수정 완료:
+- main.qml: dockMouseArea에 Accessible.ignored 추가
+- AppearancePage.qml: 슬라이더 delegates에 Accessible.name 추가
+- docs/kwin-mcp-issues.md: 9개 이슈 문서화 (D-01~D-09)
+- tests/e2e/ 시나리오 7개 + README 갱신 (PoC 결과 반영)
+
 ## 다음 작업
 
-- 접근성 커밋
+- E2E + 접근성 수정 커밋
 - M7 나머지 항목 (주의 요구 애니메이션, 아이콘 크기 정규화)

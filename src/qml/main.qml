@@ -368,6 +368,7 @@ Item {
 
     MouseArea {
         id: dockMouseArea
+        Accessible.ignored: true
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton

@@ -7,9 +7,9 @@
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/activityinfo.h>
+#include <taskmanager/regionfiltermode.h>
 #include <taskmanager/tasksmodel.h>
 #include <taskmanager/virtualdesktopinfo.h>
-#include <taskmanager/windowtasksmodel.h>
 
 #include <QLoggingCategory>
 #include <QScreen>
@@ -33,8 +33,23 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
     , m_activityInfo(activityInfo)
     , m_dockWindow(dockWindow)
 {
-    // Ungrouped window model for visibility checks — bypasses the proxy chain
-    m_windowModel = new TaskManager::WindowTasksModel(this);
+    // Region-filtered model: only windows overlapping the dock geometry pass through.
+    // Uses KDE's built-in filterByRegion(Intersect) — same approach as Plasma panels.
+    m_overlapModel = new TaskManager::TasksModel(this);
+    m_overlapModel->classBegin();
+    m_overlapModel->setGroupMode(TaskManager::TasksModel::GroupDisabled);
+    m_overlapModel->setFilterByRegion(RegionFilterMode::Intersect);
+    m_overlapModel->setFilterMinimized(true);
+    m_overlapModel->setFilterHidden(true);
+    m_overlapModel->setFilterByVirtualDesktop(true);
+    m_overlapModel->setFilterByActivity(true);
+    if (m_virtualDesktopInfo) {
+        m_overlapModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
+    }
+    if (m_activityInfo) {
+        m_overlapModel->setActivity(m_activityInfo->currentActivity());
+    }
+    m_overlapModel->componentComplete();
 
     // Show timer: fires when mouse has dwelled in trigger area long enough
     m_showTimer.setSingleShot(true);
@@ -58,11 +73,13 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
     // Re-evaluate when virtual desktop or activity changes
     if (m_virtualDesktopInfo) {
         connect(m_virtualDesktopInfo, &TaskManager::VirtualDesktopInfo::currentDesktopChanged, this, [this]() {
+            m_overlapModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
             m_evaluateTimer.start();
         });
     }
     if (m_activityInfo) {
         connect(m_activityInfo, &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
+            m_overlapModel->setActivity(m_activityInfo->currentActivity());
             m_evaluateTimer.start();
         });
     }
@@ -187,8 +204,6 @@ void DockVisibilityController::evaluateVisibility()
         return;
     }
 
-    const bool overlapping = hasOverlappingWindow();
-
     switch (m_mode) {
     case DockPlatform::VisibilityMode::AlwaysVisible:
         setVisible(true);
@@ -199,11 +214,11 @@ void DockVisibilityController::evaluateVisibility()
         break;
 
     case DockPlatform::VisibilityMode::DodgeWindows:
-        setVisible(!overlapping);
+        setVisible(!hasOverlappingWindow(/*activeOnly=*/true));
         break;
 
     case DockPlatform::VisibilityMode::SmartHide:
-        setVisible(!overlapping);
+        setVisible(!hasOverlappingWindow(/*activeOnly=*/false));
         break;
     }
 }
@@ -227,6 +242,9 @@ void DockVisibilityController::setPanelRect(qreal x, qreal y, qreal width, qreal
 
     // Reapply input region with the updated panel geometry
     applyInputRegion();
+
+    // Update overlap model's region geometry for SmartHide/DodgeWindows
+    updateRegionGeometry();
 
     Q_EMIT panelRectChanged();
 }
@@ -321,6 +339,7 @@ QRect DockVisibilityController::panelRect() const
 
 void DockVisibilityController::requestEvaluate()
 {
+    updateRegionGeometry();
     m_evaluateTimer.start();
 }
 
@@ -368,108 +387,58 @@ QRect DockVisibilityController::dockScreenRect() const
     return computeDockScreenRect(params);
 }
 
-bool DockVisibilityController::hasOverlappingWindow() const
+bool DockVisibilityController::hasOverlappingWindow(bool activeOnly) const
 {
-    const QRect dockRect = dockScreenRect();
-    if (!dockRect.isValid()) {
-        return false;
+    const int count = m_overlapModel->rowCount();
+    qCDebug(lcVisibility) << "hasOverlappingWindow: overlapModel rows=" << count << "activeOnly=" << activeOnly
+                          << "regionGeometry=" << m_overlapModel->regionGeometry();
+
+    if (!activeOnly) {
+        return count > 0;
     }
 
-    const QVariant currentDesktop = m_virtualDesktopInfo ? m_virtualDesktopInfo->currentDesktop() : QVariant();
-    const QString currentActivity = m_activityInfo ? m_activityInfo->currentActivity() : QString();
-
-    const int count = m_windowModel->rowCount();
-    qCDebug(lcVisibility) << "hasOverlappingWindow: windowModel rows=" << count << "dockRect=" << dockRect << "currentDesktop=" << currentDesktop;
-
+    // DodgeWindows: only hide when an *active* window overlaps
     for (int i = 0; i < count; ++i) {
-        const QModelIndex idx = m_windowModel->index(i, 0);
-
-        if (idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool())
-            continue;
-
-        // Virtual desktop filter
-        if (currentDesktop.isValid()) {
-            if (!idx.data(TaskManager::AbstractTasksModel::IsOnAllVirtualDesktops).toBool()) {
-                const auto desktops = idx.data(TaskManager::AbstractTasksModel::VirtualDesktops).toList();
-                if (!desktops.contains(currentDesktop))
-                    continue;
-            }
-        }
-
-        // Activity filter
-        if (!currentActivity.isEmpty()) {
-            const auto activities = idx.data(TaskManager::AbstractTasksModel::Activities).toStringList();
-            if (!activities.isEmpty() && !activities.contains(currentActivity))
-                continue;
-        }
-
-        const QRect geo = idx.data(TaskManager::AbstractTasksModel::Geometry).toRect();
-        if (geo.isValid() && geo.intersects(dockRect))
+        const QModelIndex idx = m_overlapModel->index(i, 0);
+        if (idx.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
             return true;
+        }
     }
     return false;
 }
 
 bool DockVisibilityController::hasMaximizedOrFullscreenWindow() const
 {
-    const QVariant currentDesktop = m_virtualDesktopInfo ? m_virtualDesktopInfo->currentDesktop() : QVariant();
-    const QString currentActivity = m_activityInfo ? m_activityInfo->currentActivity() : QString();
-
-    const int count = m_windowModel->rowCount();
+    const int count = m_overlapModel->rowCount();
     for (int i = 0; i < count; ++i) {
-        const QModelIndex idx = m_windowModel->index(i, 0);
-
-        if (idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool())
-            continue;
-
-        // Virtual desktop filter
-        if (currentDesktop.isValid()) {
-            if (!idx.data(TaskManager::AbstractTasksModel::IsOnAllVirtualDesktops).toBool()) {
-                const auto desktops = idx.data(TaskManager::AbstractTasksModel::VirtualDesktops).toList();
-                if (!desktops.contains(currentDesktop))
-                    continue;
-            }
-        }
-
-        // Activity filter
-        if (!currentActivity.isEmpty()) {
-            const auto activities = idx.data(TaskManager::AbstractTasksModel::Activities).toStringList();
-            if (!activities.isEmpty() && !activities.contains(currentActivity))
-                continue;
-        }
-
-        if (idx.data(TaskManager::AbstractTasksModel::IsMaximized).toBool() || idx.data(TaskManager::AbstractTasksModel::IsFullScreen).toBool())
+        const QModelIndex idx = m_overlapModel->index(i, 0);
+        if (idx.data(TaskManager::AbstractTasksModel::IsMaximized).toBool() || idx.data(TaskManager::AbstractTasksModel::IsFullScreen).toBool()) {
             return true;
+        }
     }
-
     return false;
 }
 
 void DockVisibilityController::connectModelSignals()
 {
-    // Use m_windowModel (ungrouped) for visibility signals — bypasses the proxy chain
-    connect(m_windowModel, &QAbstractItemModel::rowsInserted, this, [this]() {
+    // The overlap model already filters by region, virtual desktop, activity,
+    // minimized, and hidden windows. Row changes mean the overlap set changed.
+    connect(m_overlapModel, &QAbstractItemModel::rowsInserted, this, [this]() {
         m_evaluateTimer.start();
     });
-    connect(m_windowModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
+    connect(m_overlapModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
         m_evaluateTimer.start();
     });
-    connect(m_windowModel, &QAbstractItemModel::modelReset, this, [this]() {
+    connect(m_overlapModel, &QAbstractItemModel::modelReset, this, [this]() {
         m_evaluateTimer.start();
     });
 
-    connect(m_windowModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &topLeft, const QModelIndex &bottomRight, const QList<int> &roles) {
-        Q_UNUSED(topLeft)
-        Q_UNUSED(bottomRight)
-
+    // IsActive changes don't add/remove rows — needed for DodgeWindows mode
+    connect(m_overlapModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
         static const QList<int> relevantRoles = {
-            TaskManager::AbstractTasksModel::Geometry,
+            TaskManager::AbstractTasksModel::IsActive,
             TaskManager::AbstractTasksModel::IsMaximized,
             TaskManager::AbstractTasksModel::IsFullScreen,
-            TaskManager::AbstractTasksModel::IsMinimized,
-            TaskManager::AbstractTasksModel::VirtualDesktops,
-            TaskManager::AbstractTasksModel::IsOnAllVirtualDesktops,
-            TaskManager::AbstractTasksModel::Activities,
         };
 
         if (roles.isEmpty()) {
@@ -484,6 +453,16 @@ void DockVisibilityController::connectModelSignals()
             }
         }
     });
+}
+
+void DockVisibilityController::updateRegionGeometry()
+{
+    const QRect rect = dockScreenRect();
+    if (rect == m_overlapModel->regionGeometry()) {
+        return;
+    }
+    qCDebug(lcVisibility) << "updateRegionGeometry:" << rect;
+    m_overlapModel->setRegionGeometry(rect);
 }
 
 } // namespace krema

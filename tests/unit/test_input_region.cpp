@@ -101,7 +101,7 @@ TEST_CASE("Dock screen rect computation", "[screen-rect]")
         p.panelRefY = 80;
         p.panelWidth = 320;
         p.panelHeight = 40;
-        p.edge = 0; // Bottom
+        p.edge = 1; // Bottom
 
         QRect rect = krema::computeDockScreenRect(p);
 
@@ -126,7 +126,7 @@ TEST_CASE("Dock screen rect computation", "[screen-rect]")
         p.panelRefY = 0;
         p.panelWidth = 320;
         p.panelHeight = 40;
-        p.edge = 1; // Top
+        p.edge = 0; // Top
 
         QRect rect = krema::computeDockScreenRect(p);
 

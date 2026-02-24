@@ -13,7 +13,6 @@ namespace TaskManager
 class ActivityInfo;
 class TasksModel;
 class VirtualDesktopInfo;
-class WindowTasksModel;
 }
 
 class QWindow;
@@ -99,7 +98,8 @@ private:
     void setVisible(bool visible);
 
     /// Check if any window overlaps the dock geometry. (DodgeWindows / SmartHide)
-    [[nodiscard]] bool hasOverlappingWindow() const;
+    /// @param activeOnly If true, only checks if an active window overlaps (DodgeWindows).
+    [[nodiscard]] bool hasOverlappingWindow(bool activeOnly = false) const;
 
     /// Check if any window is maximized or fullscreen.
     [[nodiscard]] bool hasMaximizedOrFullscreenWindow() const;
@@ -108,12 +108,13 @@ private:
 
     DockPlatform *m_platform;
     TaskManager::TasksModel *m_tasksModel;
-    TaskManager::WindowTasksModel *m_windowModel = nullptr;
+    TaskManager::TasksModel *m_overlapModel = nullptr;
     TaskManager::VirtualDesktopInfo *m_virtualDesktopInfo = nullptr;
     TaskManager::ActivityInfo *m_activityInfo = nullptr;
     QWindow *m_dockWindow;
 
     void applyInputRegion();
+    void updateRegionGeometry();
 
     /// Calculate the dock panel rect in screen coordinates.
     /// Layer-shell surfaces don't report screen position via QWindow::geometry(),

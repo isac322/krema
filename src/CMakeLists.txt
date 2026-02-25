@@ -38,6 +38,7 @@ add_library(krema_lib STATIC
     models/dockcontextmenu.h
     models/dockcontextmenu.cpp
     models/taskiconprovider.h
+    models/taskiconprovider.cpp
 
     utils/zoomcalculator.h
     utils/surfacegeometry.h

@@ -12,6 +12,7 @@
 #include <QLoggingCategory>
 #include <QPainterPath>
 
+#include <KIconLoader>
 #include <KLocalizedQmlContext>
 
 #include <QQmlEngine>
@@ -49,7 +50,14 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     m_visibilityController->setMode(visibilityMode);
 
     // Register the icon image provider for QML
-    engine()->addImageProvider(QStringLiteral("icon"), new TaskIconProvider());
+    m_iconProvider = new TaskIconProvider(m_settings->iconNormalization());
+    engine()->addImageProvider(QStringLiteral("icon"), m_iconProvider);
+
+    // Invalidate icon normalization cache when icon theme changes
+    connect(KIconLoader::global(), &KIconLoader::iconChanged, this, [this]() {
+        m_iconProvider->clearCache();
+        bumpIconCacheVersion();
+    });
 
     // Enable i18n() in QML (required for Accessible.name/description strings)
     KLocalization::setupLocalizedContext(engine());
@@ -110,6 +118,22 @@ int DockView::backgroundStyleType() const
 int DockView::floatingPadding() const
 {
     return m_settings->floating() ? s_floatingMargin : 0;
+}
+
+int DockView::iconCacheVersion() const
+{
+    return m_iconCacheVersion;
+}
+
+TaskIconProvider *DockView::iconProvider() const
+{
+    return m_iconProvider;
+}
+
+void DockView::bumpIconCacheVersion()
+{
+    ++m_iconCacheVersion;
+    Q_EMIT iconCacheVersionChanged();
 }
 
 int DockView::panelBarHeight() const

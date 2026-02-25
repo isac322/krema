@@ -72,6 +72,15 @@ FormCard.FormCardPage {
                 }
             }
         }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormSwitchDelegate {
+            text: i18n("Icon size normalization")
+            description: i18n("Automatically adjust icons with excess padding to appear visually consistent")
+            checked: DockSettings.iconNormalization
+            onToggled: DockSettings.iconNormalization = checked
+        }
     }
 
     // --- Background ---

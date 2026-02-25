@@ -9,6 +9,7 @@
 #include "models/dockactions.h"
 #include "models/dockcontextmenu.h"
 #include "models/dockmodel.h"
+#include "models/taskiconprovider.h"
 #include "previewcontroller.h"
 #include "settingswindow.h"
 
@@ -150,6 +151,13 @@ void DockShell::connectSettingsSignals()
     });
     connect(s, &KremaSettings::DodgeActiveOnlyChanged, this, [this]() {
         m_view->visibilityController()->setDodgeActiveOnly(m_settings->dodgeActiveOnly());
+    });
+
+    // Icon normalization toggle
+    connect(s, &KremaSettings::IconNormalizationChanged, this, [this]() {
+        m_view->iconProvider()->setNormalizationEnabled(m_settings->iconNormalization());
+        m_view->iconProvider()->clearCache();
+        m_view->bumpIconCacheVersion();
     });
 
     // Delay settings

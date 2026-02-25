@@ -126,6 +126,14 @@ int Application::run()
     connect(s, &KremaSettings::PreviewThumbnailSizeChanged, this, saveSettings);
     connect(s, &KremaSettings::PreviewHoverDelayChanged, this, saveSettings);
     connect(s, &KremaSettings::PreviewHideDelayChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowEnabledChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowLightXChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowLightYChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowLightZChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowLightRadiusChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowColorChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowIntensityChanged, this, saveSettings);
+    connect(s, &KremaSettings::ShadowElevationChanged, this, saveSettings);
 
     // The dock window is now created with layer-shell.
     // Unset the env var so child processes (launched apps) don't inherit it.

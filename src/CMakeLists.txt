@@ -52,6 +52,7 @@ qt6_add_shaders(krema_lib "acrylic_shaders"
     BATCHABLE PRECOMPILE OPTIMIZED
     PREFIX "/"
     FILES qml/shaders/acrylic_overlay.frag
+          qml/shaders/outer_shadow.frag
 )
 
 target_link_libraries(krema_lib PUBLIC

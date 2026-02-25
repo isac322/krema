@@ -517,6 +517,52 @@ Item {
         }
     }
 
+    // Projective SDF drop shadow via ShaderEffect.
+    // Each pixel projects a ray from the light source through the ground plane
+    // to determine shadow intensity — no blur/offset needed.
+    // Shadow renders within available surface space; overflow clips naturally at screen edges.
+    ShaderEffect {
+        id: dockShadow
+        visible: DockSettings.shadowEnabled
+        z: dockPanel.z - 1
+        Accessible.ignored: true
+
+        // Shader uniforms (names must match outer_shadow.frag UBO fields)
+        property real panelWidth: dockPanel.width
+        property real panelHeight: dockPanel.height
+        property real cornerRadius: dockPanel.radius
+        property real elevation: DockSettings.shadowElevation
+        property real lightX: DockSettings.shadowLightX
+        property real lightY: DockSettings.shadowLightY
+        property real lightZ: DockSettings.shadowLightZ
+        property real lightRadius: DockSettings.shadowLightRadius
+        property color _shadowColor: DockSettings.shadowColor
+        property real shadowR: _shadowColor.r
+        property real shadowG: _shadowColor.g
+        property real shadowB: _shadowColor.b
+        property real shadowA: DockSettings.shadowIntensity
+        property real margin: _margin
+
+        // Compute shadow margin: how far the shadow can extend beyond the panel
+        // Takes the larger of physical projection margin and Gaussian 3-sigma spread
+        property real _margin: {
+            let denom = Math.max(lightZ - elevation, 1)
+            let lightDist = Math.sqrt(lightX * lightX + lightY * lightY)
+            let physicalMargin = (lightDist + lightRadius) * elevation / denom
+            // Gaussian decays to ~0.1% at 3*sigma
+            let softnessMargin = lightRadius * 3.0
+            return Math.min(Math.max(physicalMargin, softnessMargin) + 10, 200)
+        }
+
+        // Centered on panel, expanded by margin on each side
+        x: dockPanel.x - _margin
+        y: dockPanel.y - _margin
+        width: dockPanel.width + _margin * 2
+        height: dockPanel.height + _margin * 2
+
+        fragmentShader: "qrc:/qml/shaders/outer_shadow.frag.qsb"
+    }
+
     // The visible dock panel (centered, fits content)
     Rectangle {
         id: dockPanel

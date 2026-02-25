@@ -93,6 +93,58 @@
       <default>#1e3a5f</default>
     </entry>
 
+    <entry name="ShadowEnabled" type="Bool">
+      <label>Enable drop shadow behind the dock panel</label>
+      <default>false</default>
+    </entry>
+
+    <entry name="ShadowLightX" type="Int">
+      <label>Light source X position relative to panel center</label>
+      <default>0</default>
+      <min>-300</min>
+      <max>300</max>
+    </entry>
+
+    <entry name="ShadowLightY" type="Int">
+      <label>Light source Y position relative to panel center (negative=above)</label>
+      <default>-150</default>
+      <min>-300</min>
+      <max>300</max>
+    </entry>
+
+    <entry name="ShadowLightZ" type="Int">
+      <label>Light source height above screen surface</label>
+      <default>500</default>
+      <min>100</min>
+      <max>2000</max>
+    </entry>
+
+    <entry name="ShadowLightRadius" type="Double">
+      <label>Light source radius (controls shadow softness)</label>
+      <default>5.0</default>
+      <min>0.5</min>
+      <max>20.0</max>
+    </entry>
+
+    <entry name="ShadowColor" type="String">
+      <label>Shadow color (hex ARGB)</label>
+      <default>#80000000</default>
+    </entry>
+
+    <entry name="ShadowIntensity" type="Double">
+      <label>Shadow intensity (opacity)</label>
+      <default>0.3</default>
+      <min>0.0</min>
+      <max>1.0</max>
+    </entry>
+
+    <entry name="ShadowElevation" type="Int">
+      <label>Panel elevation above screen surface (for shadow projection)</label>
+      <default>15</default>
+      <min>1</min>
+      <max>50</max>
+    </entry>
+
     <entry name="PreviewEnabled" type="Bool">
       <label>Enable window preview on hover</label>
       <default>true</default>

@@ -16,11 +16,16 @@ inline int zoomOverflowHeight(int iconSize, double maxZoomFactor)
 }
 
 /// Total surface height including dock, zoom overflow / tooltip reserve, and floating padding.
+/// Shadow is rendered within available space and naturally clips at surface boundaries.
 inline int surfaceHeight(int iconSize, int padding, double maxZoomFactor, int tooltipReserve, int floatingPadding)
 {
     const int dockHeight = iconSize + padding * 2;
-    const int overflowHeight = std::max(zoomOverflowHeight(iconSize, maxZoomFactor), tooltipReserve);
-    return dockHeight + overflowHeight + floatingPadding;
+    const int zoomOverflow = zoomOverflowHeight(iconSize, maxZoomFactor);
+
+    const int topOverflow = std::max(zoomOverflow, tooltipReserve);
+    const int bottomOverflow = floatingPadding;
+
+    return dockHeight + topOverflow + bottomOverflow;
 }
 
 /// Height of the visible panel bar (icon + padding + floating gap).

@@ -125,6 +125,9 @@ void DockShell::connectSettingsSignals()
         Q_EMIT m_view->floatingPaddingChanged();
     });
 
+    // Shadow: no surface resize needed — shadow renders within available space
+    // and naturally clips at surface boundaries (QML ShaderEffect computes its own margin)
+
     // Background style changes — applyBackgroundStyle re-applies both compositor effects
     // (blur/contrast region) and emits backgroundColorChanged, so it's the single entry point.
     // Opacity changes must also re-apply because blur is disabled at opacity=0.

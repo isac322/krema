@@ -249,4 +249,316 @@ FormCard.FormCardPage {
             onToggled: DockSettings.floating = checked
         }
     }
+
+    // --- Shadow ---
+    FormCard.FormHeader {
+        title: i18n("Shadow")
+    }
+
+    FormCard.FormCard {
+        FormCard.FormSwitchDelegate {
+            text: i18n("Enable shadow")
+            checked: DockSettings.shadowEnabled
+            onToggled: DockSettings.shadowEnabled = checked
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: lightXDelegate
+            visible: DockSettings.shadowEnabled
+            Accessible.name: i18n("Light X")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Light X")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: lightXDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: lightXSlider.value
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: lightXSlider
+                    Layout.fillWidth: true
+                    from: -300; to: 300; stepSize: 10
+                    value: DockSettings.shadowLightX
+                    onMoved: DockSettings.shadowLightX = value
+                    Accessible.name: i18n("Light X")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: lightYDelegate
+            visible: DockSettings.shadowEnabled
+            Accessible.name: i18n("Light Y")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Light Y")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: lightYDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: lightYSlider.value
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: lightYSlider
+                    Layout.fillWidth: true
+                    from: -300; to: 300; stepSize: 10
+                    value: DockSettings.shadowLightY
+                    onMoved: DockSettings.shadowLightY = value
+                    Accessible.name: i18n("Light Y")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: lightZDelegate
+            visible: DockSettings.shadowEnabled
+            Accessible.name: i18n("Light Z")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Light Z (height)")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: lightZDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: lightZSlider.value
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: lightZSlider
+                    Layout.fillWidth: true
+                    from: 100; to: 2000; stepSize: 20
+                    value: DockSettings.shadowLightZ
+                    onMoved: DockSettings.shadowLightZ = value
+                    Accessible.name: i18n("Light Z")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: lightRadiusDelegate
+            visible: DockSettings.shadowEnabled
+            Accessible.name: i18n("Light radius")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Light radius")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: lightRadiusDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: lightRadiusSlider.value.toFixed(1) + "px"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: lightRadiusSlider
+                    Layout.fillWidth: true
+                    from: 0.5; to: 20.0; stepSize: 0.5
+                    value: DockSettings.shadowLightRadius
+                    onMoved: DockSettings.shadowLightRadius = value
+                    Accessible.name: i18n("Light radius")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: shadowElevationDelegate
+            visible: DockSettings.shadowEnabled
+            Accessible.name: i18n("Elevation")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Elevation")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: shadowElevationDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: shadowElevationSlider.value
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: shadowElevationSlider
+                    Layout.fillWidth: true
+                    from: 1; to: 50; stepSize: 1
+                    value: DockSettings.shadowElevation
+                    onMoved: DockSettings.shadowElevation = value
+                    Accessible.name: i18n("Elevation")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: shadowIntensityDelegate
+            visible: DockSettings.shadowEnabled
+            Accessible.name: i18n("Shadow intensity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Shadow intensity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: shadowIntensityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(shadowIntensitySlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: shadowIntensitySlider
+                    Layout.fillWidth: true
+                    from: 0.0; to: 1.0; stepSize: 0.05
+                    value: DockSettings.shadowIntensity
+                    onMoved: DockSettings.shadowIntensity = value
+                    Accessible.name: i18n("Shadow intensity")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.shadowEnabled
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: shadowColorDelegate
+            visible: DockSettings.shadowEnabled
+            background: null
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Shadow color")
+                    elide: Text.ElideRight
+                    color: shadowColorDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                }
+
+                Rectangle {
+                    id: shadowColorPreview
+                    width: Kirigami.Units.gridUnit * 2
+                    height: Kirigami.Units.gridUnit * 1.5
+                    radius: Kirigami.Units.smallSpacing
+                    color: DockSettings.shadowColor
+                    border.color: Kirigami.Theme.disabledTextColor
+                    border.width: 1
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: i18n("Shadow color: %1", DockSettings.shadowColor)
+                    Accessible.onPressAction: shadowColorDialog.open()
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: shadowColorDialog.open()
+                    }
+                }
+            }
+        }
+
+        ColorDialog {
+            id: shadowColorDialog
+            title: i18n("Choose shadow color")
+            selectedColor: DockSettings.shadowColor
+            onAccepted: DockSettings.shadowColor = selectedColor
+        }
+    }
 }

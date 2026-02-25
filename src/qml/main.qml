@@ -602,6 +602,14 @@ Item {
         property bool animationsReady: false
         Component.onCompleted: Qt.callLater(function() { animationsReady = true })
 
+        Behavior on width {
+            enabled: dockPanel.animationsReady
+            NumberAnimation {
+                duration: Kirigami.Units.longDuration
+                easing.type: Easing.InOutQuad
+            }
+        }
+
         Behavior on y {
             enabled: dockPanel.animationsReady
             NumberAnimation {
@@ -635,8 +643,36 @@ Item {
         // Main icon row
         Row {
             id: dockRow
-            anchors.centerIn: parent
+            anchors.verticalCenter: parent.verticalCenter
             spacing: DockSettings.iconSpacing
+
+            // Animate content width to sync Row centering with panel width animation.
+            // Without this, implicitWidth changes instantly when items are added/removed,
+            // causing an abrupt centering jump even though panel width animates smoothly.
+            // Math proof: panel.width and animatedContentWidth change by the same delta
+            // with the same easing, so x = (panel.width - animatedContentWidth) / 2
+            // remains constant during animation (= padding). No jump, no flicker.
+            property real animatedContentWidth: implicitWidth
+            Behavior on animatedContentWidth {
+                enabled: dockPanel.animationsReady
+                NumberAnimation {
+                    duration: Kirigami.Units.longDuration
+                    easing.type: Easing.InOutQuad
+                }
+            }
+            x: (parent.width - animatedContentWidth) / 2
+
+            // Animate existing items displaced by add/remove within the Row.
+            // Disabled during hover zoom (mouseInside) to avoid lagging sibling
+            // repositioning — zoom needs immediate response.
+            move: Transition {
+                enabled: dockPanel.animationsReady && !dockPanel.mouseInside
+                NumberAnimation {
+                    properties: "x,y"
+                    duration: Kirigami.Units.longDuration
+                    easing.type: Easing.InOutQuad
+                }
+            }
 
             Repeater {
                 id: dockRepeater

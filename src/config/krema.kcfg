@@ -27,6 +27,11 @@
       <max>2.0</max>
     </entry>
 
+    <entry name="IconNormalization" type="Bool">
+      <label>Normalize icon sizes by removing internal padding</label>
+      <default>true</default>
+    </entry>
+
     <entry name="CornerRadius" type="Int">
       <label>Panel corner radius</label>
       <default>12</default>

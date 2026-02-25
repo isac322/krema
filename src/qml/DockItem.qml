@@ -275,7 +275,7 @@ Item {
             let _dep = model.display
             let name = DockModel.iconName(dockItem.index)
             if (name && name.length > 0) {
-                return "image://icon/" + name
+                return "image://icon/" + name + "?v=" + DockView.iconCacheVersion
             }
             return ""
         }

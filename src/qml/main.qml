@@ -762,7 +762,7 @@ Item {
         source: {
             if (!visible) return ""
             let name = DockModel.iconName(root._dragSourceIndex)
-            return (name && name.length > 0) ? "image://icon/" + name : ""
+            return (name && name.length > 0) ? "image://icon/" + name + "?v=" + DockView.iconCacheVersion : ""
         }
         sourceSize: Qt.size(DockSettings.iconSize, DockSettings.iconSize)
         x: root._dragCurrentX - width / 2

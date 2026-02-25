@@ -23,6 +23,7 @@ namespace krema
 {
 
 class DockVisibilityController;
+class TaskIconProvider;
 
 /**
  * Main dock window.
@@ -38,6 +39,7 @@ class DockView : public QQuickView
     Q_PROPERTY(QColor backgroundColor READ backgroundColor NOTIFY backgroundColorChanged)
     Q_PROPERTY(int backgroundStyleType READ backgroundStyleType NOTIFY backgroundStyleTypeChanged)
     Q_PROPERTY(int floatingPadding READ floatingPadding NOTIFY floatingPaddingChanged)
+    Q_PROPERTY(int iconCacheVersion READ iconCacheVersion NOTIFY iconCacheVersionChanged)
 
 public:
     explicit DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settings, QWindow *parent = nullptr);
@@ -54,6 +56,7 @@ public:
     [[nodiscard]] QColor backgroundColor() const;
     [[nodiscard]] int backgroundStyleType() const;
     [[nodiscard]] int floatingPadding() const;
+    [[nodiscard]] int iconCacheVersion() const;
 
     /// Height of the visible panel bar + floating padding (excludes zoom overflow).
     /// Used for preview surface margin to ensure seamless input region adjacency.
@@ -68,14 +71,17 @@ public:
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
+    [[nodiscard]] TaskIconProvider *iconProvider() const;
 
 public Q_SLOTS:
     void applyBackgroundStyle();
+    void bumpIconCacheVersion();
 
 Q_SIGNALS:
     void backgroundColorChanged();
     void backgroundStyleTypeChanged();
     void floatingPaddingChanged();
+    void iconCacheVersionChanged();
 
 private:
     /// Extra height above the panel needed for zoomed icons.
@@ -91,6 +97,8 @@ private:
     std::unique_ptr<DockPlatform> m_platform;
     KremaSettings *m_settings = nullptr;
     DockVisibilityController *m_visibilityController = nullptr;
+    TaskIconProvider *m_iconProvider = nullptr;
+    int m_iconCacheVersion = 0;
     QMetaObject::Connection m_screenGeometryConnection;
 
     static constexpr int s_padding = 8;

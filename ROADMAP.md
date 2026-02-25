@@ -119,9 +119,9 @@ Visual refinement and polish.
   - [ ] Icon wiggle (IsDemandingAttention)
   - [ ] Badge count display (notification count)
   - [ ] Highlight glow effect
-- [ ] Icon size normalization option
-  - [ ] Auto-detect icon internal padding and scale (default: enabled)
-  - [ ] Option to use original icon size as-is
+- [x] Icon size normalization option
+  - [x] Auto-detect icon internal padding and scale (default: enabled)
+  - [x] Option to use original icon size as-is
 
 ---
 

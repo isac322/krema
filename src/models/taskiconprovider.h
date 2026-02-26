@@ -54,8 +54,8 @@ private:
     /// Load, crop, and scale an icon to fill the target size.
     QPixmap normalizePixmap(const QIcon &icon, int targetSize, const IconNormalizationInfo &info);
 
-    /// Shrink an edge-to-edge icon to add breathing room.
-    static QPixmap shrinkPixmap(const QIcon &icon, int targetSize);
+    /// Shrink an icon to add breathing room. Factor 1.0 = no shrink, 0.88 = 12% smaller.
+    static QPixmap shrinkPixmap(const QIcon &icon, int targetSize, qreal shrinkFactor);
 
     QHash<QString, IconNormalizationInfo> m_cache;
     bool m_normalizationEnabled = true;
@@ -63,9 +63,8 @@ private:
     static constexpr int kAlphaThreshold = 25;
     static constexpr qreal kMinContentRatio = 0.92;
     static constexpr qreal kMaxEffectiveScale = 1.5;
-    static constexpr qreal kMinMarginRatio = 0.04;
-    static constexpr qreal kEdgeToEdgeThreshold = 0.99;
-    static constexpr qreal kEdgeToEdgeFill = 0.92;
+    static constexpr qreal kMinMarginRatio = 0.06;
+    static constexpr qreal kEdgeToEdgeFill = 0.88;
 };
 
 } // namespace krema

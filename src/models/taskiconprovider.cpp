@@ -60,27 +60,17 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
     const bool hasSignificantPadding = info.contentRatio < 0.95;
     const qreal effectiveRatio = hasSignificantPadding ? info.contentRatio * std::sqrt(info.fillRatio) : info.contentRatio;
 
-    // If content fills most of the icon (accounting for shape), skip normalization
+    // If content fills most of the icon (accounting for shape), skip normalization.
+    // Shrink so that content fills exactly kEdgeToEdgeFill of the canvas,
+    // matching the target fill used by normalizePixmap for square icons.
     if (effectiveRatio >= kMinContentRatio) {
-        // Edge-to-edge icons (zero padding) look oversized next to icons that have
-        // natural padding. Intentionally shrink them to add breathing room.
-        if (info.contentRatio >= kEdgeToEdgeThreshold) {
-            QPixmap result = shrinkPixmap(icon, targetSize);
-            if (size) {
-                *size = result.size();
-            }
-            return result;
-        }
+        const qreal shrinkFactor = (info.contentRatio > kEdgeToEdgeFill) ? kEdgeToEdgeFill / info.contentRatio : 1.0;
 
-        QPixmap pixmap = icon.pixmap(QSize(targetSize, targetSize));
-        if (pixmap.isNull()) {
-            pixmap = QPixmap(targetSize, targetSize);
-            pixmap.fill(Qt::transparent);
-        }
+        QPixmap result = shrinkPixmap(icon, targetSize, shrinkFactor);
         if (size) {
-            *size = pixmap.size();
+            *size = result.size();
         }
-        return pixmap;
+        return result;
     }
 
     // Normalize: crop padding and rescale
@@ -277,7 +267,7 @@ QPixmap TaskIconProvider::normalizePixmap(const QIcon &icon, int targetSize, con
     return result;
 }
 
-QPixmap TaskIconProvider::shrinkPixmap(const QIcon &icon, int targetSize)
+QPixmap TaskIconProvider::shrinkPixmap(const QIcon &icon, int targetSize, qreal shrinkFactor)
 {
     QPixmap original = icon.pixmap(QSize(targetSize, targetSize));
     if (original.isNull()) {
@@ -286,7 +276,7 @@ QPixmap TaskIconProvider::shrinkPixmap(const QIcon &icon, int targetSize)
         return original;
     }
 
-    int shrunkSize = static_cast<int>(std::round(targetSize * kEdgeToEdgeFill));
+    int shrunkSize = static_cast<int>(std::round(targetSize * shrinkFactor));
     QImage scaled = original.toImage().scaled(shrunkSize, shrunkSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     QPixmap result(targetSize, targetSize);

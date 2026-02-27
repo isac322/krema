@@ -81,6 +81,45 @@ FormCard.FormCardPage {
             checked: DockSettings.iconNormalization
             onToggled: DockSettings.iconNormalization = checked
         }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.AbstractFormDelegate {
+            id: iconScaleDelegate
+            Accessible.name: i18n("Icon scale")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Icon scale")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconScaleDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconScaleSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconScaleSlider
+                    Layout.fillWidth: true
+                    from: 0.5; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconScale
+                    onMoved: DockSettings.iconScale = value
+                    Accessible.name: i18n("Icon scale")
+                }
+            }
+        }
     }
 
     // --- Background ---

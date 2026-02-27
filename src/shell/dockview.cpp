@@ -51,6 +51,7 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
 
     // Register the icon image provider for QML
     m_iconProvider = new TaskIconProvider(m_settings->iconNormalization());
+    m_iconProvider->setIconScale(m_settings->iconScale());
     engine()->addImageProvider(QStringLiteral("icon"), m_iconProvider);
 
     // Invalidate icon normalization cache when icon theme changes

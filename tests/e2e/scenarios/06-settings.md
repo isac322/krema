@@ -1,7 +1,7 @@
 # Settings UI
 
 ## Features
-- settings-appearance: Icon size, zoom factor, spacing, opacity, background style
+- settings-appearance: Icon size, icon scale, zoom factor, spacing, opacity, background style
 - settings-behavior: Visibility mode, dock position
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
@@ -14,8 +14,13 @@
 - src/qml/settings/BehaviorPage.qml
 - src/qml/settings/PreviewPage.qml
 - src/qml/SettingsDialog.qml
+- src/qml/DockItem.qml
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
+- src/shell/dockshell.cpp
+- src/shell/dockview.cpp
+- src/models/taskiconprovider.h
+- src/models/taskiconprovider.cpp
 - src/config/krema.kcfg
 - src/config/krema.kcfgc
 

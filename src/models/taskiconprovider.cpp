@@ -36,45 +36,50 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
         icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
     }
 
+    QPixmap result;
+
     // Fast path: normalization disabled
     if (!m_normalizationEnabled) {
-        QPixmap pixmap = icon.pixmap(QSize(targetSize, targetSize));
-        if (pixmap.isNull()) {
-            pixmap = QPixmap(targetSize, targetSize);
-            pixmap.fill(Qt::transparent);
+        result = icon.pixmap(QSize(targetSize, targetSize));
+        if (result.isNull()) {
+            result = QPixmap(targetSize, targetSize);
+            result.fill(Qt::transparent);
         }
-        if (size) {
-            *size = pixmap.size();
+    } else {
+        // Analyze icon padding (cached)
+        auto info = analyzeIcon(iconName, icon);
+
+        // Shape correction only applies when there's actual padding to reclaim.
+        // If the bounding box already fills the canvas (contentRatio > 0.95), scaling up
+        // would clip the icon edges — so skip normalization entirely.
+        // For icons WITH padding, use effective ratio that penalizes round shapes
+        // (a circle's visual mass is ~sqrt(π/4) ≈ 89% of same-bbox square).
+        const bool hasSignificantPadding = info.contentRatio < 0.95;
+        const qreal effectiveRatio = hasSignificantPadding ? info.contentRatio * std::sqrt(info.fillRatio) : info.contentRatio;
+
+        // If content fills most of the icon (accounting for shape), skip normalization.
+        // Shrink so that content fills exactly kEdgeToEdgeFill of the canvas,
+        // matching the target fill used by normalizePixmap for square icons.
+        if (effectiveRatio >= kMinContentRatio) {
+            const qreal shrinkFactor = (info.contentRatio > kEdgeToEdgeFill) ? kEdgeToEdgeFill / info.contentRatio : 1.0;
+            result = shrinkPixmap(icon, targetSize, shrinkFactor);
+        } else {
+            // Normalize: crop padding and rescale
+            result = normalizePixmap(icon, targetSize, info);
         }
-        return pixmap;
     }
 
-    // Analyze icon padding (cached)
-    auto info = analyzeIcon(iconName, icon);
-
-    // Shape correction only applies when there's actual padding to reclaim.
-    // If the bounding box already fills the canvas (contentRatio > 0.95), scaling up
-    // would clip the icon edges — so skip normalization entirely.
-    // For icons WITH padding, use effective ratio that penalizes round shapes
-    // (a circle's visual mass is ~sqrt(π/4) ≈ 89% of same-bbox square).
-    const bool hasSignificantPadding = info.contentRatio < 0.95;
-    const qreal effectiveRatio = hasSignificantPadding ? info.contentRatio * std::sqrt(info.fillRatio) : info.contentRatio;
-
-    // If content fills most of the icon (accounting for shape), skip normalization.
-    // Shrink so that content fills exactly kEdgeToEdgeFill of the canvas,
-    // matching the target fill used by normalizePixmap for square icons.
-    if (effectiveRatio >= kMinContentRatio) {
-        const qreal shrinkFactor = (info.contentRatio > kEdgeToEdgeFill) ? kEdgeToEdgeFill / info.contentRatio : 1.0;
-
-        QPixmap result = shrinkPixmap(icon, targetSize, shrinkFactor);
-        if (size) {
-            *size = result.size();
-        }
-        return result;
+    // Apply uniform icon scale (adds equal padding around all icons)
+    if (m_iconScale < 1.0) {
+        int shrunkSize = static_cast<int>(std::round(targetSize * m_iconScale));
+        QImage scaled = result.toImage().scaled(shrunkSize, shrunkSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        result = QPixmap(targetSize, targetSize);
+        result.fill(Qt::transparent);
+        QPainter painter(&result);
+        painter.drawImage((targetSize - scaled.width()) / 2, (targetSize - scaled.height()) / 2, scaled);
+        painter.end();
     }
 
-    // Normalize: crop padding and rescale
-    QPixmap result = normalizePixmap(icon, targetSize, info);
     if (size) {
         *size = result.size();
     }
@@ -84,6 +89,11 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
 void TaskIconProvider::setNormalizationEnabled(bool enabled)
 {
     m_normalizationEnabled = enabled;
+}
+
+void TaskIconProvider::setIconScale(qreal scale)
+{
+    m_iconScale = std::clamp(scale, 0.5, 1.0);
 }
 
 void TaskIconProvider::clearCache()

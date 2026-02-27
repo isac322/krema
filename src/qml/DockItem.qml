@@ -384,7 +384,7 @@ Item {
     Row {
         id: indicatorRow
         anchors.top: iconImage.bottom
-        anchors.topMargin: Kirigami.Units.smallSpacing
+        anchors.topMargin: Kirigami.Units.smallSpacing - iconImage.height * (1.0 - DockSettings.iconScale) / 2.0
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: Kirigami.Units.smallSpacing
         Accessible.ignored: true

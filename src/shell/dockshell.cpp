@@ -160,6 +160,13 @@ void DockShell::connectSettingsSignals()
         m_view->bumpIconCacheVersion();
     });
 
+    // Icon scale
+    connect(s, &KremaSettings::IconScaleChanged, this, [this]() {
+        m_view->iconProvider()->setIconScale(m_settings->iconScale());
+        m_view->iconProvider()->clearCache();
+        m_view->bumpIconCacheVersion();
+    });
+
     // Delay settings
     connect(s, &KremaSettings::ShowDelayChanged, this, [this]() {
         m_view->visibilityController()->setShowDelay(m_settings->showDelay());

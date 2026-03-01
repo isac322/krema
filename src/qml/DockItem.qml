@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import com.bhyoo.krema 1.0
 
@@ -31,6 +32,9 @@ Item {
         let count = model.ChildCount || 0
         if (count > 1) parts.push(i18n("%1 windows", count))
         if (launching) parts.push(i18n("Starting"))
+        if (_isDemandingAttention) parts.push(i18n("Attention requested"))
+        if (_badgeCount > 0)
+            parts.push(i18n("%1 notifications", _badgeCount))
         return parts.join(", ")
     }
 
@@ -43,6 +47,70 @@ Item {
     Accessible.focusable: true
     Accessible.focused: isKeyboardFocused
     Accessible.onPressAction: DockActions.activate(index)
+
+    // SmartLauncherItem for badge count / urgent status (created in Component.onCompleted)
+    property QtObject _smartLauncherItem: null
+
+    // Desktop entry name for notification lookup (e.g. "org.kde.dolphin", "slack")
+    readonly property string _appId: {
+        let _dep = model.display  // reactive dependency on model data
+        return DockModel.appId(index)
+    }
+
+    // Unified badge count (priority: SmartLauncher > WatchedNotifications)
+    readonly property int _badgeCount: {
+        let _rev = NotificationTracker.revision  // reactive dependency
+        // 1st: SmartLauncherItem (Unity API) — exact count from the app
+        if (_smartLauncherItem && _smartLauncherItem.countVisible)
+            return _smartLauncherItem.count
+        // 2nd: WatchedNotifications — unread notification count
+        if (_appId.length > 0) {
+            let n = NotificationTracker.unreadCount(_appId)
+            if (n > 0) return n
+        }
+        return 0
+    }
+
+    // Attention condition (Plasma-compatible: IsDemandingAttention OR SmartLauncher.urgent OR SNI NeedsAttention OR has badges)
+    readonly property bool _isDemandingAttention: {
+        let _rev = NotificationTracker.revision  // reactive dependency
+        return (model.IsDemandingAttention ?? false)
+            || (_smartLauncherItem !== null && _smartLauncherItem.urgent)
+            || (_appId.length > 0 && NotificationTracker.sniNeedsAttention(_appId))
+            || _badgeCount > 0
+    }
+
+    // Attention animation won't run during launch bounce
+    readonly property bool _showAttentionAnim:
+        _isDemandingAttention && !launching && DockSettings.attentionAnimation > 0
+
+    readonly property int _attentionType: DockSettings.attentionAnimation
+
+    // --- Notification → animation debug logging ---
+    on_BadgeCountChanged: {
+        console.log("[NOTIF-TRACE] '" + displayName + "' appId=" + _appId
+                    + " badgeCount=" + _badgeCount)
+    }
+    on_IsDemandingAttentionChanged: {
+        console.log("[NOTIF-TRACE] '" + displayName + "' appId=" + _appId
+                    + " isDemandingAttention=" + _isDemandingAttention
+                    + " | model.IsDemandingAttention=" + (model.IsDemandingAttention ?? false)
+                    + " | smartLauncher.urgent=" + (_smartLauncherItem !== null && _smartLauncherItem.urgent)
+                    + " | sniNeedsAttention=" + (_appId.length > 0 ? NotificationTracker.sniNeedsAttention(_appId) : false)
+                    + " | badgeCount=" + _badgeCount)
+    }
+
+    // Blink opacity multiplier (animated by type 6)
+    property real _blinkOpacity: 1.0
+    on_BlinkOpacityChanged: {
+        if (_blinkOpacity !== 1.0)
+            console.log("[ANIM-TRACE] _blinkOpacity=" + _blinkOpacity.toFixed(3)
+                + " → iconOpacity=" + iconImage.opacity.toFixed(3)
+                + " for '" + displayName + "'")
+    }
+
+    // Dot blink opacity (animated by type 5)
+    property real _dotBlinkOpacity: 1.0
 
     // Launch animation state
     property bool manualLaunching: false
@@ -231,6 +299,20 @@ Item {
             currentScale = zoomFactor  // correct value after layout
             _zoomAnimReady = true
         })
+
+        // Create SmartLauncherItem for badge/urgent tracking
+        let comp = Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem")
+        if (comp && comp.status === Component.Ready) {
+            _smartLauncherItem = comp.createObject(dockItem)
+            _smartLauncherItem.launcherUrl = Qt.binding(() => DockModel.launcherUrl(dockItem.index))
+        }
+        if (comp) comp.destroy()
+
+        // Debug: log appId for notification matching verification
+        Qt.callLater(function() {
+            if (dockItem._appId.length > 0)
+                console.log("[NOTIF-TRACE] DockItem created: '" + dockItem.displayName + "' appId=" + dockItem._appId)
+        })
     }
 
     // Size: base icon size, scaled by zoom
@@ -282,18 +364,36 @@ Item {
         sourceSize: Qt.size(Math.ceil(iconSize * maxZoomFactor), Math.ceil(iconSize * maxZoomFactor))
         smooth: true
 
-        // Bounce transform for launch animation
-        transform: Translate { id: bounceTranslate; y: 0 }
+        // Transforms: launch bounce + attention animations
+        transform: [
+            Translate { id: bounceTranslate; y: 0 },
+            Translate { id: attentionBounceT; y: 0 },
+            Rotation {
+                id: attentionRotateT
+                origin.x: iconSize / 2; origin.y: iconSize / 2
+                angle: 0
+            },
+            Scale {
+                id: attentionScaleT
+                origin.x: iconSize / 2; origin.y: iconSize / 2
+                xScale: 1.0; yScale: xScale
+            }
+        ]
 
-        // Highlight for active window / drag source dimming
+        // Highlight for active window / drag source dimming (× blink for type 6)
         opacity: {
-            if (dockItem.isDragSource) return 0.3
-            if (dockItem.model.IsActive) return 1.0
-            if (dockItem.model.IsMinimized) return 0.5
-            return 0.8
+            let base
+            if (dockItem.isDragSource) base = 0.3
+            else if (dockItem.model.IsActive) base = 1.0
+            else if (dockItem.model.IsMinimized) base = 0.5
+            else base = 0.8
+            return base * dockItem._blinkOpacity
         }
 
         Behavior on opacity {
+            // Disable during blink animation — rapid _blinkOpacity changes cause
+            // the Behavior to restart every frame, preventing opacity from changing.
+            enabled: !blinkAnim.running
             NumberAnimation { duration: Kirigami.Units.shortDuration }
         }
 
@@ -317,6 +417,67 @@ Item {
                 color: Kirigami.Theme.highlightedTextColor
                 Accessible.ignored: true
             }
+        }
+    }
+
+    // Attention glow effect (type 4) — MultiEffect shadow pulse on iconImage
+    MultiEffect {
+        id: attentionGlow
+        source: iconImage
+        anchors.fill: iconImage
+        paddingRect: Qt.rect(16, 16, 16, 16)
+        visible: dockItem._showAttentionAnim && dockItem._attentionType === 4
+        shadowEnabled: true
+        shadowColor: Kirigami.Theme.highlightColor
+        shadowBlur: 0.7
+        shadowScale: 1.12
+        shadowHorizontalOffset: 0
+        shadowVerticalOffset: 0
+        shadowOpacity: 0
+        Accessible.ignored: true
+
+        SequentialAnimation on shadowOpacity {
+            running: attentionGlow.visible
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.85; duration: 800; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.15; duration: 800; easing.type: Easing.InOutSine }
+        }
+    }
+
+    // Badge count overlay (unified: SmartLauncher + WatchedNotifications)
+    Rectangle {
+        id: badge
+        visible: dockItem._badgeCount > 0
+        anchors.right: iconImage.right
+        anchors.top: iconImage.top
+        anchors.rightMargin: -width * 0.2
+        anchors.topMargin: -height * 0.2
+        width: Math.round(iconSize * 0.38)
+        height: width
+        radius: width / 2
+        color: Kirigami.Theme.highlightColor
+        Accessible.ignored: true
+
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Qt.alpha("black", 0.4)
+            shadowBlur: 0.3
+            shadowVerticalOffset: 1
+        }
+
+        QQC2.Label {
+            anchors.centerIn: parent
+            text: dockItem._badgeCount > 99 ? "99+" : dockItem._badgeCount.toString()
+            color: Kirigami.Theme.highlightedTextColor
+            font.pixelSize: parent.height * 0.55
+            font.bold: true
+            fontSizeMode: Text.Fit
+            minimumPixelSize: 5
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            width: parent.width - 2
+            height: parent.height - 2
         }
     }
 
@@ -380,6 +541,108 @@ Item {
         }
     }
 
+    // --- Attention animations (6 types) ---
+
+    // Type 1: Bounce
+    SequentialAnimation {
+        running: dockItem._showAttentionAnim && dockItem._attentionType === 1
+        onRunningChanged: console.log("[ANIM-TRACE] bounceAttentionAnim.running=" + running
+            + " for '" + dockItem.displayName + "'"
+            + " | _attentionType=" + dockItem._attentionType)
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: attentionBounceT; property: "y"
+            to: -14; duration: 300; easing.type: Easing.OutQuad
+        }
+        NumberAnimation {
+            target: attentionBounceT; property: "y"
+            to: 0; duration: 300; easing.type: Easing.InBounce
+        }
+        PauseAnimation { duration: 800 }
+    }
+
+    // Type 2: Wiggle
+    SequentialAnimation {
+        running: dockItem._showAttentionAnim && dockItem._attentionType === 2
+        loops: Animation.Infinite
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: 5; duration: 80; easing.type: Easing.InOutSine }
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: -5; duration: 160; easing.type: Easing.InOutSine }
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: 3; duration: 120; easing.type: Easing.InOutSine }
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: -3; duration: 120; easing.type: Easing.InOutSine }
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: 1; duration: 100; easing.type: Easing.InOutSine }
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: -1; duration: 100; easing.type: Easing.InOutSine }
+        NumberAnimation { target: attentionRotateT; property: "angle"; to: 0; duration: 80; easing.type: Easing.InOutSine }
+        PauseAnimation { duration: 2000 }
+    }
+
+    // Type 3: Pulse
+    SequentialAnimation {
+        running: dockItem._showAttentionAnim && dockItem._attentionType === 3
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: attentionScaleT; property: "xScale"
+            to: 1.15; duration: 600; easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+            target: attentionScaleT; property: "xScale"
+            to: 1.0; duration: 600; easing.type: Easing.InOutSine
+        }
+        PauseAnimation { duration: 400 }
+    }
+
+    // Type 4: Glow — animation is on MultiEffect (attentionGlow) above
+
+    // Type 5: DotColor — animation on _dotBlinkOpacity
+    SequentialAnimation {
+        running: dockItem._showAttentionAnim && dockItem._attentionType === 5
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: dockItem; property: "_dotBlinkOpacity"
+            to: 0.3; duration: 500; easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+            target: dockItem; property: "_dotBlinkOpacity"
+            to: 1.0; duration: 500; easing.type: Easing.InOutSine
+        }
+    }
+
+    // Type 6: Blink — animation on _blinkOpacity
+    SequentialAnimation {
+        id: blinkAnim
+        running: dockItem._showAttentionAnim && dockItem._attentionType === 6
+        loops: Animation.Infinite
+        onRunningChanged: console.log("[ANIM-TRACE] blinkAnim.running=" + running
+            + " for '" + dockItem.displayName + "'"
+            + " | _showAttentionAnim=" + dockItem._showAttentionAnim
+            + " | _attentionType=" + dockItem._attentionType
+            + " (type: " + typeof dockItem._attentionType + ")")
+        NumberAnimation {
+            target: dockItem; property: "_blinkOpacity"
+            to: 0.2; duration: 400; easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+            target: dockItem; property: "_blinkOpacity"
+            to: 1.0; duration: 400; easing.type: Easing.InOutSine
+        }
+    }
+
+    // Reset attention properties when animation stops
+    on_ShowAttentionAnimChanged: {
+        console.log("[NOTIF-TRACE] '" + displayName + "' appId=" + _appId
+                    + " showAttentionAnim=" + _showAttentionAnim
+                    + " | isDemandingAttention=" + _isDemandingAttention
+                    + " | launching=" + launching
+                    + " | attentionSetting=" + DockSettings.attentionAnimation)
+        if (!_showAttentionAnim) {
+            attentionBounceT.y = 0
+            attentionRotateT.angle = 0
+            attentionScaleT.xScale = 1.0
+            attentionGlow.shadowOpacity = 0
+            _blinkOpacity = 1.0
+            _dotBlinkOpacity = 1.0
+        }
+    }
+
     // Status indicator dots
     Row {
         id: indicatorRow
@@ -401,10 +664,18 @@ Item {
                 width: dockItem.model.IsActive ? 4 : 3
                 height: width
                 radius: width / 2
-                color: Kirigami.Theme.textColor
-                opacity: dockItem.model.IsMinimized ? 0.4 : 0.8
+                color: (dockItem._showAttentionAnim && dockItem._attentionType === 5)
+                       ? Kirigami.Theme.negativeTextColor
+                       : Kirigami.Theme.textColor
+                opacity: (dockItem._showAttentionAnim && dockItem._attentionType === 5)
+                         ? dockItem._dotBlinkOpacity
+                         : (dockItem.model.IsMinimized ? 0.4 : 0.8)
 
+                Behavior on color {
+                    ColorAnimation { duration: Kirigami.Units.longDuration }
+                }
                 Behavior on opacity {
+                    enabled: !(dockItem._showAttentionAnim && dockItem._attentionType === 5)
                     NumberAnimation { duration: Kirigami.Units.shortDuration }
                 }
             }

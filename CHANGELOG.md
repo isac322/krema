@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Notification badge count on dock icons (via D-Bus RegisterWatcher and SmartLauncher Unity API)
+- SNI (StatusNotifierItem) NeedsAttention monitoring for tray-based attention requests
+- Six attention animation styles: Bounce, Wiggle, Pulse, Glow, Dot color, and Blink
+- Attention animation setting in Appearance settings page
+
 ## [0.5.1] - 2026-03-01
 
 ### Fixed

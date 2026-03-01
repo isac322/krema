@@ -179,6 +179,13 @@
       <default>200</default>
     </entry>
 
+    <entry name="AttentionAnimation" type="Int">
+      <label>Attention animation style (0=None, 1=Bounce, 2=Wiggle, 3=Pulse, 4=Glow, 5=DotColor, 6=Blink)</label>
+      <default>2</default>
+      <min>0</min>
+      <max>6</max>
+    </entry>
+
     <entry name="PinnedLaunchers" type="StringList">
       <label>Pinned launcher URLs</label>
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>

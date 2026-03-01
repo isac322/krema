@@ -39,6 +39,8 @@ add_library(krema_lib STATIC
     models/dockcontextmenu.cpp
     models/taskiconprovider.h
     models/taskiconprovider.cpp
+    models/notificationtracker.h
+    models/notificationtracker.cpp
 
     utils/zoomcalculator.h
     utils/surfacegeometry.h
@@ -76,6 +78,7 @@ target_link_libraries(krema_lib PUBLIC
     KF6::Service
     LayerShellQt::Interface
     PW::LibTaskManager
+    PW::LibNotificationManager
     Wayland::Client
 )
 

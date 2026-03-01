@@ -16,6 +16,7 @@
 #include <KAboutData>
 #include <KActionCollection>
 #include <KCrash>
+#include <KDBusService>
 #include <KGlobalAccel>
 #include <KLocalizedString>
 #include <LayerShellQt/Shell>
@@ -60,6 +61,12 @@ int Application::run()
     aboutData.setOrganizationDomain(QByteArrayLiteral("bhyoo.com"));
     KAboutData::setApplicationData(aboutData);
     setDesktopFileName(QStringLiteral("com.bhyoo.krema"));
+
+    // Enforce single instance via D-Bus (exits if another instance is already running)
+    KDBusService service(KDBusService::Unique);
+    connect(&service, &KDBusService::activateRequested, this, [](const QStringList &args, const QString &) {
+        qCInfo(lcApp) << "Another instance attempted to start, ignoring. args:" << args;
+    });
 
     // Initialize Qt resources from static library
     initResources();

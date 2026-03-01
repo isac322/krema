@@ -23,6 +23,7 @@ BuildRequires:  cmake(Qt6Quick) >= 6.6.0
 BuildRequires:  cmake(KF6WindowSystem) >= 6.0.0
 BuildRequires:  cmake(KF6Config) >= 6.0.0
 BuildRequires:  cmake(KF6CoreAddons) >= 6.0.0
+BuildRequires:  cmake(KF6DBusAddons) >= 6.0.0
 BuildRequires:  cmake(KF6I18n) >= 6.0.0
 BuildRequires:  cmake(KF6GlobalAccel) >= 6.0.0
 

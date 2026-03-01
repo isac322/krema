@@ -68,6 +68,7 @@ target_link_libraries(krema_lib PUBLIC
     KF6::WindowSystem
     KF6::ConfigCore
     KF6::CoreAddons
+    KF6::DBusAddons
     KF6::I18n
     KF6::I18nQml
     KF6::GlobalAccel

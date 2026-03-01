@@ -103,6 +103,16 @@ install(
     DESTINATION ${KDE_INSTALL_APPDIR}
 )
 
+configure_file(
+    com.bhyoo.krema.autostart.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/com.bhyoo.krema.autostart.desktop
+    @ONLY
+)
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/com.bhyoo.krema.autostart.desktop
+    DESTINATION ${KDE_INSTALL_AUTOSTARTDIR}
+)
+
 install(
     FILES com.bhyoo.krema.metainfo.xml
     DESTINATION ${KDE_INSTALL_METAINFODIR}

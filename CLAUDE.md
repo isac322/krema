@@ -100,10 +100,11 @@ After feature completion, run **process-reviewer** to:
 
 1. `CMakeLists.txt` 버전 업데이트 (single source of truth)
 2. `CHANGELOG.md`: `## [Unreleased]` 항목 → `## [x.y.z] - YYYY-MM-DD`로 이동, Unreleased 비우기
-3. `packaging/arch/PKGBUILD`: `pkgver` 업데이트
-4. 커밋 (`chore: release x.y.z`)
-5. `git tag vx.y.z && git push && git push --tags`
-6. `gh release create vx.y.z` — 릴리즈 노트 작성 (documentation.md GitHub Release Notes 규칙 참조)
+3. `packaging/arch/PKGBUILD`: `pkgver` + `sha256sums` 업데이트 (릴리즈 tarball sha256sum)
+4. `packaging/arch/.SRCINFO`: `makepkg --printsrcinfo > .SRCINFO` 로 재생성
+5. 커밋 (`chore: release x.y.z`)
+6. `git tag vx.y.z && git push && git push --tags`
+7. `gh release create vx.y.z` — 릴리즈 노트 작성 (documentation.md GitHub Release Notes 규칙 참조)
 
 ## Code Rules
 

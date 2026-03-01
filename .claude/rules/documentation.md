@@ -40,6 +40,7 @@ All documents must match:
 - `CHANGELOG.md` latest `## [x.y.z]` header
 - `docs/releases/vx.y.z.md` filename and content
 - `metainfo.xml` `<release version="x.y.z">`
+- `packaging/arch/PKGBUILD` `pkgver=x.y.z`
 - GitHub release tag and body (`gh release create`)
 - Any version references in README.md
 

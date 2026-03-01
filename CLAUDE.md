@@ -94,6 +94,17 @@ After feature completion, run **process-reviewer** to:
 - 내부 리팩토링, CI 변경, 에이전트 설정 등 사용자에게 보이지 않는 변경은 기록하지 않음
 - **버전 릴리즈 시**: `## [Unreleased]`의 모든 항목을 `## [x.y.z] - YYYY-MM-DD` 섹션으로 이동하고, `## [Unreleased]`를 비운 채로 유지
 
+## Version Release Checklist (Mandatory)
+
+버전을 릴리즈할 때 반드시 아래 항목을 **모두** 수행해야 한다. 하나라도 빠지면 릴리즈 불완전.
+
+1. `CMakeLists.txt` 버전 업데이트 (single source of truth)
+2. `CHANGELOG.md`: `## [Unreleased]` 항목 → `## [x.y.z] - YYYY-MM-DD`로 이동, Unreleased 비우기
+3. `packaging/arch/PKGBUILD`: `pkgver` 업데이트
+4. 커밋 (`chore: release x.y.z`)
+5. `git tag vx.y.z && git push && git push --tags`
+6. `gh release create vx.y.z` — 릴리즈 노트 작성 (documentation.md GitHub Release Notes 규칙 참조)
+
 ## Code Rules
 
 - C++23, Qt 6, KDE Frameworks 6

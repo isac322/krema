@@ -62,12 +62,35 @@ Value-first structure. Recommended sections:
 - Source: `git log` transformed to user language
 - Group by version, newest first
 
+#### Unreleased Workflow (CRITICAL — always enforce)
+
+`## [Unreleased]` must ALWAYS exist at the top of the changelog.
+
+**After any feature/fix implementation:**
+- Add user-facing entry to the appropriate category under `## [Unreleased]`
+- Do NOT add internal-only changes (refactoring, CI, agent config)
+
+**When bumping version / releasing:**
+1. Move ALL `## [Unreleased]` entries into a new `## [x.y.z] - YYYY-MM-DD` section
+2. Clear `## [Unreleased]` (leave it empty, no category headers)
+3. New version section goes directly below `## [Unreleased]`
+4. NEVER release with entries still in Unreleased — they must all move to the version section
+
 ### Release Notes (`docs/releases/v{VERSION}.md`)
 
 - Narrative-driven, not just a list
 - Lead with the biggest user-facing change
 - Include Image Specs for major visual changes
 - Link back to CHANGELOG for full details
+
+### GitHub Releases
+
+- **SEO opportunity**: Release pages are indexed by search engines — include keywords naturally
+- **Intro sentence**: 1-2 lines with primary SEO keywords and user-facing value summary
+- **First/major releases**: Include brief project intro ("Krema is a lightweight dock for KDE Plasma 6...")
+- **User benefit first**: "Live window previews on hover" not "Implemented PipeWire stream"
+- **Omit developer-only items**: CI config, agent settings, code style changes
+- **Internal refactors**: Reframe as user benefit or omit if no user-facing impact
 
 ### metainfo.xml
 

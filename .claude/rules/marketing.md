@@ -11,26 +11,32 @@
 
 ## Agent Pipeline
 
-Marketing agents work in sequence — each stage feeds the next:
+Marketing and documentation agents work in sequence — each stage feeds the next:
 
 ```
 feature-analyst → marketing/briefs/features.md
        ↓
 competitive-analyst → marketing/briefs/competitive.md
        ↓
+docs-writer → README.md, CHANGELOG.md, release notes, metainfo.xml
+       ↓
 content-creator → marketing/blog/, marketing/social/
        ↓
 distribution-manager → marketing/distribution/
 ```
 
-Always run feature-analyst and competitive-analyst BEFORE content-creator.
+Always run feature-analyst and competitive-analyst BEFORE docs-writer and content-creator.
+docs-writer runs BEFORE content-creator — marketing content references official docs.
 
 ## When to Use Marketing Agents
 
 | Trigger | Action |
 |---------|--------|
 | Milestone completed | Run `feature-analyst` to update feature catalog |
-| Before launch / announcement | Run full pipeline (all 4 agents) |
+| Milestone completed | Run `docs-writer` to update README + CHANGELOG |
+| Version bump | Run `docs-writer` for CHANGELOG + release notes + metainfo.xml |
+| Before release | Run `docs-writer` for full document audit |
+| Before launch / announcement | Run full pipeline (all 5 agents) |
 | New competitor appears | Run `competitive-analyst` |
 | Content needed for specific channel | Run `content-creator` with channel target |
 | Planning content schedule | Run `distribution-manager` |

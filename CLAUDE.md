@@ -85,6 +85,15 @@ After feature completion, run **process-reviewer** to:
 - Update CLAUDE.md rules, agent definitions, and documentation
 - Ensure lessons are captured for future features
 
+## CHANGELOG (Mandatory)
+
+기능 추가, 버그 수정, 동작 변경 등 **사용자에게 영향이 있는 코드 변경** 시 반드시 `CHANGELOG.md`의 `## [Unreleased]` 섹션에 항목을 추가해야 한다.
+
+- 카테고리: `### Added`, `### Changed`, `### Fixed`, `### Removed`
+- 언어: 영어, 과거형, 사용자 관점 (커밋 메시지가 아닌 사용자 혜택 중심)
+- 내부 리팩토링, CI 변경, 에이전트 설정 등 사용자에게 보이지 않는 변경은 기록하지 않음
+- **버전 릴리즈 시**: `## [Unreleased]`의 모든 항목을 `## [x.y.z] - YYYY-MM-DD` 섹션으로 이동하고, `## [Unreleased]`를 비운 채로 유지
+
 ## Code Rules
 
 - C++23, Qt 6, KDE Frameworks 6

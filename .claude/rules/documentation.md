@@ -5,7 +5,7 @@
 | Document | Owner Agent | Update Trigger | Source of Truth |
 |----------|-------------|----------------|-----------------|
 | `README.md` | docs-writer | Milestone completion, major feature | `marketing/briefs/features.md` + `ROADMAP.md` |
-| `CHANGELOG.md` | docs-writer | Each version bump | `git log` + `CMakeLists.txt` version |
+| `CHANGELOG.md` | docs-writer (Unreleased: all agents) | Feature/fix impl + version bump | `git log` + `CMakeLists.txt` version |
 | `docs/releases/v*.md` | docs-writer | Version bump / release | `CHANGELOG.md` + feature highlights |
 | `metainfo.xml` | docs-writer | Version bump, keyword changes | `CMakeLists.txt` version + `marketing/strategy.md` keywords |
 | `.desktop` Comment | docs-writer | Positioning changes | `marketing/positioning.md` |
@@ -40,6 +40,7 @@ All documents must match:
 - `CHANGELOG.md` latest `## [x.y.z]` header
 - `docs/releases/vx.y.z.md` filename and content
 - `metainfo.xml` `<release version="x.y.z">`
+- GitHub release tag and body (`gh release create`)
 - Any version references in README.md
 
 ## CHANGELOG Format
@@ -47,10 +48,15 @@ All documents must match:
 Follow [Keep a Changelog](https://keepachangelog.com/):
 
 ```markdown
+## [Unreleased]
+
+### Added
+- New feature description (past tense, user-facing)
+
 ## [x.y.z] - YYYY-MM-DD
 
 ### Added
-- New feature in user-facing language (past tense)
+- Released feature description
 
 ### Changed
 - Modified behavior description
@@ -62,11 +68,56 @@ Follow [Keep a Changelog](https://keepachangelog.com/):
 - Removed feature description
 ```
 
-Rules:
+### Unreleased Workflow (CRITICAL)
+
+`## [Unreleased]` must ALWAYS exist at the top of the changelog (below the header).
+
+**When to add entries:**
+- Every user-facing code change (feature, bug fix, behavior change) MUST add an entry
+- Internal-only changes (refactoring, CI, agent config) are NOT recorded
+- Any agent (main or sub) that implements a feature/fix is responsible for updating Unreleased
+
+**When releasing a version:**
+1. Move ALL entries from `## [Unreleased]` to a new `## [x.y.z] - YYYY-MM-DD` section
+2. Leave `## [Unreleased]` empty (with no categories) — ready for the next cycle
+3. The new version section goes directly below `## [Unreleased]`
+
+**docs-writer** is the primary owner, but ALL agents that modify user-facing behavior must update Unreleased.
+
+### General Rules
 - User-facing language, not commit messages
 - Past tense ("Added", not "Add")
 - Newest version first
 - Link to release notes for details
+
+## GitHub Release Notes
+
+GitHub release pages are indexed by search engines — treat them as SEO and value communication opportunities, not just developer changelogs.
+
+### Structure
+
+```markdown
+{1-2 sentence intro with SEO keywords and user-facing value summary}
+
+### Added
+- {User benefit first} — {technical detail as backup}
+
+### Changed
+...
+
+### Fixed
+...
+```
+
+### Rules
+
+- **Lead with value, not implementation**: "Live window previews on hover" not "Implemented PipeWire stream capture"
+- **SEO keyword integration**: Naturally include primary keywords from `marketing/strategy.md` in the intro sentence (e.g., "KDE Plasma 6 dock", "Latte Dock", "parabolic zoom", "Wayland")
+- **First/major releases**: Include a brief project intro ("Krema is a lightweight dock for KDE Plasma 6...")
+- **Internal refactors**: Reframe as user benefit ("Faster startup" or "More reliable settings") or omit if no user-facing impact
+- **Developer-only items** (CI, agent config, code style): Omit from release notes entirely
+- **Consistency**: Keep a Changelog categories (Added/Changed/Fixed/Removed), same as CHANGELOG.md
+- **Language**: English, past tense, user-facing
 
 ## Language
 

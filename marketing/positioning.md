@@ -35,9 +35,16 @@ experience.
 
 ### For Customizers (r/unixporn)
 **"Make it yours."**
-- Multiple background styles: transparent, tinted, acrylic frosted glass
+- 6 background styles: transparent, tinted, acrylic frosted glass, Mica, adaptive opacity
 - Configurable icon size, zoom factor, spacing, dock position
+- Icon size normalization for uniform appearance across icon themes
 - Integrates seamlessly into any Plasma rice
+
+### For Accessibility-Minded Users
+**"A dock for everyone."**
+- Full keyboard navigation (Meta+F5 to focus, arrow keys, Enter/Escape)
+- AT-SPI screen reader support with accessible names and announcements
+- Visual focus ring following KDE accessibility guidelines
 
 ## Competitive Positioning
 
@@ -47,9 +54,10 @@ experience.
 | Wayland Native | Yes | No | No | Yes |
 | Parabolic Zoom | Yes | Yes | Yes | No |
 | Window Previews | Yes (PipeWire) | Yes | No | Yes |
-| Background Styles | 4+ styles | Yes | Limited | Panel only |
+| Background Styles | 6 styles | Yes | Limited | Panel only |
 | Drag & Drop | Yes | Yes | Yes | Yes |
 | Global Shortcuts | Yes | Yes | No | No |
+| Keyboard Accessibility | Yes (AT-SPI) | Limited | No | Yes |
 | Active Development | Yes | No | Minimal | Yes |
 
 ## Key Differentiators
@@ -58,7 +66,8 @@ experience.
 2. **Wayland-native from day one** — no X11 legacy code
 3. **Deep KDE integration** — not just running on KDE, built WITH KDE libraries
 4. **PipeWire-based window previews** — modern, efficient, Plasma-native
-5. **Multiple background styles** including acrylic frosted glass
+5. **6 background styles** including acrylic frosted glass and Mica
+6. **Full keyboard accessibility** — AT-SPI screen reader support with visual focus ring
 
 ## Tone & Voice
 

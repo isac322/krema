@@ -13,9 +13,10 @@
       integration with KDE Plasma desktop features.
     </p>
     <p>
-      Features include multiple background styles (transparent, tinted, acrylic frosted
-      glass), drag-and-drop reordering, smart visibility modes that dodge or hide behind
-      windows, and global keyboard shortcuts for quick app launching.
+      Choose from six background styles — transparent, tinted, acrylic frosted glass,
+      Mica (system accent color based), and adaptive opacity that responds to
+      overlapping windows. Full keyboard navigation (Meta+F5) and AT-SPI screen
+      reader support ensure the dock is accessible to all users.
     </p>
     <p>
       Built from scratch with C++23 and KDE Frameworks 6, Krema is Wayland-native and
@@ -25,6 +26,7 @@
   <launchable type="desktop-id">com.bhyoo.krema.desktop</launchable>
   <url type="homepage">https://github.com/isac322/krema</url>
   <url type="bugtracker">https://github.com/isac322/krema/issues</url>
+  <url type="contribute">https://github.com/isac322/krema</url>
   <developer id="com.bhyoo">
     <name>Byeonghoon Yoo</name>
   </developer>
@@ -40,6 +42,7 @@
     <keyword>kde</keyword>
     <keyword>plasma</keyword>
     <keyword>wayland</keyword>
+    <keyword>zoom</keyword>
   </keywords>
   <categories>
     <category>Qt</category>
@@ -48,8 +51,20 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.4.0" date="2026-02-24"/>
-    <release version="0.3.0" date="2026-02-24"/>
-    <release version="0.2.1" date="2026-02-23"/>
+    <release version="0.4.0" date="2026-02-24">
+      <description>
+        <p>Background styles (6 types including Mica and adaptive opacity), icon size normalization, keyboard accessibility with AT-SPI screen reader support, and icon scale setting.</p>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-02-24">
+      <description>
+        <p>Window previews via PipeWire, multi-window preview list, and Settings UI improvements.</p>
+      </description>
+    </release>
+    <release version="0.2.1" date="2026-02-23">
+      <description>
+        <p>Bug fixes and stability improvements.</p>
+      </description>
+    </release>
   </releases>
 </component>

@@ -89,8 +89,8 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
         break;
     case VisibilityMode::AutoHide:
     case VisibilityMode::DodgeWindows:
-        // No exclusive zone — windows can use the full screen
-        m_layerWindow->setExclusiveZone(0);
+        // Ignore other surfaces' exclusive zones — stay at the real screen edge
+        m_layerWindow->setExclusiveZone(-1);
         break;
     }
 }

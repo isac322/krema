@@ -51,9 +51,19 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.1" date="2026-03-01">
+      <description>
+        <p>Fixed icon rendering on HiDPI displays when icon normalization or icon scale is active. Fixed dock edge trigger unreachable in AutoHide/DodgeWindows mode when KDE panel occupies the screen edge.</p>
+      </description>
+    </release>
+    <release version="0.5.0" date="2026-03-01">
+      <description>
+        <p>Icon size normalization with automatic padding detection, projective SDF drop shadow, smooth icon repositioning animation on dock resize, and dock recovery after screen lock and monitor hot-plug. Merged SmartHide into DodgeWindows with DodgeActiveOnly option. Full documentation overhaul with updated feature descriptions and accessibility coverage.</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-02-24">
       <description>
-        <p>Background styles (6 types including Mica and adaptive opacity), icon size normalization, keyboard accessibility with AT-SPI screen reader support, and icon scale setting.</p>
+        <p>Six background styles (transparent, tinted, acrylic frosted glass, Mica, and adaptive opacity), and comprehensive keyboard accessibility with AT-SPI screen reader support.</p>
       </description>
     </release>
     <release version="0.3.0" date="2026-02-24">

@@ -37,7 +37,7 @@ struct DockScreenRectParams {
     int panelRefY;
     int panelWidth;
     int panelHeight;
-    int edge; // 0=Bottom, 1=Top, 2=Left, 3=Right
+    int edge; // 0=Top, 1=Bottom, 2=Left, 3=Right
 };
 
 /// Compute the dock panel rectangle in screen coordinates.

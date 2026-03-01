@@ -40,7 +40,7 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
 
     // Fast path: normalization disabled
     if (!m_normalizationEnabled) {
-        result = icon.pixmap(QSize(targetSize, targetSize));
+        result = icon.pixmap(QSize(targetSize, targetSize), 1.0);
         if (result.isNull()) {
             result = QPixmap(targetSize, targetSize);
             result.fill(Qt::transparent);
@@ -156,7 +156,7 @@ IconNormalizationInfo TaskIconProvider::analyzeIcon(const QString &iconName, con
     }
     // For SVG icons, availableSizes() is empty; 256 is a good probe size
 
-    QImage probeImage = icon.pixmap(QSize(probeSize, probeSize)).toImage();
+    QImage probeImage = icon.pixmap(QSize(probeSize, probeSize), 1.0).toImage();
     if (probeImage.isNull() || probeImage.format() != QImage::Format_ARGB32_Premultiplied) {
         probeImage = probeImage.convertToFormat(QImage::Format_ARGB32_Premultiplied);
     }
@@ -232,7 +232,7 @@ QPixmap TaskIconProvider::normalizePixmap(const QIcon &icon, int targetSize, con
     // SVG: loadSize = requiredLoadSize (exact render)
 
     // Load icon at the determined size
-    QImage loadedImage = icon.pixmap(QSize(loadSize, loadSize)).toImage();
+    QImage loadedImage = icon.pixmap(QSize(loadSize, loadSize), 1.0).toImage();
     if (loadedImage.isNull()) {
         QPixmap fallback(targetSize, targetSize);
         fallback.fill(Qt::transparent);
@@ -245,7 +245,7 @@ QPixmap TaskIconProvider::normalizePixmap(const QIcon &icon, int targetSize, con
     // Find actual content bounds in the loaded image
     QRect bounds = findContentBounds(loadedImage, kAlphaThreshold);
     if (bounds.isEmpty()) {
-        return icon.pixmap(QSize(targetSize, targetSize));
+        return icon.pixmap(QSize(targetSize, targetSize), 1.0);
     }
 
     // Expand to square, centered on the content center
@@ -279,7 +279,7 @@ QPixmap TaskIconProvider::normalizePixmap(const QIcon &icon, int targetSize, con
 
 QPixmap TaskIconProvider::shrinkPixmap(const QIcon &icon, int targetSize, qreal shrinkFactor)
 {
-    QPixmap original = icon.pixmap(QSize(targetSize, targetSize));
+    QPixmap original = icon.pixmap(QSize(targetSize, targetSize), 1.0);
     if (original.isNull()) {
         original = QPixmap(targetSize, targetSize);
         original.fill(Qt::transparent);

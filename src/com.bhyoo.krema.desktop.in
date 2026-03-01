@@ -8,5 +8,4 @@ Icon=krema
 Terminal=false
 Categories=Qt;KDE;Utility;
 Keywords=dock;launcher;taskbar;panel;latte;kde;plasma;wayland;zoom;
-NoDisplay=true
 X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_plasma_activation_feedback,zkde_screencast_unstable_v1

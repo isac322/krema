@@ -36,9 +36,10 @@ obs-build-deb distro="Debian_13" arch="x86_64":
 # Install .desktop file for development (KWin Wayland protocol access)
 dev-desktop:
     @mkdir -p ~/.local/share/applications
-    @sed 's|@KDE_INSTALL_FULL_BINDIR@/krema|'$PWD'/build/dev/bin/krema|' \
+    @sed -e 's|@KDE_INSTALL_FULL_BINDIR@/krema|'$PWD'/build/dev/bin/krema|' \
+         -e '/^NoDisplay=/d' \
         src/com.bhyoo.krema.desktop.in > ~/.local/share/applications/com.bhyoo.krema.desktop
-    @echo "Installed dev .desktop file to ~/.local/share/applications/com.bhyoo.krema.desktop"
+    @echo "Installed dev launcher to ~/.local/share/applications/com.bhyoo.krema.desktop"
     @echo "Run: kbuildsycoca6 --noincremental"
     @# Clean up legacy dev desktop files if they exist
     @rm -f ~/.local/share/applications/org.krema.dev.desktop

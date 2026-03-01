@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Krema
+Comment=Start Krema dock automatically at login
+Exec=@KDE_INSTALL_FULL_BINDIR@/krema
+Icon=krema
+Terminal=false
+OnlyShowIn=KDE;
+X-GNOME-Autostart-enabled=true

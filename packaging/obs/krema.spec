@@ -48,3 +48,4 @@ Wayland native support via LayerShellQt, and deep KDE integration.
 %license LICENSES/GPL-3.0-or-later.txt
 %{_bindir}/krema
 %{_datadir}/applications/com.bhyoo.krema.desktop
+%{_sysconfdir}/xdg/autostart/com.bhyoo.krema.autostart.desktop

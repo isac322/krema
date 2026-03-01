@@ -15,6 +15,7 @@ namespace krema
 
 class DockModel;
 class DockShell;
+class NotificationTracker;
 
 class Application : public QApplication
 {
@@ -31,6 +32,7 @@ private:
 
     std::unique_ptr<KremaSettings> m_settings;
     std::unique_ptr<DockModel> m_dockModel;
+    std::unique_ptr<NotificationTracker> m_notificationTracker;
     std::unique_ptr<DockShell> m_shell;
     KActionCollection *m_actionCollection = nullptr;
 };

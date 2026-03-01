@@ -179,4 +179,13 @@ QModelIndex DockModel::taskModelIndex(int index) const
     return m_tasksModel->index(index, 0);
 }
 
+QString DockModel::appId(int index) const
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return {};
+    }
+    return idx.data(TaskManager::AbstractTasksModel::AppId).toString();
+}
+
 } // namespace krema

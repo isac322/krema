@@ -61,6 +61,9 @@ public:
     /// Return a QModelIndex for use as DelegateModel.rootIndex.
     Q_INVOKABLE QModelIndex taskModelIndex(int index) const;
 
+    /// Return the desktop entry name (AppId) for the task at @p index.
+    Q_INVOKABLE QString appId(int index) const;
+
 Q_SIGNALS:
     void pinnedLaunchersChanged();
 

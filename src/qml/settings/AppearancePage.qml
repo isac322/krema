@@ -120,6 +120,24 @@ FormCard.FormCardPage {
                 }
             }
         }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Attention animation")
+            description: i18n("Animation when an app demands attention")
+            model: [
+                i18n("None"),
+                i18n("Bounce"),
+                i18n("Wiggle"),
+                i18n("Pulse"),
+                i18n("Glow"),
+                i18n("Dot color"),
+                i18n("Blink")
+            ]
+            currentIndex: DockSettings.attentionAnimation
+            onActivated: function(index) { DockSettings.attentionAnimation = index }
+        }
     }
 
     // --- Background ---

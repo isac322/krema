@@ -6,6 +6,7 @@
 #include "krema.h"
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
+#include "models/notificationtracker.h"
 #include "platform/dockplatform.h"
 #include "platform/dockplatformfactory.h"
 #include "shell/dockshell.h"
@@ -81,6 +82,9 @@ int Application::run()
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
 
+    // Create notification tracker (before QML loading)
+    m_notificationTracker = std::make_unique<NotificationTracker>();
+
     // Register global QML singletons (must be before any QML loading)
     // Use qmlRegisterSingletonType (not qmlRegisterSingletonInstance) so multiple
     // QML engines (dock + settings window) can access the same C++ objects.
@@ -93,6 +97,11 @@ int Application::run()
     qmlRegisterSingletonType<KremaSettings>("com.bhyoo.krema", 1, 0, "DockSettings", [settings](QQmlEngine *, QJSEngine *) -> QObject * {
         QQmlEngine::setObjectOwnership(settings, QQmlEngine::CppOwnership);
         return settings;
+    });
+    auto *tracker = m_notificationTracker.get();
+    qmlRegisterSingletonType<NotificationTracker>("com.bhyoo.krema", 1, 0, "NotificationTracker", [tracker](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(tracker, QQmlEngine::CppOwnership);
+        return tracker;
     });
 
     // Create and initialize the dock shell (creates all sub-objects, loads QML)
@@ -135,6 +144,7 @@ int Application::run()
     connect(s, &KremaSettings::ShadowIntensityChanged, this, saveSettings);
     connect(s, &KremaSettings::ShadowElevationChanged, this, saveSettings);
     connect(s, &KremaSettings::IconNormalizationChanged, this, saveSettings);
+    connect(s, &KremaSettings::AttentionAnimationChanged, this, saveSettings);
 
     // The dock window is now created with layer-shell.
     // Unset the env var so child processes (launched apps) don't inherit it.

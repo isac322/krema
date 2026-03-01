@@ -6,6 +6,7 @@ Comment=Parabolic zoom dock for KDE Plasma 6 — spiritual successor to Latte Do
 Exec=@KDE_INSTALL_FULL_BINDIR@/krema
 Icon=krema
 Terminal=false
+DBusActivatable=true
 Categories=Qt;KDE;Utility;
 Keywords=dock;launcher;taskbar;panel;latte;kde;plasma;wayland;zoom;
 X-KDE-Wayland-Interfaces=org_kde_plasma_window_management,org_kde_plasma_activation_feedback,zkde_screencast_unstable_v1

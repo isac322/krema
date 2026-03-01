@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Single-instance enforcement — launching Krema again while it's already running is now silently ignored
 - Notification badge count on dock icons (via D-Bus RegisterWatcher and SmartLauncher Unity API)
 - SNI (StatusNotifierItem) NeedsAttention monitoring for tray-based attention requests
 - Six attention animation styles: Bounce, Wiggle, Pulse, Glow, Dot color, and Blink

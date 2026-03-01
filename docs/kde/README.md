@@ -37,6 +37,14 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [pipewire-thumbnails.md](pipewire-thumbnails.md) | KPipeWire — PipeWireSourceItem, stream management, KWin screencast |
 
+### M8+: Notification Badges
+
+| Document | Description |
+|----------|-------------|
+| [notification-badges.md](notification-badges.md) | Multi-source badge architecture — WatchedNotificationsModel, SNI, Unity API, EWMH; all apps coverage |
+| [notification-watcher-protocol.md](notification-watcher-protocol.md) | RegisterWatcher protocol deep-dive — correct D-Bus path/interface, live test results, Krema bug diagnosis |
+| [notification-badge-approaches.md](notification-badge-approaches.md) | How Plasma task manager actually implements badges — SmartLauncherItem (Unity API), RegisterWatcher live test, Q_CLASSINFO issue diagnosis |
+
 ### M7: Visual Effects
 
 | Document | Description |

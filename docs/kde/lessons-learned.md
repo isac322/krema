@@ -125,3 +125,34 @@
 - Layer-shell 서피스 간 키보드 포커스 전환은 신뢰할 수 없음 — 항상 단일 서피스에서 키보드 처리
 - `QWindow::activeChanged` 시그널 + 재시도 패턴은 안전장치로만 사용 (주 로직에 의존 금지)
 - 멀티 서피스 앱에서는 키보드 이벤트를 하나의 "컨트롤러" 서피스에 집중시킬 것
+
+---
+
+## N. NotificationManager::Notifications가 외부 앱에서 항상 0행 (2026-02)
+
+**증상:** `NotificationManager::Notifications` C++ 인스턴스 생성 후 `notify-send`를 보내도
+`rowCount()` = 0, `rowsInserted` 시그널 미발생.
+
+**근본 원인** (바이너리 분석으로 확인):
+- `Notifications::componentComplete()` → `createNotificationsModel()` → 싱글톤 `NotificationsModel` 생성
+- `NotificationsModel` 생성자에서 `connect(Server::self().notificationAdded, ...)` 연결
+- `Server::self()`는 **프로세스 내** 서버 싱글톤 — `Server::init()` 없이는 알림 수신 불가
+- 실제 `notify-send`는 plasmashell의 `Server`로 전달 → 크레마 프로세스의 `Server::self()`는 공백
+
+**오해:** `classBegin()` + `componentComplete()` 수동 호출로 해결된다고 생각했으나 무관.
+**진짜 문제:** 소스 모델 타입이 잘못됨 (`NotificationsModel` vs `WatchedNotificationsModel`).
+
+**올바른 해결책:**
+- **방법 1 (권장)**: 커스텀 D-Bus 감시자 직접 구현
+  - `/org/freedesktop/Notifications` 경로에 D-Bus 객체 등록 (`registerObject`)
+  - `org.kde.NotificationManager.RegisterWatcher()` 호출
+  - plasmashell이 `Notify()` 슬롯을 직접 호출해 줌
+  - `hints["desktop-entry"]`로 앱 식별
+- **방법 2**: QML 엔진에서 `WatchedNotificationsModel` 인스턴스 생성
+
+**상세 분석:** `docs/kde/notification-badges.md` 섹션 "CRITICAL BUG" 참조
+
+**핵심 교훈:**
+- KDE 라이브러리의 "proxy model" 클래스가 반드시 올바른 소스를 사용하는지 바이너리 수준에서 검증 필요
+- `QQmlParserStatus::componentComplete()` 수동 호출 = 소스 모델 생성 트리거이지만, 어떤 소스인지는 별개 문제
+- 외부 D-Bus 서비스의 알림을 수신하려면 D-Bus 감시자(watcher) 프로토콜 직접 구현이 가장 안전

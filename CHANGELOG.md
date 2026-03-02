@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-02
+
 ### Added
 
-- Single-instance enforcement — launching Krema again while it's already running is now silently ignored
 - Notification badge count on dock icons (via D-Bus RegisterWatcher and SmartLauncher Unity API)
 - SNI (StatusNotifierItem) NeedsAttention monitoring for tray-based attention requests
 - Six attention animation styles: Bounce, Wiggle, Pulse, Glow, Dot color, and Blink
 - Attention animation setting in Appearance settings page
+- Single-instance enforcement — launching Krema again while it's already running is now silently ignored
+- Automatic startup on KDE Plasma login
+- Desktop launcher entry visible in application menu
 
 ## [0.5.1] - 2026-03-01
 

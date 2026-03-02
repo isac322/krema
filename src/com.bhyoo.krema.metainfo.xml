@@ -51,6 +51,11 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.6.0" date="2026-03-02">
+      <description>
+        <p>Notification badges with six attention animation styles (Bounce, Wiggle, Pulse, Glow, Dot color, Blink), single-instance enforcement via KDBusService, automatic startup on login, and visible desktop launcher entry.</p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-03-01">
       <description>
         <p>Fixed icon rendering on HiDPI displays when icon normalization or icon scale is active. Fixed dock edge trigger unreachable in AutoHide/DodgeWindows mode when KDE panel occupies the screen edge.</p>

@@ -45,6 +45,9 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     m_platform->setupWindow(this);
     m_platform->setEdge(edge);
 
+    // Store edge for QML access (must be set before QML loading)
+    m_edge = edge;
+
     // Create visibility controller (manages show/hide logic for all modes)
     m_visibilityController = new DockVisibilityController(m_platform.get(), tasksModel, virtualDesktopInfo, activityInfo, this, this);
     m_visibilityController->setMode(visibilityMode);
@@ -126,6 +129,26 @@ int DockView::iconCacheVersion() const
     return m_iconCacheVersion;
 }
 
+int DockView::edge() const
+{
+    return static_cast<int>(m_edge);
+}
+
+bool DockView::isVertical() const
+{
+    return m_edge == DockPlatform::Edge::Left || m_edge == DockPlatform::Edge::Right;
+}
+
+void DockView::setEdge(DockPlatform::Edge edge)
+{
+    if (m_edge == edge) {
+        return;
+    }
+    m_edge = edge;
+    updateSize();
+    Q_EMIT edgeChanged();
+}
+
 TaskIconProvider *DockView::iconProvider() const
 {
     return m_iconProvider;
@@ -160,13 +183,21 @@ DockVisibilityController *DockView::visibilityController() const
 void DockView::updateSize()
 {
     const int h = krema::surfaceHeight(m_settings->iconSize(), s_padding, m_settings->maxZoomFactor(), s_tooltipReserve, floatingPadding());
-    const int screenWidth = screen() ? screen()->geometry().width() : 0;
+    const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
-    setWidth(screenWidth);
-    setHeight(h);
-
-    // Tell layer-shell the desired size.
-    m_platform->setSize(QSize(screenWidth, h));
+    if (isVertical()) {
+        // Vertical dock: h becomes width, screen height becomes height
+        setWidth(h);
+        setHeight(screenGeo.height());
+        // Layer-shell: 0 on double-anchored axis (Top+Bottom) lets compositor decide
+        m_platform->setSize(QSize(h, 0));
+    } else {
+        // Horizontal dock: screen width becomes width, h becomes height
+        setWidth(screenGeo.width());
+        setHeight(h);
+        // Layer-shell: 0 on double-anchored axis (Left+Right) lets compositor decide
+        m_platform->setSize(QSize(0, h));
+    }
 
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());

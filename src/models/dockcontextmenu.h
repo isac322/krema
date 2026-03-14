@@ -10,6 +10,7 @@ namespace krema
 
 class DockModel;
 class DockActions;
+class NotificationTracker;
 
 /**
  * Context menu for dock items.
@@ -22,7 +23,7 @@ class DockContextMenu : public QObject
     Q_OBJECT
 
 public:
-    explicit DockContextMenu(DockModel *model, DockActions *actions, QObject *parent = nullptr);
+    explicit DockContextMenu(DockModel *model, DockActions *actions, NotificationTracker *tracker, QObject *parent = nullptr);
 
     /// Show the native context menu for the task at @p index.
     Q_INVOKABLE void showForTask(int index);
@@ -35,6 +36,7 @@ Q_SIGNALS:
 private:
     DockModel *m_model;
     DockActions *m_actions;
+    NotificationTracker *m_tracker;
 };
 
 } // namespace krema

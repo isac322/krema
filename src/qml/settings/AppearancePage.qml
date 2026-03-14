@@ -138,6 +138,32 @@ FormCard.FormCardPage {
             currentIndex: DockSettings.attentionAnimation
             onActivated: function(index) { DockSettings.attentionAnimation = index }
         }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.attentionAnimation > 0
+        }
+
+        FormCard.FormSpinBoxDelegate {
+            visible: DockSettings.attentionAnimation > 0
+            label: i18n("Attention duration (seconds, 0 = infinite)")
+            from: 0; to: 60
+            value: DockSettings.attentionAnimationDuration
+            onValueChanged: DockSettings.attentionAnimationDuration = value
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Badge display")
+            description: i18n("How notification badges appear on dock icons")
+            model: [
+                i18n("Number"),
+                i18n("Dot"),
+                i18n("Off")
+            ]
+            currentIndex: DockSettings.badgeDisplayMode
+            onActivated: function(index) { DockSettings.badgeDisplayMode = index }
+        }
     }
 
     // --- Background ---

@@ -126,13 +126,21 @@ Item {
 
         // Preview keyboard mode: route keys to PreviewController
         if (PreviewController.previewKeyboardActive) {
+            // Thumbnail navigation follows dock axis (Left/Right for horizontal, Up/Down for vertical)
+            let thumbPrev = DockView.isVertical ? Qt.Key_Up : Qt.Key_Left
+            let thumbNext = DockView.isVertical ? Qt.Key_Down : Qt.Key_Right
+            // Return to dock: key toward the dock edge
+            let backKey = DockView.isVertical
+                ? (DockView.edge === 2 ? Qt.Key_Left : Qt.Key_Right)
+                : (DockView.edge === 0 ? Qt.Key_Up : Qt.Key_Down)
+
             switch (event.key) {
-            case Qt.Key_Left:
+            case thumbPrev:
                 PreviewController.navigatePreviewThumbnail(-1)
                 announcePreviewThumbnail()
                 event.accepted = true
                 break
-            case Qt.Key_Right:
+            case thumbNext:
                 PreviewController.navigatePreviewThumbnail(1)
                 announcePreviewThumbnail()
                 event.accepted = true
@@ -149,7 +157,7 @@ Item {
                 event.accepted = true
                 break
             case Qt.Key_Escape:
-            case Qt.Key_Up:
+            case backKey:
                 // Return to dock navigation (keep preview visible)
                 PreviewController.endPreviewKeyboardNav()
                 event.accepted = true
@@ -158,13 +166,20 @@ Item {
             return
         }
 
-        // Normal dock navigation
+        // Normal dock navigation — keys depend on orientation
+        let navPrev = DockView.isVertical ? Qt.Key_Up : Qt.Key_Left
+        let navNext = DockView.isVertical ? Qt.Key_Down : Qt.Key_Right
+        // Preview open key: perpendicular to dock axis, away from edge
+        let previewKey = DockView.isVertical
+            ? (DockView.edge === 2 ? Qt.Key_Right : Qt.Key_Left)   // Left→Right, Right→Left
+            : (DockView.edge === 0 ? Qt.Key_Down : Qt.Key_Up)      // Top→Down, Bottom→Up (was Key_Down for bottom)
+
         switch (event.key) {
-        case Qt.Key_Left:
+        case navPrev:
             navigateItem(-1)
             event.accepted = true
             break
-        case Qt.Key_Right:
+        case navNext:
             navigateItem(1)
             event.accepted = true
             break
@@ -185,7 +200,7 @@ Item {
             endKeyboardNavigation()
             event.accepted = true
             break
-        case Qt.Key_Down:
+        case previewKey:
             // Open preview for the focused item (if it has windows)
             if (hoveredIndex >= 0) {
                 let idx = DockModel.tasksModel.index(hoveredIndex, 0)
@@ -195,7 +210,9 @@ Item {
                     let item = dockRepeater.itemAt(hoveredIndex)
                     if (item) {
                         let globalPos = item.mapToGlobal(0, 0)
-                        PreviewController.showPreview(hoveredIndex, globalPos.x, item.width)
+                        let pos = DockView.isVertical ? globalPos.y : globalPos.x
+                        let ext = DockView.isVertical ? item.height : item.width
+                        PreviewController.showPreview(hoveredIndex, pos, ext)
                         PreviewController.startPreviewKeyboardNav()
                         announcePreviewThumbnail()
                     }
@@ -243,24 +260,40 @@ Item {
     // Compute the target index where the dragged item would be inserted.
     // Compares mouse X with each icon's center X (including the source so
     // that dropping near the original position keeps the item in place).
-    function computeDropIndex(globalMouseX) {
-        let panelRelX = globalMouseX - dockPanel.x
-        let items = []
-        for (let i = 0; i < dockRepeater.count; i++) {
-            let item = dockRepeater.itemAt(i)
-            if (!item) continue
-            items.push({ idx: i, cx: item.x + item.width / 2 + dockRow.x })
+    function computeDropIndex(globalMousePos) {
+        if (DockView.isVertical) {
+            let panelRelY = globalMousePos - dockPanel.y
+            let items = []
+            for (let i = 0; i < dockRepeater.count; i++) {
+                let item = dockRepeater.itemAt(i)
+                if (!item) continue
+                items.push({ idx: i, cx: item.y + item.height / 2 + dockRow.y })
+            }
+            if (items.length === 0) return -1
+            let bestIdx = items[0].idx
+            let bestDist = Math.abs(panelRelY - items[0].cx)
+            for (let j = 1; j < items.length; j++) {
+                let d = Math.abs(panelRelY - items[j].cx)
+                if (d < bestDist) { bestDist = d; bestIdx = items[j].idx }
+            }
+            return bestIdx
+        } else {
+            let panelRelX = globalMousePos - dockPanel.x
+            let items = []
+            for (let i = 0; i < dockRepeater.count; i++) {
+                let item = dockRepeater.itemAt(i)
+                if (!item) continue
+                items.push({ idx: i, cx: item.x + item.width / 2 + dockRow.x })
+            }
+            if (items.length === 0) return -1
+            let bestIdx = items[0].idx
+            let bestDist = Math.abs(panelRelX - items[0].cx)
+            for (let j = 1; j < items.length; j++) {
+                let d = Math.abs(panelRelX - items[j].cx)
+                if (d < bestDist) { bestDist = d; bestIdx = items[j].idx }
+            }
+            return bestIdx
         }
-        if (items.length === 0) return -1
-
-        // Find closest icon center
-        let bestIdx = items[0].idx
-        let bestDist = Math.abs(panelRelX - items[0].cx)
-        for (let j = 1; j < items.length; j++) {
-            let d = Math.abs(panelRelX - items[j].cx)
-            if (d < bestDist) { bestDist = d; bestIdx = items[j].idx }
-        }
-        return bestIdx
     }
 
     // Compute which icon is under an external drop cursor (unscaled hit test).
@@ -292,7 +325,9 @@ Item {
             let item = dockRepeater.itemAt(hoveredIndex)
             if (item) {
                 let globalPos = item.mapToGlobal(0, 0)
-                PreviewController.showPreview(hoveredIndex, globalPos.x, item.width)
+                let pos = DockView.isVertical ? globalPos.y : globalPos.x
+                let ext = DockView.isVertical ? item.height : item.width
+                PreviewController.showPreview(hoveredIndex, pos, ext)
             }
         }
     }
@@ -496,22 +531,44 @@ Item {
             if (root._dragActive) {
                 root._dragCurrentX = mouse.x
                 root._dragCurrentY = mouse.y
-                root._dragTargetIndex = computeDropIndex(mouse.x)
+                root._dragTargetIndex = computeDropIndex(DockView.isVertical ? mouse.y : mouse.x)
                 return  // Skip normal zoom handling during drag
             }
 
             // --- Normal zoom tracking ---
-            // Only activate zoom when mouse is near the panel vertically.
-            // Tight zone: panel area + zoom extension above (icons grow upward).
-            let panelTop = dockPanel.y
-            let panelBottom = dockPanel.y + dockPanel.height
+            // Remap mouse coordinates: mouseX = primary axis (along dock),
+            // mouseY = secondary axis (depth). This lets all zoom/hover logic
+            // work identically regardless of orientation.
             let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
-            if (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom) {
-                dockPanel.mouseX = mouse.x - dockPanel.x
-                dockPanel.mouseY = mouse.y - dockPanel.y
+
+            if (DockView.isVertical) {
+                // Vertical: primary = Y screen axis, secondary = X screen axis
+                let panelNear = dockPanel.x
+                let panelFar = dockPanel.x + dockPanel.width
+                let inZone = (DockView.edge === 2)
+                    ? (mouse.x >= panelNear && mouse.x <= panelFar + zoomExtension)    // Left
+                    : (mouse.x >= panelNear - zoomExtension && mouse.x <= panelFar)    // Right
+                if (inZone) {
+                    dockPanel.mouseX = mouse.y - dockPanel.y   // primary = Y
+                    dockPanel.mouseY = mouse.x - dockPanel.x   // secondary = X
+                } else {
+                    dockPanel.mouseX = -1
+                    dockPanel.mouseY = -1
+                }
             } else {
-                dockPanel.mouseX = -1
-                dockPanel.mouseY = -1
+                // Horizontal: primary = X screen axis, secondary = Y screen axis
+                let panelTop = dockPanel.y
+                let panelBottom = dockPanel.y + dockPanel.height
+                let inZone = (DockView.edge === 0)
+                    ? (mouse.y >= panelTop && mouse.y <= panelBottom + zoomExtension)   // Top
+                    : (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom)   // Bottom
+                if (inZone) {
+                    dockPanel.mouseX = mouse.x - dockPanel.x
+                    dockPanel.mouseY = mouse.y - dockPanel.y
+                } else {
+                    dockPanel.mouseX = -1
+                    dockPanel.mouseY = -1
+                }
             }
             root.updateHoveredItem()
         }
@@ -563,16 +620,41 @@ Item {
         fragmentShader: "qrc:/qml/shaders/outer_shadow.frag.qsb"
     }
 
-    // The visible dock panel (centered, fits content)
+    // The visible dock panel (positioned per edge, fits content)
     Rectangle {
         id: dockPanel
-        anchors.horizontalCenter: parent.horizontalCenter
-        height: DockSettings.iconSize + Kirigami.Units.largeSpacing * 2  // icon + padding
-        width: Math.max(dockRow.implicitWidth + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)  // content + padding, min width
+
+        // Panel size: primary axis stretches to content, secondary axis = icon + padding
+        width: DockView.isVertical
+            ? (DockSettings.iconSize + Kirigami.Units.largeSpacing * 2)
+            : Math.max(dockRow.implicitWidth + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
+        height: DockView.isVertical
+            ? Math.max(dockRow.implicitHeight + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
+            : (DockSettings.iconSize + Kirigami.Units.largeSpacing * 2)
         radius: DockSettings.cornerRadius
         color: DockView.backgroundStyleType === 3
                ? "transparent"
                : DockView.backgroundColor
+
+        // Position: center on the non-edge axis, slide on the edge axis
+        x: DockView.isVertical ? _panelEdgePos : (parent.width - width) / 2
+        y: DockView.isVertical ? (parent.height - height) / 2 : _panelEdgePos
+
+        property real _panelEdgePos: {
+            let fp = DockView.floatingPadding
+            let sp = Kirigami.Units.largeSpacing
+            switch (DockView.edge) {
+            case 0: // Top
+                return DockVisibility.dockVisible ? fp : -height - sp
+            case 1: // Bottom
+                return DockVisibility.dockVisible ? parent.height - height - fp : parent.height + sp
+            case 2: // Left
+                return DockVisibility.dockVisible ? fp : -width - sp
+            case 3: // Right
+                return DockVisibility.dockVisible ? parent.width - width - fp : parent.width + sp
+            }
+            return 0
+        }
 
         // Acrylic overlay: tint + noise via GPU shader, composited over KWin blur.
         // Shader handles rounded corners via SDF mask — no clip wrapper needed.
@@ -591,13 +673,6 @@ Item {
             fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
         }
 
-        // Slide animation: y position controlled by visibility.
-        // floatingPadding creates a visual gap between the panel and the screen edge
-        // without using layer-shell margin (which would cause surface repositioning).
-        y: DockVisibility.dockVisible
-           ? parent.height - height - DockView.floatingPadding
-           : parent.height + Kirigami.Units.largeSpacing
-
         // Delay enabling animations until after initial layout to avoid startup flicker
         property bool animationsReady: false
         Component.onCompleted: Qt.callLater(function() { animationsReady = true })
@@ -610,8 +685,24 @@ Item {
             }
         }
 
+        Behavior on height {
+            enabled: dockPanel.animationsReady && DockView.isVertical
+            NumberAnimation {
+                duration: Kirigami.Units.longDuration
+                easing.type: Easing.InOutQuad
+            }
+        }
+
+        Behavior on x {
+            enabled: dockPanel.animationsReady && DockView.isVertical
+            NumberAnimation {
+                duration: Kirigami.Units.longDuration
+                easing.type: Easing.InOutQuad
+            }
+        }
+
         Behavior on y {
-            enabled: dockPanel.animationsReady
+            enabled: dockPanel.animationsReady && !DockView.isVertical
             NumberAnimation {
                 duration: Kirigami.Units.longDuration
                 easing.type: Easing.InOutQuad
@@ -640,29 +731,37 @@ Item {
         onYChanged: DockVisibility.setPanelRect(x, y, width, height)
         onHeightChanged: DockVisibility.setPanelRect(x, y, width, height)
 
-        // Main icon row
-        Row {
+        // Main icon layout (Flow switches between horizontal/vertical)
+        Flow {
             id: dockRow
-            anchors.verticalCenter: parent.verticalCenter
+            flow: DockView.isVertical ? Flow.TopToBottom : Flow.LeftToRight
             spacing: DockSettings.iconSpacing
 
-            // Animate content width to sync Row centering with panel width animation.
-            // Without this, implicitWidth changes instantly when items are added/removed,
-            // causing an abrupt centering jump even though panel width animates smoothly.
-            // Math proof: panel.width and animatedContentWidth change by the same delta
-            // with the same easing, so x = (panel.width - animatedContentWidth) / 2
-            // remains constant during animation (= padding). No jump, no flicker.
+            // Animate content extent to sync centering with panel size animation.
             property real animatedContentWidth: implicitWidth
+            property real animatedContentHeight: implicitHeight
             Behavior on animatedContentWidth {
-                enabled: dockPanel.animationsReady
+                enabled: dockPanel.animationsReady && !DockView.isVertical
                 NumberAnimation {
                     duration: Kirigami.Units.longDuration
                     easing.type: Easing.InOutQuad
                 }
             }
-            x: (parent.width - animatedContentWidth) / 2
+            Behavior on animatedContentHeight {
+                enabled: dockPanel.animationsReady && DockView.isVertical
+                NumberAnimation {
+                    duration: Kirigami.Units.longDuration
+                    easing.type: Easing.InOutQuad
+                }
+            }
+            x: DockView.isVertical
+                ? (parent.width - animatedContentWidth) / 2
+                : (parent.width - animatedContentWidth) / 2
+            y: DockView.isVertical
+                ? (parent.height - animatedContentHeight) / 2
+                : (parent.height - animatedContentHeight) / 2
 
-            // Animate existing items displaced by add/remove within the Row.
+            // Animate existing items displaced by add/remove within the Flow.
             // Disabled during hover zoom (mouseInside) to avoid lagging sibling
             // repositioning — zoom needs immediate response.
             move: Transition {
@@ -690,8 +789,11 @@ Item {
                     panelMouseInside: dockPanel.mouseInside
                     spacing: DockSettings.iconSpacing
 
-                    // Compute this item's center X relative to the panel
-                    itemCenterX: x + width / 2 + dockRow.x
+                    // Compute this item's center on the primary axis relative to the panel.
+                    // For vertical docks, the primary axis is Y (remapped to mouseX).
+                    itemCenterX: DockView.isVertical
+                        ? (y + height / 2 + dockRow.y)
+                        : (x + width / 2 + dockRow.x)
 
                     // Drag and drop visual feedback
                     isDragSource: root._dragActive && root._dragSourceIndex === index
@@ -777,25 +879,36 @@ Item {
         Accessible.ignored: true
         visible: root._dragActive && root._dragTargetIndex >= 0
                  && root._dragTargetIndex !== root._dragSourceIndex
-        width: 2
-        height: DockSettings.iconSize
+        width: DockView.isVertical ? DockSettings.iconSize : 2
+        height: DockView.isVertical ? 2 : DockSettings.iconSize
         color: Kirigami.Theme.highlightColor
         radius: 1
         z: 150
 
         x: {
             if (!visible || root._dragTargetIndex < 0) return 0
+            if (DockView.isVertical) return dockPanel.x + dockRow.x
             let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
             if (!targetItem) return 0
             let itemX = dockPanel.x + dockRow.x + targetItem.x
-            // Show line on the side where the item will be inserted
             if (root._dragTargetIndex > root._dragSourceIndex) {
                 return itemX + targetItem.width + DockSettings.iconSpacing / 2 - 1
             } else {
                 return itemX - DockSettings.iconSpacing / 2 - 1
             }
         }
-        y: dockPanel.y + dockRow.y
+        y: {
+            if (!visible || root._dragTargetIndex < 0) return 0
+            if (!DockView.isVertical) return dockPanel.y + dockRow.y
+            let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
+            if (!targetItem) return 0
+            let itemY = dockPanel.y + dockRow.y + targetItem.y
+            if (root._dragTargetIndex > root._dragSourceIndex) {
+                return itemY + targetItem.height + DockSettings.iconSpacing / 2 - 1
+            } else {
+                return itemY - DockSettings.iconSpacing / 2 - 1
+            }
+        }
     }
 
     // Handle launch bounce trigger from C++ signal.
@@ -863,8 +976,9 @@ Item {
                 let item = dockRepeater.itemAt(root.hoveredIndex)
                 if (item) {
                     let globalPos = item.mapToGlobal(0, 0)
-                    PreviewController.showPreview(
-                        root.hoveredIndex, globalPos.x, item.width)
+                    let pos = DockView.isVertical ? globalPos.y : globalPos.x
+                    let ext = DockView.isVertical ? item.height : item.width
+                    PreviewController.showPreview(root.hoveredIndex, pos, ext)
                 }
             } else {
                 // Launcher-only → show text tooltip
@@ -882,15 +996,27 @@ Item {
         // Reset when hover changes
         onVisibleChanged: if (!visible) show = false
 
-        // Position above the hovered icon
+        // Position on the opposite side of the dock edge
         x: {
             if (root.hoveredIndex < 0 || root.hoveredIndex >= dockRepeater.count)
                 return 0
             let item = dockRepeater.itemAt(root.hoveredIndex)
             if (!item) return 0
+            let sp = Kirigami.Units.largeSpacing
+            if (DockView.edge === 2) return dockPanel.x + dockPanel.width + sp  // Left → right
+            if (DockView.edge === 3) return dockPanel.x - width - sp            // Right → left
             return dockPanel.x + dockRow.x + item.x + item.width / 2 - width / 2
         }
-        y: dockPanel.y - height - Kirigami.Units.largeSpacing
+        y: {
+            if (root.hoveredIndex < 0 || root.hoveredIndex >= dockRepeater.count)
+                return 0
+            let item = dockRepeater.itemAt(root.hoveredIndex)
+            if (!item) return 0
+            let sp = Kirigami.Units.largeSpacing
+            if (DockView.edge === 0) return dockPanel.y + dockPanel.height + sp  // Top → below
+            if (DockView.edge === 1) return dockPanel.y - height - sp            // Bottom → above
+            return dockPanel.y + dockRow.y + item.y + item.height / 2 - height / 2
+        }
 
         Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip
         Kirigami.Theme.inherit: false
@@ -943,8 +1069,9 @@ Item {
                 let item = dockRepeater.itemAt(root.hoveredIndex)
                 if (item) {
                     let globalPos = item.mapToGlobal(0, 0)
-                    PreviewController.showPreview(
-                        root.hoveredIndex, globalPos.x, item.width)
+                    let pos = DockView.isVertical ? globalPos.y : globalPos.x
+                    let ext = DockView.isVertical ? item.height : item.width
+                    PreviewController.showPreview(root.hoveredIndex, pos, ext)
                 }
             }
         }

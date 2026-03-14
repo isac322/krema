@@ -18,6 +18,7 @@ class DockActions;
 class DockContextMenu;
 class DockModel;
 class DockView;
+class NotificationTracker;
 class PreviewController;
 class SettingsWindow;
 
@@ -33,7 +34,11 @@ class DockShell : public QObject
     Q_OBJECT
 
 public:
-    explicit DockShell(KremaSettings *settings, DockModel *model, std::unique_ptr<DockPlatform> platform, QObject *parent = nullptr);
+    explicit DockShell(KremaSettings *settings,
+                       DockModel *model,
+                       NotificationTracker *tracker,
+                       std::unique_ptr<DockPlatform> platform,
+                       QObject *parent = nullptr);
     ~DockShell() override;
 
     /// Initialize the dock: register QML singletons, load QML, connect signals.

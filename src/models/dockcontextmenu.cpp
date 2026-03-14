@@ -5,6 +5,7 @@
 
 #include "dockactions.h"
 #include "dockmodel.h"
+#include "notificationtracker.h"
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
@@ -18,10 +19,11 @@
 namespace krema
 {
 
-DockContextMenu::DockContextMenu(DockModel *model, DockActions *actions, QObject *parent)
+DockContextMenu::DockContextMenu(DockModel *model, DockActions *actions, NotificationTracker *tracker, QObject *parent)
     : QObject(parent)
     , m_model(model)
     , m_actions(actions)
+    , m_tracker(tracker)
 {
 }
 
@@ -65,6 +67,16 @@ void DockContextMenu::showForTask(int index)
     menu->addAction(i18nc("@action:inmenu", "New Instance"), this, [this, index]() {
         m_actions->newInstance(index);
     });
+
+    // Clear Notifications (only when badges are present)
+    if (m_tracker != nullptr) {
+        const QString appId = m_model->appId(index);
+        if (!appId.isEmpty() && m_tracker->unreadCount(appId) > 0) {
+            menu->addAction(i18nc("@action:inmenu", "Clear Notifications"), this, [this, appId]() {
+                m_tracker->clearUnreadNotifications(appId);
+            });
+        }
+    }
 
     // Close (only for running windows)
     if (isWindow) {

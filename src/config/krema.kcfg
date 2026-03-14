@@ -186,6 +186,20 @@
       <max>6</max>
     </entry>
 
+    <entry name="AttentionAnimationDuration" type="Int">
+      <label>Duration of attention animation in seconds (0 = infinite)</label>
+      <default>5</default>
+      <min>0</min>
+      <max>60</max>
+    </entry>
+
+    <entry name="BadgeDisplayMode" type="Int">
+      <label>Badge display mode (0=Number, 1=Dot, 2=Off)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
     <entry name="PinnedLaunchers" type="StringList">
       <label>Pinned launcher URLs</label>
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>

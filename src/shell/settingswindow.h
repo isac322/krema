@@ -39,7 +39,7 @@ Q_SIGNALS:
 
 private:
     void ensureEngine();
-    void findAndTrackConfigWindow();
+    void findAndTrackConfigWindow(int attempt = 0);
 
     KremaSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;

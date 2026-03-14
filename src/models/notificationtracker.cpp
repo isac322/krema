@@ -10,7 +10,9 @@
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDateTime>
 #include <QLoggingCategory>
+#include <QTimer>
 
 Q_LOGGING_CATEGORY(lcNotif, "krema.notifications")
 
@@ -61,8 +63,13 @@ NotificationTracker::NotificationTracker(QObject *parent)
     qCInfo(lcNotif) << "NotificationTracker init: badgesInTaskManager=" << (m_notifSettings ? m_notifSettings->badgesInTaskManager() : true)
                     << "blacklist=" << (m_notifSettings ? m_notifSettings->badgeBlacklistedApplications() : QStringList());
 
+    // DND state tracking
+    connect(m_notifSettings.get(), &NotificationManager::Settings::settingsChanged, this, &NotificationTracker::updateDndState);
+    connect(m_notifSettings.get(), &NotificationManager::Settings::notificationsInhibitedByApplicationChanged, this, &NotificationTracker::updateDndState);
+
     setupNotificationWatcher();
     setupSniWatcher();
+    updateDndState();
 }
 
 NotificationTracker::~NotificationTracker()
@@ -78,6 +85,35 @@ NotificationTracker::~NotificationTracker()
 int NotificationTracker::revision() const
 {
     return m_revision;
+}
+
+bool NotificationTracker::dndActive() const
+{
+    return m_dndActive;
+}
+
+void NotificationTracker::updateDndState()
+{
+    bool active = false;
+    if (m_notifSettings) {
+        active = m_notifSettings->notificationsInhibitedByApplication();
+        if (!active) {
+            const auto until = m_notifSettings->notificationsInhibitedUntil();
+            if (until.isValid() && until > QDateTime::currentDateTime()) {
+                active = true;
+                // Schedule re-check when DND period expires
+                const int msUntil = static_cast<int>(QDateTime::currentDateTime().msecsTo(until));
+                if (msUntil > 0) {
+                    QTimer::singleShot(msUntil + 100, this, &NotificationTracker::updateDndState);
+                }
+            }
+        }
+    }
+    if (m_dndActive != active) {
+        m_dndActive = active;
+        qCInfo(lcNotif) << "DND state changed:" << active;
+        Q_EMIT dndActiveChanged();
+    }
 }
 
 int NotificationTracker::unreadCount(const QString &desktopEntry) const
@@ -134,6 +170,35 @@ bool NotificationTracker::sniNeedsAttention(const QString &appId) const
         }
     }
     return false;
+}
+
+void NotificationTracker::clearUnreadNotifications(const QString &appId)
+{
+    if (appId.isEmpty()) {
+        return;
+    }
+
+    const QString normalized = stripDesktopSuffix(appId.toLower());
+    bool changed = false;
+
+    // Find and remove all notification entries matching this app
+    for (auto it = m_unreadNotifs.begin(); it != m_unreadNotifs.end();) {
+        if (desktopEntryMatches(it.key(), normalized)) {
+            qCInfo(lcNotif) << "clearUnreadNotifications: clearing" << it->size() << "notifications for" << it.key() << "(triggered by SNI" << appId << ")";
+            // Remove reverse-lookup entries
+            for (uint notifId : *it) {
+                m_notifIdToEntry.remove(notifId);
+            }
+            it = m_unreadNotifs.erase(it);
+            changed = true;
+        } else {
+            ++it;
+        }
+    }
+
+    if (changed) {
+        qCInfo(lcNotif) << "clearUnreadNotifications: cleared for" << appId;
+    }
 }
 
 void NotificationTracker::dumpState() const
@@ -486,8 +551,17 @@ void NotificationTracker::onSniNewStatus(const QString &status, const QDBusMessa
 
     if (auto it = m_sniItems.find(key); it != m_sniItems.end()) {
         if (it->status != status) {
-            qCInfo(lcNotif) << ">>> SNI status changed:" << it->id << "(" << key << ")" << it->status << "->" << status;
+            const QString oldStatus = it->status;
+            qCInfo(lcNotif) << ">>> SNI status changed:" << it->id << "(" << key << ")" << oldStatus << "->" << status;
             it->status = status;
+
+            // When transitioning away from NeedsAttention, the user has attended
+            // to the app (e.g. opened Slack). Clear notification watcher counts
+            // for this app so badge count reflects the acknowledged state.
+            if (oldStatus == QLatin1String("NeedsAttention") && status != QLatin1String("NeedsAttention") && !it->id.isEmpty()) {
+                clearUnreadNotifications(it->id);
+            }
+
             bumpRevision();
         }
     } else {

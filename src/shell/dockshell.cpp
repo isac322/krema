@@ -19,13 +19,13 @@
 namespace krema
 {
 
-DockShell::DockShell(KremaSettings *settings, DockModel *model, std::unique_ptr<DockPlatform> platform, QObject *parent)
+DockShell::DockShell(KremaSettings *settings, DockModel *model, NotificationTracker *tracker, std::unique_ptr<DockPlatform> platform, QObject *parent)
     : QObject(parent)
     , m_settings(settings)
     , m_model(model)
     , m_view(std::make_unique<DockView>(std::move(platform), settings))
     , m_actions(std::make_unique<DockActions>(model, this))
-    , m_contextMenu(std::make_unique<DockContextMenu>(model, m_actions.get(), this))
+    , m_contextMenu(std::make_unique<DockContextMenu>(model, m_actions.get(), tracker, this))
     , m_previewController(new PreviewController(model, m_view.get(), settings, m_view.get()))
 {
 }
@@ -144,7 +144,10 @@ void DockShell::connectSettingsSignals()
 
     // Platform-level changes
     connect(s, &KremaSettings::EdgeChanged, this, [this]() {
-        m_view->platform()->setEdge(static_cast<DockPlatform::Edge>(m_settings->edge()));
+        auto edge = static_cast<DockPlatform::Edge>(m_settings->edge());
+        m_view->platform()->setEdge(edge);
+        m_view->setEdge(edge);
+        m_previewController->updateEdge();
     });
     connect(s, &KremaSettings::VisibilityModeChanged, this, [this]() {
         m_view->visibilityController()->setMode(static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));

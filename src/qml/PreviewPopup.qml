@@ -202,11 +202,18 @@ Item {
         Accessible.name: PreviewController.appName
             ? i18n("Preview for %1", PreviewController.appName)
             : ""
-        x: PreviewController.contentX
+        x: {
+            if (DockView.edge === 2) return 0                            // Left → left edge
+            if (DockView.edge === 3) return parent.width - width         // Right → right edge
+            return PreviewController.contentX                            // Top/Bottom → centered
+        }
         width: popupContent.implicitWidth + 2 * Kirigami.Units.largeSpacing
         height: popupContent.implicitHeight + 2 * Kirigami.Units.largeSpacing
-        // Anchor to bottom of the surface (which sits above the dock)
-        y: parent.height - height
+        y: {
+            if (DockView.edge === 0) return 0                            // Top → top edge
+            if (DockView.edge === 1) return parent.height - height       // Bottom → bottom edge
+            return PreviewController.contentY                            // Left/Right → centered
+        }
         radius: Kirigami.Units.cornerRadius
         color: Kirigami.Theme.backgroundColor
 

@@ -112,7 +112,7 @@ int Application::run()
     });
 
     // Create and initialize the dock shell (creates all sub-objects, loads QML)
-    m_shell = std::make_unique<DockShell>(m_settings.get(), m_dockModel.get(), std::move(platform), this);
+    m_shell = std::make_unique<DockShell>(m_settings.get(), m_dockModel.get(), m_notificationTracker.get(), std::move(platform), this);
     m_shell->initialize(static_cast<DockPlatform::Edge>(m_settings->edge()), static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
 
     // Auto-save pinned launchers when they change (pin/unpin, drag reorder, add/remove)

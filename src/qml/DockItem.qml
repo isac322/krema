@@ -57,6 +57,9 @@ Item {
         return DockModel.appId(index)
     }
 
+    // === Inbox (persistent badge) ===
+    // Sources: SmartLauncher.count (1st, app-managed), fd.o watcher unreadCount (2nd, dock-managed)
+    // Clear: focus → fd.o auto-clear, context menu → manual clear, SNI→Active → fd.o clear
     // Unified badge count (priority: SmartLauncher > WatchedNotifications)
     readonly property int _badgeCount: {
         let _rev = NotificationTracker.revision  // reactive dependency
@@ -71,18 +74,49 @@ Item {
         return 0
     }
 
-    // Attention condition (Plasma-compatible: IsDemandingAttention OR SmartLauncher.urgent OR SNI NeedsAttention OR has badges)
+    // === Notification (transient attention) ===
+    // Sources: Window.IsDemandingAttention, SmartLauncher.urgent, SNI NeedsAttention, badgeCount increase
+    // → _triggerAttention() → auto-stops after attentionAnimationDuration. Suppressed by DND.
+    //
+    // API support matrix:
+    //   fd.o RegisterWatcher: notification(badge↑→animation) + inbox(badge count) + clear(focus/menu/SNI)
+    //   Portal: transparent (routed to fd.o)
+    //   SNI: notification(NeedsAttention→animation) + clear(→Active clears fd.o)
+    //   SmartLauncher: inbox(count→badge, app-managed) + notification(urgent→animation)
+    //   Window: notification(IsDemandingAttention→animation)
+    //   Jobs: transparent (exposed via SmartLauncherItem.progress)
+    //   DND: suppresses notification animation (badge persists)
+    // Attention condition (Plasma-compatible: IsDemandingAttention OR SmartLauncher.urgent OR SNI NeedsAttention)
     readonly property bool _isDemandingAttention: {
         let _rev = NotificationTracker.revision  // reactive dependency
         return (model.IsDemandingAttention ?? false)
             || (_smartLauncherItem !== null && _smartLauncherItem.urgent)
             || (_appId.length > 0 && NotificationTracker.sniNeedsAttention(_appId))
-            || _badgeCount > 0
     }
 
-    // Attention animation won't run during launch bounce
+    // Timed attention animation state — triggers on new attention events, auto-clears after duration
+    property bool _animationActive: false
+    property int _prevBadgeCount: 0
+
+    function _triggerAttention() {
+        if (NotificationTracker.dndActive) return
+        _animationActive = true
+        let dur = DockSettings.attentionAnimationDuration
+        if (dur > 0) {
+            attentionTimer.interval = dur * 1000
+            attentionTimer.restart()
+        }
+    }
+
+    Timer {
+        id: attentionTimer
+        onTriggered: dockItem._animationActive = false
+    }
+
+    // Attention animation won't run during launch bounce or DND
     readonly property bool _showAttentionAnim:
-        _isDemandingAttention && !launching && DockSettings.attentionAnimation > 0
+        _animationActive && !launching && DockSettings.attentionAnimation > 0
+        && !NotificationTracker.dndActive
 
     readonly property int _attentionType: DockSettings.attentionAnimation
 
@@ -90,6 +124,10 @@ Item {
     on_BadgeCountChanged: {
         console.log("[NOTIF-TRACE] '" + displayName + "' appId=" + _appId
                     + " badgeCount=" + _badgeCount)
+        if (_badgeCount > _prevBadgeCount) {
+            _triggerAttention()
+        }
+        _prevBadgeCount = _badgeCount
     }
     on_IsDemandingAttentionChanged: {
         console.log("[NOTIF-TRACE] '" + displayName + "' appId=" + _appId
@@ -98,6 +136,9 @@ Item {
                     + " | smartLauncher.urgent=" + (_smartLauncherItem !== null && _smartLauncherItem.urgent)
                     + " | sniNeedsAttention=" + (_appId.length > 0 ? NotificationTracker.sniNeedsAttention(_appId) : false)
                     + " | badgeCount=" + _badgeCount)
+        if (_isDemandingAttention) {
+            _triggerAttention()
+        }
     }
 
     // Blink opacity multiplier (animated by type 6)
@@ -195,6 +236,11 @@ Item {
         if (_isActive && _waitingForWindow) {
             _waitingForWindow = false
             maxLaunchTimer.stop()
+        }
+        // Clear fd.o watcher badges when window gains focus.
+        // SmartLauncher count is app-managed (separate source), so always clear fd.o unconditionally.
+        if (_isActive && _appId.length > 0) {
+            NotificationTracker.clearUnreadNotifications(_appId)
         }
     }
 
@@ -315,14 +361,34 @@ Item {
         })
     }
 
-    // Size: base icon size, scaled by zoom
-    width: iconSize
-    height: iconSize + indicatorRow.height + Kirigami.Units.smallSpacing  // icon + gap + indicators
+    // Fixed space reserved for indicator dots (max dot size + spacing).
+    // Always reserve this space so icon position stays stable when dots appear/disappear.
+    readonly property int _indicatorSpace: 4 + Kirigami.Units.smallSpacing
 
-    // Scaled transform (icon grows upward from bottom)
+    // Size: base icon size + fixed indicator space (toward screen edge)
+    width: DockView.isVertical
+        ? (iconSize + _indicatorSpace)
+        : iconSize
+    height: DockView.isVertical
+        ? iconSize
+        : (iconSize + _indicatorSpace)
+
+    // Scaled transform: grow away from the dock edge
     transform: Scale {
-        origin.x: width / 2
-        origin.y: height
+        origin.x: {
+            switch (DockView.edge) {
+            case 2: return 0           // Left: grow right
+            case 3: return width       // Right: grow left
+            default: return width / 2
+            }
+        }
+        origin.y: {
+            switch (DockView.edge) {
+            case 0: return 0           // Top: grow down
+            case 1: return height      // Bottom: grow up
+            default: return height / 2
+            }
+        }
         xScale: currentScale
         yScale: currentScale
     }
@@ -344,8 +410,7 @@ Item {
     // Application icon
     Image {
         id: iconImage
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
+        // Anchors set via states below (iconAnchorStates)
         width: iconSize
         height: iconSize
         source: {
@@ -366,8 +431,8 @@ Item {
 
         // Transforms: launch bounce + attention animations
         transform: [
-            Translate { id: bounceTranslate; y: 0 },
-            Translate { id: attentionBounceT; y: 0 },
+            Translate { id: bounceTranslate; x: 0; y: 0 },
+            Translate { id: attentionBounceT; x: 0; y: 0 },
             Rotation {
                 id: attentionRotateT
                 origin.x: iconSize / 2; origin.y: iconSize / 2
@@ -418,6 +483,61 @@ Item {
                 Accessible.ignored: true
             }
         }
+
+        states: [
+            State {
+                name: "bottom"
+                when: DockView.edge === 1
+                AnchorChanges {
+                    target: iconImage
+                    anchors.top: parent.top
+                    anchors.bottom: undefined
+                    anchors.left: undefined
+                    anchors.right: undefined
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: undefined
+                }
+            },
+            State {
+                name: "top"
+                when: DockView.edge === 0
+                AnchorChanges {
+                    target: iconImage
+                    anchors.top: undefined
+                    anchors.bottom: parent.bottom
+                    anchors.left: undefined
+                    anchors.right: undefined
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: undefined
+                }
+            },
+            State {
+                name: "left"
+                when: DockView.edge === 2
+                AnchorChanges {
+                    target: iconImage
+                    anchors.top: undefined
+                    anchors.bottom: undefined
+                    anchors.left: undefined
+                    anchors.right: parent.right
+                    anchors.horizontalCenter: undefined
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            },
+            State {
+                name: "right"
+                when: DockView.edge === 3
+                AnchorChanges {
+                    target: iconImage
+                    anchors.top: undefined
+                    anchors.bottom: undefined
+                    anchors.left: parent.left
+                    anchors.right: undefined
+                    anchors.horizontalCenter: undefined
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        ]
     }
 
     // Attention glow effect (type 4) — MultiEffect shadow pulse on iconImage
@@ -447,18 +567,20 @@ Item {
     // Badge count overlay (unified: SmartLauncher + WatchedNotifications)
     Rectangle {
         id: badge
-        visible: dockItem._badgeCount > 0
+        visible: dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
         anchors.right: iconImage.right
         anchors.top: iconImage.top
         anchors.rightMargin: -width * 0.2
         anchors.topMargin: -height * 0.2
-        width: Math.round(iconSize * 0.38)
+        width: DockSettings.badgeDisplayMode === 1
+               ? Math.round(iconSize * 0.18)
+               : Math.round(iconSize * 0.38)
         height: width
         radius: width / 2
         color: Kirigami.Theme.highlightColor
         Accessible.ignored: true
 
-        layer.enabled: true
+        layer.enabled: DockSettings.badgeDisplayMode === 0
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: Qt.alpha("black", 0.4)
@@ -467,6 +589,7 @@ Item {
         }
 
         QQC2.Label {
+            visible: DockSettings.badgeDisplayMode === 0
             anchors.centerIn: parent
             text: dockItem._badgeCount > 99 ? "99+" : dockItem._badgeCount.toString()
             color: Kirigami.Theme.highlightedTextColor
@@ -478,6 +601,36 @@ Item {
             verticalAlignment: Text.AlignVCenter
             width: parent.width - 2
             height: parent.height - 2
+        }
+    }
+
+    // Progress bar (SmartLauncher task progress)
+    Rectangle {
+        id: progressBar
+        visible: dockItem._smartLauncherItem !== null
+                 && dockItem._smartLauncherItem.progressVisible
+        anchors.bottom: iconImage.bottom
+        anchors.horizontalCenter: iconImage.horizontalCenter
+        anchors.bottomMargin: 2
+        width: iconImage.width * 0.8
+        height: 3
+        radius: 1.5
+        color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.6)
+        Accessible.ignored: true
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: parent.width * (dockItem._smartLauncherItem
+                                   ? dockItem._smartLauncherItem.progress / 100.0
+                                   : 0)
+            radius: parent.radius
+            color: Kirigami.Theme.highlightColor
+
+            Behavior on width {
+                NumberAnimation { duration: Kirigami.Units.shortDuration }
+            }
         }
     }
 
@@ -496,20 +649,32 @@ Item {
     // Launch bounce animation — finishes current cycle gracefully when launching ends
     property bool _finishingBounce: false
 
+    // Bounce property/value depends on edge direction
+    readonly property string _bounceProp: DockView.isVertical ? "x" : "y"
+    readonly property real _bounceTarget: {
+        switch (DockView.edge) {
+        case 0: return 8    // Top: bounce down
+        case 1: return -8   // Bottom: bounce up
+        case 2: return 8    // Left: bounce right
+        case 3: return -8   // Right: bounce left
+        }
+        return -8
+    }
+
     SequentialAnimation {
         id: bounceAnim
         loops: 1
 
         NumberAnimation {
-            target: bounceTranslate; property: "y"
-            to: -8
+            target: bounceTranslate; property: dockItem._bounceProp
+            to: dockItem._bounceTarget
             duration: dockItem._finishingBounce
                 ? Kirigami.Units.longDuration * 0.85
                 : Kirigami.Units.longDuration
             easing.type: Easing.OutQuad
         }
         NumberAnimation {
-            target: bounceTranslate; property: "y"
+            target: bounceTranslate; property: dockItem._bounceProp
             to: 0
             duration: dockItem._finishingBounce
                 ? Kirigami.Units.longDuration * 0.85
@@ -519,13 +684,13 @@ Item {
 
         onFinished: {
             if (dockItem._finishingBounce) {
-                // Finished the wind-down cycle
                 dockItem._finishingBounce = false
+                bounceTranslate.x = 0
                 bounceTranslate.y = 0
             } else if (dockItem.launching) {
-                // Still launching — bounce again
                 bounceAnim.start()
             } else {
+                bounceTranslate.x = 0
                 bounceTranslate.y = 0
             }
         }
@@ -543,6 +708,17 @@ Item {
 
     // --- Attention animations (6 types) ---
 
+    // Attention bounce target (bigger than launch bounce)
+    readonly property real _attentionBounceTarget: {
+        switch (DockView.edge) {
+        case 0: return 14   // Top: down
+        case 1: return -14  // Bottom: up
+        case 2: return 14   // Left: right
+        case 3: return -14  // Right: left
+        }
+        return -14
+    }
+
     // Type 1: Bounce
     SequentialAnimation {
         running: dockItem._showAttentionAnim && dockItem._attentionType === 1
@@ -551,11 +727,11 @@ Item {
             + " | _attentionType=" + dockItem._attentionType)
         loops: Animation.Infinite
         NumberAnimation {
-            target: attentionBounceT; property: "y"
-            to: -14; duration: 300; easing.type: Easing.OutQuad
+            target: attentionBounceT; property: dockItem._bounceProp
+            to: dockItem._attentionBounceTarget; duration: 300; easing.type: Easing.OutQuad
         }
         NumberAnimation {
-            target: attentionBounceT; property: "y"
+            target: attentionBounceT; property: dockItem._bounceProp
             to: 0; duration: 300; easing.type: Easing.InBounce
         }
         PauseAnimation { duration: 800 }
@@ -634,6 +810,7 @@ Item {
                     + " | launching=" + launching
                     + " | attentionSetting=" + DockSettings.attentionAnimation)
         if (!_showAttentionAnim) {
+            attentionBounceT.x = 0
             attentionBounceT.y = 0
             attentionRotateT.angle = 0
             attentionScaleT.xScale = 1.0
@@ -643,14 +820,87 @@ Item {
         }
     }
 
-    // Status indicator dots
-    Row {
+    // Status indicator dots (toward screen edge)
+    // Uses States + AnchorChanges for clean runtime edge switching.
+    Flow {
         id: indicatorRow
-        anchors.top: iconImage.bottom
-        anchors.topMargin: Kirigami.Units.smallSpacing - iconImage.height * (1.0 - DockSettings.iconScale) / 2.0
-        anchors.horizontalCenter: parent.horizontalCenter
+        flow: DockView.isVertical ? Flow.TopToBottom : Flow.LeftToRight
         spacing: Kirigami.Units.smallSpacing
         Accessible.ignored: true
+
+        // Margin compensation for icon padding from iconScale
+        property real _iconPaddingCompensation: iconImage.height * (1.0 - DockSettings.iconScale) / 2.0
+
+        states: [
+            State {
+                name: "bottom"
+                when: DockView.edge === 1
+                AnchorChanges {
+                    target: indicatorRow
+                    anchors.top: iconImage.bottom
+                    anchors.bottom: undefined
+                    anchors.left: undefined
+                    anchors.right: undefined
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: undefined
+                }
+                PropertyChanges {
+                    target: indicatorRow
+                    anchors.topMargin: Kirigami.Units.smallSpacing - indicatorRow._iconPaddingCompensation
+                }
+            },
+            State {
+                name: "top"
+                when: DockView.edge === 0
+                AnchorChanges {
+                    target: indicatorRow
+                    anchors.top: undefined
+                    anchors.bottom: iconImage.top
+                    anchors.left: undefined
+                    anchors.right: undefined
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: undefined
+                }
+                PropertyChanges {
+                    target: indicatorRow
+                    anchors.bottomMargin: Kirigami.Units.smallSpacing - indicatorRow._iconPaddingCompensation
+                }
+            },
+            State {
+                name: "left"
+                when: DockView.edge === 2
+                AnchorChanges {
+                    target: indicatorRow
+                    anchors.top: undefined
+                    anchors.bottom: undefined
+                    anchors.left: undefined
+                    anchors.right: iconImage.left
+                    anchors.horizontalCenter: undefined
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                PropertyChanges {
+                    target: indicatorRow
+                    anchors.rightMargin: Kirigami.Units.smallSpacing
+                }
+            },
+            State {
+                name: "right"
+                when: DockView.edge === 3
+                AnchorChanges {
+                    target: indicatorRow
+                    anchors.top: undefined
+                    anchors.bottom: undefined
+                    anchors.left: iconImage.right
+                    anchors.right: undefined
+                    anchors.horizontalCenter: undefined
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                PropertyChanges {
+                    target: indicatorRow
+                    anchors.leftMargin: Kirigami.Units.smallSpacing
+                }
+            }
+        ]
 
         Repeater {
             // Show dots based on window count (max 3)

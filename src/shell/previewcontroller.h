@@ -38,6 +38,7 @@ class PreviewController : public QObject
     Q_PROPERTY(QVariantList windowIds READ windowIds NOTIFY parentIndexChanged)
     Q_PROPERTY(QString appName READ appName NOTIFY parentIndexChanged)
     Q_PROPERTY(qreal contentX READ contentX NOTIFY positionChanged)
+    Q_PROPERTY(qreal contentY READ contentY NOTIFY positionChanged)
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
     Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
 
@@ -59,14 +60,20 @@ public:
     [[nodiscard]] QVariantList windowIds() const;
     [[nodiscard]] QString appName() const;
     [[nodiscard]] qreal contentX() const;
+    [[nodiscard]] qreal contentY() const;
     [[nodiscard]] qreal contentWidth() const;
     [[nodiscard]] qreal contentHeight() const;
 
     [[nodiscard]] bool isPreviewKeyboardActive() const;
     [[nodiscard]] int focusedThumbnailIndex() const;
 
-    /// Show preview for the task at @p index, positioned above the icon.
-    Q_INVOKABLE void showPreview(int index, qreal itemGlobalX, qreal itemWidth);
+    /// Show preview for the task at @p index, positioned near the icon.
+    /// @p itemGlobalPos is the icon's global X (horizontal) or Y (vertical).
+    /// @p itemExtent is the icon's width (horizontal) or height (vertical).
+    Q_INVOKABLE void showPreview(int index, qreal itemGlobalPos, qreal itemExtent);
+
+    /// Reconfigure preview surface anchors/margins after edge change.
+    void updateEdge();
 
     /// Hide the preview immediately.
     Q_INVOKABLE void hidePreview();
@@ -123,6 +130,8 @@ Q_SIGNALS:
 
 private:
     void updateInputRegion();
+    void applyEdgeLayout();
+    void recalcContentPosition();
     void doShow();
     void doHide();
 
@@ -139,10 +148,11 @@ private:
     int m_parentIndex = -1;
 
     qreal m_contentX = 0;
+    qreal m_contentY = 0;
     qreal m_contentWidth = 280;
     qreal m_contentHeight = 200;
-    qreal m_itemGlobalX = 0;
-    qreal m_itemWidth = 0;
+    qreal m_itemGlobalPos = 0;
+    qreal m_itemExtent = 0;
 
     // Preview keyboard navigation state
     bool m_previewKeyboardActive = false;

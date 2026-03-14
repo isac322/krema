@@ -366,6 +366,7 @@ void DockVisibilityController::applyInputRegion()
     params.zoomOverflowHeight = m_zoomOverflowHeight;
     params.visible = m_visible;
     params.hovered = m_hovered;
+    params.edge = static_cast<int>(m_platform->edge());
 
     m_platform->setInputRegion(computeDockInputRegion(params));
 }

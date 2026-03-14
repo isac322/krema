@@ -37,12 +37,14 @@ class NotificationTracker : public QObject
     Q_CLASSINFO("D-Bus Interface", "org.kde.NotificationWatcher")
 
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
+    Q_PROPERTY(bool dndActive READ dndActive NOTIFY dndActiveChanged)
 
 public:
     explicit NotificationTracker(QObject *parent = nullptr);
     ~NotificationTracker() override;
 
     [[nodiscard]] int revision() const;
+    [[nodiscard]] bool dndActive() const;
 
     /// Return the number of unread notifications for the given desktop entry (e.g. "slack").
     [[nodiscard]] Q_INVOKABLE int unreadCount(const QString &desktopEntry) const;
@@ -50,11 +52,15 @@ public:
     /// Return true if the SNI item matching @p appId has NeedsAttention status.
     [[nodiscard]] Q_INVOKABLE bool sniNeedsAttention(const QString &appId) const;
 
+    /// Clear all unread notifications for the given app (e.g. when user reads them).
+    Q_INVOKABLE void clearUnreadNotifications(const QString &appId);
+
     /// Dump all tracked state to the console (debug tool).
     Q_INVOKABLE void dumpState() const;
 
 Q_SIGNALS:
     void revisionChanged();
+    void dndActiveChanged();
 
 public Q_SLOTS:
     // D-Bus notification watcher slots — called by the notification server.
@@ -83,6 +89,7 @@ private:
     void setupNotificationWatcher();
     void setupSniWatcher();
     void bumpRevision();
+    void updateDndState();
 
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
@@ -106,6 +113,7 @@ private:
     QDBusServiceWatcher m_sniServiceWatcher;
 
     int m_revision = 0;
+    bool m_dndActive = false;
 };
 
 } // namespace krema

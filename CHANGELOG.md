@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Progress bar on dock icons for apps reporting task progress (e.g. file copy in Dolphin)
+- Badge display mode setting: Number, Dot, or Off
+- Attention animation duration setting with auto-stop (default 5 seconds, 0 for infinite)
+- "Clear Notifications" context menu action for manually dismissing notification badges
+- Do Not Disturb integration — attention animations are suppressed when system DND is active
+
+### Fixed
+
+- Notification badges now always clear on focus, even when SmartLauncher count was previously active
+- Attention animation no longer runs infinitely for persistent notification badges
+- Dodge mode now correctly resumes after closing the settings window
+
 ## [0.6.0] - 2026-03-02
 
 ### Added

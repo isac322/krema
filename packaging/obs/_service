@@ -1,8 +1,8 @@
 <services>
   <service name="obs_scm">
     <param name="scm">git</param>
-    <param name="url">https://github.com/user/krema.git</param>
-    <param name="revision">main</param>
+    <param name="url">https://github.com/isac322/krema.git</param>
+    <param name="revision">master</param>
     <param name="versionformat">@PARENT_TAG@+@TAG_OFFSET@.%ci.g@COMMIT_SHORT@</param>
     <param name="versionrewrite-pattern">v(.*)</param>
   </service>

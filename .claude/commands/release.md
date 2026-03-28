@@ -14,6 +14,48 @@ Abort with a clear message if any check fails.
 2. **On master branch**: `git branch --show-current`
 3. **Unreleased has content**: CHANGELOG.md `## [Unreleased]` must have at least one entry. Empty → abort ("nothing to release")
 4. **Tag doesn't exist** (checked after version is determined)
+5. **Multi-distribution tooling**: Detect which deployment channels are available. Report all, proceed with what's available.
+
+```bash
+AUR_READY=yes  # Always available (git subtree push)
+OBS_READY=$(command -v osc >/dev/null 2>&1 && echo yes || echo no)
+COPR_READY=$(command -v copr-cli >/dev/null 2>&1 && echo yes || echo no)
+
+# PPA: needs dput + (dpkg-buildpackage OR Docker)
+DPUT_READY=$(command -v dput >/dev/null 2>&1 && echo yes || echo no)
+DPKG_READY=$(command -v dpkg-buildpackage >/dev/null 2>&1 && echo yes || echo no)
+DOCKER_READY=$(docker info >/dev/null 2>&1 && echo yes || echo no)
+PPA_READY=no
+if [ "$DPUT_READY" = yes ] && { [ "$DPKG_READY" = yes ] || [ "$DOCKER_READY" = yes ]; }; then
+  PPA_READY=yes
+fi
+
+# GPG key for PPA: query Launchpad API for the registered fingerprint
+if [ "$PPA_READY" = yes ]; then
+  LP_GPG_FINGERPRINT=$(curl -s "https://api.launchpad.net/devel/~isac322" \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('gpg_keys_collection_link',''))" 2>/dev/null)
+  # Then fetch the actual fingerprint from that collection
+  LP_GPG_KEY=$(curl -s "$LP_GPG_FINGERPRINT" \
+    | python3 -c "import sys,json; entries=json.load(sys.stdin).get('entries',[]); print(entries[0]['fingerprint'] if entries else '')" 2>/dev/null)
+  if [ -z "$LP_GPG_KEY" ]; then
+    PPA_READY=no
+    PPA_REASON="GPG key not found on Launchpad"
+  fi
+fi
+```
+
+Report:
+```
+배포 채널 사전 검사:
+  AUR:  ✅ ready
+  OBS:  ✅ ready / ❌ osc 미설치 (pip install osc)
+  COPR: ✅ ready / ❌ copr-cli 미설치 (pip install copr-cli)
+  PPA:  ✅ ready (GPG: <fingerprint>) / ❌ <reason>
+
+❌ 채널은 릴리즈 후 건너뜁니다. 계속할까요?
+```
+
+Wait for user confirmation before proceeding.
 
 ## Step 2: Determine Version
 
@@ -153,21 +195,99 @@ AUR에 push:
 git subtree push --prefix=packaging/arch aur master
 ```
 
-## Step 7: Summary
+## Step 7: OBS Deployment
+
+Skip if `OBS_READY=no` from Step 1.
+
+### 7a. Update packaging/obs version files
+
+1. **krema.spec**: Update `Version:` to the new version
+2. **debian.changelog**: Prepend new entry. Extract maintainer name+email from existing entries — never hardcode.
+3. **Dependency sync audit**: Compare `CMakeLists.txt` find_package() against `krema.spec` BuildRequires and `debian.control` Build-Depends. Report mismatches.
+4. Commit + push:
+```bash
+git add packaging/obs/krema.spec packaging/obs/debian.changelog
+git commit -m "chore: update OBS packaging for v<version>
+
+Co-Authored-By: Claude <model-name> <noreply@anthropic.com>"
+git push
+```
+
+### 7b. Upload to OBS
+
+```bash
+osc checkout home:isac322/krema
+cp packaging/obs/* home:isac322/krema/
+cd home:isac322/krema && osc addremove && osc commit -m "Update to v<version>" && cd -
+rm -rf home:isac322
+```
+
+## Step 8: COPR Deployment
+
+Skip if `COPR_READY=no` from Step 1.
+
+```bash
+copr-cli edit-package-scm isac322/krema \
+  --name krema \
+  --clone-url https://github.com/isac322/krema.git \
+  --committish "v<version>" \
+  --subdir packaging/obs \
+  --spec krema.spec
+
+copr-cli build-package isac322/krema --name krema
+```
+
+## Step 9: Launchpad PPA Deployment
+
+Skip if `PPA_READY=no` from Step 1.
+
+### 9a. Determine target Ubuntu series
+
+Query the PPA to find which series are configured, or maintain the list here. Update when new Ubuntu versions with Qt 6.8+ are released:
+- `plucky` (25.04)
+- `questing` (25.10)
+- 26.04 series codename (check `distro-info --supported` or Ubuntu release schedule at release time)
+
+### 9b. Build source packages
+
+For each series, build a source package with version `<version>-1~ppa1~<series>1`. Download the release tarball once, then loop over series.
+
+If `dpkg-buildpackage` is available, build natively. Otherwise, use Docker (`docker run --rm ubuntu:25.04`) to run it. Mount the repo as read-only, output to a temp dir.
+
+The `debian/` directory is assembled from `packaging/obs/debian.*` files. The only change per series is `debian/changelog` which targets that series name.
+
+### 9c. Sign and upload
+
+Use `$LP_GPG_KEY` (fingerprint detected from Launchpad API in Step 1) to sign `.dsc` and `.changes` files.
+
+If `debsign` is available:
+```bash
+debsign -k "$LP_GPG_KEY" <changes_file>
+```
+Otherwise, use `gpg --clearsign` directly on `.dsc` and `.changes`.
+
+Upload with `dput ppa:isac322/krema <changes_file>`. If `dput` is unavailable, use Python `ftplib` to FTP files to `ppa.launchpad.net`.
+
+### 9d. Cleanup temp directory
+
+## Step 10: Summary
 
 ```
-✅ Released vx.y.z
+✅ Released v<version>
 
 Commits:
-  1. chore: release vx.y.z
-  2. chore: update PKGBUILD and .SRCINFO for vx.y.z
+  1. chore: release v<version>
+  2. chore: update PKGBUILD and .SRCINFO for v<version>
+  3. chore: update OBS packaging for v<version> (if applicable)
 
-Updated files:
-  - CMakeLists.txt, CHANGELOG.md, ROADMAP.md
-  - metainfo.xml, work-state.md
-  - PKGBUILD, .SRCINFO
+Distribution deployment:
+  AUR:  ✅ pushed / ⚠️ <error>
+  OBS:  ✅ uploaded / ⏭️ skipped (osc not installed)
+  COPR: ✅ build triggered / ⏭️ skipped (copr-cli not installed)
+  PPA:  ✅ uploaded (<series list>) / ⏭️ skipped (<reason>)
 
-PKGBUILD deps: ✅ in sync / ⚠️ <issues>
 GitHub Release: <URL>
-AUR: ✅ pushed / ⚠️ <error>
+COPR: https://copr.fedorainfracloud.org/coprs/isac322/krema/builds/
+OBS:  https://build.opensuse.org/package/show/home:isac322/krema
+PPA:  https://launchpad.net/~isac322/+archive/ubuntu/krema
 ```

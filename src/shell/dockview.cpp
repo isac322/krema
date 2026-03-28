@@ -3,6 +3,7 @@
 
 #include "dockview.h"
 
+#include "config/screensettings.h"
 #include "dockvisibilitycontroller.h"
 #include "krema.h"
 #include "models/taskiconprovider.h"
@@ -66,11 +67,8 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     // Enable i18n() in QML (required for Accessible.name/description strings)
     KLocalization::setupLocalizedContext(engine());
 
-    auto *visibility = m_visibilityController;
-    qmlRegisterSingletonType<DockVisibilityController>("com.bhyoo.krema", 1, 0, "DockVisibility", [visibility](QQmlEngine *, QJSEngine *) -> QObject * {
-        QQmlEngine::setObjectOwnership(visibility, QQmlEngine::CppOwnership);
-        return visibility;
-    });
+    // Per-engine context property (supports multiple DockView instances for M8 multi-monitor)
+    engine()->rootContext()->setContextProperty(QStringLiteral("DockVisibility"), m_visibilityController);
 
     // Apply background effects (blur, contrast)
     applyBackgroundStyle();
@@ -160,9 +158,15 @@ void DockView::bumpIconCacheVersion()
     Q_EMIT iconCacheVersionChanged();
 }
 
+void DockView::setScreenSettings(ScreenSettings *screenSettings)
+{
+    m_screenSettings = screenSettings;
+}
+
 int DockView::panelBarHeight() const
 {
-    return krema::panelBarHeight(m_settings->iconSize(), s_padding, floatingPadding());
+    const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
+    return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
 }
 
 bool DockView::isStyleAvailable(int styleType) const
@@ -182,7 +186,9 @@ DockVisibilityController *DockView::visibilityController() const
 
 void DockView::updateSize()
 {
-    const int h = krema::surfaceHeight(m_settings->iconSize(), s_padding, m_settings->maxZoomFactor(), s_tooltipReserve, floatingPadding());
+    const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
+    const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, s_tooltipReserve, floatingPadding());
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {
@@ -206,7 +212,9 @@ void DockView::updateSize()
 
 int DockView::zoomOverflowHeight() const
 {
-    return krema::zoomOverflowHeight(m_settings->iconSize(), m_settings->maxZoomFactor());
+    const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
+    const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
+    return krema::zoomOverflowHeight(iconSize, maxZoom);
 }
 
 void DockView::handleScreenChanged(QScreen *newScreen)

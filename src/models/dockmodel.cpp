@@ -72,6 +72,7 @@ DockModel::DockModel(QObject *parent)
     // Track desktop/activity changes so the model stays up to date.
     connect(m_virtualDesktopInfo.get(), &TaskManager::VirtualDesktopInfo::currentDesktopChanged, this, [this]() {
         m_tasksModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
+        Q_EMIT currentDesktopChanged();
     });
     connect(m_activityInfo.get(), &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
         m_tasksModel->setActivity(m_activityInfo->currentActivity());
@@ -186,6 +187,48 @@ QString DockModel::appId(int index) const
         return {};
     }
     return idx.data(TaskManager::AbstractTasksModel::AppId).toString();
+}
+
+bool DockModel::filterByVirtualDesktop() const
+{
+    return m_tasksModel->filterByVirtualDesktop();
+}
+
+void DockModel::setFilterByVirtualDesktop(bool filter)
+{
+    if (m_tasksModel->filterByVirtualDesktop() == filter) {
+        return;
+    }
+    m_tasksModel->setFilterByVirtualDesktop(filter);
+    Q_EMIT filterByVirtualDesktopChanged();
+}
+
+QVariant DockModel::currentDesktop() const
+{
+    return m_virtualDesktopInfo->currentDesktop();
+}
+
+bool DockModel::isOnCurrentDesktop(int index) const
+{
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return true;
+    }
+
+    // Launchers (no window) are always considered "on current desktop"
+    if (!idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()) {
+        return true;
+    }
+
+    // Windows on all desktops are always visible
+    if (idx.data(TaskManager::AbstractTasksModel::IsOnAllVirtualDesktops).toBool()) {
+        return true;
+    }
+
+    // Check if any of the task's desktops match the current desktop
+    const QVariant currentDesktop = m_virtualDesktopInfo->currentDesktop();
+    const QVariantList desktops = idx.data(TaskManager::AbstractTasksModel::VirtualDesktops).toList();
+    return desktops.contains(currentDesktop);
 }
 
 } // namespace krema

@@ -13,6 +13,8 @@ class QQuickWindow;
 namespace krema
 {
 
+class DockView;
+
 /**
  * Settings dialog window.
  *
@@ -25,7 +27,7 @@ class SettingsWindow : public QObject
     Q_OBJECT
 
 public:
-    explicit SettingsWindow(KremaSettings *settings, QObject *parent = nullptr);
+    explicit SettingsWindow(KremaSettings *settings, DockView *dockView, QObject *parent = nullptr);
     ~SettingsWindow() override;
 
     /// Show the settings dialog, or raise it if already visible.
@@ -42,6 +44,7 @@ private:
     void findAndTrackConfigWindow(int attempt = 0);
 
     KremaSettings *m_settings;
+    DockView *m_dockView;
     QQmlApplicationEngine *m_engine = nullptr;
     QPointer<QQuickWindow> m_configWindow;
 };

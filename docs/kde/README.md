@@ -10,8 +10,8 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [wayland-layer-shell.md](wayland-layer-shell.md) | LayerShellQt — Shell, Window, Anchor/Layer/KeyboardInteractivity enums, surface coordinates |
 | [taskmanager-models.md](taskmanager-models.md) | TaskManager — model hierarchy, proxy chain, roles, Q_PROPERTIES, task interaction |
-| [virtual-desktops.md](virtual-desktops.md) | VirtualDesktopInfo — desktop/activity tracking |
-| [multi-monitor.md](multi-monitor.md) | QScreen API, LayerShellQt ScreenConfiguration, multi-monitor architecture |
+| [virtual-desktops.md](virtual-desktops.md) | VirtualDesktopInfo, TasksModel filtering, IsOnAllVirtualDesktops, ScreenGeometry roles, M8 filtering patterns |
+| [multi-monitor.md](multi-monitor.md) | QScreen API, LayerShellQt ScreenConfiguration, multi-monitor architecture, active screen detection, per-screen settings |
 | [kconfig.md](kconfig.md) | KConfig/KSharedConfig/KConfigGroup — persistent configuration, read/write, watchers |
 | [kglobalaccel.md](kglobalaccel.md) | KGlobalAccel — global keyboard shortcuts, registration, conflict handling |
 | [kaboutdata.md](kaboutdata.md) | KAboutData — application metadata, license, D-Bus/KGlobalAccel integration |
@@ -52,6 +52,12 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | [kwindow-effects.md](kwindow-effects.md) | KWindowEffects (blur/contrast/slide), KWindowSystem, KWaylandExtras |
 | [attention-animation-reference.md](attention-animation-reference.md) | Attention animation options — wiggle/bounce/glow/badge comparison, Plasma reference, SmartLauncherItem API |
 | [icon-normalization-reference.md](icon-normalization-reference.md) | Icon size normalization algorithms — alpha bounding box, threshold trim, content-aware scale |
+
+### M8: Multi-Monitor + Virtual Desktop
+
+| Document | Description |
+|----------|-------------|
+| [screen-transition-research.md](screen-transition-research.md) | Dock transition animation research — Latte, macOS, GNOME, follow-active recommendations |
 
 ### M9: System Tray
 

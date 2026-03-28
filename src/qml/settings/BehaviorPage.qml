@@ -84,4 +84,75 @@ FormCard.FormCardPage {
             visible: DockSettings.visibilityMode !== 0
         }
     }
+
+    FormCard.FormHeader {
+        title: i18n("Multi-Monitor")
+    }
+
+    FormCard.FormCard {
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Monitor mode")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Primary monitor only"),
+                i18n("All monitors"),
+                i18n("Follow active screen")
+            ]
+            currentIndex: DockSettings.monitorMode
+            onActivated: function(index) {
+                DockSettings.monitorMode = index
+            }
+        }
+    }
+
+    FormCard.FormDelegateSeparator {
+        visible: DockSettings.monitorMode === 2
+    }
+
+    FormCard.FormCard {
+        visible: DockSettings.monitorMode === 2
+
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Follow trigger")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Mouse position"),
+                i18n("Active window focus"),
+                i18n("Composite (focus + mouse)")
+            ]
+            currentIndex: DockSettings.followActiveTrigger
+            onActivated: function(index) {
+                DockSettings.followActiveTrigger = index
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Screen transition")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Fade"),
+                i18n("Slide"),
+                i18n("Instant")
+            ]
+            currentIndex: DockSettings.screenTransition
+            onActivated: function(index) {
+                DockSettings.screenTransition = index
+            }
+        }
+    }
+
+    FormCard.FormHeader {
+        title: i18n("Virtual Desktops")
+    }
+
+    FormCard.FormCard {
+        FormCard.FormSwitchDelegate {
+            text: i18n("Show current desktop only")
+            description: i18n("When on, only shows windows from the active virtual desktop. Pinned apps are always visible.")
+            checked: DockSettings.filterByVirtualDesktop
+            onCheckedChanged: DockSettings.filterByVirtualDesktop = checked
+        }
+    }
 }

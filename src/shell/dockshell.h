@@ -20,6 +20,7 @@ class DockModel;
 class DockView;
 class NotificationTracker;
 class PreviewController;
+class ScreenSettings;
 class SettingsWindow;
 
 /**
@@ -34,7 +35,8 @@ class DockShell : public QObject
     Q_OBJECT
 
 public:
-    explicit DockShell(KremaSettings *settings,
+    explicit DockShell(KremaSettings *globalSettings,
+                       ScreenSettings *screenSettings,
                        DockModel *model,
                        NotificationTracker *tracker,
                        std::unique_ptr<DockPlatform> platform,
@@ -57,6 +59,7 @@ private:
     void connectMenuSignals();
 
     KremaSettings *m_settings;
+    ScreenSettings *m_screenSettings;
     DockModel *m_model;
 
     std::unique_ptr<DockView> m_view;

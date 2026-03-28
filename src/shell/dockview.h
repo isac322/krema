@@ -23,6 +23,7 @@ namespace krema
 {
 
 class DockVisibilityController;
+class ScreenSettings;
 class TaskIconProvider;
 
 /**
@@ -72,6 +73,9 @@ public:
     /// Recalculate surface size (called when iconSize/maxZoomFactor/floating change).
     void updateSize();
 
+    /// Set per-screen settings overlay for size calculations.
+    void setScreenSettings(ScreenSettings *screenSettings);
+
     /// Check if a style is available on this system (for settings UI).
     Q_INVOKABLE bool isStyleAvailable(int styleType) const;
 
@@ -104,6 +108,7 @@ private Q_SLOTS:
 private:
     std::unique_ptr<DockPlatform> m_platform;
     KremaSettings *m_settings = nullptr;
+    ScreenSettings *m_screenSettings = nullptr;
     DockVisibilityController *m_visibilityController = nullptr;
     TaskIconProvider *m_iconProvider = nullptr;
     int m_iconCacheVersion = 0;

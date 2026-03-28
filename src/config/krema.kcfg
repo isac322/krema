@@ -200,6 +200,32 @@
       <max>2</max>
     </entry>
 
+    <entry name="MonitorMode" type="Int">
+      <label>Monitor mode (0=PrimaryOnly, 1=AllScreens, 2=FollowActive)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
+    <entry name="FollowActiveTrigger" type="Int">
+      <label>Follow active trigger (0=Mouse, 1=Focus, 2=Composite)</label>
+      <default>1</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
+    <entry name="ScreenTransition" type="Int">
+      <label>Screen transition animation (0=Fade, 1=Slide, 2=Instant)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
+    <entry name="FilterByVirtualDesktop" type="Bool">
+      <label>Only show windows from the current virtual desktop</label>
+      <default>false</default>
+    </entry>
+
     <entry name="PinnedLaunchers" type="StringList">
       <label>Pinned launcher URLs</label>
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>

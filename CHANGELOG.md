@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
+- Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
+- Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite
+- Virtual desktop filtering: show windows from current desktop only, or all desktops with dimmed icons for other desktops
 - Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
 - Compile-time LayerShellQt API detection for cross-distribution compatibility
 

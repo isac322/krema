@@ -107,8 +107,8 @@ int Application::run()
     m_dockManager = std::make_unique<MultiDockManager>(m_settings.get(), m_dockModel.get(), m_notificationTracker.get(), this);
     m_dockManager->initialize();
 
-    // Apply initial virtual desktop filter setting
-    m_dockModel->setFilterByVirtualDesktop(m_settings->filterByVirtualDesktop());
+    // Apply initial virtual desktop display mode
+    m_dockModel->setVirtualDesktopMode(m_settings->virtualDesktopMode());
 
     // Auto-save pinned launchers when they change on any shell
     connect(m_dockManager.get(), &MultiDockManager::pinnedLaunchersChanged, this, [this]() {
@@ -147,14 +147,15 @@ int Application::run()
     connect(s, &KremaSettings::ShadowElevationChanged, this, saveSettings);
     connect(s, &KremaSettings::IconNormalizationChanged, this, saveSettings);
     connect(s, &KremaSettings::AttentionAnimationChanged, this, saveSettings);
-    connect(s, &KremaSettings::FilterByVirtualDesktopChanged, this, saveSettings);
+    connect(s, &KremaSettings::VirtualDesktopModeChanged, this, saveSettings);
+    connect(s, &KremaSettings::OtherDesktopOpacityChanged, this, saveSettings);
     connect(s, &KremaSettings::MonitorModeChanged, this, saveSettings);
     connect(s, &KremaSettings::FollowActiveTriggerChanged, this, saveSettings);
     connect(s, &KremaSettings::ScreenTransitionChanged, this, saveSettings);
 
-    // Virtual desktop filter toggle
-    connect(s, &KremaSettings::FilterByVirtualDesktopChanged, this, [this]() {
-        m_dockModel->setFilterByVirtualDesktop(m_settings->filterByVirtualDesktop());
+    // Virtual desktop mode change
+    connect(s, &KremaSettings::VirtualDesktopModeChanged, this, [this]() {
+        m_dockModel->setVirtualDesktopMode(m_settings->virtualDesktopMode());
     });
 
     // Monitor mode change

@@ -51,6 +51,11 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.7.0" date="2026-03-28">
+      <description>
+        <p>Task progress bars on dock icons, configurable badge display modes (Number, Dot, Off), attention animation auto-stop with adjustable duration, manual notification clearing via context menu, and Do Not Disturb integration. Fixed notification badge clearing on focus and dodge mode resumption after settings close.</p>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-03-02">
       <description>
         <p>Notification badges with six attention animation styles (Bounce, Wiggle, Pulse, Glow, Dot color, Blink), single-instance enforcement via KDBusService, automatic startup on login, and visible desktop launcher entry.</p>

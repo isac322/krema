@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-28
+
 ### Added
 
 - Progress bar on dock icons for apps reporting task progress (e.g. file copy in Dolphin)

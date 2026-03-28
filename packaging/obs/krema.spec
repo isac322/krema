@@ -2,44 +2,69 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
 Name:           krema
-Version:        0.1.0
+Version:        0.7.0
 Release:        1%{?dist}
-Summary:        Latte Dock replacement for KDE Plasma 6
+Summary:        A lightweight dock for KDE Plasma 6
+
 License:        GPL-3.0-or-later
 URL:            https://github.com/isac322/krema
 Source0:        %{name}-%{version}.tar.xz
 
 BuildRequires:  cmake >= 3.22
 BuildRequires:  ninja-build
-BuildRequires:  gcc-c++
+BuildRequires:  gcc-c++ >= 14
 BuildRequires:  extra-cmake-modules >= 6.0.0
 
-BuildRequires:  cmake(Qt6Core) >= 6.6.0
-BuildRequires:  cmake(Qt6Gui) >= 6.6.0
-BuildRequires:  cmake(Qt6Widgets) >= 6.6.0
-BuildRequires:  cmake(Qt6DBus) >= 6.6.0
-BuildRequires:  cmake(Qt6Quick) >= 6.6.0
+# Qt 6
+BuildRequires:  cmake(Qt6Core) >= 6.8.0
+BuildRequires:  cmake(Qt6Gui) >= 6.8.0
+BuildRequires:  cmake(Qt6Widgets) >= 6.8.0
+BuildRequires:  cmake(Qt6DBus) >= 6.8.0
+BuildRequires:  cmake(Qt6Quick) >= 6.8.0
+BuildRequires:  cmake(Qt6QuickControls2) >= 6.8.0
+BuildRequires:  cmake(Qt6ShaderTools) >= 6.8.0
 
+# KDE Frameworks 6
 BuildRequires:  cmake(KF6WindowSystem) >= 6.0.0
 BuildRequires:  cmake(KF6Config) >= 6.0.0
 BuildRequires:  cmake(KF6CoreAddons) >= 6.0.0
 BuildRequires:  cmake(KF6DBusAddons) >= 6.0.0
 BuildRequires:  cmake(KF6I18n) >= 6.0.0
 BuildRequires:  cmake(KF6GlobalAccel) >= 6.0.0
+BuildRequires:  cmake(KF6ColorScheme) >= 6.0.0
+BuildRequires:  cmake(KF6IconThemes) >= 6.0.0
+BuildRequires:  cmake(KF6Crash) >= 6.0.0
+BuildRequires:  cmake(KF6XmlGui) >= 6.0.0
+BuildRequires:  cmake(KF6Service) >= 6.0.0
+BuildRequires:  cmake(KF6Kirigami) >= 6.0.0
+BuildRequires:  cmake(KF6KirigamiAddons)
 
+# Transitive dependencies (required by LibTaskManager/LibNotificationManager)
+BuildRequires:  cmake(KF6ItemModels) >= 6.0.0
+
+# Plasma and system
 BuildRequires:  cmake(LayerShellQt) >= 6.0.0
+BuildRequires:  cmake(LibTaskManager)
+BuildRequires:  cmake(LibNotificationManager)
+BuildRequires:  cmake(KPipeWire)
 BuildRequires:  pkgconfig(wayland-client) >= 1.22
 
+Requires:       kf6-kirigami%{?_isa}
+Requires:       kf6-kirigami-addons%{?_isa}
+Requires:       kpipewire%{?_isa}
+Requires:       plasma-workspace%{?_isa}
+Requires:       layer-shell-qt%{?_isa}
+
 %description
-Krema is a dock application for KDE Plasma 6, designed as a replacement
-for the discontinued Latte Dock. It features parabolic zoom animations,
-Wayland native support via LayerShellQt, and deep KDE integration.
+Krema is a lightweight dock for KDE Plasma 6, designed as a spiritual
+successor to Latte Dock. It features parabolic zoom animations, window
+previews via PipeWire, and deep integration with KDE Plasma desktop.
 
 %prep
 %autosetup -p1
 
 %build
-%cmake -G Ninja
+%cmake -G Ninja -DBUILD_TESTING=OFF
 %cmake_build
 
 %install
@@ -50,3 +75,4 @@ Wayland native support via LayerShellQt, and deep KDE integration.
 %{_bindir}/krema
 %{_datadir}/applications/com.bhyoo.krema.desktop
 %{_sysconfdir}/xdg/autostart/com.bhyoo.krema.autostart.desktop
+%{_datadir}/metainfo/com.bhyoo.krema.metainfo.xml

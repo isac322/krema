@@ -1,0 +1,30 @@
+krema (0.7.0-1) unstable; urgency=medium
+
+  * New upstream release v0.7.0
+  * Task progress bars on dock icons
+  * Configurable badge display modes (Number, Dot, Off)
+  * Attention animation auto-stop with adjustable duration
+  * Manual notification clearing via context menu
+  * Do Not Disturb integration
+  * Fixed notification badge clearing on focus
+  * Fixed dodge mode resumption after settings close
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Fri, 28 Mar 2026 00:00:00 +0900
+
+krema (0.6.0-1) unstable; urgency=medium
+
+  * New upstream release v0.6.0
+  * Notification badges with six attention animation styles
+  * Single-instance enforcement via KDBusService
+  * Automatic startup on login
+  * Visible desktop launcher entry
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Sun, 02 Mar 2026 00:00:00 +0900
+
+krema (0.5.1-1) unstable; urgency=medium
+
+  * New upstream release v0.5.1
+  * Fixed icon rendering on HiDPI displays
+  * Fixed dock edge trigger in AutoHide/DodgeWindows mode
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Sat, 01 Mar 2026 00:00:00 +0900

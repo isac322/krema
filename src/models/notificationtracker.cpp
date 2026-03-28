@@ -207,8 +207,9 @@ void NotificationTracker::dumpState() const
 
     // Notification watcher data
     const bool badgesEnabled = m_notifSettings ? m_notifSettings->badgesInTaskManager() : true;
-    qCInfo(lcNotif).noquote()
-        << QStringLiteral("[Notification Watcher] (tracked IDs: %1, badgesEnabled: %2)").arg(m_notifIdToEntry.size()).arg(badgesEnabled ? "true" : "false");
+    qCInfo(lcNotif).noquote() << QStringLiteral("[Notification Watcher] (tracked IDs: %1, badgesEnabled: %2)")
+                                     .arg(m_notifIdToEntry.size())
+                                     .arg(badgesEnabled ? QStringLiteral("true") : QStringLiteral("false"));
 
     for (auto it = m_unreadNotifs.cbegin(); it != m_unreadNotifs.cend(); ++it) {
         qCInfo(lcNotif).noquote() << QStringLiteral("  %1 : %2 unread (IDs: %3)").arg(it.key()).arg(it->size()).arg([&]() {

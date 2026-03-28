@@ -491,7 +491,11 @@ void PreviewController::applyEdgeLayout()
 
     m_previewView->setWidth(size.width());
     m_previewView->setHeight(size.height());
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+    m_previewView->resize(size);
+#else
     layerWindow->setDesiredSize(size);
+#endif
 }
 
 void PreviewController::recalcContentPosition()

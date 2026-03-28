@@ -97,9 +97,15 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
 
 void WaylandDockPlatform::setSize(const QSize &size)
 {
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+    if (m_window) {
+        m_window->resize(size);
+    }
+#else
     if (m_layerWindow) {
         m_layerWindow->setDesiredSize(size);
     }
+#endif
 }
 
 void WaylandDockPlatform::setInputRegion(const QRegion &region)

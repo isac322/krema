@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
+- Compile-time LayerShellQt API detection for cross-distribution compatibility
+
+### Fixed
+
+- Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
+- Build compatibility with strict `QT_NO_CAST_FROM_ASCII` flag on non-Arch distributions
+
 ## [0.7.0] - 2026-03-28
 
 ### Added

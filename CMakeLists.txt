@@ -59,7 +59,20 @@ ecm_set_disabled_deprecation_versions(
     KF ${KF6_MIN_VERSION}
 )
 
+# LayerShellQt < 6.4 lacks Window::setDesiredSize — detect and flag for fallback
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_INCLUDES ${LayerShellQt_INCLUDE_DIRS})
+set(CMAKE_REQUIRED_LIBRARIES LayerShellQt::Interface)
+check_cxx_source_compiles("
+#include <LayerShellQt/Window>
+#include <QSize>
+int main() { static_cast<LayerShellQt::Window*>(nullptr)->setDesiredSize(QSize{}); }
+" _HAVE_LAYERSHELLQT_DESIRED_SIZE)
+
 add_compile_definitions(KREMA_VERSION_STRING="${PROJECT_VERSION}")
+if(NOT _HAVE_LAYERSHELLQT_DESIRED_SIZE)
+    add_compile_definitions(KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE)
+endif()
 
 add_subdirectory(src)
 

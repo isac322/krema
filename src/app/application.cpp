@@ -7,11 +7,10 @@
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
 #include "models/notificationtracker.h"
-#include "platform/dockplatform.h"
-#include "platform/dockplatformfactory.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
+#include "shell/multidockmanager.h"
 
 #include <KAboutData>
 #include <KActionCollection>
@@ -74,13 +73,6 @@ int Application::run()
     // Must be called before any QWindow is created
     LayerShellQt::Shell::useLayerShell();
 
-    // Create platform backend
-    auto platform = DockPlatformFactory::create();
-    if (!platform) {
-        qCCritical(lcApp) << "No platform backend available";
-        return 1;
-    }
-
     // Load settings from KConfig (~/.config/kremarc)
     m_settings = std::make_unique<KremaSettings>();
     m_settings->load();
@@ -111,12 +103,15 @@ int Application::run()
         return tracker;
     });
 
-    // Create and initialize the dock shell (creates all sub-objects, loads QML)
-    m_shell = std::make_unique<DockShell>(m_settings.get(), m_dockModel.get(), m_notificationTracker.get(), std::move(platform), this);
-    m_shell->initialize(static_cast<DockPlatform::Edge>(m_settings->edge()), static_cast<DockPlatform::VisibilityMode>(m_settings->visibilityMode()));
+    // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode)
+    m_dockManager = std::make_unique<MultiDockManager>(m_settings.get(), m_dockModel.get(), m_notificationTracker.get(), this);
+    m_dockManager->initialize();
 
-    // Auto-save pinned launchers when they change (pin/unpin, drag reorder, add/remove)
-    connect(m_shell->actions(), &DockActions::pinnedLaunchersChanged, this, [this]() {
+    // Apply initial virtual desktop filter setting
+    m_dockModel->setFilterByVirtualDesktop(m_settings->filterByVirtualDesktop());
+
+    // Auto-save pinned launchers when they change on any shell
+    connect(m_dockManager.get(), &MultiDockManager::pinnedLaunchersChanged, this, [this]() {
         m_settings->setPinnedLaunchers(m_dockModel->pinnedLaunchers());
         m_settings->save();
     });
@@ -152,6 +147,20 @@ int Application::run()
     connect(s, &KremaSettings::ShadowElevationChanged, this, saveSettings);
     connect(s, &KremaSettings::IconNormalizationChanged, this, saveSettings);
     connect(s, &KremaSettings::AttentionAnimationChanged, this, saveSettings);
+    connect(s, &KremaSettings::FilterByVirtualDesktopChanged, this, saveSettings);
+    connect(s, &KremaSettings::MonitorModeChanged, this, saveSettings);
+    connect(s, &KremaSettings::FollowActiveTriggerChanged, this, saveSettings);
+    connect(s, &KremaSettings::ScreenTransitionChanged, this, saveSettings);
+
+    // Virtual desktop filter toggle
+    connect(s, &KremaSettings::FilterByVirtualDesktopChanged, this, [this]() {
+        m_dockModel->setFilterByVirtualDesktop(m_settings->filterByVirtualDesktop());
+    });
+
+    // Monitor mode change
+    connect(s, &KremaSettings::MonitorModeChanged, this, [this]() {
+        m_dockManager->setMonitorMode(static_cast<MultiDockManager::MonitorMode>(m_settings->monitorMode()));
+    });
 
     // The dock window is now created with layer-shell.
     // Unset the env var so child processes (launched apps) don't inherit it.
@@ -173,17 +182,25 @@ void Application::registerGlobalShortcuts()
     toggleAction->setText(i18nc("@action global shortcut", "Toggle Dock"));
     kga->setDefaultShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
-    connect(toggleAction, &QAction::triggered, m_shell->view()->visibilityController(), &DockVisibilityController::toggleVisibility);
+    connect(toggleAction, &QAction::triggered, this, [this]() {
+        if (auto *shell = m_dockManager->primaryShell()) {
+            shell->view()->visibilityController()->toggleVisibility();
+        }
+    });
 
     // Focus dock for keyboard navigation: Meta+F5
-    // Note: Meta+D conflicts with KWin's "Show Desktop" default shortcut
+    // In multi-monitor mode, focuses the dock on the screen containing the cursor.
     auto *focusDockAction = m_actionCollection->addAction(QStringLiteral("focus-dock"));
     focusDockAction->setText(i18nc("@action global shortcut", "Focus Dock"));
     kga->setDefaultShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
     kga->setShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
-    connect(focusDockAction, &QAction::triggered, m_shell.get(), &DockShell::focusDock);
+    connect(focusDockAction, &QAction::triggered, this, [this]() {
+        if (auto *shell = m_dockManager->shellAtCursor()) {
+            shell->focusDock();
+        }
+    });
 
-    // Meta+1..9: Activate N-th app
+    // Meta+1..9: Activate N-th app (targets primary dock)
     for (int i = 1; i <= 9; ++i) {
         auto *activateAction = m_actionCollection->addAction(QStringLiteral("activate-entry-%1").arg(i));
         activateAction->setText(i18nc("@action global shortcut", "Activate Entry %1", i));
@@ -191,11 +208,13 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(activateAction, {seq});
         kga->setShortcut(activateAction, {seq});
         connect(activateAction, &QAction::triggered, this, [this, i]() {
-            m_shell->actions()->activate(i - 1);
+            if (auto *shell = m_dockManager->primaryShell()) {
+                shell->actions()->activate(i - 1);
+            }
         });
     }
 
-    // Meta+Shift+1..9: New instance of N-th app
+    // Meta+Shift+1..9: New instance of N-th app (targets primary dock)
     for (int i = 1; i <= 9; ++i) {
         auto *newInstanceAction = m_actionCollection->addAction(QStringLiteral("new-instance-entry-%1").arg(i));
         newInstanceAction->setText(i18nc("@action global shortcut", "New Instance of Entry %1", i));
@@ -203,7 +222,9 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(newInstanceAction, {seq});
         kga->setShortcut(newInstanceAction, {seq});
         connect(newInstanceAction, &QAction::triggered, this, [this, i]() {
-            m_shell->actions()->newInstance(i - 1);
+            if (auto *shell = m_dockManager->primaryShell()) {
+                shell->actions()->newInstance(i - 1);
+            }
         });
     }
 

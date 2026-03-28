@@ -206,6 +206,15 @@ Item {
     readonly property bool _isStartup: model.IsStartup ?? false
     readonly property bool _isActive: model.IsActive ?? false
     readonly property int _childCount: model.ChildCount || 0
+
+    // Virtual desktop: dim items on other desktops when showing all desktops
+    // DockModel.currentDesktop is a reactive dependency — triggers re-evaluation on desktop switch
+    readonly property bool _isOnCurrentDesktop: {
+        let _dep = DockModel.currentDesktop
+        return DockModel.isOnCurrentDesktop(index)
+    }
+    opacity: (!DockModel.filterByVirtualDesktop && !_isOnCurrentDesktop) ? 0.4 : 1.0
+    Behavior on opacity { NumberAnimation { duration: 150 } }
     property int _prevChildCount: 0
 
     property bool _noOpOverride: false

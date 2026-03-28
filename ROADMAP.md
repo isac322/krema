@@ -128,17 +128,44 @@ Visual refinement and polish.
 
 ---
 
-## Milestone 8: Multi-Monitor + Virtual Desktops ⬅️ Current
+## Milestone 8a: Virtual Desktop Filtering ✅
 
-Multi-screen environment support.
+- [x] QML singleton → context property refactor (multi-DockShell prerequisite)
+- [x] Virtual desktop filtering (current desktop only / all desktops)
+- [x] Other-desktop window icon opacity dimming
+- [x] Settings UI: virtual desktop mode toggle
 
-- [ ] Multi-monitor
-  - [ ] Per-screen dock instances
-  - [ ] Active screen tracking (dock follows active screen)
-  - [ ] Per-monitor dock settings
-- [ ] Virtual desktops
-  - [ ] Filter by current virtual desktop
-  - [ ] Show all desktops option
+---
+
+## Milestone 8b: Multi-Monitor Core ✅
+
+- [ ] MultiDockManager (replaces single DockShell in Application)
+- [ ] All Screens mode (one dock per screen)
+- [ ] Primary Only mode
+- [ ] Screen hot-plug handling (with debounce)
+- [ ] Global shortcut policy (primary dock target)
+- [ ] PipeWire global stream cap (shared across PreviewControllers)
+- [ ] App list filter policy toggle (all apps vs per-screen)
+- [ ] Settings UI: Monitor Mode selector
+
+---
+
+## Milestone 8c: Per-Screen Settings ✅
+
+- [x] ScreenSettings two-tier KConfig architecture (global defaults + per-screen overrides)
+- [x] Per-monitor icon size, edge, visibility, background, zoom factor, floating, corner radius override
+- [x] Per-monitor pinned launchers override
+- [ ] Settings UI: per-screen settings page
+
+---
+
+## Milestone 8d: Follow Active Mode ✅
+
+- [x] Follow Active logic in MultiDockManager (mouse / focus / composite triggers)
+- [x] Screen transition via show/hide (Fade/Slide/Instant settings prepared)
+- [x] Debounce (300ms) for screen switch events
+- [x] Settings UI: trigger + transition effect selector
+- [ ] QML fade/slide transition animations (currently instant show/hide)
 
 ---
 

@@ -17,6 +17,8 @@ add_library(krema_lib STATIC
 
     shell/dockshell.h
     shell/dockshell.cpp
+    shell/multidockmanager.h
+    shell/multidockmanager.cpp
     shell/dockview.h
     shell/dockview.cpp
     shell/dockvisibilitycontroller.h
@@ -27,6 +29,9 @@ add_library(krema_lib STATIC
     shell/dockwidget.cpp
     shell/settingswindow.h
     shell/settingswindow.cpp
+
+    config/screensettings.h
+    config/screensettings.cpp
 
     style/backgroundstyle.h
     style/backgroundstyle.cpp

@@ -3,6 +3,7 @@
 
 #include "settingswindow.h"
 
+#include "dockview.h"
 #include "krema.h"
 
 #include <KLocalizedQmlContext>
@@ -20,9 +21,10 @@ Q_LOGGING_CATEGORY(lcSettingsWindow, "krema.settings.window")
 namespace krema
 {
 
-SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
+SettingsWindow::SettingsWindow(KremaSettings *settings, DockView *dockView, QObject *parent)
     : QObject(parent)
     , m_settings(settings)
+    , m_dockView(dockView)
 {
 }
 
@@ -106,6 +108,10 @@ void SettingsWindow::ensureEngine()
 
     m_engine = new QQmlApplicationEngine(this);
     KLocalization::setupLocalizedContext(m_engine);
+
+    // Expose DockView as context property so settings QML can access
+    // DockView.isStyleAvailable() etc. without process-global singleton registration.
+    m_engine->rootContext()->setContextProperty(QStringLiteral("DockView"), m_dockView);
 }
 
 void SettingsWindow::findAndTrackConfigWindow(int attempt)

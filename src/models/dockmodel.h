@@ -28,6 +28,8 @@ class DockModel : public QObject
 
     Q_PROPERTY(TaskManager::TasksModel *tasksModel READ tasksModel CONSTANT)
     Q_PROPERTY(QStringList pinnedLaunchers READ pinnedLaunchers WRITE setPinnedLaunchers NOTIFY pinnedLaunchersChanged)
+    Q_PROPERTY(bool filterByVirtualDesktop READ filterByVirtualDesktop WRITE setFilterByVirtualDesktop NOTIFY filterByVirtualDesktopChanged)
+    Q_PROPERTY(QVariant currentDesktop READ currentDesktop NOTIFY currentDesktopChanged)
 
 public:
     explicit DockModel(QObject *parent = nullptr);
@@ -39,6 +41,15 @@ public:
 
     [[nodiscard]] QStringList pinnedLaunchers() const;
     void setPinnedLaunchers(const QStringList &launchers);
+
+    [[nodiscard]] bool filterByVirtualDesktop() const;
+    void setFilterByVirtualDesktop(bool filter);
+
+    [[nodiscard]] QVariant currentDesktop() const;
+
+    /// Check if the task at @p index is on the current virtual desktop.
+    /// Returns true for launchers, tasks on all desktops, and tasks on current desktop.
+    Q_INVOKABLE bool isOnCurrentDesktop(int index) const;
 
     /// Return the icon theme name for the task at @p index.
     Q_INVOKABLE QString iconName(int index) const;
@@ -66,6 +77,8 @@ public:
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();
+    void filterByVirtualDesktopChanged();
+    void currentDesktopChanged();
 
 private:
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;

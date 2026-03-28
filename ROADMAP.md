@@ -104,7 +104,7 @@ Preview popup showing window thumbnails on mouse hover.
 
 ---
 
-## Milestone 7: Background Styles + Visual Polish ⬅️ Current
+## Milestone 7: Background Styles + Visual Polish ✅
 
 Visual refinement and polish.
 
@@ -115,17 +115,20 @@ Visual refinement and polish.
   - [x] Acrylic / Frosted Glass (blur + noise texture)
   - [x] Mica (system accent color based)
   - [x] Adaptive Opacity (switch to opaque when windows overlap)
-- [ ] Attention-demanding animations
-  - [ ] Icon wiggle (IsDemandingAttention)
-  - [ ] Badge count display (notification count)
-  - [ ] Highlight glow effect
+- [x] Attention-demanding animations
+  - [x] Six animation styles (Bounce, Wiggle, Pulse, Glow, Dot color, Blink)
+  - [x] Badge count display (Number, Dot, Off modes)
+  - [x] Task progress bar on dock icons
+  - [x] Attention auto-stop with configurable duration
+  - [x] Do Not Disturb integration
+  - [x] "Clear Notifications" context menu action
 - [x] Icon size normalization option
   - [x] Auto-detect icon internal padding and scale (default: enabled)
   - [x] Option to use original icon size as-is
 
 ---
 
-## Milestone 8: Multi-Monitor + Virtual Desktops
+## Milestone 8: Multi-Monitor + Virtual Desktops ⬅️ Current
 
 Multi-screen environment support.
 

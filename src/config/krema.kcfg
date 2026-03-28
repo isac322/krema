@@ -221,9 +221,18 @@
       <max>2</max>
     </entry>
 
-    <entry name="FilterByVirtualDesktop" type="Bool">
-      <label>Only show windows from the current virtual desktop</label>
-      <default>false</default>
+    <entry name="VirtualDesktopMode" type="Int">
+      <label>Virtual desktop display mode (0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly)</label>
+      <default>1</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
+    <entry name="OtherDesktopOpacity" type="Double">
+      <label>Opacity for windows on other virtual desktops (DimOtherDesktops mode)</label>
+      <default>0.4</default>
+      <min>0.1</min>
+      <max>0.9</max>
     </entry>
 
     <entry name="PinnedLaunchers" type="StringList">

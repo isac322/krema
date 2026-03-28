@@ -28,7 +28,7 @@ class DockModel : public QObject
 
     Q_PROPERTY(TaskManager::TasksModel *tasksModel READ tasksModel CONSTANT)
     Q_PROPERTY(QStringList pinnedLaunchers READ pinnedLaunchers WRITE setPinnedLaunchers NOTIFY pinnedLaunchersChanged)
-    Q_PROPERTY(bool filterByVirtualDesktop READ filterByVirtualDesktop WRITE setFilterByVirtualDesktop NOTIFY filterByVirtualDesktopChanged)
+    Q_PROPERTY(int virtualDesktopMode READ virtualDesktopMode WRITE setVirtualDesktopMode NOTIFY virtualDesktopModeChanged)
     Q_PROPERTY(QVariant currentDesktop READ currentDesktop NOTIFY currentDesktopChanged)
 
 public:
@@ -42,8 +42,9 @@ public:
     [[nodiscard]] QStringList pinnedLaunchers() const;
     void setPinnedLaunchers(const QStringList &launchers);
 
-    [[nodiscard]] bool filterByVirtualDesktop() const;
-    void setFilterByVirtualDesktop(bool filter);
+    /// Virtual desktop display mode: 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
+    [[nodiscard]] int virtualDesktopMode() const;
+    void setVirtualDesktopMode(int mode);
 
     [[nodiscard]] QVariant currentDesktop() const;
 
@@ -77,10 +78,11 @@ public:
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();
-    void filterByVirtualDesktopChanged();
+    void virtualDesktopModeChanged();
     void currentDesktopChanged();
 
 private:
+    int m_virtualDesktopMode = 0;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
     std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
     std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;

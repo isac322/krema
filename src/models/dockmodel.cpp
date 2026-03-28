@@ -189,18 +189,20 @@ QString DockModel::appId(int index) const
     return idx.data(TaskManager::AbstractTasksModel::AppId).toString();
 }
 
-bool DockModel::filterByVirtualDesktop() const
+int DockModel::virtualDesktopMode() const
 {
-    return m_tasksModel->filterByVirtualDesktop();
+    return m_virtualDesktopMode;
 }
 
-void DockModel::setFilterByVirtualDesktop(bool filter)
+void DockModel::setVirtualDesktopMode(int mode)
 {
-    if (m_tasksModel->filterByVirtualDesktop() == filter) {
+    if (m_virtualDesktopMode == mode) {
         return;
     }
-    m_tasksModel->setFilterByVirtualDesktop(filter);
-    Q_EMIT filterByVirtualDesktopChanged();
+    m_virtualDesktopMode = mode;
+    // Mode 2 (CurrentOnly): use TasksModel built-in filter
+    m_tasksModel->setFilterByVirtualDesktop(mode == 2);
+    Q_EMIT virtualDesktopModeChanged();
 }
 
 QVariant DockModel::currentDesktop() const

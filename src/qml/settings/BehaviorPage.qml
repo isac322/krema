@@ -148,11 +148,56 @@ FormCard.FormCardPage {
     }
 
     FormCard.FormCard {
-        FormCard.FormSwitchDelegate {
-            text: i18n("Show current desktop only")
-            description: i18n("When on, only shows windows from the active virtual desktop. Pinned apps are always visible.")
-            checked: DockSettings.filterByVirtualDesktop
-            onCheckedChanged: DockSettings.filterByVirtualDesktop = checked
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Display mode")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Show all windows"),
+                i18n("Dim other desktops"),
+                i18n("Current desktop only")
+            ]
+            currentIndex: DockSettings.virtualDesktopMode
+            onActivated: function(index) {
+                DockSettings.virtualDesktopMode = index
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.virtualDesktopMode === 1
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: dimOpacityDelegate
+            visible: DockSettings.virtualDesktopMode === 1
+            Accessible.name: i18n("Other desktop opacity")
+            background: null
+
+            contentItem: ColumnLayout {
+                RowLayout {
+                    Layout.fillWidth: true
+                    QQC2.Label {
+                        text: i18n("Other desktop opacity")
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        maximumLineCount: 2
+                        color: dimOpacityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(dimOpacitySlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: dimOpacitySlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 0.9; stepSize: 0.05
+                    value: DockSettings.otherDesktopOpacity
+                    onMoved: DockSettings.otherDesktopOpacity = value
+                    Accessible.name: i18n("Other desktop opacity")
+                }
+            }
         }
     }
 }

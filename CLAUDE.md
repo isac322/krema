@@ -96,16 +96,26 @@ After feature completion, run **process-reviewer** to:
 
 ## Version Release Checklist (Mandatory)
 
-버전을 릴리즈할 때 반드시 아래 항목을 **모두** 수행해야 한다. 하나라도 빠지면 릴리즈 불완전.
+`/release` 커맨드가 전체 릴리즈 파이프라인을 자동화한다. 수동으로 릴리즈할 경우 아래 순서를 반드시 따른다.
 
-1. `CMakeLists.txt` 버전 업데이트 (single source of truth)
-2. `CHANGELOG.md`: `## [Unreleased]` 항목 → `## [x.y.z] - YYYY-MM-DD`로 이동, Unreleased 비우기
-3. **PKGBUILD 의존성 동기화 검증**: `CMakeLists.txt`의 `find_package()` + `target_link_libraries()`와 `packaging/arch/PKGBUILD`의 `depends`/`makedepends`를 비교하여 누락/불필요 패키지 확인
-4. `packaging/arch/PKGBUILD`: `pkgver` + `sha256sums` 업데이트 (릴리즈 tarball sha256sum)
-5. `packaging/arch/.SRCINFO`: `makepkg --printsrcinfo > .SRCINFO` 로 재생성
-6. 커밋 (`chore: release x.y.z`)
-7. `git tag vx.y.z && git push && git push --tags`
-8. `gh release create vx.y.z` — 릴리즈 노트 작성 (documentation.md GitHub Release Notes 규칙 참조)
+**Phase 1: 릴리즈 커밋 (PKGBUILD 제외)**
+1. `CHANGELOG.md` [Unreleased] 카테고리로 semver 자동 판단 (Added→minor, Fixed only→patch)
+2. `CMakeLists.txt` 버전 업데이트
+3. `CHANGELOG.md`: `## [Unreleased]` → `## [x.y.z - YYYY-MM-DD]`
+4. `ROADMAP.md`: 완료 항목 체크, 마일스톤 마커 이동
+5. `metainfo.xml`: 릴리즈 엔트리 추가
+6. `work-state.md`: 상태 갱신
+7. 커밋 (`chore: release vx.y.z`) → 태그 → push
+
+**Phase 2: GitHub Release**
+8. `gh release create vx.y.z` — SEO 최적화 릴리즈 노트 (documentation.md 규칙)
+
+**Phase 3: PKGBUILD + AUR (GitHub release 완료 후)**
+9. PKGBUILD 의존성 동기화 검증 (`CMakeLists.txt` ↔ PKGBUILD)
+10. `pkgver` + `sha256sums` 업데이트 (릴리즈 tarball sha256sum)
+11. `.SRCINFO`: `makepkg --printsrcinfo > .SRCINFO` (절대 수동 편집 금지)
+12. 커밋 (`chore: update PKGBUILD and .SRCINFO for vx.y.z`) → push
+13. AUR 업로드: `git subtree push --prefix=packaging/arch aur master`
 
 ## Code Rules
 

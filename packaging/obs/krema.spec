@@ -8,10 +8,14 @@ Summary:        A lightweight dock for KDE Plasma 6
 
 License:        GPL-3.0-or-later
 URL:            https://github.com/isac322/krema
-Source0:        %{name}-%{version}.tar.xz
+Source0:        https://github.com/isac322/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  cmake >= 3.22
+%if 0%{?suse_version}
+BuildRequires:  ninja
+%else
 BuildRequires:  ninja-build
+%endif
 BuildRequires:  gcc-c++ >= 14
 BuildRequires:  extra-cmake-modules >= 6.0.0
 

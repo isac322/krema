@@ -1,0 +1,117 @@
+name: Docs & SEO Review
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "src/**"
+      - "CMakeLists.txt"
+      - "CHANGELOG.md"
+      - "README.md"
+      - "ROADMAP.md"
+      - ".claude/positioning.yml"
+      - "marketing/strategy.md"
+
+jobs:
+  docs-seo-check:
+    name: Documentation consistency check
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed source files
+        id: changed
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" HEAD -- \
+            'src/**' \
+            'CMakeLists.txt' \
+            2>/dev/null || git diff --name-only HEAD~1 HEAD -- \
+            'src/**' \
+            'CMakeLists.txt')
+
+          if [ -z "$CHANGED" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No relevant source files changed — skipping docs review."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "changed_files<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$CHANGED" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "Source files changed:"
+            echo "$CHANGED"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.changed.outputs.has_changes == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Run docs-seo consistency checks
+        if: steps.changed.outputs.has_changes == 'true'
+        id: check
+        run: |
+          python3 scripts/check_docs_seo.py 2>&1 | tee /tmp/docs-seo-report.txt
+          echo "report<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/docs-seo-report.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Post PR comment with docs-seo findings
+        if: >
+          github.event_name == 'pull_request' &&
+          steps.changed.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = `${{ steps.check.outputs.report }}`;
+            const changedFiles = `${{ steps.changed.outputs.changed_files }}`;
+
+            const body = [
+              '## Docs & SEO Review',
+              '',
+              '**Source files changed in this PR:**',
+              '```',
+              changedFiles,
+              '```',
+              '',
+              '**Consistency check results:**',
+              '```',
+              report,
+              '```',
+              '',
+              '> Run `/check-docs-seo` or `@docs-seo` agent in Claude Code for full review.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Docs & SEO Review')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

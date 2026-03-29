@@ -20,6 +20,16 @@
             "timeout": 30000
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/docs-seo-trigger.sh\"",
+            "timeout": 30000
+          }
+        ]
       }
     ],
     "PreCompact": [

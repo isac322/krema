@@ -18,8 +18,22 @@ Abort with a clear message if any check fails.
 
 ```bash
 AUR_READY=yes  # Always available (git subtree push)
-OBS_READY=$(command -v osc >/dev/null 2>&1 && echo yes || echo no)
-COPR_READY=$(command -v copr-cli >/dev/null 2>&1 && echo yes || echo no)
+
+# OBS: check both installed AND authenticated
+OBS_READY=no
+if command -v osc >/dev/null 2>&1; then
+  osc api /about >/dev/null 2>&1 && OBS_READY=yes || OBS_REASON="osc installed but not authenticated (run: osc ls)"
+else
+  OBS_REASON="osc not installed (pip install osc)"
+fi
+
+# COPR: check both installed AND authenticated
+COPR_READY=no
+if command -v copr-cli >/dev/null 2>&1; then
+  copr-cli whoami >/dev/null 2>&1 && COPR_READY=yes || COPR_REASON="copr-cli installed but not authenticated (run: copr-cli whoami)"
+else
+  COPR_REASON="copr-cli not installed (pip install copr-cli)"
+fi
 
 # PPA: needs dput + (dpkg-buildpackage OR Docker)
 DPUT_READY=$(command -v dput >/dev/null 2>&1 && echo yes || echo no)
@@ -84,10 +98,30 @@ Wait for user confirmation. After confirmed, verify `git tag -l v<version>` is e
 
 ## Step 3: Document Updates (release commit에 포함될 파일들)
 
-Read each file before editing. PKGBUILD는 이 단계에서 수정하지 않는다 — GitHub release 후 별도 처리.
+Read each file before editing. PKGBUILD는 이 단계에서 수정하지 않는다 — GitHub release 후 별도 처리. OBS 패키징 파일은 이 단계에서 함께 수정한다 — 태그에 올바른 버전이 포함되어야 COPR/OBS가 정상 빌드된다.
 
 ### 3a. CMakeLists.txt
 Update `project(krema VERSION x.y.z LANGUAGES CXX)`.
+
+### 3a-1. packaging/obs/krema.spec
+Update `Version:` field to the new version.
+
+### 3a-2. packaging/obs/krema.dsc
+Update `Version:` and `DEBTRANSFORM-TAR:` and `Files:` to match the new version. The tarball name must match what OBS `_service` (tar_scm) generates — it uses the `@PARENT_TAG@` format, so the tarball will be named `krema-<version>.tar.gz`.
+
+### 3a-3. packaging/obs/debian.changelog
+Prepend new entry at top. Extract maintainer name+email from existing entries — never hardcode.
+```
+krema (<version>-1) unstable; urgency=medium
+
+  * New upstream release v<version>
+  * <key items from CHANGELOG.md>
+
+ -- <maintainer from existing entries>  <RFC 2822 date>
+```
+
+### 3a-4. Dependency sync audit
+Compare `CMakeLists.txt` find_package() against `krema.spec` BuildRequires and `debian.control` Build-Depends. Report mismatches — fix before proceeding.
 
 ### 3b. CHANGELOG.md
 - Move all entries from `## [Unreleased]` into `## [x.y.z] - YYYY-MM-DD` (today's date)
@@ -121,7 +155,8 @@ This was forgotten in v0.5.1 and caught in a later session. Never skip.
 
 ```bash
 git add CMakeLists.txt CHANGELOG.md ROADMAP.md \
-  src/com.bhyoo.krema.metainfo.xml .claude/work-state.md
+  src/com.bhyoo.krema.metainfo.xml .claude/work-state.md \
+  packaging/obs/krema.spec packaging/obs/krema.dsc packaging/obs/debian.changelog
 
 git diff --cached --stat   # verify staged changes
 
@@ -199,21 +234,7 @@ git subtree push --prefix=packaging/arch aur master
 
 Skip if `OBS_READY=no` from Step 1.
 
-### 7a. Update packaging/obs version files
-
-1. **krema.spec**: Update `Version:` to the new version
-2. **debian.changelog**: Prepend new entry. Extract maintainer name+email from existing entries — never hardcode.
-3. **Dependency sync audit**: Compare `CMakeLists.txt` find_package() against `krema.spec` BuildRequires and `debian.control` Build-Depends. Report mismatches.
-4. Commit + push:
-```bash
-git add packaging/obs/krema.spec packaging/obs/debian.changelog
-git commit -m "chore: update OBS packaging for v<version>
-
-Co-Authored-By: Claude <model-name> <noreply@anthropic.com>"
-git push
-```
-
-### 7b. Upload to OBS
+The `_service` file points to `master` with `@PARENT_TAG@` versioning, so it automatically picks up the new version tag. The spec and debian.changelog were already updated in Step 3 and included in the tagged release commit. Just upload and trigger.
 
 ```bash
 osc checkout home:isac322/krema
@@ -221,6 +242,8 @@ cp packaging/obs/* home:isac322/krema/
 cd home:isac322/krema && osc addremove && osc commit -m "Update to v<version>" && cd -
 rm -rf home:isac322
 ```
+
+OBS `_service` (tar_scm) automatically fetches the tagged source and starts building. Verify builds are triggered by checking https://build.opensuse.org/package/show/home:isac322/krema
 
 ## Step 8: COPR Deployment
 
@@ -241,34 +264,92 @@ copr-cli build-package isac322/krema --name krema
 
 Skip if `PPA_READY=no` from Step 1.
 
-### 9a. Determine target Ubuntu series
+### 9a. Determine active Ubuntu series
 
-Query the PPA to find which series are configured, or maintain the list here. Update when new Ubuntu versions with Qt 6.8+ are released:
-- `plucky` (25.04)
-- `questing` (25.10)
-- 26.04 series codename (check `distro-info --supported` or Ubuntu release schedule at release time)
+Do NOT hardcode series names — they become obsolete. Query active series dynamically:
+```bash
+# Option 1: distro-info (if available)
+distro-info --supported 2>/dev/null
+
+# Option 2: Launchpad API
+curl -s "https://api.launchpad.net/devel/ubuntu/series" \
+  | python3 -c "import json,sys; [print(s['name'],s['status']) for s in json.load(sys.stdin)['entries'] if s['status'] in ('Current Stable Release','Supported','Active Development')]"
+```
+
+Only target series with Qt >= 6.8 (generally Ubuntu 25.10+). Skip any series marked as obsolete.
 
 ### 9b. Build source packages
 
-For each series, build a source package with version `<version>-1~ppa1~<series>1`. Download the release tarball once, then loop over series.
+```bash
+PPA_DIR=$(mktemp -d)
+curl -sL "https://github.com/isac322/krema/archive/v<version>.tar.gz" \
+  -o "$PPA_DIR/krema_<version>.orig.tar.gz"
+```
 
-If `dpkg-buildpackage` is available, build natively. Otherwise, use Docker (`docker run --rm ubuntu:25.04`) to run it. Mount the repo as read-only, output to a temp dir.
+For each active series, build a source package with version `<version>-1~ppa1~<series>1`.
 
-The `debian/` directory is assembled from `packaging/obs/debian.*` files. The only change per series is `debian/changelog` which targets that series name.
+Use Docker to run `dpkg-buildpackage` (Arch doesn't have it natively):
+```bash
+DOCKER_HOST=tcp://localhost:2375 docker run --rm \
+  -v "$(pwd):/src:ro" -v "$PPA_DIR:/output" ubuntu:25.10 bash -c '
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq >/dev/null 2>&1
+apt-get install -y -qq dpkg-dev devscripts debhelper >/dev/null 2>&1
+cd /output && tar xzf krema_<version>.orig.tar.gz && cd krema-<version>
+mkdir -p debian/source && echo "3.0 (quilt)" > debian/source/format
+cp /src/packaging/obs/debian.control debian/control
+cp /src/packaging/obs/debian.rules debian/rules
+cp /src/packaging/obs/debian.copyright debian/copyright
+chmod +x debian/rules
+cat > debian/changelog << "CHLOG"
+krema (<version>-1~ppa1~<series>1) <series>; urgency=medium
 
-### 9c. Sign and upload
+  * New upstream release v<version>
 
-Use `$LP_GPG_KEY` (fingerprint detected from Launchpad API in Step 1) to sign `.dsc` and `.changes` files.
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  <RFC 2822 date>
+CHLOG
+dpkg-buildpackage -S -us -uc -d
+chmod 666 /output/krema_<version>*
+'
+```
 
-If `debsign` is available:
+The `chmod 666` is critical — Docker creates files as root, but GPG signing runs on the host as the current user.
+
+### 9c. Sign source packages
+
+The signing order matters because checksums change when files are signed:
+
+1. **Sign `.dsc`** with `gpg --clearsign`
+2. **Recalculate checksums** of the signed `.dsc` in `.changes` (md5, sha1, sha256, size)
+3. **Sign `.changes`** with `gpg --clearsign`
+
+If `debsign` is available, it handles all of this automatically:
 ```bash
 debsign -k "$LP_GPG_KEY" <changes_file>
 ```
-Otherwise, use `gpg --clearsign` directly on `.dsc` and `.changes`.
 
-Upload with `dput ppa:isac322/krema <changes_file>`. If `dput` is unavailable, use Python `ftplib` to FTP files to `ppa.launchpad.net`.
+Otherwise, sign manually and update checksums with a script.
 
-### 9d. Cleanup temp directory
+### 9d. Upload to Launchpad
+
+Upload ALL 5 files (missing any one causes rejection):
+- `krema_<version>.orig.tar.gz`
+- `krema_<version>-1~ppa1~<series>1.debian.tar.xz`
+- `krema_<version>-1~ppa1~<series>1.dsc`
+- `krema_<version>-1~ppa1~<series>1_source.buildinfo`
+- `krema_<version>-1~ppa1~<series>1_source.changes`
+
+```bash
+dput "ppa:isac322/krema" <changes_file>
+```
+
+If using Python ftplib fallback, upload to `~isac322/ubuntu/krema/` directory (NOT the FTP root).
+
+### 9e. Cleanup
+
+```bash
+rm -rf "$PPA_DIR"
+```
 
 ## Step 10: Summary
 
@@ -276,9 +357,8 @@ Upload with `dput ppa:isac322/krema <changes_file>`. If `dput` is unavailable, u
 ✅ Released v<version>
 
 Commits:
-  1. chore: release v<version>
+  1. chore: release v<version> (includes OBS spec+debian.changelog)
   2. chore: update PKGBUILD and .SRCINFO for v<version>
-  3. chore: update OBS packaging for v<version> (if applicable)
 
 Distribution deployment:
   AUR:  ✅ pushed / ⚠️ <error>

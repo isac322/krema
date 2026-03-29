@@ -1,0 +1,127 @@
+# Krema Positioning Manifest
+# Single source of truth for product positioning, keywords, and search intents.
+# All documentation and SEO files derive from this manifest.
+# Increment manifest_version when making deliberate positioning changes.
+
+manifest_version: "1.0.0"
+
+product:
+  name: Krema
+  tagline: "A lightweight dock for KDE Plasma 6"
+  one_liner: "A lightweight, high-performance dock for KDE Plasma 6 — spiritual successor to Latte Dock."
+  meta_description: "Krema is a lightweight dock for KDE Plasma 6 with parabolic zoom, PipeWire window previews, and native Plasma integration."
+  latte_dock_relation: "spiritual successor"  # ONLY this phrase — never "replacement", "fork", or "clone"
+  language: C++23
+  frameworks:
+    - Qt 6
+    - KDE Frameworks 6
+    - Kirigami
+  background_style_count: 6
+  attention_animation_count: 6
+  visibility_mode_count: 3
+
+keywords:
+  primary:
+    - kde plasma dock
+    - latte dock alternative
+    - kde plasma 6 dock
+    - plasma 6 dock
+    - kde dock wayland
+
+  secondary:
+    - wayland dock linux
+    - kde dock application
+    - linux dock app
+    - kde taskbar alternative
+    - macos dock linux
+    - parabolic zoom dock
+    - pipewire window preview
+
+  long_tail:
+    - latte dock plasma 6 alternative
+    - best dock for kde plasma
+    - lightweight dock kde plasma
+    - parabolic zoom dock linux
+    - pipewire window preview dock
+    - kde plasma dock with window previews
+    - wayland native dock kde
+
+  metainfo_keywords:
+    - dock
+    - launcher
+    - taskbar
+    - panel
+    - latte
+    - kde
+    - plasma
+    - wayland
+    - zoom
+    - preview
+
+  github_topics:
+    - kde
+    - kde-plasma
+    - plasma-6
+    - wayland
+    - dock
+    - taskbar
+    - linux
+    - qt6
+    - cpp
+    - latte-dock
+    - kirigami
+    - pipewire
+    - layer-shell
+    - accessibility
+
+search_intents:
+  - name: latte-dock-migration
+    description: "Former Latte Dock users seeking a Plasma 6 replacement"
+    keywords: [latte dock alternative, latte dock plasma 6 alternative]
+
+  - name: kde-dock-search
+    description: "KDE users looking for a dock application"
+    keywords: [kde plasma dock, kde plasma 6 dock, kde dock application]
+
+  - name: wayland-dock
+    description: "Users specifically seeking Wayland-native dock"
+    keywords: [wayland dock linux, kde dock wayland, wayland native dock kde]
+
+  - name: customization
+    description: "Linux customizers (r/unixporn) seeking aesthetic dock"
+    keywords: [parabolic zoom dock, linux dock app, macos dock linux]
+
+  - name: window-preview
+    description: "Users wanting dock with window preview feature"
+    keywords: [pipewire window preview, kde plasma dock with window previews]
+
+  - name: lightweight-dock
+    description: "Users seeking performant, lightweight dock"
+    keywords: [lightweight dock kde plasma, best dock for kde plasma]
+
+target_audience:
+  primary: "Former Latte Dock users who lost their dock when upgrading to KDE Plasma 6"
+  secondary:
+    - "KDE Plasma users who want a more feature-rich dock than the default panel"
+    - "Linux customizers (r/unixporn) seeking aesthetic desktop setups"
+    - "macOS converts looking for familiar dock behavior on Linux"
+
+differentiators:
+  - "Only actively maintained dock with parabolic zoom for Plasma 6"
+  - "Wayland-native from day one — no X11 legacy code"
+  - "Deep KDE integration — built WITH KDE libraries, not just running on KDE"
+  - "PipeWire-based window previews — modern, efficient, Plasma-native"
+  - "6 background styles including acrylic frosted glass and Mica"
+  - "Full keyboard accessibility with AT-SPI screen reader support"
+
+drift_detection:
+  metainfo_keyword_max_divergence: 2
+  github_topic_max_divergence: 3
+  files_to_audit:
+    - README.md
+    - CHANGELOG.md
+    - src/com.bhyoo.krema.metainfo.xml
+    - src/com.bhyoo.krema.desktop.in
+    - packaging/arch/PKGBUILD
+    - marketing/strategy.md
+    - marketing/positioning.md

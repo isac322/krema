@@ -137,6 +137,35 @@ Krema는 KDE Plasma 전용 앱이다. 다른 데스크톱 환경은 고려하지
 - 설정 저장: KConfigXT (.kcfg 스키마, 자동 생성 KremaSettings 클래스)
 - 번역: 모든 사용자 대면 문자열에 `i18n()` 사용
 
+## Documentation & SEO
+
+`.claude/positioning.yml`이 포지셔닝/키워드의 **single source of truth**. 문서 작성/수정 시 반드시 참조.
+
+### Target Keywords
+
+**Primary**: kde plasma dock, latte dock alternative, kde plasma 6 dock, plasma 6 dock, kde dock wayland
+**Secondary**: wayland dock linux, kde dock application, linux dock app, kde taskbar alternative, macos dock linux, parabolic zoom dock, pipewire window preview
+**Long-tail**: latte dock plasma 6 alternative, best dock for kde plasma, lightweight dock kde plasma, parabolic zoom dock linux, pipewire window preview dock
+
+### SEO Rules
+
+- 키워드는 `marketing/strategy.md`에서 참조 — 하드코딩 금지
+- Latte Dock: "spiritual successor"만 사용 — "replacement", "fork", "clone" 금지
+- 문서 간 중복 표현 금지 (README ≠ metainfo ≠ .desktop 각각 고유 표현)
+- 구체적 숫자 사용 (6 background styles, 6 attention animations)
+- 코드 변경 후 `@docs-seo` 에이전트 평가 실행 또는 `/check-docs-seo` 사용
+
+### docs-seo Auto-Trigger Files
+
+| Changed File | Trigger Label | Action |
+|---|---|---|
+| `src/**/*.cpp`, `src/**/*.h` | code-change | README 기능 설명 확인 |
+| `src/qml/*.qml` | ui-change | README 시각적 기능 확인 |
+| `src/config/krema.kcfg` | settings-change | 설정 관련 문서 확인 |
+| `CMakeLists.txt` | deps-change | 빌드 의존성 + 버전 확인 |
+| `.claude/positioning.yml` | manifest-update | 전체 SEO 파일 동기화 |
+| `marketing/strategy.md` | strategy-update | 키워드 동기화 |
+
 ## Anti-Patterns (MUST AVOID)
 
 > 전체 교훈 및 상세 분석: `docs/kde/lessons-learned.md` 참조

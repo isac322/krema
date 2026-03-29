@@ -170,13 +170,58 @@ git push && git push --tags
 
 ## Step 5: GitHub Release
 
-Compose release notes following `.claude/rules/documentation.md` GitHub Release Notes rules:
+GitHub release pages are indexed by search engines — treat them as SEO and value communication opportunities.
 
-- Intro: 1-2 sentences with SEO keywords (KDE Plasma 6, dock, Wayland, Latte Dock spiritual successor)
-- Body: CHANGELOG categories, rewritten to lead with user value
-- Footer: `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
-- English, past tense
+### 5a. Gather context
 
+1. Read `marketing/strategy.md` for current SEO keywords (Primary, Secondary, Long-tail)
+2. Read `.claude/rules/documentation.md` § "GitHub Release Notes" and § "Latte Dock References"
+3. Check previous release style for consistency:
+```bash
+gh release view $(git describe --tags --abbrev=0 HEAD~1) 2>/dev/null || gh release list --limit 1
+```
+
+### 5b. Compose release notes (template by release type)
+
+**Minor/Major release template:**
+```markdown
+Krema vx.y.z — {1-2 sentence value summary with SEO keywords from marketing/strategy.md}.
+{For first/major releases, add: "Krema is a lightweight dock for KDE Plasma 6, the spiritual successor to Latte Dock."}
+
+### Added
+- {User benefit first} — {technical detail}
+
+### Changed
+...
+
+### Fixed
+...
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
+
+**Patch release template:**
+```markdown
+Krema vx.y.z — {one-line summary of what was fixed/improved}.
+
+### Fixed
+- {Detailed fix description, user-facing impact}
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
+
+### 5c. SEO rules for release notes
+
+- **Keyword source**: Read from `marketing/strategy.md` — never hardcode keywords
+- **Lead with value**: "Live window previews on hover" not "Implemented PipeWire stream capture"
+- **Latte Dock**: Only "spiritual successor" — never "replacement", "fork", or "clone"
+- **Internal refactors**: Reframe as user benefit or omit entirely
+- **Developer-only items** (CI, agent config): Omit from release notes
+- **Language**: English, past tense, user-facing
+
+### 5d. Present for review, then create
+
+Show the composed release notes to the user for review. After approval:
 ```bash
 gh release create vx.y.z --title "vx.y.z" -n "<notes>"
 ```

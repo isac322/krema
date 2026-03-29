@@ -2,7 +2,7 @@
 Type=Application
 Name=Krema
 GenericName=Dock
-Comment=Parabolic zoom dock for KDE Plasma 6 — spiritual successor to Latte Dock
+Comment=Lightweight Wayland-native dock with parabolic zoom and live window previews for KDE Plasma 6
 Exec=@KDE_INSTALL_FULL_BINDIR@/krema
 Icon=krema
 Terminal=false

@@ -41,7 +41,7 @@ Q_SIGNALS:
 
 private:
     void ensureEngine();
-    void findAndTrackConfigWindow(int attempt = 0);
+    void trackConfigWindow(QObject *configView);
 
     KremaSettings *m_settings;
     DockView *m_dockView;

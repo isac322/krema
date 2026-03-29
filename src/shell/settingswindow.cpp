@@ -12,9 +12,7 @@
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
-#include <QQuickView>
 #include <QQuickWindow>
-#include <QTimer>
 
 Q_LOGGING_CATEGORY(lcSettingsWindow, "krema.settings.window")
 
@@ -57,12 +55,7 @@ void SettingsWindow::show()
     auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
     if (configView) {
         QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, QVariant()));
-
-        // Find the ConfigWindow created by ConfigurationView.open()
-        // It's a top-level window created with createObject(null)
-        QTimer::singleShot(0, this, [this]() {
-            findAndTrackConfigWindow();
-        });
+        trackConfigWindow(configView);
     } else {
         qCWarning(lcSettingsWindow) << "ConfigurationView not found in SettingsDialog.qml";
     }
@@ -93,10 +86,7 @@ void SettingsWindow::show(const QString &defaultModule)
     auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
     if (configView) {
         QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, defaultModule));
-
-        QTimer::singleShot(0, this, [this]() {
-            findAndTrackConfigWindow();
-        });
+        trackConfigWindow(configView);
     }
 }
 
@@ -114,59 +104,34 @@ void SettingsWindow::ensureEngine()
     m_engine->rootContext()->setContextProperty(QStringLiteral("DockView"), m_dockView);
 }
 
-void SettingsWindow::findAndTrackConfigWindow(int attempt)
+void SettingsWindow::trackConfigWindow(QObject *configView)
 {
-    // ConfigurationView.open() creates a top-level window asynchronously.
-    // Find it among all QWindows.
-    const auto allWindows = QGuiApplication::allWindows();
-    for (auto *win : allWindows) {
-        auto *quickWin = qobject_cast<QQuickWindow *>(win);
-        if (!quickWin || quickWin == m_configWindow) {
-            continue;
-        }
-        // Skip QQuickView subclasses (e.g. DockView) — ConfigWindow is a plain QQuickWindow
-        if (qobject_cast<QQuickView *>(win)) {
-            continue;
-        }
-        // Skip the invisible host window (our root object).
-        if (!m_engine->rootObjects().isEmpty() && quickWin == qobject_cast<QQuickWindow *>(m_engine->rootObjects().first())) {
-            continue;
-        }
-        // Found the config window — track it regardless of visibility.
-        // ConfigurationView.open() shows the window asynchronously; it may not be visible yet.
-        m_configWindow = quickWin;
-        quickWin->setIcon(QGuiApplication::windowIcon());
-
-        connect(quickWin, &QWindow::visibleChanged, this, [this](bool visible) {
-            // Only forward close events — open is emitted manually below (exactly once)
-            // to avoid double-counting that breaks dodge interacting refcount.
-            if (!visible) {
-                Q_EMIT visibleChanged(false);
-                m_configWindow = nullptr;
-            }
-        });
-
-        // Ensure the window is visible and raised — ConfigurationView.open()
-        // creates the window asynchronously, so it may not be shown yet.
-        quickWin->show();
-        quickWin->raise();
-        quickWin->requestActivate();
-
-        Q_EMIT visibleChanged(true);
-
-        qCDebug(lcSettingsWindow) << "Tracking config window:" << quickWin;
+    // configViewItem is set synchronously by ConfigurationView.open() — no polling needed.
+    auto *win = qvariant_cast<QQuickWindow *>(configView->property("configViewItem"));
+    if (!win) {
+        qCWarning(lcSettingsWindow) << "configViewItem is null after open()";
         return;
     }
 
-    // ConfigWindow may not exist yet — retry up to 10 times (500ms total)
-    constexpr int maxAttempts = 10;
-    if (attempt < maxAttempts) {
-        QTimer::singleShot(50, this, [this, attempt]() {
-            findAndTrackConfigWindow(attempt + 1);
-        });
-    } else {
-        qCWarning(lcSettingsWindow) << "Config window not found after" << maxAttempts << "attempts";
-    }
+    m_configWindow = win;
+    win->setIcon(QGuiApplication::windowIcon());
+
+    connect(win, &QWindow::visibleChanged, this, [this](bool visible) {
+        // Only forward close events — open is emitted manually below (exactly once)
+        // to avoid double-counting that breaks dodge interacting refcount.
+        if (!visible) {
+            Q_EMIT visibleChanged(false);
+            m_configWindow = nullptr;
+        }
+    });
+
+    win->show();
+    win->raise();
+    win->requestActivate();
+
+    Q_EMIT visibleChanged(true);
+
+    qCDebug(lcSettingsWindow) << "Tracking config window:" << win;
 }
 
 } // namespace krema

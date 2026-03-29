@@ -25,6 +25,7 @@ M8 완료 → M9 준비 (Widget System + System Tray)
   - openSUSE ninja/autostart 경로 조건부 처리
 - [x] /release 스킬에 멀티 배포판 배포 파이프라인 추가
 - [x] README 배포판 배지 + 설치 가이드 업데이트
+- [x] SettingsWindow 리팩터링: 폴링 루프 → configViewItem 직접 참조
 
 ## 알려진 이슈
 
@@ -32,10 +33,8 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - QML fade/slide 전환 애니메이션 미구현 (현재 instant show/hide)
 - Per-screen 설정 UI 페이지 미구현 (백엔드만 완료)
 - PipeWire 글로벌 스트림 캡 미구현
-- SettingsWindow: findAndTrackConfigWindow() 폴링 루프를 ConfigurationView.configViewItem 직접 읽기로 리팩터링 필요 (docs/kde/settings-window-patterns.md 참조)
 
 ## 다음 작업
 
-- SettingsWindow 리팩터링 (폴링 → configViewItem 직접 참조)
 - M8 전체 릴리즈 검토 (v0.8.0)
 - M9: Widget System + System Tray

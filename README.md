@@ -67,7 +67,10 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 
 ## Installation
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/krema.svg)](https://repology.org/project/krema/versions)
+[![AUR](https://img.shields.io/aur/version/krema?logo=archlinux&label=AUR)](https://aur.archlinux.org/packages/krema)
+[![COPR](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcopr.fedorainfracloud.org%2Fapi_3%2Fpackage%3Fownername%3Disac322%26projectname%3Dkrema%26packagename%3Dkrema%26with_latest_succeeded_build%3Dtrue&query=%24.packages%5B0%5D.builds.latest_succeeded.source_package.version&logo=fedora&label=COPR&color=51A2DA)](https://copr.fedorainfracloud.org/coprs/isac322/krema/)
+[![OBS](https://build.opensuse.org/projects/home:isac322/packages/krema/badge.svg?type=default)](https://build.opensuse.org/package/show/home:isac322/krema)
+[![PPA](https://img.shields.io/badge/PPA-ppa%3Aisac322%2Fkrema-E95420?logo=ubuntu)](https://launchpad.net/~isac322/+archive/ubuntu/krema)
 
 | Distribution | Versions | Architectures |
 |---|---|---|

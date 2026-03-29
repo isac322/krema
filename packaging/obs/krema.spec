@@ -68,7 +68,11 @@ previews via PipeWire, and deep integration with KDE Plasma desktop.
 %autosetup -p1
 
 %build
+%if 0%{?suse_version}
+%cmake -DBUILD_TESTING=OFF
+%else
 %cmake -G Ninja -DBUILD_TESTING=OFF
+%endif
 %cmake_build
 
 %install

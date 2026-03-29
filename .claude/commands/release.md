@@ -268,15 +268,19 @@ Skip if `PPA_READY=no` from Step 1.
 
 Do NOT hardcode series names — they become obsolete. Query active series dynamically:
 ```bash
-# Option 1: distro-info (if available)
-distro-info --supported 2>/dev/null
-
-# Option 2: Launchpad API
 curl -s "https://api.launchpad.net/devel/ubuntu/series" \
-  | python3 -c "import json,sys; [print(s['name'],s['status']) for s in json.load(sys.stdin)['entries'] if s['status'] in ('Current Stable Release','Supported','Active Development')]"
+  | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+# Active statuses that accept PPA uploads
+ok = ('Current Stable Release', 'Supported', 'Active Development', 'Pre-release Freeze')
+for s in d['entries']:
+    if s['active'] and s['status'] in ok and float(s['version']) >= 25.10:
+        print(s['name'], s['version'], s['status'])
+"
 ```
 
-Only target series with Qt >= 6.8 (generally Ubuntu 25.10+). Skip any series marked as obsolete.
+The version filter (>= 25.10) ensures Qt >= 6.8 availability. Upload a separate source package per series — the only difference is the `debian/changelog` target and version suffix (`~ppa1~<series>1`).
 
 ### 9b. Build source packages
 

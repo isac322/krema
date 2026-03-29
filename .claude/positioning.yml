@@ -16,7 +16,7 @@ product:
     - Qt 6
     - KDE Frameworks 6
     - Kirigami
-  background_style_count: 6
+  background_style_count: 7
   attention_animation_count: 6
   visibility_mode_count: 3
 
@@ -73,6 +73,8 @@ keywords:
     - pipewire
     - layer-shell
     - accessibility
+    - qml
+    - launcher
 
 search_intents:
   - name: latte-dock-migration

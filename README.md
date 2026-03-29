@@ -11,14 +11,12 @@ A lightweight, high-performance dock for KDE Plasma 6 — spiritual successor to
 
 Krema brings back the beloved dock experience for KDE Plasma users who miss Latte Dock. Built from scratch with C++23, Qt 6, and KDE Frameworks 6, it delivers smooth parabolic zoom animations, live window previews via PipeWire, and deep native integration with the Plasma desktop.
 
-<!-- TODO: Add screenshots — see docs/image-specs/ for capture instructions -->
-
 ## Why Krema?
 
 - **Your dock is back** — Krema picks up where Latte Dock left off, purpose-built for Plasma 6
 - **A dock that speaks Plasma** — Uses KDE's own frameworks (Kirigami, KConfig, KColorScheme, KGlobalAccel) and respects your theme, shortcuts, and desktop conventions
 - **Lightweight by design** — GPU-accelerated rendering via QRhi, Wayland-native via Layer Shell, lazy resource allocation
-- **Make it yours** — 6 background styles including acrylic frosted glass and Mica, configurable zoom, spacing, and position
+- **Make it yours** — 7 background styles including acrylic frosted glass and Mica, configurable zoom, spacing, and position
 
 ## Features
 
@@ -45,10 +43,25 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Click-to-Activate** — Click a preview to switch to that window
 - **Preview Close Button** — Close windows directly from the preview popup
 
+### Notifications & Attention
+- **Notification Badges** — Badge count on dock icons via D-Bus and SmartLauncher Unity API
+- **Badge Display Modes** — Choose between Number, Dot, or Off
+- **6 Attention Animations** — Bounce, Wiggle, Pulse, Glow, Dot Color, and Blink
+- **Task Progress Bar** — Progress indicator on dock icons (e.g. file copy in Dolphin)
+- **Do Not Disturb** — Attention animations suppressed when system DND is active
+- **Auto-Stop** — Attention animations stop after configurable duration (default 5s)
+
+### Multi-Monitor & Virtual Desktops
+- **Multi-Monitor Modes** — Primary only, all screens, or follow active window
+- **Per-Screen Settings** — Override icon size, edge, visibility mode per monitor
+- **Follow Active Triggers** — Mouse, focus, or composite trigger for dock follows
+- **Virtual Desktop Filtering** — Show all desktops, dim other desktops, or current only
+- **Automatic Startup** — Launches on login, enforces single instance
+
 ### Integration & Accessibility
 - **KDE Native Integration** — Kirigami UI, KDE color schemes, Plasma theme colors
 - **Wayland Native** — Built on Layer Shell protocol for proper dock behavior
-- **Smart Visibility** — Always visible, auto-hide, dodge windows, or smart hide modes
+- **Smart Visibility** — Always visible, auto-hide, or dodge windows modes
 - **Drag & Drop** — Reorder dock items, drop files onto apps, add launchers by dragging .desktop files
 - **Settings UI** — Kirigami-based settings dialog (FormCard) for easy customization
 - **Keyboard Accessibility** — Full keyboard navigation with AT-SPI screen reader support

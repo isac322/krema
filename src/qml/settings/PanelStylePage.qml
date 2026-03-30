@@ -50,7 +50,7 @@ FormCard.FormCardPage {
                             ? Kirigami.Theme.highlightColor
                             : "transparent"
                         border.width: DockSettings.backgroundStyle === styleIndex ? 2 : 0
-                        opacity: DockView.isStyleAvailable(styleIndex) ? 1.0 : 0.4
+                        opacity: SettingsWindow.isStyleAvailable(styleIndex) ? 1.0 : 0.4
 
                         ColumnLayout {
                             anchors.centerIn: parent
@@ -106,7 +106,7 @@ FormCard.FormCardPage {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                if (DockView.isStyleAvailable(styleIndex)) {
+                                if (SettingsWindow.isStyleAvailable(styleIndex)) {
                                     DockSettings.backgroundStyle = styleIndex
                                 }
                             }

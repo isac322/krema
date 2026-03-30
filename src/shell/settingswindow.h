@@ -3,17 +3,14 @@
 
 #pragma once
 
-#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
-#include <QWindowList>
 
 class KremaSettings;
 class QQmlApplicationEngine;
 class QQuickWindow;
 class QScreen;
-class QVariant;
 
 namespace krema
 {
@@ -21,9 +18,9 @@ namespace krema
 /**
  * Settings dialog window.
  *
- * Opens a ConfigurationView-based settings window with sidebar navigation.
- * Uses QQmlApplicationEngine to load a host ApplicationWindow, which then
- * opens a ConfigurationView (creates its own ConfigWindow on desktop).
+ * Loads SettingsDialog.qml, whose root object is the settings window itself:
+ * a sidebar of pages next to the selected page. The window is created once
+ * per engine and only hidden on close.
  *
  * One instance serves every dock and must outlive dock shells: settings
  * handlers (e.g. Monitor mode) rebuild the shells while they are running.
@@ -42,7 +39,7 @@ public:
     /// Show the settings dialog, or raise it if already visible.
     void show();
 
-    /// Show the settings dialog with a specific module pre-selected.
+    /// Show the settings dialog with a specific module selected.
     void show(const QString &defaultModule);
 
     /// Whether the dialog is open (between visibleChanged(true) and
@@ -64,19 +61,15 @@ Q_SIGNALS:
     void hasSelectedMonitorFallbackChanged();
 
 private:
-    void open(const QVariant &defaultModule);
+    void open(const QString &defaultModule);
     void ensureEngine();
-    [[nodiscard]] QQuickWindow *windowCreatedSince(const QWindowList &windowsBefore) const;
-    void trackConfigWindow(QQuickWindow *win, bool deleteOnClose);
+    void trackConfigWindow(QQuickWindow *win);
     void watchScreen(QScreen *screen);
     void updateAvailableScreens();
 
     KremaSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;
     QPointer<QQuickWindow> m_configWindow;
-    // Every settings window open() created that still exists, including
-    // closed ones whose deletion is pending; destroyed before the engine.
-    QList<QPointer<QQuickWindow>> m_openedWindows;
     QVariantList m_availableScreens;
     bool m_hasSelectedMonitorFallback = false;
     bool m_visible = false;

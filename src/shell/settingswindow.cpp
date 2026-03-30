@@ -50,17 +50,11 @@ SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
 
 SettingsWindow::~SettingsWindow()
 {
-    // Destroy the settings windows while the engine is intact. ConfigWindow is
-    // parentless and JavaScript-owned, so otherwise the engine's teardown sweep
-    // destroys it, which crashes on Qt 6.8 / KF 6.13 (Debian 13) when its pages
-    // are still being created (#27). Disconnect first so no close handling
-    // (lock release, deleteLater) runs from here; deleting also cancels any
-    // pending deleteLater() or QML destroy().
-    for (const auto &window : std::as_const(m_openedWindows)) {
-        if (window) {
-            disconnect(window, nullptr, this, nullptr);
-            delete window.data();
-        }
+    // The settings window is the engine's root object, so deleting the engine
+    // below destroys it while its pages and bindings are still intact.
+    // Disconnect first so no close handling runs from here.
+    if (m_configWindow) {
+        disconnect(m_configWindow, nullptr, this, nullptr);
     }
 
     // Delete the engine while the "SettingsWindow" context property still
@@ -146,7 +140,7 @@ bool SettingsWindow::isStyleAvailable(int styleType) const
 
 void SettingsWindow::show()
 {
-    open(QVariant());
+    open(QString());
 }
 
 void SettingsWindow::show(const QString &defaultModule)
@@ -154,19 +148,10 @@ void SettingsWindow::show(const QString &defaultModule)
     open(defaultModule);
 }
 
-void SettingsWindow::open(const QVariant &defaultModule)
+void SettingsWindow::open(const QString &defaultModule)
 {
     ensureEngine();
 
-    // If the ConfigurationView's window is already open, just raise it
-    if (m_configWindow) {
-        m_configWindow->show();
-        m_configWindow->raise();
-        m_configWindow->requestActivate();
-        return;
-    }
-
-    // Load the QML host (invisible ApplicationWindow + ConfigurationView)
     if (m_engine->rootObjects().isEmpty()) {
         m_engine->load(QUrl(QStringLiteral("qrc:/qml/SettingsDialog.qml")));
 
@@ -176,52 +161,31 @@ void SettingsWindow::open(const QVariant &defaultModule)
         }
     }
 
-    auto *root = m_engine->rootObjects().first();
-    auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
-    if (!configView) {
-        qCWarning(lcSettingsWindow) << "ConfigurationView not found in SettingsDialog.qml";
-        return;
-    }
-
-    // ConfigurationView.configViewItem exists since kirigami-addons 1.8.0.
-    // Older versions (Debian 13, Ubuntu 25.04 ship 1.7.0) create the
-    // ConfigWindow in open() without keeping a reference to it.
-    const bool hasConfigViewItem = configView->metaObject()->indexOfProperty("configViewItem") >= 0;
-    const QWindowList windowsBefore = hasConfigViewItem ? QWindowList() : QGuiApplication::allWindows();
-
-    QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, defaultModule));
-
-    // Both paths are synchronous: open() creates the window before returning.
-    auto *win = hasConfigViewItem ? qvariant_cast<QQuickWindow *>(configView->property("configViewItem")) : windowCreatedSince(windowsBefore);
-    if (!win) {
-        qCWarning(lcSettingsWindow) << "No settings window to track after ConfigurationView.open()";
-        return;
-    }
-
-    // kirigami-addons >= 1.8 destroys its window when it closes; older
-    // versions never do, so the window found here is deleted on close.
-    trackConfigWindow(win, !hasConfigViewItem);
-}
-
-QQuickWindow *SettingsWindow::windowCreatedSince(const QWindowList &windowsBefore) const
-{
-    // The ConfigWindow is the one window of the settings engine that did not
-    // exist before open(). Windows of other engines (dock, preview) and the
-    // already loaded host window never qualify.
-    QQuickWindow *created = nullptr;
-    const auto windows = QGuiApplication::allWindows();
-    for (auto *window : windows) {
-        auto *quickWindow = qobject_cast<QQuickWindow *>(window);
-        if (!quickWindow || windowsBefore.contains(window) || qmlEngine(quickWindow) != m_engine) {
-            continue;
+    // The root object IS the settings window. It lives as long as the engine
+    // and is only hidden on close, so it is tracked and connected once.
+    if (!m_configWindow) {
+        auto *win = qobject_cast<QQuickWindow *>(m_engine->rootObjects().first());
+        if (!win) {
+            qCWarning(lcSettingsWindow) << "Root object of SettingsDialog.qml is not a QQuickWindow";
+            return;
         }
-        if (created) {
-            qCWarning(lcSettingsWindow) << "ConfigurationView.open() created more than one window";
-            return nullptr;
-        }
-        created = quickWindow;
+        trackConfigWindow(win);
     }
-    return created;
+
+    if (!defaultModule.isEmpty()) {
+        QMetaObject::invokeMethod(m_configWindow, "openModule", Q_ARG(QVariant, defaultModule));
+    }
+
+    m_configWindow->show();
+    m_configWindow->raise();
+    m_configWindow->requestActivate();
+
+    // Emit open exactly once per open/close cycle to avoid double-counting
+    // that breaks the dodge interacting refcount.
+    if (!m_visible) {
+        m_visible = true;
+        Q_EMIT visibleChanged(true);
+    }
 }
 
 void SettingsWindow::ensureEngine()
@@ -239,36 +203,21 @@ void SettingsWindow::ensureEngine()
     m_engine->rootContext()->setContextProperty(QStringLiteral("SettingsWindow"), this);
 }
 
-void SettingsWindow::trackConfigWindow(QQuickWindow *win, bool deleteOnClose)
+void SettingsWindow::trackConfigWindow(QQuickWindow *win)
 {
     m_configWindow = win;
-    m_openedWindows.removeAll(nullptr);
-    m_openedWindows.append(win);
     win->setIcon(QGuiApplication::windowIcon());
 
-    connect(win, &QWindow::visibleChanged, this, [this, window = QPointer<QQuickWindow>(win), deleteOnClose](bool visible) {
-        // Only forward close events — open is emitted manually below (exactly once)
-        // to avoid double-counting that breaks dodge interacting refcount.
-        // Only the tracked window releases the lock.
-        if (visible || window != m_configWindow) {
+    connect(win, &QWindow::visibleChanged, this, [this](bool visible) {
+        // Only forward close events — open is emitted by open().
+        if (visible || !m_visible) {
             return;
         }
         m_visible = false;
         Q_EMIT visibleChanged(false);
-        m_configWindow = nullptr;
-        if (deleteOnClose) {
-            window->deleteLater();
-        }
     });
 
-    win->show();
-    win->raise();
-    win->requestActivate();
-
-    m_visible = true;
-    Q_EMIT visibleChanged(true);
-
-    qCDebug(lcSettingsWindow) << "Tracking config window:" << win;
+    qCDebug(lcSettingsWindow) << "Tracking settings window:" << win;
 }
 
 } // namespace krema

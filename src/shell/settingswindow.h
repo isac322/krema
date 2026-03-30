@@ -41,7 +41,7 @@ Q_SIGNALS:
 
 private:
     void ensureEngine();
-    void trackConfigWindow(QObject *configView);
+    void showImpl(const QString &defaultModule);
 
     KremaSettings *m_settings;
     DockView *m_dockView;

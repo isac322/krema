@@ -22,10 +22,34 @@ Kirigami.ApplicationWindow {
 
         modules: [
             KirigamiSettings.ConfigurationModule {
-                moduleId: "appearance"
-                text: i18n("Appearance")
-                icon.name: "preferences-desktop-theme-global"
-                page: () => Qt.createComponent(Qt.resolvedUrl("settings/AppearancePage.qml"))
+                moduleId: "icons"
+                text: i18n("Icons")
+                icon.name: "preferences-desktop-icons"
+                page: () => Qt.createComponent(Qt.resolvedUrl("settings/IconsPage.qml"))
+            },
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "layout"
+                text: i18n("Layout & Position")
+                icon.name: "preferences-desktop-display"
+                page: () => Qt.createComponent(Qt.resolvedUrl("settings/LayoutPage.qml"))
+            },
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "panelstyle"
+                text: i18n("Panel Style")
+                icon.name: "preferences-desktop-color"
+                page: () => Qt.createComponent(Qt.resolvedUrl("settings/PanelStylePage.qml"))
+            },
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "shadow"
+                text: i18n("Shadow")
+                icon.name: "preferences-desktop-effects"
+                page: () => Qt.createComponent(Qt.resolvedUrl("settings/ShadowPage.qml"))
+            },
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "animations"
+                text: i18n("Animations & Badges")
+                icon.name: "preferences-desktop-notification"
+                page: () => Qt.createComponent(Qt.resolvedUrl("settings/AnimationsPage.qml"))
             },
             KirigamiSettings.ConfigurationModule {
                 moduleId: "behavior"

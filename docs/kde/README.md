@@ -63,7 +63,8 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 
 | Document | Description |
 |----------|-------------|
-| [statusnotifieritem.md](statusnotifieritem.md) | KStatusNotifierItem — status/category/icon/tooltip/menu/activation |
+| [statusnotifieritem.md](statusnotifieritem.md) | KStatusNotifierItem — status/category/icon/tooltip/menu/activation (PRODUCER side) |
+| [system-tray-apis.md](system-tray-apis.md) | System tray CONSUMER APIs — SNI protocol, D-Bus watcher/item interfaces, DBusMenu, full implementation plan |
 
 ### Accessibility
 
@@ -71,6 +72,12 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [accessibility-guide.md](accessibility-guide.md) | KDE/Qt accessibility best practices — QML Accessible API, AT-SPI2, keyboard navigation |
 | [accessibility-audit.md](accessibility-audit.md) | Krema accessibility audit baseline and implementation tracking |
+
+### Settings Window
+
+| Document | Description |
+|----------|-------------|
+| [settings-window-patterns.md](settings-window-patterns.md) | KDE settings window patterns — KConfigDialog, KQuickConfigModule, ConfigurationView+ConfigurationModule, StatefulWindow; Krema current arch analysis and recommended fix (direct configViewItem access vs. polling) |
 
 ### Reference
 

@@ -36,5 +36,11 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 
 ## 다음 작업
 
+- 설정창 리디자인 (런칭 게이트, `docs/settings-redesign-prd.md` 참조)
+  - ouroboros interview 완료: `interview_20260330_013829`
+  - 35개 설정 전체 시각적 UX 결정 완료
+  - 다음: `ooo seed` → 구현 시작
 - M8 전체 릴리즈 검토 (v0.8.0)
-- M9: Widget System + System Tray
+- M9: Widget System + System Tray (설계 일시 중단, `docs/m9-design-decisions.md` 참조)
+  - ouroboros interview 세션: `interview_20260330_010041` (재개 가능)
+  - 미결정: 툴팁 스타일, expand/collapse UX, NeedsAttention 표현, 위젯 설정 UI

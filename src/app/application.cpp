@@ -12,6 +12,10 @@
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
 
+#include <taskmanager/activityinfo.h>
+#include <taskmanager/tasksmodel.h>
+#include <taskmanager/virtualdesktopinfo.h>
+
 #include <KAboutData>
 #include <KActionCollection>
 #include <KCrash>
@@ -77,8 +81,13 @@ int Application::run()
     m_settings = std::make_unique<KremaSettings>();
     m_settings->load();
 
-    // Create data model
-    m_dockModel = std::make_unique<DockModel>();
+    // Create shared task management objects (owned by Application)
+    m_tasksModel = new TaskManager::TasksModel(this);
+    m_virtualDesktopInfo = new TaskManager::VirtualDesktopInfo(this);
+    m_activityInfo = new TaskManager::ActivityInfo(this);
+
+    // Create data model (receives shared objects, configures TasksModel internally)
+    m_dockModel = std::make_unique<DockModel>(m_tasksModel, m_virtualDesktopInfo, m_activityInfo);
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
 
     // Create notification tracker (before QML loading)

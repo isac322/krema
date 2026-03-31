@@ -95,13 +95,15 @@ Q_SIGNALS:
     void modeChanged();
     void panelRectChanged();
 
+protected:
+    /// Check if any window overlaps the dock geometry.
+    /// @param activeOnly If true, only checks if an active window overlaps.
+    /// Virtual for testability — test subclass can override to simulate overlap state.
+    [[nodiscard]] virtual bool hasOverlappingWindow(bool activeOnly = false) const;
+
 private:
     void evaluateVisibility();
     void setVisible(bool visible);
-
-    /// Check if any window overlaps the dock geometry.
-    /// @param activeOnly If true, only checks if an active window overlaps.
-    [[nodiscard]] bool hasOverlappingWindow(bool activeOnly = false) const;
 
     /// Check if any window is maximized or fullscreen.
     [[nodiscard]] bool hasMaximizedOrFullscreenWindow() const;

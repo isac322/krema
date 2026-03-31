@@ -36,6 +36,9 @@ add_library(krema_lib STATIC
     style/backgroundstyle.h
     style/backgroundstyle.cpp
 
+    models/itaskssource.h
+    models/tasksmodelAdapter.h
+    models/tasksmodelAdapter.cpp
     models/dockmodel.h
     models/dockmodel.cpp
     models/dockactions.h

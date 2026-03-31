@@ -10,6 +10,13 @@
 class KActionCollection;
 class KremaSettings;
 
+namespace TaskManager
+{
+class ActivityInfo;
+class TasksModel;
+class VirtualDesktopInfo;
+}
+
 namespace krema
 {
 
@@ -31,6 +38,9 @@ private:
     void registerGlobalShortcuts();
 
     std::unique_ptr<KremaSettings> m_settings;
+    TaskManager::TasksModel *m_tasksModel = nullptr;
+    TaskManager::VirtualDesktopInfo *m_virtualDesktopInfo = nullptr;
+    TaskManager::ActivityInfo *m_activityInfo = nullptr;
     std::unique_ptr<DockModel> m_dockModel;
     std::unique_ptr<NotificationTracker> m_notificationTracker;
     std::unique_ptr<MultiDockManager> m_dockManager;

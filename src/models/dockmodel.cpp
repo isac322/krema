@@ -3,8 +3,12 @@
 
 #include "dockmodel.h"
 
+#include "tasksmodelAdapter.h"
+
 #include <taskmanager/abstracttasksmodel.h>
+#include <taskmanager/activityinfo.h>
 #include <taskmanager/tasksmodel.h>
+#include <taskmanager/virtualdesktopinfo.h>
 
 #include <QGuiApplication>
 #include <QIcon>
@@ -16,11 +20,42 @@ Q_LOGGING_CATEGORY(lcModel, "krema.model")
 namespace krema
 {
 
-DockModel::DockModel(QObject *parent)
+DockModel::DockModel(TaskManager::TasksModel *tasksModel,
+                     TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
+                     TaskManager::ActivityInfo *activityInfo,
+                     QObject *parent)
     : QObject(parent)
-    , m_tasksModel(std::make_unique<TaskManager::TasksModel>(this))
-    , m_virtualDesktopInfo(std::make_shared<TaskManager::VirtualDesktopInfo>(this))
-    , m_activityInfo(std::make_shared<TaskManager::ActivityInfo>(this))
+    , m_tasksModel(tasksModel)
+    , m_virtualDesktopInfo(virtualDesktopInfo)
+    , m_activityInfo(activityInfo)
+{
+    Q_ASSERT(m_tasksModel);
+    Q_ASSERT(m_virtualDesktopInfo);
+    Q_ASSERT(m_activityInfo);
+
+    m_tasksSource = std::make_unique<TasksModelAdapter>(m_tasksModel);
+
+    configureTasksModel();
+
+    // Track desktop/activity changes so the model stays up to date.
+    connect(m_virtualDesktopInfo, &TaskManager::VirtualDesktopInfo::currentDesktopChanged, this, [this]() {
+        m_tasksModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
+        Q_EMIT currentDesktopChanged();
+    });
+    connect(m_activityInfo, &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
+        m_tasksModel->setActivity(m_activityInfo->currentActivity());
+    });
+
+    // Debug logging for model row changes
+    connect(m_tasksModel, &QAbstractItemModel::rowsInserted, this, [this]() {
+        qCDebug(lcModel) << "Model rows after insert:" << m_tasksModel->rowCount();
+    });
+    connect(m_tasksModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
+        qCDebug(lcModel) << "Model rows after remove:" << m_tasksModel->rowCount();
+    });
+}
+
+void DockModel::configureTasksModel()
 {
     // TasksModel implements QQmlParserStatus. When created from C++ (not QML),
     // classBegin/componentComplete are not called by the QML engine.
@@ -68,40 +103,33 @@ DockModel::DockModel(QObject *parent)
     // NOW activate internal source models (launcher model, window model, etc.)
     // All properties are set, so the backends will correctly discover running windows.
     m_tasksModel->componentComplete();
-
-    // Track desktop/activity changes so the model stays up to date.
-    connect(m_virtualDesktopInfo.get(), &TaskManager::VirtualDesktopInfo::currentDesktopChanged, this, [this]() {
-        m_tasksModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
-        Q_EMIT currentDesktopChanged();
-    });
-    connect(m_activityInfo.get(), &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
-        m_tasksModel->setActivity(m_activityInfo->currentActivity());
-    });
-
-    // Debug logging for model row changes
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, [this]() {
-        qCDebug(lcModel) << "Model rows after insert:" << m_tasksModel->rowCount();
-    });
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, [this]() {
-        qCDebug(lcModel) << "Model rows after remove:" << m_tasksModel->rowCount();
-    });
 }
 
 DockModel::~DockModel() = default;
 
 TaskManager::TasksModel *DockModel::tasksModel() const
 {
-    return m_tasksModel.get();
+    return m_tasksModel;
+}
+
+ITasksSource *DockModel::tasksSource() const
+{
+    return m_tasksSource.get();
+}
+
+void DockModel::setTasksSource(std::unique_ptr<ITasksSource> source)
+{
+    m_tasksSource = std::move(source);
 }
 
 TaskManager::VirtualDesktopInfo *DockModel::virtualDesktopInfo() const
 {
-    return m_virtualDesktopInfo.get();
+    return m_virtualDesktopInfo;
 }
 
 TaskManager::ActivityInfo *DockModel::activityInfo() const
 {
-    return m_activityInfo.get();
+    return m_activityInfo;
 }
 
 QStringList DockModel::pinnedLaunchers() const

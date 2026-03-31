@@ -7,6 +7,8 @@
 #include <QObject>
 #include <QUrl>
 
+#include "itaskssource.h"
+
 namespace krema
 {
 

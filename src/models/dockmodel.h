@@ -3,14 +3,21 @@
 
 #pragma once
 
+#include <memory>
+
+#include <QModelIndex>
 #include <QObject>
 #include <QUrl>
 
-#include <taskmanager/activityinfo.h>
 #include <taskmanager/tasksmodel.h>
-#include <taskmanager/virtualdesktopinfo.h>
 
-#include <memory>
+#include "itaskssource.h"
+
+namespace TaskManager
+{
+class ActivityInfo;
+class VirtualDesktopInfo;
+}
 
 namespace krema
 {
@@ -32,10 +39,22 @@ class DockModel : public QObject
     Q_PROPERTY(QVariant currentDesktop READ currentDesktop NOTIFY currentDesktopChanged)
 
 public:
-    explicit DockModel(QObject *parent = nullptr);
+    explicit DockModel(TaskManager::TasksModel *tasksModel,
+                       TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
+                       TaskManager::ActivityInfo *activityInfo,
+                       QObject *parent = nullptr);
     ~DockModel() override;
 
     [[nodiscard]] TaskManager::TasksModel *tasksModel() const;
+    [[nodiscard]] ITasksSource *tasksSource() const;
+
+    /**
+     * Replace the internal ITasksSource.
+     *
+     * Intended for unit tests that inject a MockTasksSource.
+     * Production code should not call this after construction.
+     */
+    void setTasksSource(std::unique_ptr<ITasksSource> source);
     [[nodiscard]] TaskManager::VirtualDesktopInfo *virtualDesktopInfo() const;
     [[nodiscard]] TaskManager::ActivityInfo *activityInfo() const;
 
@@ -82,10 +101,13 @@ Q_SIGNALS:
     void currentDesktopChanged();
 
 private:
+    void configureTasksModel();
+
     int m_virtualDesktopMode = 0;
-    std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
-    std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
-    std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;
+    TaskManager::TasksModel *m_tasksModel = nullptr;
+    TaskManager::VirtualDesktopInfo *m_virtualDesktopInfo = nullptr;
+    TaskManager::ActivityInfo *m_activityInfo = nullptr;
+    std::unique_ptr<ITasksSource> m_tasksSource;
 };
 
 } // namespace krema

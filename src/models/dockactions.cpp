@@ -5,11 +5,9 @@
 
 #include "dockmodel.h"
 
+#include <QLoggingCategory>
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
-#include <taskmanager/tasktools.h>
-
-#include <QLoggingCategory>
 
 Q_DECLARE_LOGGING_CATEGORY(lcModel)
 
@@ -24,121 +22,112 @@ DockActions::DockActions(DockModel *model, QObject *parent)
 
 void DockActions::activate(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (!idx.isValid()) {
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount()) {
         return;
     }
 
-    const bool isLauncher = idx.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const bool isLauncher = source->data(index, TaskManager::AbstractTasksModel::IsLauncher).toBool();
+    const bool isWindow = source->data(index, TaskManager::AbstractTasksModel::IsWindow).toBool();
 
     if (isWindow) {
-        tasksModel->requestActivate(idx);
+        source->requestActivate(index);
     } else if (isLauncher) {
-        tasksModel->requestNewInstance(idx);
+        source->requestNewInstance(index);
         Q_EMIT taskLaunching(index);
     }
 }
 
 void DockActions::newInstance(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (idx.isValid()) {
-        tasksModel->requestNewInstance(idx);
-        Q_EMIT taskLaunching(index);
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount()) {
+        return;
     }
+
+    source->requestNewInstance(index);
+    Q_EMIT taskLaunching(index);
 }
 
 void DockActions::closeTask(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (idx.isValid()) {
-        tasksModel->requestClose(idx);
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount()) {
+        return;
     }
+    source->requestClose(index);
 }
 
 void DockActions::togglePinned(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (!idx.isValid()) {
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount()) {
         return;
     }
 
-    const QUrl launcherUrl = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    const QUrl launcherUrl = source->data(index, TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
     if (launcherUrl.isValid()) {
-        if (tasksModel->launcherList().contains(launcherUrl.toString())) {
-            tasksModel->requestRemoveLauncher(launcherUrl);
-        } else {
-            tasksModel->requestAddLauncher(launcherUrl);
+        const bool isPinned = source->launcherList().contains(launcherUrl.toString());
+        const bool ok = isPinned ? source->requestRemoveLauncher(launcherUrl) : source->requestAddLauncher(launcherUrl);
+        if (ok) {
+            Q_EMIT pinnedLaunchersChanged();
         }
-        Q_EMIT pinnedLaunchersChanged();
     }
 }
 
 void DockActions::cycleWindows(int index, bool forward)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (!idx.isValid()) {
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount()) {
         return;
     }
 
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const bool isWindow = source->data(index, TaskManager::AbstractTasksModel::IsWindow).toBool();
     if (!isWindow) {
         return;
     }
 
-    const int childCount = tasksModel->rowCount(idx);
-    if (childCount <= 1) {
+    const int count = source->childCount(index);
+    if (count <= 1) {
         // Single window or non-grouped: just activate/focus it
-        tasksModel->requestActivate(idx);
+        source->requestActivate(index);
         return;
     }
 
     // Find the currently active child window
     int activeChild = -1;
-    for (int i = 0; i < childCount; ++i) {
-        const QModelIndex child = tasksModel->makeModelIndex(index, i);
-        if (child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+    for (int i = 0; i < count; ++i) {
+        if (source->childData(index, i, TaskManager::AbstractTasksModel::IsActive).toBool()) {
             activeChild = i;
             break;
         }
     }
 
     // Cycle to next/previous child
-    int target;
-    if (activeChild < 0) {
-        target = 0;
-    } else {
-        target = forward ? (activeChild + 1) % childCount : (activeChild - 1 + childCount) % childCount;
+    int target = 0;
+    if (activeChild >= 0) {
+        target = forward ? (activeChild + 1) % count : (activeChild - 1 + count) % count;
     }
 
-    const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
-    if (targetIdx.isValid()) {
-        tasksModel->requestActivate(targetIdx);
-    }
+    source->requestActivateChild(index, target);
 }
 
 bool DockActions::moveTask(int fromIndex, int toIndex)
 {
-    auto *tasksModel = m_model->tasksModel();
+    auto *source = m_model->tasksSource();
     if (fromIndex == toIndex) {
         return false;
     }
-    if (fromIndex < 0 || fromIndex >= tasksModel->rowCount()) {
+    if (fromIndex < 0 || fromIndex >= source->rowCount()) {
         return false;
     }
-    if (toIndex < 0 || toIndex >= tasksModel->rowCount()) {
+    if (toIndex < 0 || toIndex >= source->rowCount()) {
         return false;
     }
 
-    const bool ok = tasksModel->move(fromIndex, toIndex);
+    const bool ok = source->move(fromIndex, toIndex);
     if (ok) {
-        tasksModel->syncLaunchers();
+        source->syncLaunchers();
         Q_EMIT pinnedLaunchersChanged();
     }
     return ok;
@@ -146,19 +135,11 @@ bool DockActions::moveTask(int fromIndex, int toIndex)
 
 bool DockActions::addLauncher(const QUrl &url)
 {
-    if (!url.isValid()) {
+    if (!url.isValid() || !m_model->isDesktopFile(url)) {
         return false;
     }
 
-    // Validate that the URL resolves to a real application
-    const auto appData = TaskManager::appDataFromUrl(url);
-    if (appData.id.isEmpty()) {
-        return false;
-    }
-
-    // Use the resolved URL (handles preferred:// and other special schemes)
-    const QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
-    const bool ok = m_model->tasksModel()->requestAddLauncher(resolvedUrl);
+    const bool ok = m_model->tasksSource()->requestAddLauncher(url);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();
     }
@@ -167,18 +148,17 @@ bool DockActions::addLauncher(const QUrl &url)
 
 bool DockActions::removeLauncher(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (!idx.isValid()) {
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount()) {
         return false;
     }
 
-    const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    const QUrl url = source->data(index, TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
     if (!url.isValid()) {
         return false;
     }
 
-    const bool ok = tasksModel->requestRemoveLauncher(url);
+    const bool ok = source->requestRemoveLauncher(url);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();
     }
@@ -187,12 +167,12 @@ bool DockActions::removeLauncher(int index)
 
 void DockActions::openUrlsWithTask(int index, const QList<QUrl> &urls)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (!idx.isValid() || urls.isEmpty()) {
+    auto *source = m_model->tasksSource();
+    if (index < 0 || index >= source->rowCount() || urls.isEmpty()) {
         return;
     }
-    tasksModel->requestOpenUrls(idx, urls);
+
+    source->requestOpenUrls(index, urls);
 }
 
 } // namespace krema

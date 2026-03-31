@@ -79,6 +79,13 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [settings-window-patterns.md](settings-window-patterns.md) | KDE settings window patterns — KConfigDialog, KQuickConfigModule, ConfigurationView+ConfigurationModule, StatefulWindow; Krema current arch analysis and recommended fix (direct configViewItem access vs. polling) |
 
+### Testing
+
+| Document | Description |
+|----------|-------------|
+| [testing-headless.md](testing-headless.md) | Headless GUI testing — offscreen QPA, kwin_wayland --virtual, QtQuickTest, QSignalSpy, CI integration, layer-shell gotchas |
+| [../testing-plan.md](../testing-plan.md) | Feature-first test plan — 71 features × 4 test layers, priority matrix, mock infrastructure, coverage summary |
+
 ### Reference
 
 | Document | Description |

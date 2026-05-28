@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
 - Compile-time LayerShellQt API detection for cross-distribution compatibility
 - OBS build targets for Fedora 44 and openSUSE Leap 16.0
+- Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
+- Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
 
 ### Fixed
 
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Fedora Rawhide OBS resolver preferences for current ICU and systemd packages
 - openSUSE Slowroll OBS support corrected to x86_64, matching upstream Slowroll architecture availability
 - openSUSE Leap 16.0 OBS compiler dependency aligned with Krema's GCC 13 minimum
+- openSUSE Docker GUI runtime images now include the `dbus-run-session` provider required by package smoke tests
 
 ## [0.7.0] - 2026-03-28
 

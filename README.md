@@ -88,8 +88,10 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 | Distribution | Versions | Architectures |
 |---|---|---|
 | Arch Linux / Manjaro | Rolling | x86_64, aarch64 |
-| Fedora | 42, 43, Rawhide | x86_64, aarch64 |
-| openSUSE | Tumbleweed, Slowroll | x86_64, aarch64 |
+| Fedora | 42, 43, 44, Rawhide | x86_64, aarch64 |
+| openSUSE Tumbleweed | Rolling | x86_64, aarch64 |
+| openSUSE Slowroll | Rolling | x86_64 |
+| openSUSE Leap | 16.0 | x86_64, aarch64 |
 | Ubuntu | 25.04, 25.10, 26.04 | x86_64, aarch64 |
 | Debian | 13 (Trixie) | x86_64, aarch64 |
 
@@ -123,6 +125,11 @@ sudo zypper install krema
 
 # Slowroll
 sudo zypper addrepo https://download.opensuse.org/repositories/home:isac322/openSUSE_Slowroll/home:isac322.repo
+sudo zypper refresh
+sudo zypper install krema
+
+# Leap 16.0
+sudo zypper addrepo https://download.opensuse.org/repositories/home:isac322/openSUSE_Leap_16.0/home:isac322.repo
 sudo zypper refresh
 sudo zypper install krema
 ```

@@ -16,7 +16,7 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - [x] M8a-M8d: 가상 데스크톱, 멀티 모니터, Per-Screen 설정, Follow Active
 - [x] 멀티 배포판 패키징 인프라 구축
   - COPR (Fedora 42/43/Rawhide): 6/6 빌드 성공
-  - OBS (openSUSE Tumbleweed/Slowroll, Fedora, Debian 13, Ubuntu 25.04-26.04): 17/17 빌드 성공
+  - OBS (openSUSE Tumbleweed/Slowroll/Leap 16.0, Fedora 42/43/44/Rawhide, Debian 13, Ubuntu 25.04-26.04): 21/21 builds succeeded
   - Launchpad PPA (Ubuntu 25.10 questing, 26.04 resolute): Published
   - AUR: 기존 운영 유지
 - [x] 크로스 배포판 빌드 호환성

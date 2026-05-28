@@ -1,0 +1,59 @@
+<project name="home:isac322">
+  <title></title>
+  <description></description>
+  <person userid="isac322" role="maintainer"/>
+  <repository name="xUbuntu_26.04">
+    <path project="Ubuntu:26.04" repository="universe"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="xUbuntu_25.10">
+    <path project="Ubuntu:25.10" repository="universe"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="xUbuntu_25.04">
+    <path project="Ubuntu:25.04" repository="universe"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="openSUSE_Tumbleweed">
+    <path project="openSUSE:Factory" repository="snapshot"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="openSUSE_Slowroll">
+    <path project="openSUSE:Slowroll" repository="standard"/>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="openSUSE_Leap_16.0">
+    <path project="openSUSE:Leap:16.0" repository="standard"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="Fedora_Rawhide">
+    <path project="Fedora:Rawhide" repository="standard"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="Fedora_44">
+    <path project="Fedora:44" repository="standard"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="Fedora_43">
+    <path project="Fedora:43" repository="standard"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="Fedora_42">
+    <path project="Fedora:42" repository="standard"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+  <repository name="Debian_13">
+    <path project="Debian:13" repository="standard"/>
+    <arch>aarch64</arch>
+    <arch>x86_64</arch>
+  </repository>
+</project>

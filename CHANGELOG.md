@@ -15,11 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Virtual desktop filtering: show windows from current desktop only, or all desktops with dimmed icons for other desktops
 - Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
 - Compile-time LayerShellQt API detection for cross-distribution compatibility
+- OBS build targets for Fedora 44 and openSUSE Leap 16.0
 
 ### Fixed
 
 - Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
 - Build compatibility with strict `QT_NO_CAST_FROM_ASCII` flag on non-Arch distributions
+- Fedora Rawhide OBS resolver preferences for current ICU and systemd packages
+- openSUSE Slowroll OBS support corrected to x86_64, matching upstream Slowroll architecture availability
+- openSUSE Leap 16.0 OBS compiler dependency aligned with Krema's GCC 13 minimum
 
 ## [0.7.0] - 2026-03-28
 

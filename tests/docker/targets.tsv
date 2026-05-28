@@ -1,0 +1,18 @@
+# Docker GUI runtime targets derived from the supported OBS/package matrix.
+#
+# Columns:
+# target_id<TAB>family<TAB>base_image<TAB>obs_repository<TAB>package_glob
+#
+# The image contains the distro runtime and install tools only. Krema packages
+# are built externally (for example with osc) and mounted at smoke-test time.
+opensuse-tumbleweed	suse	opensuse/tumbleweed:latest	openSUSE_Tumbleweed	*.rpm
+opensuse-slowroll	suse	opensuse/tumbleweed:latest	openSUSE_Slowroll	*.rpm
+opensuse-leap-16.0	suse	opensuse/leap:16.0	openSUSE_Leap_16.0	*.rpm
+fedora-42	fedora	fedora:42	Fedora_42	*.rpm
+fedora-43	fedora	fedora:43	Fedora_43	*.rpm
+fedora-44	fedora	fedora:44	Fedora_44	*.rpm
+fedora-rawhide	fedora	fedora:rawhide	Fedora_Rawhide	*.rpm
+debian-13	debian	debian:13-slim	Debian_13	*.deb
+ubuntu-25.04	debian	ubuntu:25.04	xUbuntu_25.04	*.deb
+ubuntu-25.10	debian	ubuntu:25.10	xUbuntu_25.10	*.deb
+ubuntu-26.04	debian	ubuntu:26.04	xUbuntu_26.04	*.deb

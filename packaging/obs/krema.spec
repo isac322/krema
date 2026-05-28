@@ -16,7 +16,7 @@ BuildRequires:  ninja
 %else
 BuildRequires:  ninja-build
 %endif
-BuildRequires:  gcc-c++ >= 14
+BuildRequires:  gcc-c++ >= 13
 BuildRequires:  extra-cmake-modules >= 6.0.0
 
 # Qt 6

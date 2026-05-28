@@ -1,3 +1,10 @@
+krema (0.7.0-2) unstable; urgency=medium
+
+  * Fix runtime dependency names for openSUSE Tumbleweed/Leap 16.0 and Debian/Ubuntu
+    so the package installs cleanly against current distribution repositories
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Thu, 28 May 2026 00:00:00 +0900
+
 krema (0.7.0-1) unstable; urgency=medium
 
   * New upstream release v0.7.0

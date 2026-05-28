@@ -35,9 +35,9 @@ Package: krema
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         libkirigami2-6,
+         qml6-module-org-kde-kirigami,
          kirigami-addons-data,
-         kpipewire,
+         qml6-module-org-kde-pipewire,
          plasma-workspace,
          liblayershellqtinterface6
 Description: A lightweight dock for KDE Plasma 6

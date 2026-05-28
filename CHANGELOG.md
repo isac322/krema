@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - openSUSE Slowroll OBS support corrected to x86_64, matching upstream Slowroll architecture availability
 - openSUSE Leap 16.0 OBS compiler dependency aligned with Krema's GCC 13 minimum
 - openSUSE Docker GUI runtime images now include the `dbus-run-session` provider required by package smoke tests
+- Debian/Ubuntu and openSUSE runtime package dependency names in OBS packaging metadata so the package installs cleanly against current distribution repositories (release bumped to 0.7.0-2)
 
 ## [0.7.0] - 2026-03-28
 

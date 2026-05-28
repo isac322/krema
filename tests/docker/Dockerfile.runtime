@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+
+ARG BASE_IMAGE=debian:13-slim
+FROM ${BASE_IMAGE}
+
+ARG TARGET_ID
+ARG FAMILY
+
+LABEL org.opencontainers.image.title="Krema GUI runtime smoke image" \
+      org.opencontainers.image.description="Minimal distro runtime for installing externally built Krema packages and running them on a mounted virtual Wayland display" \
+      org.opencontainers.image.source="https://github.com/isac322/krema" \
+      com.bhyoo.krema.target="${TARGET_ID}" \
+      com.bhyoo.krema.family="${FAMILY}"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+SHELL ["/bin/sh", "-euxc"]
+
+RUN case "${FAMILY}" in \
+        suse) \
+            if [ "${TARGET_ID}" = "opensuse-slowroll" ]; then \
+                zypper --non-interactive modifyrepo --all --disable || true; \
+                zypper --non-interactive addrepo --refresh https://download.opensuse.org/slowroll/repo/oss/ slowroll-oss; \
+                zypper --non-interactive addrepo --refresh https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update; \
+                zypper --non-interactive --gpg-auto-import-keys refresh; \
+            else \
+                zypper --non-interactive refresh; \
+            fi; \
+            zypper --non-interactive install --no-recommends \
+                bash coreutils findutils tar gzip xz shadow \
+                dbus-1 dbus-1-tools dbus-1-daemon \
+                qt6-wayland qt6-declarative-imports \
+                kf6-kirigami kf6-kirigami-imports kirigami-addons6 \
+                layer-shell-qt6 libLayerShellQtInterface6 layer-shell-qt6-imports \
+                plasma6-workspace libKPipeWire6 libKPipeWireDmaBuf6 libKPipeWireRecord6 kpipewire6-imports pipewire wireplumber \
+                Mesa-dri fontconfig hicolor-icon-theme kf6-breeze-icons wayland-utils; \
+            zypper clean --all \
+            ;; \
+        fedora) \
+            dnf -y --setopt=install_weak_deps=False install \
+                bash coreutils findutils tar gzip xz shadow-utils procps-ng \
+                dbus-daemon dbus-tools \
+                qt6-qtbase qt6-qtbase-gui qt6-qtdeclarative qt6-qtwayland \
+                kf6-kirigami kf6-kirigami-addons \
+                layer-shell-qt plasma-workspace kpipewire pipewire wireplumber \
+                mesa-dri-drivers fontconfig hicolor-icon-theme breeze-icon-theme wayland-utils; \
+            dnf clean all \
+            ;; \
+        debian) \
+            apt-get update; \
+            apt-get install -y --no-install-recommends \
+                bash coreutils findutils tar gzip xz-utils passwd procps ca-certificates \
+                dbus-daemon dbus-bin \
+                qt6-base-dev qt6-wayland qml6-module-qtquick qml6-module-qtquick-controls \
+                libkirigami6 qml6-module-org-kde-kirigami \
+                kirigami-addons-data qml6-module-org-kde-kirigamiaddons-components \
+                liblayershellqtinterface6 qml6-module-org-kde-layershell \
+                plasma-workspace libkpipewire6 libkpipewiredmabuf6 libkpipewirerecord6 qml6-module-org-kde-pipewire pipewire wireplumber \
+                libgl1-mesa-dri fontconfig hicolor-icon-theme breeze-icon-theme wayland-utils; \
+            rm -rf /var/lib/apt/lists/* \
+            ;; \
+        *) \
+            echo "Unknown FAMILY: ${FAMILY}" >&2; exit 64 \
+            ;; \
+    esac
+
+COPY container-smoke.sh /usr/local/bin/krema-container-smoke
+RUN chmod +x /usr/local/bin/krema-container-smoke
+
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/krema-container-smoke"]

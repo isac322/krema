@@ -3,7 +3,7 @@
 
 Name:           krema
 Version:        0.7.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        A lightweight dock for KDE Plasma 6
 
 License:        GPL-3.0-or-later
@@ -53,11 +53,19 @@ BuildRequires:  cmake(LibNotificationManager)
 BuildRequires:  cmake(KPipeWire)
 BuildRequires:  pkgconfig(wayland-client) >= 1.22
 
+%if 0%{?suse_version}
+Requires:       kf6-kirigami%{?_isa}
+Requires:       kirigami-addons6%{?_isa}
+Requires:       kpipewire6-imports%{?_isa}
+Requires:       plasma6-workspace%{?_isa}
+Requires:       layer-shell-qt6%{?_isa}
+%else
 Requires:       kf6-kirigami%{?_isa}
 Requires:       kf6-kirigami-addons%{?_isa}
 Requires:       kpipewire%{?_isa}
 Requires:       plasma-workspace%{?_isa}
 Requires:       layer-shell-qt%{?_isa}
+%endif
 
 %description
 Krema is a lightweight dock for KDE Plasma 6, designed as a spiritual

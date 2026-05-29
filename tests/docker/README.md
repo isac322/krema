@@ -57,6 +57,25 @@ KREMA_DOCKER_PLATFORM=linux/arm64 DOCKER_HOST=tcp://localhost:2375 tests/docker/
 
 If any `targets.tsv` row still has a `pending` `base_digest` value the build aborts with an instruction to run `update-digests.sh` first.
 
+## Parallel builds
+
+Both `build-images.sh` and `publish-images.sh` build up to `KREMA_DOCKER_PARALLEL` targets concurrently (default `4`). When more than one target is selected, each target's output is redirected to `KREMA_DOCKER_LOG_DIR/<target>.log` (default `${TMPDIR:-/tmp}/krema-{build,publish}-images/<target>.log`) and a pass/fail summary is printed at the end. The script exits non-zero if any target fails.
+
+Single-target invocations and `KREMA_DOCKER_PARALLEL=1` keep the original streaming-to-terminal behaviour. Dry-run (`KREMA_DOCKER_DRY_RUN=1`) also stays serial so the resolved buildx commands print in target order.
+
+```bash
+# Default: 4-wide parallel build of every target
+DOCKER_HOST=tcp://localhost:2375 tests/docker/build-images.sh all
+
+# 8-wide on a beefier machine
+KREMA_DOCKER_PARALLEL=8 DOCKER_HOST=tcp://localhost:2375 tests/docker/publish-images.sh all
+
+# Old serial behaviour
+KREMA_DOCKER_PARALLEL=1 DOCKER_HOST=tcp://localhost:2375 tests/docker/build-images.sh all
+```
+
+Parallel mode requires bash 5.1+ (uses `wait -n -p`). The scripts refuse to run with `KREMA_DOCKER_PARALLEL>1` on older bash and tell the caller to set `KREMA_DOCKER_PARALLEL=1`.
+
 ## Publish to ghcr.io
 
 `tests/docker/publish-images.sh` builds each image with `docker buildx` from the locked base digest and pushes a multi-arch OCI manifest to `ghcr.io/<owner>/<repo-prefix>-<target_id>` (default: `ghcr.io/isac322/krema-gui-runtime-<target_id>`).

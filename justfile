@@ -36,6 +36,12 @@ obs-build-deb distro="Debian_13" arch="x86_64":
 docker-runtime-images target="all":
     tests/docker/build-images.sh {{target}}
 
+docker-runtime-update-digests target="all":
+    tests/docker/update-digests.sh {{target}}
+
+docker-runtime-publish target="all":
+    tests/docker/publish-images.sh {{target}}
+
 docker-runtime-smoke target package_dir:
     tests/docker/run-smoke.sh {{target}} {{package_dir}}
 

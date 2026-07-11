@@ -28,8 +28,15 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
     const int height = requestedSize.height() > 0 ? requestedSize.height() : 48;
     const int targetSize = std::max(width, height);
 
-    QIcon icon = QIcon::fromTheme(iconName);
-    if (icon.isNull()) {
+    // .desktop Icon= fields sometimes include file extensions
+    QString themeName = iconName;
+    if (themeName.endsWith(QLatin1String(".png"), Qt::CaseInsensitive) || themeName.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive)
+        || themeName.endsWith(QLatin1String(".xpm"), Qt::CaseInsensitive)) {
+        themeName.chop(4);
+    }
+
+    QIcon icon = QIcon::fromTheme(themeName);
+    if (icon.isNull() && themeName != iconName) {
         icon = QIcon(iconName);
     }
     if (icon.isNull()) {
@@ -46,8 +53,8 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
             result.fill(Qt::transparent);
         }
     } else {
-        // Analyze icon padding (cached)
-        auto info = analyzeIcon(iconName, icon);
+        // Analyze icon padding (cached) — use themeName as cache key
+        auto info = analyzeIcon(themeName, icon);
 
         // Shape correction only applies when there's actual padding to reclaim.
         // If the bounding box already fills the canvas (contentRatio > 0.95), scaling up

@@ -32,12 +32,41 @@ void DockActions::activate(int index)
 
     const bool isLauncher = idx.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
     const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const int childCount = tasksModel->rowCount(idx);
+
+    if (isLauncher && childCount == 0) {
+        tasksModel->requestNewInstance(idx);
+        Q_EMIT taskLaunching(index);
+        return;
+    }
+
+    if (childCount > 1) {
+        int activeChild = -1;
+        for (int i = 0; i < childCount; ++i) {
+            const QModelIndex child = tasksModel->makeModelIndex(index, i);
+            if (child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+                activeChild = i;
+                break;
+            }
+        }
+        const int target = (activeChild < 0) ? 0 : (activeChild + 1) % childCount;
+        const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
+        if (targetIdx.isValid()) {
+            tasksModel->requestActivate(targetIdx);
+        }
+        return;
+    }
+
+    if (childCount == 1) {
+        const QModelIndex child = tasksModel->makeModelIndex(index, 0);
+        if (child.isValid()) {
+            tasksModel->requestActivate(child);
+        }
+        return;
+    }
 
     if (isWindow) {
         tasksModel->requestActivate(idx);
-    } else if (isLauncher) {
-        tasksModel->requestNewInstance(idx);
-        Q_EMIT taskLaunching(index);
     }
 }
 
@@ -84,11 +113,6 @@ void DockActions::cycleWindows(int index, bool forward)
     auto *tasksModel = m_model->tasksModel();
     const QModelIndex idx = tasksModel->index(index, 0);
     if (!idx.isValid()) {
-        return;
-    }
-
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
-    if (!isWindow) {
         return;
     }
 

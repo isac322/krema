@@ -458,9 +458,9 @@ Item {
         opacity: {
             let base
             if (dockItem.isDragSource) base = 0.3
-            else if (dockItem.model.IsActive) base = 1.0
-            else if (dockItem.model.IsMinimized) base = 0.5
-            else base = 0.8
+            else if (dockItem.model.IsActive) base = DockSettings.iconOpacityActive
+            else if (dockItem.model.IsMinimized) base = DockSettings.iconOpacityMinimized
+            else base = DockSettings.iconOpacityInactive
             return base * dockItem._blinkOpacity
         }
 

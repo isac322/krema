@@ -29,7 +29,7 @@ FormCard.FormCardPage {
 
         FormCard.FormSpinBoxDelegate {
             label: i18n("Icon spacing")
-            from: 0; to: 16
+            from: 0; to: 64
             value: DockSettings.iconSpacing
             onValueChanged: DockSettings.iconSpacing = value
         }
@@ -117,6 +117,58 @@ FormCard.FormCardPage {
                     value: DockSettings.iconScale
                     onMoved: DockSettings.iconScale = value
                     Accessible.name: i18n("Icon scale")
+                }
+            }
+        }
+
+        Repeater {
+            model: ["Active", "Inactive", "Minimized"]
+
+            delegate: ColumnLayout {
+                spacing: 0
+
+                FormCard.FormDelegateSeparator {}
+
+                FormCard.AbstractFormDelegate {
+                    Accessible.name: i18n("%1 icon opacity", modelData)
+                    background: null
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: i18n("%1 icon opacity", modelData)
+                                elide: Text.ElideRight
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                color: Kirigami.Theme.textColor
+                            }
+
+                            QQC2.Label {
+                                text: Math.round(slider.value * 100) + "%"
+                                color: Kirigami.Theme.disabledTextColor
+                            }
+                        }
+
+                        QQC2.Slider {
+                            id: slider
+                            Layout.fillWidth: true
+                            from: 0.1; to: 1.0; stepSize: 0.05
+                            value: modelData === "Active" ? DockSettings.iconOpacityActive
+                                : modelData === "Inactive" ? DockSettings.iconOpacityInactive
+                                : DockSettings.iconOpacityMinimized
+                            onMoved: {
+                                if (modelData === "Active") DockSettings.iconOpacityActive = value
+                                else if (modelData === "Inactive") DockSettings.iconOpacityInactive = value
+                                else DockSettings.iconOpacityMinimized = value
+                            }
+                            Accessible.name: i18n("%1 icon opacity", modelData)
+                        }
+                    }
                 }
             }
         }

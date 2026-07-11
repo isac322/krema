@@ -17,7 +17,28 @@
       <label>Spacing between icons</label>
       <default>4</default>
       <min>0</min>
-      <max>16</max>
+      <max>64</max>
+    </entry>
+
+    <entry name="IconOpacityActive" type="Double">
+      <label>Icon opacity for active windows</label>
+      <default>1.0</default>
+      <min>0.1</min>
+      <max>1.0</max>
+    </entry>
+
+    <entry name="IconOpacityInactive" type="Double">
+      <label>Icon opacity for running but inactive windows</label>
+      <default>0.8</default>
+      <min>0.1</min>
+      <max>1.0</max>
+    </entry>
+
+    <entry name="IconOpacityMinimized" type="Double">
+      <label>Icon opacity for minimized windows</label>
+      <default>0.5</default>
+      <min>0.1</min>
+      <max>1.0</max>
     </entry>
 
     <entry name="MaxZoomFactor" type="Double">

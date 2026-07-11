@@ -5,11 +5,17 @@
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
+#include <taskmanager/tasktools.h>
 
+#include <KDesktopFile>
+#include <KService>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
 #include <QScreen>
+#include <QStandardPaths>
+#include <QUrlQuery>
 
 Q_LOGGING_CATEGORY(lcModel, "krema.model")
 
@@ -123,7 +129,56 @@ QString DockModel::iconName(int index) const
     }
 
     const QIcon icon = idx.data(Qt::DecorationRole).value<QIcon>();
-    return icon.name();
+    const QUrl launcherUrl = idx.data(TaskManager::AbstractTasksModel::LauncherUrl).toUrl();
+
+    // Fast path: themed icon — "unknown" means libtaskmanager failed to resolve
+    const QString decorationName = icon.name();
+    if (!decorationName.isEmpty() && decorationName != QLatin1String("unknown")) {
+        return decorationName;
+    }
+
+    // Fallback: parse Icon= from .desktop file
+    if (launcherUrl.isValid()) {
+        QString desktopFileName;
+        if (launcherUrl.scheme() == QLatin1String("applications")) {
+            desktopFileName = launcherUrl.path();
+        } else if (launcherUrl.isLocalFile()) {
+            const QString path = launcherUrl.toLocalFile();
+            if (path.endsWith(QLatin1String(".desktop"))) {
+                desktopFileName = path;
+            }
+        }
+
+        if (!desktopFileName.isEmpty()) {
+            const KDesktopFile df(desktopFileName);
+            const QString iconFromDesktop = df.readIcon();
+            if (!iconFromDesktop.isEmpty()) {
+                return iconFromDesktop;
+            }
+
+            // Manual fallback across all XDG data dirs
+            const QStringList dataDirs = QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation);
+            for (const QString &dataDir : dataDirs) {
+                const QString fullPath = dataDir + QLatin1String("/applications/") + desktopFileName;
+                if (QFileInfo::exists(fullPath)) {
+                    const KDesktopFile dfFull(fullPath);
+                    const QString iconFull = dfFull.readIcon();
+                    if (!iconFull.isEmpty()) {
+                        return iconFull;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Last resort: appDataFromUrl for path-based icons
+        const TaskManager::AppData appData = TaskManager::appDataFromUrl(launcherUrl);
+        if (!appData.icon.name().isEmpty() && appData.icon.name() != QLatin1String("unknown")) {
+            return appData.icon.name();
+        }
+    }
+
+    return {};
 }
 
 QUrl DockModel::launcherUrl(int index) const

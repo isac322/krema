@@ -20,6 +20,8 @@
 #include <QQuickView>
 #include <QScreen>
 
+#include "utils/screenpin.h"
+
 Q_LOGGING_CATEGORY(lcPreview, "krema.shell.preview")
 
 namespace krema
@@ -53,6 +55,9 @@ void PreviewController::initialize()
     // Layer-shell configuration: overlay above the dock
     auto *layerWindow = LayerShellQt::Window::get(m_previewView);
     if (layerWindow) {
+        // Keep the preview popup on the same output as the dock
+        applyScreenPinFromEnv(m_previewView, layerWindow);
+
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setScope(QStringLiteral("krema-preview"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);

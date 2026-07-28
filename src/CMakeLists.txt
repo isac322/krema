@@ -49,6 +49,7 @@ add_library(krema_lib STATIC
 
     utils/zoomcalculator.h
     utils/surfacegeometry.h
+    utils/screenpin.h
     utils/inputregion.h
     utils/inputregion.cpp
 

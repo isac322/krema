@@ -20,6 +20,8 @@
 #include <QQuickView>
 #include <QScreen>
 
+#include "utils/screenpin.h"
+
 Q_LOGGING_CATEGORY(lcPreview, "krema.shell.preview")
 
 namespace krema
@@ -53,6 +55,9 @@ void PreviewController::initialize()
     // Layer-shell configuration: overlay above the dock
     auto *layerWindow = LayerShellQt::Window::get(m_previewView);
     if (layerWindow) {
+        // Keep the preview popup on the same output as the dock
+        applyScreenPinFromEnv(m_previewView, layerWindow);
+
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setScope(QStringLiteral("krema-preview"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
@@ -153,7 +158,13 @@ void PreviewController::showPreview(int index, qreal itemGlobalPos, qreal itemEx
 
     const bool indexChanged = (m_parentIndex != index);
     m_parentIndex = index;
-    m_itemGlobalPos = itemGlobalPos;
+    // itemGlobalPos comes from QML mapToGlobal(); on outputs whose origin is
+    // not (0,0) it includes the dock window's position on the virtual desktop.
+    // recalcContentPosition() works in surface-local coordinates (clamped to
+    // the preview surface size), so undo the window offset here.
+    const auto dockEdge = m_dockView->platform()->edge();
+    const bool dockVertical = (dockEdge == DockPlatform::Edge::Left || dockEdge == DockPlatform::Edge::Right);
+    m_itemGlobalPos = itemGlobalPos - (dockVertical ? m_dockView->y() : m_dockView->x());
     m_itemExtent = itemExtent;
 
     recalcContentPosition();

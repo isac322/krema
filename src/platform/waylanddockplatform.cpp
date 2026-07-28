@@ -7,6 +7,8 @@
 
 #include <QLoggingCategory>
 
+#include "utils/screenpin.h"
+
 Q_LOGGING_CATEGORY(lcWayland, "krema.platform.wayland")
 
 namespace krema
@@ -23,6 +25,8 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
         qCCritical(lcWayland) << "LayerShellQt::Window::get() returned null!";
         return;
     }
+
+    applyScreenPinFromEnv(window, m_layerWindow);
 
     m_layerWindow->setLayer(LayerShellQt::Window::LayerTop);
     m_layerWindow->setScope(QStringLiteral("krema-dock"));

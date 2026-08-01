@@ -306,10 +306,45 @@ The model stays empty.
 |---|---|---|
 | Desktop file check | KWin reads `/proc/<pid>/exe`, checks `X-KDE-Wayland-Interfaces` | `KWIN_WAYLAND_NO_PERMISSION_CHECKS=1` (env var for KWin) |
 | Single-client restriction | Protocol XML: "Only one client can bind at a time" | Not applicable in isolated sessions (no other client) |
-| Global availability in `--virtual` | Unknown — possibly not created in virtual backend | Unresolved; use `wayland_info` to diagnose |
+| Global availability in `--virtual` | **Refuted 2026-07: the global IS advertised and window rows DO appear** (see below) | n/a |
 | D-Bus services absent | `VirtualDesktopInfo`, `ActivityInfo` may not connect | Ensure isolated D-Bus has no filter effects |
 
 ---
+
+## Refuted: window rows do appear under `kwin_wayland --virtual`
+
+Hypothesis A above is wrong, and so is the broader premise of this document.
+Measured inside `tests/ci/Dockerfile` (Fedora 43, KWin 6.7.3, Qt 6.10,
+unprivileged container, no `/dev/dri`, `KWIN_WAYLAND_NO_PERMISSION_CHECKS=1`).
+
+**The global is advertised.** `wayland-info` against
+`kwin_wayland --virtual --socket krema-ci --width 800 --height 600` lists 66
+globals, including `org_kde_plasma_window_management`, `org_kde_plasma_shell`,
+`org_kde_plasma_activation_feedback`, `org_kde_kwin_fake_input`,
+`zkde_screencast_unstable_v1` and `zwlr_layer_shell_v1`. Absent:
+`org_kde_plasma_virtual_desktop`.
+
+**And `TasksModel` populates from it.** Captured via `tests/ci/frameprobe`,
+counting `DockItem` delegates in krema's own scene graph:
+
+| Session state | `DockItem` rows |
+|---|---|
+| krema alone (4 pinned launchers, no toplevel clients) | 4 |
+| after mapping one plain `xdg_toplevel` Qt client | **5** |
+
+No `"The PlasmaWindowManagement protocol hasn't activated in time"` and no
+`denied` message appeared in krema's log. So `WaylandTasksModel` binds the
+protocol and receives window events in a virtual session.
+
+The empty model previously observed was simply an empty compositor: nothing had
+mapped a toplevel window. Window-dependent scenarios (`IsWindow`, `IsActive`,
+preview popup, running-indicator dots) are therefore testable headlessly — the
+fixture is to launch a real Wayland client inside the same container before
+asserting. See `tests/ci/README.md`.
+
+Still untested this way: `IsDemandingAttention` (needs a client that requests
+attention) and PipeWire window previews (`kwin_screencast: Failed to connect
+PipeWire context` in a container without a PipeWire daemon).
 
 ## Usage in Krema
 

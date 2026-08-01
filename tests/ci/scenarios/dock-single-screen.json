@@ -1,0 +1,27 @@
+{
+  "description": "PrimaryOnly 기본 설정의 단일 가상 출력에서는 독 서피스 하나에 해당하는 네 개의 핀 DockItem만 생성된다.",
+  "config": {
+    "General/MonitorMode": 0
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-018",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "PrimaryOnly 모드에서 주 출력에 독 창이 존재하고 표시된다",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-018",
+      "kind": "count",
+      "type": "DockItem",
+      "comment": "단일 독에는 기본 핀 런처 네 개만 있어 DockItem 총수가 정확히 4개다. 독이 중복되면 이 수도 배수로 늘어난다",
+      "frame": 10,
+      "value": 4
+    }
+  ]
+}

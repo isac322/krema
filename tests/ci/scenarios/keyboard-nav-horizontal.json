@@ -1,0 +1,117 @@
+{
+  "description": "수평 독 키보드 진입 후 좌우 탐색은 포커스를 옮기고 양 끝에서 고정되며, 미지원 Home/End는 현재 포커스를 안전하게 유지한다.",
+  "actions": [
+    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
+    {"frame": 30, "type": "key", "key": "Right"},
+    {"frame": 50, "type": "key", "key": "Home"},
+    {"frame": 60, "type": "key", "key": "End"},
+    {"frame": 70, "type": "key", "key": "Left"},
+    {"frame": 85, "type": "key", "key": "Left"},
+    {"frame": 95, "type": "key", "key": "Right"},
+    {"frame": 105, "type": "key", "key": "Right"},
+    {"frame": 115, "type": "key", "key": "Right"},
+    {"frame": 125, "type": "key", "key": "Right"}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-001",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "focus-dock QAction의 실제 슬롯으로 진입해 키보드 탐색 모드가 켜진다; Meta+F5 키 바인딩 자체는 KGlobalAccel 환경 밖이라 검증하지 않는다",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-001",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "키보드 진입 시 첫 번째 런처에 포커스가 지정된다",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-001",
+      "kind": "equals",
+      "item": "0/0/2/1/0/0",
+      "prop": "visible",
+      "comment": "첫 번째 DockItem의 실제 포커스 링 child path가 표시된다",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-001",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "첫 번째 키보드 포커스 아이콘이 기본 MaxZoomFactor 1.6까지 확대된다",
+      "frame": 25,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-002",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Right 키를 누르면 두 번째 아이템으로 포커스가 이동한다",
+      "frame": 40,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-002",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Right 키 이동 뒤 첫 번째 아이템의 포커스 링은 해제된다",
+      "frame": 40,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-005",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "현재 구현에서 미지원인 Home 키는 예외 없이 두 번째 아이템 포커스를 유지한다",
+      "frame": 55,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-005",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "현재 구현에서 미지원인 End 키도 예외 없이 두 번째 아이템 포커스를 유지한다",
+      "frame": 65,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-002",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Left 키를 누르면 두 번째 아이템에서 첫 번째 아이템으로 돌아온다",
+      "frame": 80,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-004",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "첫 번째 아이템에서 Left 키를 더 눌러도 wrap-around 없이 첫 번째에 고정된다",
+      "frame": 90,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-004",
+      "kind": "equals",
+      "item": "dockItem3",
+      "prop": "isKeyboardFocused",
+      "comment": "마지막 아이템에서 Right 키를 더 눌러도 마지막에 고정된다",
+      "frame": 130,
+      "value": true
+    }
+  ]
+}

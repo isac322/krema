@@ -1,0 +1,92 @@
+{
+  "description": "좌측 독은 108px 폭의 세로 서피스로 전환되고, 네 아이콘이 위에서 아래로 정렬된다.",
+  "config": {
+    "General/Edge": 2,
+    "General/Floating": true
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-003",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "좌측 독은 계산된 폭 108px과 출력 높이 768px을 쓰는 세로 서피스를 요청한다",
+      "frame": 10,
+      "visible": true,
+      "w": 108,
+      "h": 768
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "이름 없는 패널 경로(0/0/2)는 좌측 가장자리에서 Floating 여백 8px만큼 떨어진다",
+      "frame": 10,
+      "value": 8
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "세로 패널은 (768-220)/2인 y=274에 중앙 배치된다",
+      "frame": 10,
+      "value": 274
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "좌측 세로 패널 너비는 48px 아이콘과 좌우 패딩 16px을 합친 64px이다",
+      "frame": 10,
+      "value": 64
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "좌측 세로 패널 높이는 네 아이템과 간격 및 패딩을 합친 220px이다",
+      "frame": 10,
+      "value": 220
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "이름 없는 패널 경로의 좌측 가장자리 위치 계산값은 8px이다",
+      "frame": 10,
+      "value": 8
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "ordered",
+      "comment": "좌측 독 아이콘은 위에서 아래로 y 좌표가 증가한다",
+      "frame": 10,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "y",
+      "order": "ascending"
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "w",
+      "comment": "세로 독의 DockItem 너비는 아이콘과 실행 표시 공간을 합친 56px이다",
+      "frame": 10,
+      "value": 56
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "h",
+      "comment": "세로 독의 DockItem 높이는 IconSize와 같은 48px이다",
+      "frame": 10,
+      "value": 48
+    }
+  ]
+}

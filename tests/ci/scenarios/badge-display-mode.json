@@ -1,0 +1,15 @@
+{
+  "description": "알림이 없는 런처에서 BadgeDisplayMode를 Dot과 Off로 전환하면 Dot 요소는 작은 무텍스트 형태로 준비되고 Off에서는 배지가 숨겨진다.",
+  "config": {"General/BadgeDisplayMode": 1},
+  "actions": [
+    {"frame": 30, "type": "setting", "name": "badgeDisplayMode", "value": 2}
+  ],
+  "assertions": [
+    {"qa": "QA-NOTI-016", "kind": "settles", "item": "dockItem0", "prop": "_badgeCount", "comment": "알림 데몬과 미확인 알림이 없는 전제에서 배지 수는 0이다", "frame": 2, "value": 0},
+    {"qa": "QA-NOTI-016", "kind": "settles", "item": "0/0/2/1/0/3", "prop": "w", "comment": "이름 없는 고정 child path의 Dot 배지 폭은 48px 아이콘의 18%를 반올림한 9px이다", "frame": 2, "value": 9},
+    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3/0", "prop": "visible", "comment": "Dot 모드에서는 이름 없는 배지 Label의 숫자 텍스트가 표시되지 않는다", "frame": 2, "value": false},
+    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3", "prop": "visible", "comment": "Dot 모드라도 미확인 알림이 0개이면 배지 요소는 표시되지 않는다", "frame": 2, "value": false},
+    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3", "prop": "visible", "comment": "Off(2)로 즉시 변경하면 이름 없는 배지 요소가 숨김 상태를 유지한다", "frame": 31, "value": false},
+    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3/0", "prop": "visible", "comment": "Off 모드에서는 배지 숫자 Label도 표시되지 않는다", "frame": 31, "value": false}
+  ]
+}

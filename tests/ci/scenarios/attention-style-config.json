@@ -1,0 +1,28 @@
+{
+  "description": "AttentionAnimation 설정을 시작 구성과 런타임 설정 변경으로 1~6까지 전환하면 각 DockItem의 선택 타입이 즉시 갱신되고 비활성 애니메이션 상태는 정상값을 유지한다.",
+  "config": {
+    "General/AttentionAnimation": 1,
+    "General/AttentionAnimationDuration": 5
+  },
+  "actions": [
+    {"frame": 10, "type": "setting", "name": "attentionAnimation", "value": 2},
+    {"frame": 20, "type": "setting", "name": "attentionAnimation", "value": 3},
+    {"frame": 30, "type": "setting", "name": "attentionAnimation", "value": 4},
+    {"frame": 40, "type": "setting", "name": "attentionAnimation", "value": 5},
+    {"frame": 50, "type": "setting", "name": "attentionAnimation", "value": 6}
+  ],
+  "assertions": [
+    {"qa": "QA-NOTI-012", "kind": "count", "type": "DockItem", "comment": "Bounce(1)를 저장한 구성으로 독이 정상 기동하여 기본 런처 네 개를 표시한다", "frame": 2, "value": 4},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "시작 구성의 Bounce 값 1이 DockItem에 반영된다", "frame": 2, "value": 1},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionBounceTarget", "comment": "기본 Bottom 독의 Bounce 요소는 위쪽 이동값 -14px로 준비된다", "frame": 2, "value": -14},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "재시작 없이 Wiggle 값 2가 즉시 반영된다", "frame": 11, "value": 2},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "재시작 없이 Pulse 값 3이 즉시 반영된다", "frame": 21, "value": 3},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "재시작 없이 Glow 값 4가 즉시 반영된다", "frame": 31, "value": 4},
+    {"qa": "QA-NOTI-012", "kind": "equals", "item": "0/0/2/1/0/2", "prop": "visible", "comment": "이름 없는 고정 child path의 Glow MultiEffect가 존재하며 Attention 전에는 숨겨져 있다", "frame": 31, "value": false},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "재시작 없이 DotColor 값 5가 즉시 반영된다", "frame": 41, "value": 5},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_dotBlinkOpacity", "comment": "DotColor 점멸 속성은 Attention 전 정상 불투명도 1.0으로 준비된다", "frame": 41, "value": 1.0},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "재시작 없이 Blink 값 6이 즉시 반영된다", "frame": 51, "value": 6},
+    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_blinkOpacity", "comment": "Blink 속성은 Attention 전 정상 불투명도 1.0으로 준비된다", "frame": 51, "value": 1.0},
+    {"qa": "QA-NOTI-012", "kind": "equals", "item": "dockItem0", "prop": "_showAttentionAnim", "comment": "Attention 입력이 없으므로 스타일 전환만으로 애니메이션을 거짓 시작하지 않는다", "frame": 51, "value": false}
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "description": "하단 독은 1024px 출력 폭을 따라가는 수평 서피스 안에서 중앙에 놓이고, 네 아이콘이 왼쪽에서 오른쪽으로 정렬된다.",
+  "config": {
+    "General/Edge": 1,
+    "General/Floating": true
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-001",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "하단 독의 클라이언트 서피스는 출력 폭 1024px과 계산된 높이 108px을 요청한다",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "이름 없는 패널 경로(0/0/2)는 (1024-220)/2인 x=402에 중앙 배치된다",
+      "frame": 10,
+      "value": 402
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "하단 패널은 108px 서피스에서 64px 패널과 8px Floating 여백을 반영한 y=36에 놓인다",
+      "frame": 10,
+      "value": 36
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "이름 없는 패널 경로의 하단 가장자리 위치 계산값은 36px이다",
+      "frame": 10,
+      "value": 36
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "ordered",
+      "comment": "하단 독 아이콘은 왼쪽에서 오른쪽으로 x 좌표가 증가한다",
+      "frame": 10,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "x",
+      "order": "ascending"
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "w",
+      "comment": "수평 독의 DockItem 기본 너비는 IconSize와 같은 48px이다",
+      "frame": 10,
+      "value": 48
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "h",
+      "comment": "수평 독의 DockItem 높이는 48px 아이콘과 8px 실행 표시 공간을 합친 56px이다",
+      "frame": 10,
+      "value": 56
+    }
+  ]
+}

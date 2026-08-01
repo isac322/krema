@@ -1,0 +1,65 @@
+{
+  "description": "미실행 핀 런처의 컨텍스트 메뉴는 고정된 기본 항목만 정확한 순서로 표시하고, 독 배경 우클릭은 어떤 아이템도 선택하지 않는다.",
+  "actions": [
+    {"frame": 5, "type": "move", "item": "dockItem0"},
+    {"frame": 10, "type": "click", "item": "dockItem0", "button": "right"},
+    {"frame": 25, "type": "key", "key": "Esc"},
+    {"frame": 35, "type": "move", "x": 20, "y": 68},
+    {"frame": 40, "type": "click", "x": 20, "y": 68, "button": "right"}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-CMD-001",
+      "kind": "menu",
+      "comment": "Dolphin 핀 런처 메뉴는 비활성 헤더부터 Quit까지 소스에 정의된 순서를 정확히 따른다",
+      "frame": 15,
+      "entries": [
+        "org.kde.dolphin.desktop",
+        "---",
+        "Unpin from Dock",
+        "New Instance",
+        "---",
+        "Settings...",
+        "---",
+        "About Krema",
+        "Quit"
+      ],
+      "enabled": {
+        "org.kde.dolphin.desktop": false,
+        "Unpin from Dock": true,
+        "New Instance": true,
+        "Settings...": true,
+        "About Krema": true,
+        "Quit": true
+      }
+    },
+    {
+      "qa": "QA-CMD-004",
+      "kind": "menu",
+      "comment": "desktop Actions를 파싱하지 않으므로 대표 점프 리스트 항목은 기본 독 메뉴에 나타나지 않는다",
+      "frame": 15,
+      "excludes": [
+        "Open in New Window",
+        "Open a New Window",
+        "New Incognito Window"
+      ]
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "hoveredIndex",
+      "comment": "아이콘이 없는 독 배경 좌표를 우클릭해도 hoveredIndex는 -1로 유지되어 어떤 항목 메뉴도 선택되지 않는다",
+      "frame": 45,
+      "value": -1
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "count",
+      "type": "DockItem",
+      "comment": "배경 우클릭 뒤에도 핀 런처 네 개가 그대로 남아 예외나 잘못된 아이템 동작이 없다",
+      "frame": 50,
+      "value": 4
+    }
+  ]
+}

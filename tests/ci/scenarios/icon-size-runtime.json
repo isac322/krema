@@ -1,0 +1,88 @@
+{
+  "description": "실행 중 IconSize를 48px에서 96px로 바꾸면 아이콘 셀은 즉시 커지고 패널과 항목 배치는 부드럽게 재조정된다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "설정 액션 직전에는 기본 IconSize 48px를 사용한다",
+      "frame": 5,
+      "value": 48
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "실행 중 설정 변경 다음 프레임에 IconSize 96px가 즉시 반영된다",
+      "frame": 6,
+      "value": 96
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "w",
+      "comment": "첫 항목의 실제 너비도 설정 변경 다음 프레임에 96px로 커진다",
+      "frame": 6,
+      "value": 96
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "h",
+      "comment": "첫 항목의 높이도 96px 아이콘과 8px 표시 점 공간을 합친 104px로 커진다",
+      "frame": 6,
+      "value": 104
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "이름 없는 패널의 캡처 path 너비가 기본 220px에서 새 콘텐츠 너비 412px로 부드럽게 커진다",
+      "from": 220,
+      "to": 412,
+      "start_after": 5,
+      "settled_by": 30,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.1
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "animates",
+      "item": "dockItem1",
+      "prop": "x",
+      "comment": "두 번째 항목도 새 첫 항목 너비에 맞춰 x=52에서 x=100으로 부드럽게 이동한다",
+      "from": 52,
+      "to": 100,
+      "start_after": 5,
+      "settled_by": 30,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.1
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "가로 독 패널 높이는 IconSize 96px와 상하 패딩 16px를 합친 112px로 즉시 맞춰진다",
+      "frame": 6,
+      "value": 112
+    }
+  ]
+}

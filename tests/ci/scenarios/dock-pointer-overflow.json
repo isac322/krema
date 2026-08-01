@@ -1,0 +1,52 @@
+{
+  "description": "확대된 아이콘 위쪽의 패널 외곽 2px 지점으로 커서를 옮겨도 Zoom Overflow 입력 영역이 호버와 확대를 유지한다.",
+  "config": {
+    "General/Edge": 1,
+    "General/VisibilityMode": 0,
+    "General/MaxZoomFactor": 1.6
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 30,
+      "type": "move",
+      "item": "dockItem0",
+      "y": -34
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-VIS-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "패널 위쪽 Zoom Overflow 영역으로 이동한 뒤에도 첫 아이콘은 최대 확대 1.6을 유지한다",
+      "frame": 45,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-017",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "panelMouseInside",
+      "comment": "기본 패널 경계보다 2px 위에서도 DockItem은 포인터가 확대 상호작용 영역 안에 있다고 본다",
+      "frame": 45,
+      "value": true
+    },
+    {
+      "qa": "QA-VIS-017",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "mouseY",
+      "comment": "커서가 아이콘 중앙에 있을 때 패널 기준 y는 음수다 — 확대된 아이콘이 패널 위로 넘치는 영역까지 포인터가 잡힌다",
+      "frame": 45,
+      "value": -19,
+      "tolerance": 1
+    }
+  ]
+}

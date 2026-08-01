@@ -1,0 +1,58 @@
+{
+  "description": "아이콘 정규화 설정을 껐다 켜도 아이콘이 계속 정상 표시되고 독 레이아웃이 흔들리지 않는다.",
+  "config": {
+    "General/IconNormalization": false
+  },
+  "actions": [
+    {
+      "frame": 30,
+      "type": "setting",
+      "name": "iconNormalization",
+      "value": true
+    },
+    {
+      "frame": 70,
+      "type": "setting",
+      "name": "iconNormalization",
+      "value": false
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-021",
+      "kind": "stable",
+      "item": "dockItem0",
+      "prop": "w",
+      "comment": "정규화를 바꿔도 항목 크기는 그대로다"
+    },
+    {
+      "qa": "QA-ITEM-021",
+      "kind": "settles",
+      "item": "0/0/2/1/0/1",
+      "prop": "progress",
+      "comment": "정규화를 끈 상태에서도 아이콘이 로드된다",
+      "frame": 20,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-ITEM-021",
+      "kind": "settles",
+      "item": "0/0/2/1/0/1",
+      "prop": "progress",
+      "comment": "정규화를 켠 뒤에도 아이콘이 다시 로드된다",
+      "frame": 60,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-ITEM-021",
+      "kind": "equals",
+      "item": "0/0/2/1/0/1/0",
+      "prop": "visible",
+      "comment": "어느 쪽 설정에서도 플레이스홀더로 떨어지지 않는다",
+      "frame": 100,
+      "value": false
+    }
+  ]
+}

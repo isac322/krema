@@ -1,0 +1,58 @@
+{
+  "description": "AutoHide 독은 focus-dock으로 키보드 탐색에 들어가면 나타나고 캡처가 끝날 때까지 계속 보인다.",
+  "config": {
+    "General/VisibilityMode": 1
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-014",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "AutoHide로 숨은 패널이 키보드 탐색 진입 시 0에서 1로 부드럽게 나타난다",
+      "from": 0.0,
+      "to": 1.0,
+      "start_after": 5,
+      "settled_by": 45,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-014",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "AutoHide 모드에서도 focus-dock 진입 후 키보드 탐색 상태가 활성화된다",
+      "frame": 35,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-014",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "QTimer 지연의 정확한 프레임은 고정하지 않고 넉넉한 캡처 끝에서 패널이 계속 완전히 보이는지만 확인한다",
+      "frame": 130,
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-014",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "오토하이드로 사라지지 않고 첫 번째 아이템 키보드 포커스도 끝까지 유지된다",
+      "frame": 130,
+      "value": true
+    }
+  ]
+}

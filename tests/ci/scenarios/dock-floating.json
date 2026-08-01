@@ -1,0 +1,47 @@
+{
+  "description": "Floating을 켜면 하단 패널과 화면 가장자리 사이의 8px 여백을 포함하도록 독 서피스 높이가 늘어난다.",
+  "config": {
+    "General/Edge": 1,
+    "General/Floating": true
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-005",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "Floating=true이면 64px 패널과 36px 상단 여유 및 8px 하단 간격을 합친 108px 서피스를 요청한다",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "이름 없는 패널 경로(0/0/2)는 108px 서피스 안의 y=36에 놓여 아래쪽 8px을 비운다",
+      "frame": 10,
+      "value": 36
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "표시 패널 자체 높이는 IconSize 48px과 패딩 16px을 합친 64px이다",
+      "frame": 10,
+      "value": 64
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "radius",
+      "comment": "Floating 패널 모서리는 CornerRadius 기본값 12px로 둥글게 표시된다",
+      "frame": 10,
+      "value": 12
+    }
+  ]
+}

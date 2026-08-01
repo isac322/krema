@@ -1,0 +1,123 @@
+{
+  "description": "아이콘 크기와 간격을 크게 바꾸고 최대 줌을 2배로 올리면 독 크기와 호버 확대가 즉시 따라간다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    },
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "iconSpacing",
+      "value": 16
+    },
+    {
+      "frame": 35,
+      "type": "setting",
+      "name": "maxZoomFactor",
+      "value": 2.0
+    },
+    {
+      "frame": 35,
+      "type": "setting",
+      "name": "iconNormalization",
+      "value": false
+    },
+    {
+      "frame": 35,
+      "type": "setting",
+      "name": "iconScale",
+      "value": 0.5
+    },
+    {
+      "frame": 55,
+      "type": "move",
+      "item": "dockItem0"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "아이콘 크기를 96px로 바꾸면 독 항목의 실제 셀 크기 설정이 즉시 96px가 된다",
+      "frame": 10,
+      "value": 96
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "dockItem1",
+      "prop": "spacing",
+      "comment": "아이콘 간격을 16px로 바꾸면 각 독 항목이 새 간격 값을 즉시 받는다",
+      "frame": 10,
+      "value": 16
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "0/0/2/1",
+      "prop": "spacing",
+      "comment": "이름 없는 Flow의 실제 캡처 경로에서 아이콘 배치 간격도 16px로 반영된다",
+      "frame": 10,
+      "value": 16
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "이름 없는 패널의 실제 캡처 경로에서 네 아이콘과 간격을 담는 너비가 448px로 확장된다",
+      "frame": 30,
+      "value": 448
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "window",
+      "comment": "아이콘 크기 96px와 기본 줌 1.6에 맞춰 독 서피스 높이가 178px로 다시 계산된다",
+      "frame": 20,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 178
+    },
+    {
+      "qa": "QA-SET-005",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "maxZoomFactor",
+      "comment": "최대 줌 배율을 2.0으로 바꾸면 독 항목이 새 배율을 즉시 사용한다",
+      "frame": 40,
+      "value": 2.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-005",
+      "kind": "window",
+      "comment": "96px 아이콘이 2배 확대되어도 잘리지 않도록 독 서피스 높이가 216px로 확보된다",
+      "frame": 45,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 216
+    },
+    {
+      "qa": "QA-SET-005",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "커서를 올린 아이콘은 1.0에서 설정한 최대 배율 2.0까지 부드럽게 확대된다",
+      "from": 1.0,
+      "to": 2.0,
+      "start_after": 55,
+      "settled_by": 80,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    }
+  ]
+}

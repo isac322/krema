@@ -1,0 +1,41 @@
+{
+  "description": "Left Edge 세로 독에서는 Down이 다음 아이템으로, Up이 이전 아이템으로 키보드 포커스와 확대 중심을 이동한다.",
+  "config": {
+    "General/Edge": 2
+  },
+  "actions": [
+    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
+    {"frame": 25, "type": "key", "key": "Down"},
+    {"frame": 50, "type": "key", "key": "Up"}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-003",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Left Edge 세로 독에서 Down 키는 두 번째 아이템으로 포커스를 이동한다",
+      "frame": 35,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-003",
+      "kind": "settles",
+      "item": "dockItem1",
+      "prop": "currentScale",
+      "comment": "Down 키로 선택된 두 번째 아이템이 기본 MaxZoomFactor 1.6까지 확대된다",
+      "frame": 45,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-003",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Up 키는 두 번째 아이템에서 첫 번째 아이템으로 포커스를 되돌린다",
+      "frame": 60,
+      "value": true
+    }
+  ]
+}

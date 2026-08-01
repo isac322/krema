@@ -1,0 +1,76 @@
+{
+  "description": "포물선 확대: 아이콘에 커서를 올리면 MaxZoomFactor까지 커지고 이웃은 감쇄된 배율을 갖는다. 다른 아이콘으로 옮기면 확대가 넘어가고, 독을 벗어나면 원복된다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 45,
+      "type": "move",
+      "item": "dockItem2"
+    },
+    {
+      "frame": 90,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-007",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "커서를 올린 아이콘이 1.0에서 MaxZoomFactor(기본 1.6)까지 부드럽게 커진다",
+      "from": 1.0,
+      "to": 1.6,
+      "start_after": 5,
+      "settled_by": 25,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-007",
+      "kind": "ordered",
+      "comment": "이웃 감쇄: 확대된 아이콘에서 멀어질수록 배율이 작아진다",
+      "frame": 25,
+      "items": [
+        "dockItem0",
+        "dockItem1",
+        "dockItem2"
+      ],
+      "prop": "currentScale",
+      "order": "descending"
+    },
+    {
+      "qa": "QA-ITEM-007",
+      "kind": "animates",
+      "item": "dockItem2",
+      "prop": "currentScale",
+      "comment": "다른 아이콘으로 커서를 옮기면 확대가 그쪽으로 넘어간다",
+      "from": 1.023,
+      "to": 1.6,
+      "start_after": 45,
+      "settled_by": 75,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-008",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "커서가 독을 벗어나면 모든 아이콘이 1.0으로 원복된다",
+      "frame": 130,
+      "value": 1.0,
+      "tolerance": 0.01
+    }
+  ]
+}

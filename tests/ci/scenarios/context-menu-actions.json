@@ -1,0 +1,89 @@
+{
+  "description": "실행 중인 비고정 창의 Pin/Unpin 메뉴 액션은 고정 상태를 실제로 바꾸고, Settings·About·Quit 항목은 활성 상태로 제공된다.",
+  "fixture_windows": 1,
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 10,
+      "type": "click",
+      "item": "dockItem0",
+      "button": "right"
+    },
+    {
+      "frame": 40,
+      "type": "move",
+      "item": "dockItem4"
+    },
+    {
+      "frame": 45,
+      "type": "click",
+      "item": "dockItem4",
+      "button": "right"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "고정된 런처를 우클릭하면 고정 해제가 제안된다",
+      "frame": 15,
+      "contains": [
+        "Unpin from Dock"
+      ],
+      "excludes": [
+        "Pin to Dock"
+      ]
+    },
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "고정되지 않은 창 항목을 우클릭하면 고정이 제안된다",
+      "frame": 50,
+      "contains": [
+        "Pin to Dock"
+      ],
+      "excludes": [
+        "Unpin from Dock"
+      ]
+    },
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "창이 있는 항목에서만 닫기가 나온다",
+      "frame": 50,
+      "contains": [
+        "Close"
+      ]
+    },
+    {
+      "qa": "QA-CMD-009",
+      "kind": "menu",
+      "comment": "설정과 정보 항목은 어느 아이콘에서든 제공되고 누를 수 있다",
+      "frame": 15,
+      "contains": [
+        "Settings...",
+        "About Krema"
+      ],
+      "enabled": {
+        "Settings...": true,
+        "About Krema": true
+      }
+    },
+    {
+      "qa": "QA-CMD-010",
+      "kind": "menu",
+      "comment": "종료 항목이 제공되고 누를 수 있다. 실제로 누르면 앱이 죽어 캡처가 끊기므로 존재와 활성만 확인한다",
+      "frame": 15,
+      "contains": [
+        "Quit"
+      ],
+      "enabled": {
+        "Quit": true
+      }
+    }
+  ]
+}

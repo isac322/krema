@@ -1,0 +1,57 @@
+{
+  "description": "미실행 런처를 충분히 오래 호버하면 긴 displayName 전체가 잘리지 않은 텍스트 툴팁으로 표시된다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-009",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "show",
+      "comment": "QML Timer 지연 시간 자체는 재지 않고 충분히 뒤 프레임에 이름 없는 툴팁 path의 최종 표시 상태를 확인한다",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-ITEM-009",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "visible",
+      "comment": "미실행 런처 호버의 최종 상태에서 텍스트 툴팁 배경이 실제로 보인다",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-ITEM-009",
+      "kind": "equals",
+      "item": "0/0/5/0",
+      "prop": "text",
+      "comment": "툴팁은 호버한 런처의 실제 displayName 전체를 표시한다",
+      "frame": 130,
+      "value": "org.kde.dolphin.desktop"
+    },
+    {
+      "qa": "QA-ITEM-011",
+      "kind": "equals",
+      "item": "0/0/5/0",
+      "prop": "truncated",
+      "comment": "긴 org.kde.dolphin.desktop 이름도 툴팁의 암시적 너비 계산으로 잘리지 않는다",
+      "frame": 130,
+      "value": false
+    },
+    {
+      "qa": "QA-ITEM-011",
+      "kind": "settles",
+      "item": "0/0/5/0",
+      "prop": "lineCount",
+      "comment": "긴 런처 이름이 툴팁 안에서 깨지지 않고 한 줄로 배치된다",
+      "frame": 130,
+      "value": 1
+    }
+  ]
+}

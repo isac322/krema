@@ -1,0 +1,126 @@
+{
+  "description": "아크릴 배경의 투명도를 0%와 100%로 바꾸고 Tinted 배경을 커스텀 빨간색으로 전환하면 렌더링 입력값이 즉시 갱신된다.",
+  "config": {
+    "General/BackgroundStyle": 3,
+    "General/BackgroundOpacity": 0.6,
+    "General/UseAccentColor": false
+  },
+  "actions": [
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "backgroundOpacity",
+      "value": 0.0
+    },
+    {
+      "frame": 25,
+      "type": "setting",
+      "name": "backgroundOpacity",
+      "value": 1.0
+    },
+    {
+      "frame": 40,
+      "type": "setting",
+      "name": "backgroundStyle",
+      "value": 2
+    },
+    {
+      "frame": 40,
+      "type": "setting",
+      "name": "useSystemColor",
+      "value": true
+    },
+    {
+      "frame": 55,
+      "type": "setting",
+      "name": "useSystemColor",
+      "value": false
+    },
+    {
+      "frame": 55,
+      "type": "setting",
+      "name": "tintColor",
+      "value": "#ff0000"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-008",
+      "kind": "equals",
+      "item": "0/0/2/0",
+      "prop": "visible",
+      "comment": "이름 없는 아크릴 오버레이의 실제 캡처 경로가 아크릴 스타일에서 표시된다",
+      "frame": 5,
+      "value": true
+    },
+    {
+      "qa": "QA-SET-008",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintOpacity",
+      "comment": "투명도를 0으로 낮춰도 0.1에서 멈춘다 — krema.kcfg:82의 min이 0.1이라 완전 투명은 도달할 수 없다",
+      "frame": 12,
+      "value": 0.1,
+      "tolerance": 0.005
+    },
+    {
+      "qa": "QA-SET-008",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintOpacity",
+      "comment": "배경 투명도를 100%로 올리면 아크릴 합성에 전달되는 알파 값이 1이 된다",
+      "frame": 27,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "equals",
+      "item": "0/0/2/0",
+      "prop": "visible",
+      "comment": "Tinted 스타일로 바꾸면 이름 없는 아크릴 전용 오버레이는 숨겨지고 패널 본체가 틴트 색을 그린다",
+      "frame": 42,
+      "value": false
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintR",
+      "comment": "숨겨진 오버레이의 바인딩된 색 채널은 패널과 같은 DockView 배경색을 반영해 커스텀 빨강의 R 값이 1이 된다",
+      "frame": 57,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintG",
+      "comment": "커스텀 빨간색 틴트를 선택하면 패널 배경색의 G 채널이 0이 된다",
+      "frame": 57,
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintB",
+      "comment": "커스텀 빨간색 틴트를 선택하면 패널 배경색의 B 채널이 0이 된다",
+      "frame": 57,
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintOpacity",
+      "comment": "커스텀 틴트 색상에도 앞서 설정한 100% 배경 투명도가 유지된다",
+      "frame": 57,
+      "value": 1.0,
+      "tolerance": 0.001
+    }
+  ]
+}

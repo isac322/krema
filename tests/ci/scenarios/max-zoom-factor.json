@@ -1,0 +1,76 @@
+{
+  "description": "MaxZoomFactor 1.0에서는 호버 확대가 없고 실행 중 2.0으로 바꾸면 같은 호버 항목이 정확히 2배까지 확대된다.",
+  "config": {
+    "General/MaxZoomFactor": 1.0
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 40,
+      "type": "setting",
+      "name": "maxZoomFactor",
+      "value": 2.0
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-020",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "maxZoomFactor",
+      "comment": "저장된 최소 MaxZoomFactor 1.0이 DockItem에 적용된다",
+      "frame": 20,
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-020",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "MaxZoomFactor가 1.0이면 아이콘 중앙을 호버해도 확대가 전혀 일어나지 않는다",
+      "frame": 20,
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-020",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "maxZoomFactor",
+      "comment": "실행 중 설정 변경 다음 프레임에 최대 확대 배율 2.0이 반영된다",
+      "frame": 41,
+      "value": 2.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-020",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "zoomFactor",
+      "comment": "커서가 중앙에 있는 항목의 목표 배율이 설정값과 같은 2.0으로 즉시 계산된다",
+      "frame": 41,
+      "value": 2.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-020",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "호버 중 MaxZoomFactor를 2.0으로 바꾸면 현재 배율이 1.0에서 2.0까지 부드럽게 커진다",
+      "from": 1.0,
+      "to": 2.0,
+      "start_after": 40,
+      "settled_by": 60,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    }
+  ]
+}

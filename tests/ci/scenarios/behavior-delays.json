@@ -1,0 +1,83 @@
+{
+  "description": "표시·숨김 지연 값을 양 끝으로 바꾼 뒤 Auto hide와 Always visible의 최종 독 상태가 올바르게 정착한다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "showDelay",
+      "value": 2000
+    },
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "hideDelay",
+      "value": 2000
+    },
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "visibilityMode",
+      "value": 1
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "showDelay",
+      "value": 0
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "hideDelay",
+      "value": 0
+    },
+    {
+      "frame": 55,
+      "type": "setting",
+      "name": "visibilityMode",
+      "value": 0
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-016",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "QTimer 지연 시간 자체가 아니라 2000ms 값 설정 뒤 Auto hide의 최종 상태가 완전히 숨김인지 확인한다",
+      "frame": 52,
+      "value": 0.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-016",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "Auto hide의 최종 상태에서 하단 패널은 서피스 밖 y=116 위치로 이동한다",
+      "frame": 52,
+      "value": 116,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-016",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "지연 값을 0ms로 바꾼 뒤 Always visible로 복귀하면 독의 최종 불투명도가 1로 정착한다",
+      "frame": 112,
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-016",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "Always visible의 최종 상태에서 하단 패널은 플로팅 위치 y=36으로 돌아온다",
+      "frame": 112,
+      "value": 36,
+      "tolerance": 0.01
+    }
+  ]
+}

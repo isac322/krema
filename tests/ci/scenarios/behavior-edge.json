@@ -1,0 +1,92 @@
+{
+  "description": "독 가장자리를 Left, Right, Top, Bottom 순서로 바꾸면 서피스 방향과 아이콘 Flow가 각 가장자리에 맞게 전환된다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "edge",
+      "value": 2
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "edge",
+      "value": 3
+    },
+    {
+      "frame": 95,
+      "type": "setting",
+      "name": "edge",
+      "value": 0
+    },
+    {
+      "frame": 140,
+      "type": "setting",
+      "name": "edge",
+      "value": 1
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "왼쪽 가장자리: 패널이 화면 왼쪽에 Floating 여백 8px만 두고 붙는다",
+      "frame": 45,
+      "value": 8,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "왼쪽 가장자리에서는 패널이 세로로 서므로 너비가 아이콘 한 줄 폭으로 줄어든다",
+      "frame": 45,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "오른쪽 가장자리: 좌표는 독 창 기준이고 창 폭이 108px이므로, 패널이 오른쪽에 8px 간격을 두면 x는 36이 된다",
+      "frame": 90,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "위쪽 가장자리: 패널이 화면 상단에 여백 8px을 두고 눕는다",
+      "frame": 135,
+      "value": 8,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "위쪽 가장자리에서는 다시 가로로 누우므로 높이가 한 줄 높이로 돌아온다",
+      "frame": 135,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "아래쪽 가장자리(기본값)로 되돌리면 패널이 하단 제자리로 돌아온다",
+      "frame": 190,
+      "value": 36,
+      "tolerance": 0.6
+    }
+  ],
+  "max_frames": 200
+}

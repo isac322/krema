@@ -1,0 +1,46 @@
+{
+  "description": "키보드 탐색 중 Esc를 누르면 탐색 모드와 아이템 포커스 링이 즉시 해제되고 확대가 원래 크기로 돌아온다.",
+  "actions": [
+    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
+    {"frame": 30, "type": "key", "key": "Esc"}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "Esc 입력 후 루트의 키보드 탐색 상태가 즉시 꺼진다",
+      "frame": 35,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Esc 입력 후 첫 번째 아이템의 키보드 포커스가 해제된다",
+      "frame": 35,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "0/0/2/1/0/0",
+      "prop": "visible",
+      "comment": "Esc 입력 후 첫 번째 DockItem의 포커스 링 child path가 보이지 않는다",
+      "frame": 35,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "키보드 모드 종료 뒤 확대가 기본 배율 1.0으로 복귀한다",
+      "frame": 50,
+      "value": 1.0,
+      "tolerance": 0.01
+    }
+  ]
+}

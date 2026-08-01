@@ -1,0 +1,242 @@
+{
+  "description": "kcfg에 정의된 아이콘·간격·줌·모서리·그림자 수치의 최솟값과 최댓값을 한꺼번에 적용해도 독 레이아웃과 셰이더 계산이 유한하게 유지된다.",
+  "config": {
+    "General/IconSize": 24,
+    "General/IconSpacing": 0,
+    "General/MaxZoomFactor": 1.0,
+    "General/IconScale": 0.5,
+    "General/CornerRadius": 0,
+    "General/ShadowEnabled": true,
+    "General/ShadowLightX": -300,
+    "General/ShadowLightY": -300,
+    "General/ShadowLightZ": 100,
+    "General/ShadowLightRadius": 0.5,
+    "General/ShadowElevation": 1
+  },
+  "actions": [
+    {
+      "frame": 10,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 35,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "iconSpacing",
+      "value": 16
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "maxZoomFactor",
+      "value": 2.0
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "iconScale",
+      "value": 1.0
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "cornerRadius",
+      "value": 24
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightX",
+      "value": 300
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightY",
+      "value": 300
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightZ",
+      "value": 2000
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightRadius",
+      "value": 20.0
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowElevation",
+      "value": 50
+    },
+    {
+      "frame": 85,
+      "type": "move",
+      "item": "dockItem0"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "kcfg 최솟값 IconSize 24에서 독 항목 크기 계산이 0이 되지 않고 24px를 유지한다",
+      "frame": 5,
+      "value": 24
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "spacing",
+      "comment": "kcfg 최솟값 IconSpacing 0에서도 아이콘 배치가 유효한 0px 간격을 사용한다",
+      "frame": 5,
+      "value": 0
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "window",
+      "comment": "최소 아이콘과 줌 값에서도 독 서피스는 1024x84의 유효한 크기를 유지한다",
+      "frame": 5,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 84
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "이름 없는 패널의 실제 캡처 경로는 최소 아이콘 네 개를 담는 112px 너비를 유지한다",
+      "frame": 5,
+      "value": 112
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "최소 아이콘에서도 패널 높이는 40px로 유지되어 레이아웃이 붕괴하지 않는다",
+      "frame": 5,
+      "value": 40
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "margin",
+      "comment": "최소 광원 반경·고도와 음의 극단 좌표에서도 그림자 마진은 유한한 약 14.29px로 계산된다",
+      "frame": 5,
+      "value": 14.290546,
+      "tolerance": 0.02
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "최소 줌 1.0에서 작은 아이콘에 커서를 올려도 정확히 1.0 배율을 유지해 히트 테스트가 깨지지 않는다",
+      "frame": 25,
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "실행 중 kcfg 최댓값 IconSize 96을 적용하면 독 항목이 즉시 96px 크기로 갱신된다",
+      "frame": 50,
+      "value": 96
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "spacing",
+      "comment": "실행 중 kcfg 최댓값 IconSpacing 16을 적용하면 독 항목이 즉시 16px 간격을 사용한다",
+      "frame": 50,
+      "value": 16
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "window",
+      "comment": "최대 아이콘 96과 줌 2.0에서도 확대 오버플로우를 담는 1024x216 서피스가 확보된다",
+      "frame": 55,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 216
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "최대 아이콘과 간격에서도 패널 너비가 448px로 정착해 아이콘이 겹치지 않는다",
+      "frame": 75,
+      "value": 448
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "최대 아이콘에서도 패널 높이는 112px로 확보되어 아이콘이 잘리지 않는다",
+      "frame": 75,
+      "value": 112
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "radius",
+      "comment": "최대 CornerRadius 24에서도 패널의 둥근 모서리 계산이 정상 값을 유지한다",
+      "frame": 75,
+      "value": 24
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "margin",
+      "comment": "최대 광원 반경과 고도에서도 그림자 마진은 유한한 70px로 계산된다",
+      "frame": 75,
+      "value": 70,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "최대 크기 아이콘도 패널 밖에서 잘리지 않고 1.0에서 최대 줌 2.0까지 부드럽게 확대된다 MaxZoomFactor를 최대(2.0)로 밀면 범위가 1.0이라 OutCubic 첫 스텝만으로 76%를 덮는다. 한 프레임 스냅은 100%이므로 0.8이어도 스냅은 잡힌다.",
+      "from": 1.0,
+      "to": 2.0,
+      "start_after": 85,
+      "settled_by": 110,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.8,
+      "monotonic": "up",
+      "tolerance": 0.01
+    }
+  ]
+}

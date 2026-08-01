@@ -1,0 +1,94 @@
+{
+  "description": "AutoHide 독에서 Focus Dock 액션으로 키보드 탐색을 시작하면 커서가 독 밖에 있어도 표시와 포커스가 유지되고 Escape 후 다시 숨는다.",
+  "config": {
+    "General/Edge": 1,
+    "General/VisibilityMode": 1,
+    "General/ShowDelay": 0,
+    "General/HideDelay": 0
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    },
+    {
+      "frame": 20,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 60,
+      "type": "key",
+      "key": "Esc"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "키보드 탐색 진입 시 첫 번째 독 아이콘이 포커스를 가진다",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Right 키를 누르면 포커스가 두 번째 아이콘으로 이동해 키 입력이 독에 전달됨을 확인한다",
+      "frame": 30,
+      "value": true
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "두 번째 아이콘으로 이동한 뒤 첫 번째 아이콘의 키보드 포커스는 해제된다",
+      "frame": 30,
+      "value": false
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "이름 없는 패널 경로(0/0/2)는 포인터 호버 없이 키보드 탐색 중에도 완전히 보인다",
+      "frame": 50,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "키보드 탐색 중 패널은 AutoHide 숨김 위치로 가지 않고 표시 위치 y=36을 유지한다",
+      "frame": 50,
+      "value": 36,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Escape를 누르면 두 번째 아이콘의 키보드 포커스가 해제되어 탐색 종료를 확인한다",
+      "frame": 70,
+      "value": false
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "탐색 종료 후 포인터가 독 밖에 있으므로 AutoHide 정책에 따라 패널이 다시 숨는다",
+      "frame": 115,
+      "value": 0.0,
+      "tolerance": 0.001
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "description": "우측 독은 108px 폭의 세로 서피스 오른쪽에 놓이고, 네 아이콘이 위에서 아래로 정렬된다.",
+  "config": {
+    "General/Edge": 3,
+    "General/Floating": true
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-004",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "우측 독은 계산된 폭 108px과 출력 높이 768px을 쓰는 세로 서피스를 요청한다",
+      "frame": 10,
+      "visible": true,
+      "w": 108,
+      "h": 768
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "이름 없는 패널 경로(0/0/2)는 108px 서피스에서 64px 패널과 8px 여백을 반영한 x=36에 놓인다",
+      "frame": 10,
+      "value": 36
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "우측 세로 패널은 (768-220)/2인 y=274에 중앙 배치된다",
+      "frame": 10,
+      "value": 274
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "우측 세로 패널 너비는 64px이다",
+      "frame": 10,
+      "value": 64
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "우측 세로 패널 높이는 네 아이템과 간격 및 패딩을 합친 220px이다",
+      "frame": 10,
+      "value": 220
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "이름 없는 패널 경로의 우측 가장자리 위치 계산값은 36px이다",
+      "frame": 10,
+      "value": 36
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "ordered",
+      "comment": "우측 독 아이콘은 위에서 아래로 y 좌표가 증가한다",
+      "frame": 10,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "y",
+      "order": "ascending"
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "w",
+      "comment": "우측 세로 독의 DockItem 너비는 56px이다",
+      "frame": 10,
+      "value": 56
+    },
+    {
+      "qa": "QA-VIS-004",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "h",
+      "comment": "우측 세로 독의 DockItem 높이는 48px이다",
+      "frame": 10,
+      "value": 48
+    }
+  ]
+}

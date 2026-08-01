@@ -1,0 +1,46 @@
+{
+  "description": "고정 1024x768 출력에서 독 서피스가 전체 출력 폭을 사용하고 220px 패널이 정확히 중앙 x=402에 놓인다.",
+  "config": {
+    "General/Edge": 1
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-022",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "고정 1024x768 출력에서 독 서피스가 출력 너비 1024px을 사용한다. 동적 해상도 변경 신호 자체는 이 하네스에서 만들지 않는다",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "이름 없는 패널 경로(0/0/2)의 고정 출력 기준 콘텐츠 폭은 220px이다",
+      "frame": 10,
+      "value": 220
+    },
+    {
+      "qa": "QA-VIS-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "고정 출력에서는 패널 x가 (1024-220)/2=402로 계산되어 정확히 중앙에 온다. geometryChanged 재현은 범위 밖이다",
+      "frame": 10,
+      "value": 402
+    },
+    {
+      "qa": "QA-VIS-022",
+      "kind": "settles",
+      "item": "0/0/2/1",
+      "prop": "x",
+      "comment": "이름 없는 Flow 경로(0/0/2/1)는 220px 패널 안에서 204px 아이콘 열을 x=8에 중앙 정렬한다",
+      "frame": 10,
+      "value": 8
+    }
+  ]
+}

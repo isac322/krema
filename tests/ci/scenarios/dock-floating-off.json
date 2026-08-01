@@ -1,0 +1,47 @@
+{
+  "description": "Floating을 끄면 하단 8px 간격이 제거되어 패널이 화면 가장자리에 밀착되고 독 서피스 높이가 100px로 줄어든다.",
+  "config": {
+    "General/Edge": 1,
+    "General/Floating": false
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-006",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "Floating=false이면 8px 하단 간격이 빠져 독 서피스 높이가 108px에서 100px으로 줄어든다",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 100
+    },
+    {
+      "qa": "QA-VIS-006",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "이름 없는 패널 경로(0/0/2)는 100px 서피스의 y=36에서 끝까지 64px을 차지해 하단에 밀착된다",
+      "frame": 10,
+      "value": 36
+    },
+    {
+      "qa": "QA-VIS-006",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Floating을 꺼도 표시 패널 자체 높이는 64px으로 유지된다",
+      "frame": 10,
+      "value": 64
+    },
+    {
+      "qa": "QA-VIS-006",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "이름 없는 패널 경로의 끝 위치는 y=36이며 36+64=100으로 서피스 하단과 정확히 맞닿는다",
+      "frame": 10,
+      "value": 36
+    }
+  ]
+}

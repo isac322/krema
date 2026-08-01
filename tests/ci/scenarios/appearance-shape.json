@@ -1,0 +1,87 @@
+{
+  "description": "모서리 반경과 플로팅을 양 끝값으로 바꾸면 패널 마스크와 독 서피스 여백이 즉시 다시 계산된다.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "cornerRadius",
+      "value": 0
+    },
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "floating",
+      "value": false
+    },
+    {
+      "frame": 25,
+      "type": "setting",
+      "name": "cornerRadius",
+      "value": 24
+    },
+    {
+      "frame": 25,
+      "type": "setting",
+      "name": "floating",
+      "value": true
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-011",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "radius",
+      "comment": "이름 없는 패널 본체의 실제 캡처 경로에서 모서리 반경 0이 즉시 직각으로 반영된다",
+      "frame": 10,
+      "value": 0
+    },
+    {
+      "qa": "QA-SET-011",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "cornerRadius",
+      "comment": "이름 없는 그림자 셰이더의 패널 마스크도 모서리 반경 0을 함께 사용한다",
+      "frame": 10,
+      "value": 0
+    },
+    {
+      "qa": "QA-SET-011",
+      "kind": "window",
+      "comment": "플로팅을 끄면 8px 하단 여백이 제거되어 독 서피스 높이가 108px에서 100px로 줄어든다",
+      "frame": 15,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 100
+    },
+    {
+      "qa": "QA-SET-011",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "radius",
+      "comment": "모서리 반경을 최댓값 24로 올리면 패널 본체의 곡률이 즉시 커진다",
+      "frame": 30,
+      "value": 24
+    },
+    {
+      "qa": "QA-SET-011",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "cornerRadius",
+      "comment": "그림자 셰이더의 둥근 패널 마스크도 반경 24로 다시 계산된다",
+      "frame": 30,
+      "value": 24
+    },
+    {
+      "qa": "QA-SET-011",
+      "kind": "window",
+      "comment": "플로팅을 다시 켜면 8px 화면 가장자리 여백을 위한 독 서피스 높이가 108px로 복원된다",
+      "frame": 35,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    }
+  ]
+}

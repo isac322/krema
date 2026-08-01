@@ -146,21 +146,41 @@ Every assertion carries `qa`, the checklist id it covers, and results are
 reported per id. `animates` is the one that matters — it fails both when the
 value never reaches its target and when it snaps there in one frame.
 
-## Screenshot review
+## Screenshot and video review
 
 `KREMA_SCREENSHOTS=1` dumps a PNG per frame and writes `review.md` /
 `review.json` per scenario, pairing each assertion's keyframes with its
 expectation in prose. This is the input for visual review by a person or a
-vision model; it is off by default because PNG capture dominates runtime.
+vision model.
+
+`KREMA_VIDEO=1` additionally encodes `<scenario>.mp4` from those frames. Every
+frame is stamped with its number, virtual time, the action firing on it and any
+assertion anchored to it, so a failing frame number scrubs straight to the
+moment it describes. Fedora's `ffmpeg-free` has neither libx264 nor libvpx, so
+the encoder ladder is libopenh264, then SVT-AV1, then MPEG-4; all frames are
+padded to one canvas because the dock window resizes mid-capture when the edge
+or the icon size changes.
 
 ```bash
-docker run --rm -e KREMA_SCREENSHOTS=1 \
+docker run --rm -e KREMA_VIDEO=1 \
     -v "$PWD:/src:ro" -v /tmp/krema-frames:/out \
     krema-ui-ci bash /src/tests/ci/run-frame-tests.sh hover-zoom
 ```
 
-Numeric assertions still decide pass/fail. The manifest exists for the part
-that is genuinely visual — whether the glow reads as a glow.
+Both are off by default: PNG encoding dominates runtime, and the raw frames are
+about 170x the size of the video. After encoding, `prune_frames.py` keeps only
+the keyframes `review.md` links and gzips the first pass's capture stream,
+which takes a full run from ~600 MB to ~17 MB.
+
+Numeric assertions still decide pass/fail. The video is for the part that is
+genuinely visual — whether the glow reads as a glow.
+
+## Reading results in CI
+
+GitHub artifacts download as a zip and cannot be played in the browser, so
+`summarize.py` writes the numbers to the job summary: which QA items failed, at
+which frame, expected versus measured, plus per-scenario reproducibility. The
+videos are in the `frame-captures` artifact for when the numbers are not enough.
 
 ## What to test
 

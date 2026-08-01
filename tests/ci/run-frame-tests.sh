@@ -17,6 +17,12 @@
 #                   comparison (default 2)
 #   KREMA_SCREENSHOTS  1 = dump a PNG per frame and emit a review manifest for
 #                   visual/LLM review (default 0; PNG capture is the slow part)
+#   KREMA_VIDEO     1 = also encode <scenario>.webm from those frames, annotated
+#                   with frame numbers, actions and assertion anchors. Implies
+#                   KREMA_SCREENSHOTS=1.
+#   KREMA_VIDEO_FPS playback fps for the video (default 30, about half speed)
+#   KREMA_KEEP_FRAMES  1 = keep every raw PNG. Default 0 prunes them after
+#                   encoding, keeping only the keyframes review.md links.
 
 set -uo pipefail
 
@@ -25,7 +31,13 @@ export KREMA_OUT="${KREMA_OUT:-/out}"
 export KREMA_WIDTH="${KREMA_WIDTH:-1024}"
 export KREMA_HEIGHT="${KREMA_HEIGHT:-768}"
 export KREMA_PASSES="${KREMA_PASSES:-2}"
+export KREMA_VIDEO="${KREMA_VIDEO:-0}"
+export KREMA_VIDEO_FPS="${KREMA_VIDEO_FPS:-30}"
+export KREMA_KEEP_FRAMES="${KREMA_KEEP_FRAMES:-0}"
 export KREMA_SCREENSHOTS="${KREMA_SCREENSHOTS:-0}"
+if [[ "$KREMA_VIDEO" == "1" ]]; then
+    KREMA_SCREENSHOTS=1
+fi
 build=/tmp/krema-build
 
 export XDG_RUNTIME_DIR=/tmp/krema-runtime
@@ -207,11 +219,23 @@ print(data.get('max_frames', 0) if isinstance(data, dict) else 0)
         if [[ "$KREMA_SCREENSHOTS" == "1" ]]; then
             review=(--review)
         fi
+        if [[ "$KREMA_VIDEO" == "1" ]]; then
+            python3 "$KREMA_SRC/tests/ci/make_video.py" \
+                --scenario "$scenario" \
+                --run-dir "$KREMA_OUT/$name" \
+                --fps "$KREMA_VIDEO_FPS" || true
+        fi
+
         if ! python3 "$KREMA_SRC/tests/ci/assert_frames.py" \
             --scenario "$scenario" \
             --run-dir "$KREMA_OUT/$name" \
             "${review[@]}"; then
             ((failures++))
+        fi
+
+        # After review.json exists, drop every frame it does not reference.
+        if [[ "$KREMA_SCREENSHOTS" == "1" && "$KREMA_KEEP_FRAMES" != "1" ]]; then
+            python3 "$KREMA_SRC/tests/ci/prune_frames.py" --run-dir "$KREMA_OUT/$name" || true
         fi
     done
 

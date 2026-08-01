@@ -51,8 +51,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "커서를 독 바깥으로 옮기면 설정된 HideDelay 뒤 독이 완전히 투명해진다. 실시간 지연 길이 자체는 측정하지 않는다",
-      "frame": 90,
+      "comment": "커서를 독 바깥으로 옮기면 설정된 HideDelay 뒤 독이 완전히 투명해진다. 숨김은 실시간 타이머가 좌우하므로 중간 프레임이 아니라 캡처 마지막 상태로 확인한다",
       "value": 0.0,
       "tolerance": 0.001
     },
@@ -61,8 +60,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "숨김이 끝난 패널은 하단 서피스 바깥 위치 y=116으로 이동한다",
-      "frame": 90,
+      "comment": "숨김이 끝난 패널은 하단 서피스 바깥 위치 y=116으로 이동한다. 숨김은 실시간 타이머가 좌우하므로 중간 프레임이 아니라 캡처 마지막 상태로 확인한다",
       "value": 116,
       "tolerance": 0.01
     },
@@ -103,7 +101,7 @@
       "from": 36,
       "to": 116,
       "start_after": 50,
-      "settled_by": 95,
+      "settled_by": 140,
       "min_intermediate_frames": 2,
       "max_step_ratio": 0.75,
       "tolerance": 0.01
@@ -117,7 +115,7 @@
       "from": 1.0,
       "to": 0.0,
       "start_after": 50,
-      "settled_by": 95,
+      "settled_by": 140,
       "min_intermediate_frames": 2,
       "max_step_ratio": 0.75,
       "tolerance": 0.001

@@ -45,10 +45,18 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/frames"
           docker run --rm \
+            -e KREMA_VIDEO=1 \
             -v "$PWD:/src:ro" \
             -v "$RUNNER_TEMP/frames:/out" \
             krema-ui-ci:local \
             bash /src/tests/ci/run-frame-tests.sh
+
+      # Artifacts download as a zip and cannot be played in the browser, so the
+      # numbers a reviewer needs go on the job page itself. The videos are for
+      # when the numbers are not enough.
+      - name: Job summary
+        if: always()
+        run: python3 tests/ci/summarize.py --run-dir "$RUNNER_TEMP/frames" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload frame artifacts
         if: always()

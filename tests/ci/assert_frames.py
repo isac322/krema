@@ -416,8 +416,11 @@ def main() -> int:
         except (IndexError, KeyError, TypeError) as exc:
             results.setdefault(qa, []).append(f'{type(exc).__name__}: {exc}')
 
+    repro = 'single pass'
     if len(passes) > 1:
         shift, notes = divergence(rows, load(passes[1]))
+        repro = notes[0] if notes else ('byte-identical' if not shift
+                                        else f'identical after a {shift:+d} frame shift')
         if notes:
             print(f'  REPRO differs beyond a {shift:+d} frame shift:')
             for note in notes:
@@ -430,6 +433,19 @@ def main() -> int:
     if args.review:
         write_review(scenario, rows, args.run_dir, results)
         print(f'  review manifest: {args.run_dir / "review.md"}')
+
+    detail = {}
+    for spec in scenario.get('assertions', []):
+        qa = spec.get('qa', '(no QA id)')
+        detail.setdefault(qa, spec.get('comment', ''))
+    (args.run_dir / 'result.json').write_text(json.dumps({
+        'scenario': args.run_dir.name,
+        'description': scenario.get('description', ''),
+        'frames': len(rows),
+        'repro': repro,
+        'qa': [{'id': qa, 'expectation': detail.get(qa, ''),
+                'failures': results.get(qa, [])} for qa in covered],
+    }, indent=2, ensure_ascii=False))
 
     for qa in covered:
         if qa in results:

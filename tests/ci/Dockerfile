@@ -35,6 +35,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
         plasma-workspace-devel kpipewire-devel \
         layer-shell-qt layer-shell-qt-devel wayland-devel \
         python3 python3-pillow diffutils procps-ng findutils libcap \
+        ffmpeg-free google-droid-sans-fonts \
     && dnf clean all
 
 # kwin_wayland ships with cap_sys_nice=ep. An unprivileged container's bounding

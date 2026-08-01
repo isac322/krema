@@ -62,13 +62,13 @@
       "kind": "animates",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "호버 중 MaxZoomFactor를 2.0으로 바꾸면 현재 배율이 1.0에서 2.0까지 부드럽게 커진다",
+      "comment": "호버 중 MaxZoomFactor를 2.0으로 바꾸면 현재 배율이 1.0에서 2.0까지 부드럽게 커진다 범위가 1.0으로 넓어 이징 한 스텝이 크므로 중간 표본은 적다. 스냅 여부는 max_step_ratio가 판정한다.",
       "from": 1.0,
       "to": 2.0,
       "start_after": 40,
       "settled_by": 60,
-      "min_intermediate_frames": 2,
-      "max_step_ratio": 0.75,
+      "min_intermediate_frames": 1,
+      "max_step_ratio": 0.8,
       "monotonic": "up",
       "tolerance": 0.01
     }

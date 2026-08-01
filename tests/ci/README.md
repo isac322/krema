@@ -177,10 +177,27 @@ genuinely visual — whether the glow reads as a glow.
 
 ## Reading results in CI
 
-GitHub artifacts download as a zip and cannot be played in the browser, so
-`summarize.py` writes the numbers to the job summary: which QA items failed, at
-which frame, expected versus measured, plus per-scenario reproducibility. The
-videos are in the `frame-captures` artifact for when the numbers are not enough.
+Three places, in the order a reviewer needs them.
+
+**Job summary** — `summarize.py` writes which QA items failed, at which frame,
+expected versus measured, plus per-scenario reproducibility. No download.
+
+**Pull request comment** — an animated GIF of every failing scenario plus two
+canonical ones, embedded inline. This is the only way to see motion on GitHub
+without downloading: raw `.mp4` and release assets are both served as
+`application/octet-stream` with `content-disposition: attachment`, so a
+`<video>` tag never plays, while raw image URLs return a real `image/*` type.
+The GIFs live on a `ci-media` branch under `pr-<n>/<run id>/`. Each run clones
+the existing tree, drops only its own older runs, and force-pushes the result as
+a parentless commit — other pull requests' previews survive and the branch never
+accumulates history. The run id is in the path because GitHub proxies markdown images
+through camo and caches by URL — a fixed path would serve the previous run's
+animation beside current numbers. Only failing scenarios are animated, since
+force-pushing does not reclaim old blobs. Fork pull requests get a read-only
+token and the step no-ops.
+
+**`frame-captures` artifact** — MP4 for every scenario, `result.json`, the
+gzipped capture streams, and the keyframes `review.md` links. ~8 MB.
 
 ## What to test
 

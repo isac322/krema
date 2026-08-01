@@ -21,6 +21,8 @@
 #                   with frame numbers, actions and assertion anchors. Implies
 #                   KREMA_SCREENSHOTS=1.
 #   KREMA_VIDEO_FPS playback fps for the video (default 30, about half speed)
+#   KREMA_PREVIEW_BASE_URL  raw URL prefix the published GIFs will live at; the
+#                   generated comment.md embeds them from there
 #   KREMA_KEEP_FRAMES  1 = keep every raw PNG. Default 0 prunes them after
 #                   encoding, keeping only the keyframes review.md links.
 
@@ -240,6 +242,15 @@ print(data.get('max_frames', 0) if isinstance(data, dict) else 0)
     done
 
     kill "$kwin_pid" 2>/dev/null
+
+    # Animations for the pull request comment: only what someone would open.
+    if [[ "$KREMA_VIDEO" == "1" ]]; then
+        python3 "$KREMA_SRC/tests/ci/make_previews.py" \
+            --run-dir "$KREMA_OUT" \
+            --out "$KREMA_OUT/previews" \
+            --base-url "${KREMA_PREVIEW_BASE_URL:-}" || true
+    fi
+
     if ((failures > 0)); then
         echo "$failures scenario(s) failed" >&2
         return 1

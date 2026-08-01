@@ -15,6 +15,10 @@ concurrency:
   group: frame-tests-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   frame-tests:
     name: Deterministic UI frame capture
@@ -46,6 +50,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/frames"
           docker run --rm \
             -e KREMA_VIDEO=1 \
+            -e KREMA_PREVIEW_BASE_URL="https://raw.githubusercontent.com/${{ github.repository }}/ci-media/pr-${{ github.event.pull_request.number || 0 }}/${{ github.run_id }}" \
             -v "$PWD:/src:ro" \
             -v "$RUNNER_TEMP/frames:/out" \
             krema-ui-ci:local \
@@ -57,6 +62,67 @@ jobs:
       - name: Job summary
         if: always()
         run: python3 tests/ci/summarize.py --run-dir "$RUNNER_TEMP/frames" >> "$GITHUB_STEP_SUMMARY"
+
+      # GitHub will not play a video inline: raw .mp4 and release assets both
+      # come back as application/octet-stream with content-disposition:
+      # attachment. Raw image URLs do return a real image/* type, so animated
+      # GIFs on a side branch are the only thing that shows without a download.
+      # The branch is orphan and force-pushed, and only failing scenarios plus
+      # two canonical ones are animated, because force-pushing does not reclaim
+      # the old blobs.
+      - name: Publish preview animations
+        id: previews
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          shopt -s nullglob
+          previews=("$RUNNER_TEMP/frames/previews"/*.gif)
+          if ((${#previews[@]} == 0)); then
+            echo "no animations to publish"
+            exit 0
+          fi
+          # A pull request from a fork gets a read-only token; skip rather than fail.
+          if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+            echo "fork pull request: cannot push previews"
+            exit 0
+          fi
+          # Keep other pull requests' previews, drop this one's older runs, and
+          # commit the result with no parent: force-pushing a parentless commit
+          # means the branch never accumulates history, while cloning the
+          # existing tree first means another PR's comment does not 404.
+          work="$RUNNER_TEMP/ci-media"
+          git clone --depth 1 --branch ci-media \
+            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+            "$work" 2>/dev/null || git init -q "$work"
+          rm -rf "${work:?}/.git"
+          git init -q "$work"
+          rm -rf "${work:?}/pr-$PR"
+          # A unique directory per run, because GitHub proxies markdown images
+          # through camo and caches them by URL: reusing a path would keep
+          # serving the previous run's animation next to current numbers.
+          mkdir -p "$work/pr-$PR/$GITHUB_RUN_ID"
+          cp "${previews[@]}" "$work/pr-$PR/$GITHUB_RUN_ID/"
+          git -C "$work" config user.name "github-actions[bot]"
+          git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$work" add -A
+          git -C "$work" commit -q -m "ci: preview animations for pr-$PR run $GITHUB_RUN_ID"
+          git -C "$work" push -q --force \
+            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+            HEAD:ci-media
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request' && steps.previews.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file "$RUNNER_TEMP/frames/previews/comment.md" --edit-last --create-if-none
 
       - name: Upload frame artifacts
         if: always()

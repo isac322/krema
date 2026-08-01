@@ -1,16 +1,86 @@
 {
   "description": "알림 데몬이 없는 컨테이너에서도 독이 런처 네 개를 표시하고 호버 확대를 수행하며 알림 배지는 나타내지 않는다.",
   "actions": [
-    {"frame": 5, "type": "move", "item": "dockItem0"},
-    {"frame": 90, "type": "move", "x": 20, "y": 10}
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 90,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    }
   ],
   "assertions": [
-    {"qa": "QA-NOTI-017", "kind": "window", "comment": "알림 데몬 등록 실패가 있어도 독 창은 1024x108 크기로 정상 표시된다", "key": "krema::DockView", "frame": 2, "visible": true, "w": 1024, "h": 108},
-    {"qa": "QA-NOTI-017", "kind": "count", "type": "DockItem", "comment": "알림 데몬 없이도 기본 핀 런처 네 개가 모두 생성된다", "frame": 2, "value": 4},
-    {"qa": "QA-NOTI-017", "kind": "animates", "item": "dockItem0", "prop": "currentScale", "comment": "알림 데몬이 없어도 런처 호버 확대가 1.0에서 기본 1.6까지 정상 동작한다", "from": 1.0, "to": 1.6, "start_after": 5, "settled_by": 25, "min_intermediate_frames": 2, "max_step_ratio": 0.75, "monotonic": "up", "tolerance": 0.01},
-    {"qa": "QA-NOTI-017", "kind": "settles", "item": "dockItem0", "prop": "currentScale", "comment": "커서를 독 밖으로 빼면 알림 데몬 유무와 관계없이 확대가 1.0으로 복귀한다", "frame": 130, "value": 1.0, "tolerance": 0.01},
-    {"qa": "QA-NOTI-017", "kind": "settles", "item": "dockItem0", "prop": "_badgeCount", "comment": "알림 데몬이 없고 알림 입력도 없으므로 첫 런처의 미확인 배지는 0개다", "frame": 130, "value": 0},
-    {"qa": "QA-NOTI-017", "kind": "equals", "item": "0/0/2/1/0/3", "prop": "visible", "comment": "이름 없는 고정 child path의 배지 요소는 알림이 없을 때 표시되지 않는다", "frame": 130, "value": false},
-    {"qa": "QA-NOTI-017", "kind": "equals", "item": "dockItem0", "prop": "_animationActive", "comment": "가짜 알림 없이 attention 상태가 잘못 활성화되지 않는다", "frame": 130, "value": false}
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "window",
+      "comment": "알림 데몬 등록 실패가 있어도 독 창은 1024x108 크기로 정상 표시된다",
+      "key": "krema::DockView",
+      "frame": 2,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "count",
+      "type": "DockItem",
+      "comment": "알림 데몬 없이도 기본 핀 런처 네 개가 모두 생성된다",
+      "frame": 2,
+      "value": 4
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "알림 데몬이 없어도 런처 호버 확대가 1.0에서 기본 1.6까지 정상 동작한다",
+      "from": 1.0,
+      "to": 1.6,
+      "start_after": 5,
+      "settled_by": 25,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "커서를 독 밖으로 빼면 알림 데몬 유무와 관계없이 확대가 1.0으로 복귀한다",
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "_badgeCount",
+      "comment": "알림 데몬이 없고 알림 입력도 없으므로 첫 런처의 미확인 배지는 0개다",
+      "value": 0
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "equals",
+      "item": "0/0/2/1/0/3",
+      "prop": "visible",
+      "comment": "이름 없는 고정 child path의 배지 요소는 알림이 없을 때 표시되지 않는다",
+      "frame": 130,
+      "value": false
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "_animationActive",
+      "comment": "가짜 알림 없이 attention 상태가 잘못 활성화되지 않는다",
+      "frame": 130,
+      "value": false
+    }
   ]
 }

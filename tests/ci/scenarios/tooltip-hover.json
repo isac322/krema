@@ -50,7 +50,6 @@
       "item": "0/0/5/0",
       "prop": "lineCount",
       "comment": "긴 런처 이름이 툴팁 안에서 깨지지 않고 한 줄로 배치된다",
-      "frame": 130,
       "value": 1
     }
   ]

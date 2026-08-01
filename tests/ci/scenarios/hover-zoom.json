@@ -68,7 +68,6 @@
       "item": "dockItem0",
       "prop": "currentScale",
       "comment": "커서가 독을 벗어나면 모든 아이콘이 1.0으로 원복된다",
-      "frame": 130,
       "value": 1.0,
       "tolerance": 0.01
     }

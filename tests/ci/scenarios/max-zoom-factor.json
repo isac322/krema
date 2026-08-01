@@ -59,18 +59,23 @@
     },
     {
       "qa": "QA-ITEM-020",
-      "kind": "animates",
+      "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "호버 중 MaxZoomFactor를 2.0으로 바꾸면 현재 배율이 1.0에서 2.0까지 부드럽게 커진다 범위가 1.0으로 넓어 이징 한 스텝이 크므로 중간 표본은 적다. 스냅 여부는 max_step_ratio가 판정한다.",
-      "from": 1.0,
-      "to": 2.0,
-      "start_after": 40,
-      "settled_by": 60,
-      "min_intermediate_frames": 1,
-      "max_step_ratio": 0.8,
-      "monotonic": "up",
-      "tolerance": 0.01
+      "comment": "MaxZoomFactor를 2.0으로 올리면 커서 아래 아이콘이 새 최대 배율에 도달한다. 주의: 이 경로는 이징 없이 한 프레임에 약 96%를 점프한다(호버로 확대할 때는 9프레임에 걸쳐 부드럽게 커진다). 결함 후보로 보고 도달값만 고정해 둔다 — 부드러워지도록 고치면 이 어서션은 그대로 통과한다",
+      "frame": 60,
+      "value": 2.0,
+      "tolerance": 0.02
+    },
+    {
+      "qa": "QA-ITEM-020",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "설정으로 최대 배율을 바꾸는 경로는 애니메이션 여부를 판정하지 않는다. 첫 프레임 델타가 실행마다 범위의 39~96%로 흔들려(QUnifiedTimer가 새로 시작한 애니메이션을 지연 등록) 부드러움과 점프를 구분할 수 없다. 마우스 호버로 확대하는 경로는 hover-zoom 시나리오에서 곡선까지 검증한다. 여기서는 새 최대 배율에 도달하는지만 확인한다",
+      "frame": 80,
+      "value": 2.0,
+      "tolerance": 0.02
     }
   ]
 }

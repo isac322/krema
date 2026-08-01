@@ -408,7 +408,7 @@
 - **실패 징후**: `MaxZoomFactor`를 변경해도 커서 호버 시 확대 배율이 변하지 않음.
 - **근거**: `src/config/krema.kcfg:25-30`, `src/utils/zoomcalculator.h:17-26`, `src/qml/DockItem.qml:89-97`
 - **우선순위**: P1
-- **자동화**: `AUTO`
+- **자동화**: `AUTO` — 새 최대 배율에 도달하는지만 검증한다. 설정으로 배율을 바꾸는 경로는 첫 프레임 델타가 실행마다 범위의 39~96%로 흔들려 애니메이션 여부를 판정할 수 없다. 호버 확대의 곡선 검증은 QA-ITEM-007이 담당한다
 
 #### QA-ITEM-021: IconNormalization 설정 변경 시 아이콘 투명 여백 제거 및 시각적 크기 균일화
 - **사용자 동작**: 설정에서 `IconNormalization` 옵션을 켜짐(`true`) 및 꺼짐(`false`)으로 교체 변경한다.

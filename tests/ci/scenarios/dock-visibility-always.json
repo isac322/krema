@@ -43,7 +43,6 @@
       "item": "0/0/2",
       "prop": "opacity",
       "comment": "토글 액션을 직접 실행한 뒤 충분히 지나도 독 패널은 완전히 보인다",
-      "frame": 130,
       "value": 1.0,
       "tolerance": 0.001
     },
@@ -52,7 +51,6 @@
       "kind": "window",
       "key": "krema::DockView",
       "comment": "AlwaysVisible 독 창은 시나리오 끝까지 표시 상태를 유지한다",
-      "frame": 130,
       "visible": true,
       "w": 1024,
       "h": 108

@@ -5,14 +5,66 @@
     "General/PreviewHoverDelay": 1
   },
   "actions": [
-    {"frame": 5, "type": "move", "item": "dockItem0"}
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    }
   ],
   "assertions": [
-    {"qa": "QA-PRE-002", "kind": "settles", "item": "dockItem0", "prop": "_childCount", "comment": "호버 대상은 실행 중인 창이 없는 런처 전용 항목이다", "frame": 2, "value": 0},
-    {"qa": "QA-PRE-002", "kind": "equals", "item": "0/0/5", "prop": "visible", "comment": "이름 없는 고정 child path의 텍스트 툴팁 배경이 호버 후 최종적으로 표시된다", "frame": 130, "value": true},
-    {"qa": "QA-PRE-002", "kind": "equals", "item": "0/0/5", "prop": "show", "comment": "런처 전용 분기에서 툴팁 show 상태가 켜진다", "frame": 130, "value": true},
-    {"qa": "QA-PRE-002", "kind": "equals", "item": "0/0/5/0", "prop": "text", "comment": "이름 없는 고정 child path의 툴팁 Label에 런처 이름만 표시된다", "frame": 130, "value": "org.kde.dolphin.desktop"},
-    {"qa": "QA-PRE-002", "kind": "equals", "item": "0/0/0/0", "prop": "visible", "comment": "DockView에는 없는 고유 child path로 미리보기 팝업의 내용 Column이 숨겨진 상태임을 확인한다", "frame": 130, "value": false},
-    {"qa": "QA-PRE-002", "kind": "window", "comment": "미리보기용 QQuickView 서피스는 상시 존재하지만 런처 호버로 새 팝업 창을 만들지 않는다", "key": "QQuickView", "frame": 130, "visible": true, "w": 1024, "h": 400}
+    {
+      "qa": "QA-PRE-002",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "_childCount",
+      "comment": "호버 대상은 실행 중인 창이 없는 런처 전용 항목이다",
+      "frame": 2,
+      "value": 0
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "visible",
+      "comment": "이름 없는 고정 child path의 텍스트 툴팁 배경이 호버 후 최종적으로 표시된다",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "show",
+      "comment": "런처 전용 분기에서 툴팁 show 상태가 켜진다",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/5/0",
+      "prop": "text",
+      "comment": "이름 없는 고정 child path의 툴팁 Label에 런처 이름만 표시된다",
+      "frame": 130,
+      "value": "org.kde.dolphin.desktop"
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/0/0",
+      "prop": "visible",
+      "comment": "DockView에는 없는 고유 child path로 미리보기 팝업의 내용 Column이 숨겨진 상태임을 확인한다",
+      "frame": 130,
+      "value": false
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "window",
+      "comment": "미리보기용 QQuickView 서피스는 상시 존재하지만 런처 호버로 새 팝업 창을 만들지 않는다",
+      "key": "QQuickView",
+      "visible": true,
+      "w": 1024,
+      "h": 400
+    }
   ]
 }

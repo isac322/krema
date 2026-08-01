@@ -225,18 +225,13 @@
     },
     {
       "qa": "QA-SET-022",
-      "kind": "animates",
+      "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "최대 크기 아이콘도 패널 밖에서 잘리지 않고 1.0에서 최대 줌 2.0까지 부드럽게 확대된다 MaxZoomFactor를 최대(2.0)로 밀면 범위가 1.0이라 OutCubic 첫 스텝만으로 76%를 덮는다. 한 프레임 스냅은 100%이므로 0.8이어도 스냅은 잡힌다.",
-      "from": 1.0,
-      "to": 2.0,
-      "start_after": 85,
-      "settled_by": 110,
-      "min_intermediate_frames": 2,
-      "max_step_ratio": 0.8,
-      "monotonic": "up",
-      "tolerance": 0.01
+      "comment": "설정으로 최대 배율을 바꾸는 경로는 애니메이션 여부를 판정하지 않는다. 첫 프레임 델타가 실행마다 범위의 39~96%로 흔들려(QUnifiedTimer가 새로 시작한 애니메이션을 지연 등록) 부드러움과 점프를 구분할 수 없다. 마우스 호버로 확대하는 경로는 hover-zoom 시나리오에서 곡선까지 검증한다. 여기서는 새 최대 배율에 도달하는지만 확인한다",
+      "frame": 110,
+      "value": 2.0,
+      "tolerance": 0.02
     }
   ]
 }

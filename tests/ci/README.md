@@ -241,17 +241,23 @@ Measured on this image (Fedora 43, KWin 6.7.3, Qt 6.10, aarch64, llvmpipe).
   runs. Set `KREMA_PROBE_PACE=1` to make each tick consume `stepMs` of real time
   so timers and the virtual clock advance together, or keep timer-gated items
   out of byte-exact assertions.
-- **Run-to-run reproducibility is structural, not bit-exact.** Measured over the
-  scenarios in this repo, roughly half are byte-identical across two passes and
-  the rest differ, with the differing frames clustered in the first two or three
-  frames after an animation starts: `QUnifiedTimer` registers a newly started
-  animation through a deferred 0 ms timer, so whether the frame that applies an
-  action also sees the first animation step varies. What *is* reproducible:
-  frame count, item set, every settled value, and animation shape — therefore
-  every assertion here. Write assertions on settled frames and on curve shape;
-  never on the exact value of an animation's first two frames. Each scenario
-  reports `repro: byte-identical` or `REPRO differs ... largest gap <n> at
-  <item>`, so the magnitude is visible rather than hidden behind a count.
+- **An animation's first frame is not reproducible.** Everything after it is.
+  `QUnifiedTimer` registers a newly started animation through a deferred 0 ms
+  timer, so the registration lands on either side of the next clock advance
+  depending on sub-frame timing, and the first delta varies: measured 39%, 43%,
+  51%, 53%, 54%, 69% and 100% of range across runs of the same scenario.
+  Draining posted events before advancing does not fix it (measured, made it
+  worse). Consequences:
+  - `animates` skips the first two frames when judging whether a value snapped
+    or eased (`skip_onset_frames`), because that judgement on the onset frame is
+    a coin flip. A real one-frame snap still fails, through the
+    intermediate-value floor.
+  - Never assert an exact value on an animation's first two frames.
+  - Roughly half the scenarios are byte-identical across two passes; the rest
+    differ only at frames where an action or an animation starts. Frame count,
+    item set, every settled value and the shape of the animation body are
+    reproducible, which is what the assertions here rest on. Each scenario
+    reports `repro: byte-identical` or the largest gap and where it is.
 - **No `Animator` types.** `ScaleAnimator`, `OpacityAnimator` and friends run on
   the render thread outside `QUnifiedTimer` and would escape the fixed-step
   clock. `src/qml` currently uses none; keep it that way, or frame-stepped

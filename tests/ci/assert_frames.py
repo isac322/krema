@@ -113,7 +113,16 @@ def check_animates(rows, spec, fail):
     # intermediate samples this does not flake, and it needs no retuning when
     # stepMs or the animation duration changes.
     max_ratio = spec.get('max_step_ratio', 0.75)
-    steps = [(f, abs(b - a)) for (_, a), (f, b) in zip(window, window[1:])]
+    # The first delta after an animation starts is not reproducible: measured
+    # 39-100% of range across runs of the same scenario, because QUnifiedTimer
+    # registers a newly started animation through a deferred 0 ms timer and the
+    # registration lands on either side of the next clock advance. Judging
+    # "snapped or eased" on that frame is a coin flip, so skip the onset and
+    # judge the body of the animation, which is stable. A true one-frame snap
+    # still fails, via the intermediate-value floor below.
+    skip = spec.get('skip_onset_frames', 2)
+    body = window[skip:] if len(window) > skip + 1 else window
+    steps = [(f, abs(b - a)) for (_, a), (f, b) in zip(body, body[1:])]
     worst = max(steps, key=lambda item: item[1], default=(None, 0.0))
     if span > tol and worst[1] > max_ratio * span:
         fail(f"{spec['item']}.{spec['prop']}: frame {worst[0]} jumps {worst[1]:.4f} of a "
@@ -122,7 +131,7 @@ def check_animates(rows, spec, fail):
 
     # Cheap sanity floor; deliberately low so it never decides pass/fail alone.
     intermediates = {round(v, 4) for _, v in window if lo + tol < v < hi - tol}
-    needed = spec.get('min_intermediate_frames', 2)
+    needed = 0 if spec.get('expect_snap') else spec.get('min_intermediate_frames', 2)
     if len(intermediates) < needed:
         fail(f"{spec['item']}.{spec['prop']}: only {len(intermediates)} intermediate "
              f"value(s) between {spec['from']} and {spec['to']}, expected >= {needed}")

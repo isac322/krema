@@ -41,7 +41,6 @@
       "item": "0/0/2",
       "prop": "opacity",
       "comment": "QTimer 지연의 정확한 프레임은 고정하지 않고 넉넉한 캡처 끝에서 패널이 계속 완전히 보이는지만 확인한다",
-      "frame": 130,
       "value": 1.0,
       "tolerance": 0.01
     },

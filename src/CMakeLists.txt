@@ -93,6 +93,10 @@ target_include_directories(krema_lib PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+if(KREMA_TEST_HOOKS)
+    target_link_libraries(krema_lib PUBLIC krema_frameprobe)
+endif()
+
 add_executable(krema main.cpp)
 target_link_libraries(krema PRIVATE krema_lib)
 

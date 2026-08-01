@@ -780,6 +780,9 @@ Item {
                 DockItem {
                     // index and model are injected by Repeater into
                     // DockItem's own required properties
+                    // Stable handle for CI frame scenarios (tests/ci/).
+                    objectName: "dockItem" + index
+
 
                     z: (root.hoveredIndex === index) ? 1 : 0
                     isKeyboardFocused: root.keyboardNavigating && root.hoveredIndex === index

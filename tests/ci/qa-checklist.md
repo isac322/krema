@@ -118,7 +118,7 @@
 - **실패 징후**: 트리거 영역 진입 즉시 지연 없이 바로 나타나거나, ShowDelay 시간이 지나도 독이 나타나지 않는다.
 - **근거**: `src/config/krema.kcfg:42-45,52-55`, `src/shell/dockvisibilitycontroller.cpp:48-54,142-154`, `src/utils/inputregion.cpp:16-30`
 - **우선순위**: P0
-- **자동화**: `AUTO`
+- **자동화**: `AUTO` — 등장·퇴장 자체와 슬라이드·페이드 곡선은 검증한다. 지연 길이는 QTimer라 검증 대상이 아니다
 
 #### QA-VIS-009: AutoHide(자동 숨김) 모드에서 마우스 이탈 시 HideDelay 지연 후 슬라이드 숨김
 - **사용자 동작**: AutoHide 모드에서 독 패널 위에서 마우스 포인터를 독 바깥 화면 영역으로 이동시킨다.
@@ -945,7 +945,7 @@
 - **실패 징후**: 수치를 2000ms로 늘렸음에도 즉시 독이 숨어버리거나, Show/Hide delay 수치가 `DockVisibilityController`에 반영되지 않는다.
 - **근거**: `src/qml/settings/BehaviorPage.qml:62-88`, `src/config/krema.kcfg:85-96`, `src/shell/dockshell.cpp:173-178`
 - **우선순위**: P1
-- **자동화**: `AUTO`
+- **자동화**: `AUTO` — 다만 지연 **길이**는 검증하지 않는다. ShowDelay/HideDelay는 QTimer라 가상 시계 밖이고 몇 번째 프레임에 터지는지가 실행마다 흔들리므로, 시나리오는 "설정이 반영되어 최종 상태가 바뀐다"까지만 확인한다. 지연이 0으로 회귀해도 통과한다
 
 ---
 

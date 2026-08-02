@@ -115,14 +115,28 @@ jobs:
             HEAD:ci-media
           echo "published=true" >> "$GITHUB_OUTPUT"
 
+      # `gh pr comment --edit-last` created a second comment instead of editing,
+      # leaving a stale red summary with 404 images above the current one. Find
+      # our own comment by a hidden marker and PATCH it.
       - name: Comment on the pull request
         if: always() && github.event_name == 'pull_request' && steps.previews.outputs.published == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --body-file "$RUNNER_TEMP/frames/previews/comment.md" --edit-last --create-if-none
+          body="$RUNNER_TEMP/frames/previews/comment.md"
+          existing=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+            --jq 'map(select(.body | contains("<!-- krema-frame-tests -->"))) | .[-1].id // empty')
+          if [[ -n "$existing" ]]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$existing" \
+              -F body=@"$body" >/dev/null
+            echo "updated comment $existing"
+          else
+            gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" \
+              -F body=@"$body" >/dev/null
+            echo "created comment"
+          fi
 
       - name: Upload frame artifacts
         if: always()

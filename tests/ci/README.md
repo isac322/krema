@@ -182,19 +182,32 @@ Three places, in the order a reviewer needs them.
 **Job summary** — `summarize.py` writes which QA items failed, at which frame,
 expected versus measured, plus per-scenario reproducibility. No download.
 
-**Pull request comment** — an animated GIF of every failing scenario plus two
-canonical ones, embedded inline. This is the only way to see motion on GitHub
-without downloading: raw `.mp4` and release assets are both served as
-`application/octet-stream` with `content-disposition: attachment`, so a
-`<video>` tag never plays, while raw image URLs return a real `image/*` type.
-The GIFs live on a `ci-media` branch under `pr-<n>/<run id>/`. Each run clones
-the existing tree, drops only its own older runs, and force-pushes the result as
-a parentless commit — other pull requests' previews survive and the branch never
-accumulates history. The run id is in the path because GitHub proxies markdown images
-through camo and caches by URL — a fixed path would serve the previous run's
-animation beside current numbers. Only failing scenarios are animated, since
-force-pushing does not reclaim old blobs. Fork pull requests get a read-only
-token and the step no-ops.
+**Pull request comment** — an animated GIF of every scenario, embedded inline,
+failures first and the rest folded per feature area. This is the only way to see
+motion on GitHub without downloading: raw `.mp4` and release assets are both
+served as `application/octet-stream` with `content-disposition: attachment`, so
+a `<video>` tag never plays, while raw image URLs return a real `image/*` type.
+
+The GIFs keep every captured frame — none are dropped. Decimating to a lower
+frame rate would hide what the suite exists to catch: a 150 ms animation is nine
+frames, and throwing five away leaves a blur indistinguishable from a snap. They
+are fitted inside a 620x380 box rather than scaled to a fixed width, because a
+vertical dock is a 108 px wide window and upscaling it turned a 32 KiB animation
+into 1.6 MB of interpolated noise. All 42 come to about 2.8 MB.
+
+They live on a `ci-media` branch under `pr-<n>/<run id>/`. Each run clones the
+existing tree, drops only its own older runs, and force-pushes the result as a
+parentless commit, so other pull requests keep working previews and the branch
+never accumulates history. The run id is in the path because GitHub proxies
+markdown images through camo and caches by URL — a fixed path would serve the
+previous run's animation beside current numbers. A separate workflow drops the
+directory when the pull request closes. Fork pull requests get a read-only token
+and the step no-ops.
+
+The comment is found by a hidden `<!-- krema-frame-tests -->` marker and
+patched in place; `gh pr comment --edit-last` posted a second one instead,
+leaving a stale summary with dead images above the current result. If the body
+would exceed GitHub's size limit it degrades to failures only.
 
 **`frame-captures` artifact** — MP4 for every scenario, `result.json`, the
 gzipped capture streams, and the keyframes `review.md` links. ~8 MB.

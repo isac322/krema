@@ -1,0 +1,37 @@
+name: Clean up preview animations
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+# Preview GIFs live on the ci-media branch so they get a raw image URL. When the
+# pull request is done they are dead weight, so drop the directory. The commit
+# is parentless and force-pushed, same as when publishing, so the branch never
+# accumulates history.
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Drop this pull request's previews
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          work="$RUNNER_TEMP/ci-media"
+          git clone --depth 1 --branch ci-media \
+            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+            "$work" || exit 0
+          rm -rf "${work:?}/.git" "${work:?}/pr-$PR"
+          git init -q "$work"
+          git -C "$work" config user.name "github-actions[bot]"
+          git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$work" add -A
+          git -C "$work" commit -q -m "ci: drop previews for pr-$PR" --allow-empty
+          git -C "$work" push -q --force \
+            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+            HEAD:ci-media

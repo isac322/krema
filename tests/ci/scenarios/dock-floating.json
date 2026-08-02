@@ -1,5 +1,5 @@
 {
-  "description": "Floating을 켜면 하단 패널과 화면 가장자리 사이의 8px 여백을 포함하도록 독 서피스 높이가 늘어난다.",
+  "description": "Enabling Floating increases dock surface height to include the 8px gap between the bottom panel and screen edge.",
   "config": {
     "General/Edge": 1,
     "General/Floating": true
@@ -10,7 +10,7 @@
       "qa": "QA-VIS-005",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "Floating=true이면 64px 패널과 36px 상단 여유 및 8px 하단 간격을 합친 108px 서피스를 요청한다",
+      "comment": "With Floating=true, the dock requests a 108px surface: a 64px panel, 36px top space, and 8px bottom gap",
       "frame": 10,
       "visible": true,
       "w": 1024,
@@ -21,7 +21,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "이름 없는 패널 경로(0/0/2)는 108px 서피스 안의 y=36에 놓여 아래쪽 8px을 비운다",
+      "comment": "The unnamed panel path (0/0/2) is at y=36 on the 108px surface, leaving 8px below",
       "frame": 10,
       "value": 36
     },
@@ -30,7 +30,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "표시 패널 자체 높이는 IconSize 48px과 패딩 16px을 합친 64px이다",
+      "comment": "The visible panel height is 64px: IconSize 48px plus 16px padding",
       "frame": 10,
       "value": 64
     },
@@ -39,7 +39,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "radius",
-      "comment": "Floating 패널 모서리는 CornerRadius 기본값 12px로 둥글게 표시된다",
+      "comment": "The Floating panel corners are rounded with the default CornerRadius of 12px",
       "frame": 10,
       "value": 12
     }

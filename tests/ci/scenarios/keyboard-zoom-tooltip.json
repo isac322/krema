@@ -1,5 +1,5 @@
 {
-  "description": "키보드 포커스는 마우스와 같은 포물선 확대를 적용하지만 텍스트 툴팁은 긴 대기 후에도 표시하지 않는다.",
+  "description": "Keyboard focus applies the same parabolic zoom as the mouse, but the text tooltip does not appear even after a long wait.",
   "actions": [
     {"frame": 5, "type": "shortcut", "name": "focus-dock"},
     {"frame": 35, "type": "key", "key": "Right"}
@@ -10,7 +10,7 @@
       "kind": "animates",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "키보드 진입 시 첫 번째 아이콘이 1.0에서 기본 MaxZoomFactor 1.6까지 부드럽게 확대된다",
+      "comment": "On keyboard entry, the first icon zooms smoothly from 1.0 to the default MaxZoomFactor of 1.6.",
       "from": 1.0,
       "to": 1.6,
       "start_after": 5,
@@ -23,7 +23,7 @@
     {
       "qa": "QA-KEY-012",
       "kind": "ordered",
-      "comment": "키보드 포커스 중심에서 멀어질수록 이웃 아이콘 배율이 작아지는 포물선 감쇄가 적용된다",
+      "comment": "Parabolic falloff reduces neighbor icon scales with distance from the keyboard focus center.",
       "frame": 25,
       "items": ["dockItem0", "dockItem1", "dockItem2"],
       "prop": "currentScale",
@@ -34,7 +34,7 @@
       "kind": "settles",
       "item": "dockItem1",
       "prop": "currentScale",
-      "comment": "Right 키로 이동한 뒤 확대 중심도 두 번째 아이콘의 1.6 배율로 이동한다",
+      "comment": "After moving with Right, the zoom center also moves to the second icon at scale 1.6.",
       "frame": 55,
       "value": 1.6,
       "tolerance": 0.01
@@ -44,7 +44,7 @@
       "kind": "equals",
       "item": "0/0/5",
       "prop": "show",
-      "comment": "이름 없는 툴팁 Rectangle의 QML child-index path는 구조 의존적이지만, 키보드 모드에서는 show가 계속 false다",
+      "comment": "The unnamed tooltip Rectangle QML child-index path depends on the structure, but show remains false in keyboard mode.",
       "frame": 130,
       "value": false
     },
@@ -53,7 +53,7 @@
       "kind": "equals",
       "item": "0/0/5",
       "prop": "visible",
-      "comment": "키보드 포커스를 오래 유지해도 텍스트 툴팁 배경은 화면에 나타나지 않는다",
+      "comment": "The text tooltip background does not appear even when keyboard focus is held for a long time.",
       "frame": 130,
       "value": false
     }

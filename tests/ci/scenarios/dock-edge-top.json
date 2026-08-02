@@ -1,5 +1,5 @@
 {
-  "description": "상단 독은 수평 서피스의 위쪽 중앙에 놓이고, 네 아이콘이 왼쪽에서 오른쪽으로 정렬된다.",
+  "description": "The top dock is centered at the top of a horizontal surface, with four icons ordered left to right.",
   "config": {
     "General/Edge": 0,
     "General/Floating": true
@@ -10,7 +10,7 @@
       "qa": "QA-VIS-002",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "상단 독도 출력 폭 1024px을 채우는 1024x108 수평 서피스를 요청한다",
+      "comment": "The top dock also requests a 1024x108 horizontal surface spanning the 1024px output width",
       "frame": 10,
       "visible": true,
       "w": 1024,
@@ -21,7 +21,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "x",
-      "comment": "이름 없는 패널 경로(0/0/2)는 상단에서도 x=402로 출력 중앙에 놓인다",
+      "comment": "The unnamed panel path (0/0/2) is centered at x=402 at the top as well",
       "frame": 10,
       "value": 402
     },
@@ -30,7 +30,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "상단 패널은 화면 가장자리에서 Floating 여백 8px만큼 떨어진 y=8에 놓인다",
+      "comment": "The top panel is at y=8, 8px from the screen edge for the Floating margin",
       "frame": 10,
       "value": 8
     },
@@ -39,14 +39,14 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "_panelEdgePos",
-      "comment": "이름 없는 패널 경로의 상단 가장자리 위치 계산값은 8px이다",
+      "comment": "The calculated top-edge position for the unnamed panel path is 8px",
       "frame": 10,
       "value": 8
     },
     {
       "qa": "QA-VIS-002",
       "kind": "ordered",
-      "comment": "상단 독 아이콘은 왼쪽에서 오른쪽으로 x 좌표가 증가한다",
+      "comment": "Top dock icons have increasing x coordinates from left to right",
       "frame": 10,
       "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
       "prop": "x",
@@ -57,7 +57,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "w",
-      "comment": "상단 수평 독의 DockItem 너비는 48px이다",
+      "comment": "The top horizontal dock’s DockItem width is 48px",
       "frame": 10,
       "value": 48
     },
@@ -66,7 +66,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "h",
-      "comment": "상단 수평 독의 DockItem 높이는 실행 표시 공간을 포함해 56px이다",
+      "comment": "The top horizontal dock’s DockItem height is 56px including launch indicator space",
       "frame": 10,
       "value": 56
     }

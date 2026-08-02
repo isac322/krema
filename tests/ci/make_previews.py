@@ -27,13 +27,13 @@ import sys
 BODY_LIMIT = 60000
 
 AREA_NAMES = {
-    'VIS': '독 표시·배치',
-    'ITEM': '독 항목·작업',
-    'PRE': '창 미리보기',
-    'CMD': '메뉴·단축키',
-    'SET': '설정',
-    'NOTI': '알림·주의 표시',
-    'KEY': '키보드·접근성',
+    'VIS': 'Dock display and placement',
+    'ITEM': 'Dock items and tasks',
+    'PRE': 'Window preview',
+    'CMD': 'Context menu and shortcuts',
+    'SET': 'Settings',
+    'NOTI': 'Notifications and attention',
+    'KEY': 'Keyboard and accessibility',
 }
 
 

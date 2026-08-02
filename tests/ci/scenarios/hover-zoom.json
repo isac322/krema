@@ -1,5 +1,5 @@
 {
-  "description": "포물선 확대: 아이콘에 커서를 올리면 MaxZoomFactor까지 커지고 이웃은 감쇄된 배율을 갖는다. 다른 아이콘으로 옮기면 확대가 넘어가고, 독을 벗어나면 원복된다.",
+  "description": "Parabolic zoom: hovering an icon scales it up to MaxZoomFactor and gives its neighbors reduced scales. Moving to another icon transfers the zoom, and leaving the dock restores the original scales.",
   "actions": [
     {
       "frame": 5,
@@ -24,7 +24,7 @@
       "kind": "animates",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "커서를 올린 아이콘이 1.0에서 MaxZoomFactor(기본 1.6)까지 부드럽게 커진다",
+      "comment": "The hovered icon grows smoothly from 1.0 to MaxZoomFactor (1.6 by default).",
       "from": 1.0,
       "to": 1.6,
       "start_after": 5,
@@ -37,7 +37,7 @@
     {
       "qa": "QA-ITEM-007",
       "kind": "ordered",
-      "comment": "이웃 감쇄: 확대된 아이콘에서 멀어질수록 배율이 작아진다",
+      "comment": "Neighbor falloff: the scale decreases with distance from the zoomed icon.",
       "frame": 25,
       "items": [
         "dockItem0",
@@ -52,7 +52,7 @@
       "kind": "animates",
       "item": "dockItem2",
       "prop": "currentScale",
-      "comment": "다른 아이콘으로 커서를 옮기면 확대가 그쪽으로 넘어간다",
+      "comment": "Moving the cursor to another icon transfers the zoom there.",
       "from": 1.023,
       "to": 1.6,
       "start_after": 45,
@@ -67,7 +67,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "커서가 독을 벗어나면 모든 아이콘이 1.0으로 원복된다",
+      "comment": "When the cursor leaves the dock, all icons return to 1.0.",
       "value": 1.0,
       "tolerance": 0.01
     }

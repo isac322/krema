@@ -73,7 +73,7 @@ to catch, silently passing.
 
 ```json
 {
-  "description": "한 문장으로: 사용자가 무엇을 하면 무엇이 보여야 하는가",
+  "description": "One sentence: what the user does and what they should see",
   "config": {"General/Edge": 2, "General/IconSize": 96},
   "fixture_windows": 1,
   "actions": [
@@ -84,7 +84,7 @@ to catch, silently passing.
   ],
   "assertions": [
     {"qa": "QA-ITEM-007", "kind": "animates", "item": "dockItem0",
-     "prop": "currentScale", "comment": "커서를 올리면 1.0에서 1.6까지 커진다",
+     "prop": "currentScale", "comment": "hovering grows the icon from 1.0 to 1.6",
      "from": 1.0, "to": 1.6, "start_after": 5, "settled_by": 25}
   ]
 }
@@ -96,6 +96,16 @@ saved settings reach the dock. Keys are `Group/Entry`; the group defaults to
 
 `max_frames` overrides the default 140-frame capture for scenarios that need
 longer, such as the edge transition (~45 frames to settle on its own).
+
+The dock's pinned launchers are set by the runner, not by krema's shipped
+default, which points at Dolphin, Konsole, Kate and System Settings — none of
+which are in this image, so every item would render as a generic placeholder
+and hide real icon regressions. The image installs KWrite, KFind, Okular and
+Gwenview for their `.desktop` files and icons, plus one synthetic launcher with
+a deliberately long name so the tooltip layout check has something to stress.
+They are pinned as absolute `file://` URLs rather than `applications:` ids:
+`LauncherTasksModel` then builds the `KService` straight from the path, so
+nothing depends on a ksycoca database keyed to a matching `XDG_DATA_DIRS`.
 
 `fixture_windows: N` maps N real `xdg_toplevel` clients first. Anything that
 depends on `TasksModel` window rows (previews, running indicators, active

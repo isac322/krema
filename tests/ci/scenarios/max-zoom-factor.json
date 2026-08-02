@@ -1,5 +1,5 @@
 {
-  "description": "MaxZoomFactor 1.0에서는 호버 확대가 없고 실행 중 2.0으로 바꾸면 같은 호버 항목이 정확히 2배까지 확대된다.",
+  "description": "With MaxZoomFactor 1.0 there is no hover zoom; changing it to 2.0 at runtime scales the same hovered item to exactly 2x.",
   "config": {
     "General/MaxZoomFactor": 1.0
   },
@@ -22,7 +22,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "maxZoomFactor",
-      "comment": "저장된 최소 MaxZoomFactor 1.0이 DockItem에 적용된다",
+      "comment": "The saved minimum MaxZoomFactor of 1.0 applies to the DockItem.",
       "frame": 20,
       "value": 1.0,
       "tolerance": 0.01
@@ -32,7 +32,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "MaxZoomFactor가 1.0이면 아이콘 중앙을 호버해도 확대가 전혀 일어나지 않는다",
+      "comment": "When MaxZoomFactor is 1.0, hovering the icon center causes no zoom.",
       "frame": 20,
       "value": 1.0,
       "tolerance": 0.01
@@ -42,7 +42,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "maxZoomFactor",
-      "comment": "실행 중 설정 변경 다음 프레임에 최대 확대 배율 2.0이 반영된다",
+      "comment": "The maximum zoom scale of 2.0 takes effect in the frame after the runtime setting change.",
       "frame": 41,
       "value": 2.0,
       "tolerance": 0.01
@@ -52,7 +52,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "zoomFactor",
-      "comment": "커서가 중앙에 있는 항목의 목표 배율이 설정값과 같은 2.0으로 즉시 계산된다",
+      "comment": "The target scale for the item under the centered cursor is immediately calculated as 2.0, matching the setting.",
       "frame": 41,
       "value": 2.0,
       "tolerance": 0.01
@@ -62,7 +62,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "MaxZoomFactor를 2.0으로 올리면 커서 아래 아이콘이 새 최대 배율에 도달한다. 주의: 이 경로는 이징 없이 한 프레임에 약 96%를 점프한다(호버로 확대할 때는 9프레임에 걸쳐 부드럽게 커진다). 결함 후보로 보고 도달값만 고정해 둔다 — 부드러워지도록 고치면 이 어서션은 그대로 통과한다",
+      "comment": "When MaxZoomFactor is raised to 2.0, the icon under the cursor reaches the new maximum scale. Note: this path jumps about 96% in one frame without easing (hover zoom grows smoothly over 9 frames). It is kept as a defect candidate and fixes only the reached value; making it smooth still passes this assertion.",
       "frame": 60,
       "value": 2.0,
       "tolerance": 0.02
@@ -72,7 +72,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "설정으로 최대 배율을 바꾸는 경로는 애니메이션 여부를 판정하지 않는다. 첫 프레임 델타가 실행마다 범위의 39~96%로 흔들려(QUnifiedTimer가 새로 시작한 애니메이션을 지연 등록) 부드러움과 점프를 구분할 수 없다. 마우스 호버로 확대하는 경로는 hover-zoom 시나리오에서 곡선까지 검증한다. 여기서는 새 최대 배율에 도달하는지만 확인한다",
+      "comment": "The path that changes the maximum scale through settings does not determine whether it is animated. The first-frame delta varies from 39–96% of the range between runs because QUnifiedTimer registers newly started animations late, so smooth motion cannot be distinguished from a jump. The mouse-hover zoom path verifies the curve in the hover-zoom scenario. Here, verify only that the new maximum scale is reached.",
       "frame": 80,
       "value": 2.0,
       "tolerance": 0.02

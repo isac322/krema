@@ -1,5 +1,5 @@
 {
-  "description": "아이콘 크기와 간격을 크게 바꾸고 최대 줌을 2배로 올리면 독 크기와 호버 확대가 즉시 따라간다.",
+  "description": "Increasing icon size and spacing and raising maximum zoom to 2x immediately updates dock size and hover zoom.",
   "actions": [
     {
       "frame": 5,
@@ -43,7 +43,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "iconSize",
-      "comment": "아이콘 크기를 96px로 바꾸면 독 항목의 실제 셀 크기 설정이 즉시 96px가 된다",
+      "comment": "Changing icon size to 96px immediately sets the actual dock item cell size to 96px",
       "value": 96
     },
     {
@@ -51,7 +51,7 @@
       "kind": "settles",
       "item": "dockItem1",
       "prop": "spacing",
-      "comment": "아이콘 간격을 16px로 바꾸면 각 독 항목이 새 간격 값을 즉시 받는다",
+      "comment": "Changing icon spacing to 16px immediately gives each dock item the new spacing value",
       "value": 16
     },
     {
@@ -59,7 +59,7 @@
       "kind": "settles",
       "item": "0/0/2/1",
       "prop": "spacing",
-      "comment": "이름 없는 Flow의 실제 캡처 경로에서 아이콘 배치 간격도 16px로 반영된다",
+      "comment": "The actual capture path of the unnamed Flow also reflects the 16px icon spacing",
       "value": 16
     },
     {
@@ -67,13 +67,13 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "이름 없는 패널의 실제 캡처 경로에서 네 아이콘과 간격을 담는 너비가 448px로 확장된다 패널 폭·높이는 Behavior로 애니메이션되므로 설정 반영 직후가 아니라 정착 후 프레임에서 본다. 패널 크기는 Behavior로 애니메이션되므로 설정 반영 직후가 아니라 정착 후 프레임에서 본다.",
+      "comment": "The actual capture path of the unnamed panel expands to 448px to contain four icons and their spacing. Panel width and height animate through Behavior, so inspect a settled frame rather than the frame immediately after the setting applies.",
       "value": 448
     },
     {
       "qa": "QA-SET-004",
       "kind": "window",
-      "comment": "아이콘 크기 96px와 기본 줌 1.6에 맞춰 독 서피스 높이가 178px로 다시 계산된다",
+      "comment": "Dock surface height is recalculated as 178px for 96px icons and the default 1.6 zoom",
       "frame": 45,
       "key": "krema::DockView",
       "visible": true,
@@ -85,14 +85,14 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "maxZoomFactor",
-      "comment": "최대 줌 배율을 2.0으로 바꾸면 독 항목이 새 배율을 즉시 사용한다",
+      "comment": "Changing maximum zoom factor to 2.0 makes dock items use the new factor immediately",
       "value": 2.0,
       "tolerance": 0.01
     },
     {
       "qa": "QA-SET-005",
       "kind": "window",
-      "comment": "96px 아이콘이 2배 확대되어도 잘리지 않도록 독 서피스 높이가 216px로 확보된다 아이콘 크기 변경으로 독 창 자체가 커지므로 레이아웃 정착 후에 본다.",
+      "comment": "Dock surface height is set to 216px so 96px icons remain unclipped at 2x. The dock window itself grows when icon size changes, so inspect after layout settles.",
       "key": "krema::DockView",
       "visible": true,
       "w": 1024,
@@ -104,7 +104,7 @@
       "kind": "animates",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "커서를 올린 아이콘은 1.0에서 설정한 최대 배율 2.0까지 부드럽게 확대된다",
+      "comment": "The hovered icon smoothly zooms from 1.0 to the configured maximum factor of 2.0",
       "from": 1.0,
       "to": 2.0,
       "start_after": 100,

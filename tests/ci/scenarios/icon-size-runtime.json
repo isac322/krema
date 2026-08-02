@@ -1,5 +1,5 @@
 {
-  "description": "실행 중 IconSize를 48px에서 96px로 바꾸면 아이콘 셀은 즉시 커지고 패널과 항목 배치는 부드럽게 재조정된다.",
+  "description": "Changing IconSize from 48px to 96px at runtime immediately enlarges the icon cells, while the panel and item layout readjust smoothly.",
   "actions": [
     {
       "frame": 5,
@@ -14,7 +14,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "iconSize",
-      "comment": "설정 액션 직전에는 기본 IconSize 48px를 사용한다",
+      "comment": "Immediately before the setting action, the default IconSize of 48px is used.",
       "frame": 5,
       "value": 48
     },
@@ -23,7 +23,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "iconSize",
-      "comment": "실행 중 설정 변경 다음 프레임에 IconSize 96px가 즉시 반영된다",
+      "comment": "The runtime setting change takes effect in the next frame, with IconSize 96px.",
       "frame": 6,
       "value": 96
     },
@@ -32,7 +32,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "w",
-      "comment": "첫 항목의 실제 너비도 설정 변경 다음 프레임에 96px로 커진다",
+      "comment": "The first item width also grows to 96px in the frame after the setting change.",
       "frame": 6,
       "value": 96
     },
@@ -41,7 +41,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "h",
-      "comment": "첫 항목의 높이도 96px 아이콘과 8px 표시 점 공간을 합친 104px로 커진다",
+      "comment": "The first item height also grows to 104px: the 96px icon plus 8px for the indicator dot.",
       "frame": 6,
       "value": 104
     },
@@ -50,7 +50,7 @@
       "kind": "animates",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "이름 없는 패널의 캡처 path 너비가 기본 220px에서 새 콘텐츠 너비 412px로 부드럽게 커진다",
+      "comment": "The unnamed panel capture path width grows smoothly from the default 220px to the new content width of 412px.",
       "from": 220,
       "to": 412,
       "start_after": 5,
@@ -65,7 +65,7 @@
       "kind": "animates",
       "item": "dockItem1",
       "prop": "x",
-      "comment": "두 번째 항목도 새 첫 항목 너비에 맞춰 x=52에서 x=100으로 부드럽게 이동한다",
+      "comment": "The second item also moves smoothly from x=52 to x=100 to match the new first-item width.",
       "from": 52,
       "to": 100,
       "start_after": 5,
@@ -80,7 +80,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "가로 독 패널 높이는 IconSize 96px와 상하 패딩 16px를 합친 112px로 즉시 맞춰진다",
+      "comment": "The horizontal dock panel height immediately becomes 112px: IconSize 96px plus 16px of top and bottom padding.",
       "frame": 6,
       "value": 112
     }

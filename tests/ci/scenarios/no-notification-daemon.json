@@ -1,5 +1,5 @@
 {
-  "description": "알림 데몬이 없는 컨테이너에서도 독이 런처 네 개를 표시하고 호버 확대를 수행하며 알림 배지는 나타내지 않는다.",
+  "description": "Even in a container without a notification daemon, the dock shows four launchers and performs hover zoom without showing notification badges.",
   "actions": [
     {
       "frame": 5,
@@ -17,7 +17,7 @@
     {
       "qa": "QA-NOTI-017",
       "kind": "window",
-      "comment": "알림 데몬 등록 실패가 있어도 독 창은 1024x108 크기로 정상 표시된다",
+      "comment": "The dock window displays normally at 1024x108 even when notification-daemon registration fails.",
       "key": "krema::DockView",
       "frame": 2,
       "visible": true,
@@ -28,7 +28,7 @@
       "qa": "QA-NOTI-017",
       "kind": "count",
       "type": "DockItem",
-      "comment": "알림 데몬 없이도 기본 핀 런처 네 개가 모두 생성된다",
+      "comment": "All four default pinned launchers are created without a notification daemon.",
       "frame": 2,
       "value": 4
     },
@@ -37,7 +37,7 @@
       "kind": "animates",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "알림 데몬이 없어도 런처 호버 확대가 1.0에서 기본 1.6까지 정상 동작한다",
+      "comment": "Launcher hover zoom works from 1.0 to the default 1.6 without a notification daemon.",
       "from": 1.0,
       "to": 1.6,
       "start_after": 5,
@@ -52,7 +52,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "커서를 독 밖으로 빼면 알림 데몬 유무와 관계없이 확대가 1.0으로 복귀한다",
+      "comment": "Moving the cursor outside the dock returns the scale to 1.0 regardless of the notification daemon.",
       "value": 1.0,
       "tolerance": 0.01
     },
@@ -61,7 +61,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "_badgeCount",
-      "comment": "알림 데몬이 없고 알림 입력도 없으므로 첫 런처의 미확인 배지는 0개다",
+      "comment": "With no notification daemon or notification input, the first launcher has 0 unread badges.",
       "value": 0
     },
     {
@@ -69,7 +69,7 @@
       "kind": "equals",
       "item": "0/0/2/1/0/3",
       "prop": "visible",
-      "comment": "이름 없는 고정 child path의 배지 요소는 알림이 없을 때 표시되지 않는다",
+      "comment": "The badge element at the unnamed fixed child path is not visible when there are no notifications.",
       "frame": 130,
       "value": false
     },
@@ -78,7 +78,7 @@
       "kind": "equals",
       "item": "dockItem0",
       "prop": "_animationActive",
-      "comment": "가짜 알림 없이 attention 상태가 잘못 활성화되지 않는다",
+      "comment": "The attention state is not activated incorrectly without a fake notification.",
       "frame": 130,
       "value": false
     }

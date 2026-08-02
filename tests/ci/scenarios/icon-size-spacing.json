@@ -1,5 +1,5 @@
 {
-  "description": "저장된 IconSize 96px와 IconSpacing 16px가 시작부터 아이콘 셀, 간격, 패널 크기에 그대로 반영된다.",
+  "description": "The saved IconSize 96px and IconSpacing 16px are reflected in the icon cells, spacing, and panel size from startup.",
   "config": {
     "General/IconSize": 96,
     "General/IconSpacing": 16
@@ -11,7 +11,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "iconSize",
-      "comment": "기본값 48이 아니라 저장한 96px 아이콘 크기가 첫 항목에 적용된다",
+      "comment": "The saved 96px icon size, not the default 48, applies to the first item.",
       "frame": 10,
       "value": 96
     },
@@ -20,7 +20,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "w",
-      "comment": "가로 독의 DockItem 너비가 IconSize와 같은 96px가 된다",
+      "comment": "The horizontal dock DockItem width becomes 96px, matching IconSize.",
       "frame": 10,
       "value": 96
     },
@@ -29,7 +29,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "h",
-      "comment": "DockItem 높이는 96px 아이콘과 실제 8px 표시 점 공간을 합친 104px가 된다",
+      "comment": "The DockItem height becomes 104px: the 96px icon plus the actual 8px indicator-dot space.",
       "frame": 10,
       "value": 104
     },
@@ -38,7 +38,7 @@
       "kind": "settles",
       "item": "0/0/2/1",
       "prop": "spacing",
-      "comment": "이름 없는 Flow의 캡처 path에서 저장한 아이콘 간격 16px가 확인된다",
+      "comment": "The saved 16px icon spacing is confirmed in the unnamed Flow capture path.",
       "frame": 10,
       "value": 16
     },
@@ -47,7 +47,7 @@
       "kind": "settles",
       "item": "dockItem1",
       "prop": "x",
-      "comment": "두 번째 항목은 첫 항목 너비 96px와 간격 16px를 합친 x=112에 놓인다",
+      "comment": "The second item is placed at x=112: the first-item width of 96px plus 16px spacing.",
       "frame": 10,
       "value": 112
     },
@@ -56,7 +56,7 @@
       "kind": "settles",
       "item": "0/0/2/1",
       "prop": "implicitWidth",
-      "comment": "이름 없는 Flow의 캡처 path 너비가 아이콘 4개와 간격 3개의 합인 432px가 된다",
+      "comment": "The unnamed Flow capture path width becomes 432px: four icons plus three gaps.",
       "frame": 10,
       "value": 432
     },
@@ -65,7 +65,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "이름 없는 패널의 캡처 path 너비가 콘텐츠 432px와 좌우 패딩 16px를 합친 448px가 된다",
+      "comment": "The unnamed panel capture path width becomes 448px: 432px of content plus 16px of left and right padding.",
       "frame": 10,
       "value": 448
     },
@@ -74,7 +74,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "패널 높이는 IconSize 96px와 상하 패딩 16px를 합친 112px가 된다",
+      "comment": "The panel height becomes 112px: IconSize 96px plus 16px of top and bottom padding.",
       "frame": 10,
       "value": 112
     }

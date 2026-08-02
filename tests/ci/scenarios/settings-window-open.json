@@ -1,5 +1,5 @@
 {
-  "description": "독 아이콘의 우클릭 메뉴에서 설정 진입 항목을 확인한다. 네이티브 QMenu를 프레임 프로브가 클릭할 수 없어 설정 창 자체는 열지 않는다.",
+  "description": "Verify the settings entry in the dock icon right-click menu. The settings window itself is not opened because the frame probe cannot click the native QMenu.",
   "actions": [
     {
       "frame": 5,
@@ -17,10 +17,10 @@
     {
       "qa": "QA-SET-001",
       "kind": "menu",
-      "comment": "우클릭 메뉴에는 설정 창과 정보 페이지로 들어가는 항목이 실제 순서대로 나타난다",
+      "comment": "The right-click menu shows entries for the settings window and information page in the actual order.",
       "frame": 15,
       "entries": [
-        "org.kde.dolphin.desktop",
+        "KWrite",
         "---",
         "Unpin from Dock",
         "New Instance",
@@ -31,7 +31,7 @@
         "Quit"
       ],
       "enabled": {
-        "org.kde.dolphin.desktop": false,
+        "KWrite": false,
         "Settings...": true,
         "About Krema": true
       }

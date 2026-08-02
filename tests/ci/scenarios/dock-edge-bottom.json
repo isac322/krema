@@ -1,5 +1,5 @@
 {
-  "description": "하단 독은 1024px 출력 폭을 따라가는 수평 서피스 안에서 중앙에 놓이고, 네 아이콘이 왼쪽에서 오른쪽으로 정렬된다.",
+  "description": "The bottom dock is centered in a horizontal surface spanning the 1024px output width, with four icons ordered left to right.",
   "config": {
     "General/Edge": 1,
     "General/Floating": true
@@ -10,7 +10,7 @@
       "qa": "QA-VIS-001",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "하단 독의 클라이언트 서피스는 출력 폭 1024px과 계산된 높이 108px을 요청한다",
+      "comment": "The bottom dock client surface requests the 1024px output width and calculated height of 108px",
       "frame": 10,
       "visible": true,
       "w": 1024,
@@ -21,7 +21,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "x",
-      "comment": "이름 없는 패널 경로(0/0/2)는 (1024-220)/2인 x=402에 중앙 배치된다",
+      "comment": "The unnamed panel path (0/0/2) is centered at x=402, which is (1024-220)/2",
       "frame": 10,
       "value": 402
     },
@@ -30,7 +30,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "하단 패널은 108px 서피스에서 64px 패널과 8px Floating 여백을 반영한 y=36에 놓인다",
+      "comment": "The bottom panel is at y=36 on the 108px surface, accounting for the 64px panel and 8px Floating margin",
       "frame": 10,
       "value": 36
     },
@@ -39,14 +39,14 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "_panelEdgePos",
-      "comment": "이름 없는 패널 경로의 하단 가장자리 위치 계산값은 36px이다",
+      "comment": "The calculated bottom-edge position for the unnamed panel path is 36px",
       "frame": 10,
       "value": 36
     },
     {
       "qa": "QA-VIS-001",
       "kind": "ordered",
-      "comment": "하단 독 아이콘은 왼쪽에서 오른쪽으로 x 좌표가 증가한다",
+      "comment": "Bottom dock icons have increasing x coordinates from left to right",
       "frame": 10,
       "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
       "prop": "x",
@@ -57,7 +57,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "w",
-      "comment": "수평 독의 DockItem 기본 너비는 IconSize와 같은 48px이다",
+      "comment": "The horizontal dock’s default DockItem width is 48px, equal to IconSize",
       "frame": 10,
       "value": 48
     },
@@ -66,7 +66,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "h",
-      "comment": "수평 독의 DockItem 높이는 48px 아이콘과 8px 실행 표시 공간을 합친 56px이다",
+      "comment": "The horizontal dock’s DockItem height is 56px: a 48px icon plus 8px for the launch indicator",
       "frame": 10,
       "value": 56
     }

@@ -1,5 +1,5 @@
 {
-  "description": "키보드 탐색 중 마우스를 다른 아이콘으로 움직이면 키보드 모드와 포커스 링이 즉시 사라지고 일반 마우스 확대가 적용된다.",
+  "description": "Moving the mouse to another icon during keyboard navigation immediately clears keyboard mode and the focus ring, and applies normal mouse zoom.",
   "actions": [
     {"frame": 5, "type": "shortcut", "name": "focus-dock"},
     {"frame": 30, "type": "move", "item": "dockItem2"}
@@ -10,7 +10,7 @@
       "kind": "equals",
       "item": "0/0",
       "prop": "keyboardNavigating",
-      "comment": "마우스 위치 변경을 감지하면 키보드 탐색 모드가 즉시 false로 전환된다",
+      "comment": "When a mouse position change is detected, keyboard navigation immediately switches to false.",
       "frame": 35,
       "value": false
     },
@@ -19,7 +19,7 @@
       "kind": "equals",
       "item": "dockItem0",
       "prop": "isKeyboardFocused",
-      "comment": "마우스 모드로 전환되면 기존 첫 번째 아이템의 키보드 포커스 링이 제거된다",
+      "comment": "When switching to mouse mode, the existing first-item keyboard focus ring is removed.",
       "frame": 35,
       "value": false
     },
@@ -28,7 +28,7 @@
       "kind": "settles",
       "item": "dockItem2",
       "prop": "currentScale",
-      "comment": "모드 전환 뒤 마우스가 가리킨 세 번째 아이템에는 일반 호버 확대 1.6이 적용된다",
+      "comment": "After the mode switch, normal hover zoom 1.6 applies to the third item under the mouse.",
       "frame": 50,
       "value": 1.6,
       "tolerance": 0.01

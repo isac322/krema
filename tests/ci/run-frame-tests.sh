@@ -48,6 +48,8 @@ export KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1
 export LIBGL_ALWAYS_SOFTWARE=1
 export GALLIUM_DRIVER=llvmpipe
 export QT_FORCE_STDERR_LOGGING=1
+# KService and the icon loader both key off this; it is unset in the image.
+export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 mkdir -p "$XDG_RUNTIME_DIR" "$KREMA_OUT"
 chmod 700 "$XDG_RUNTIME_DIR"
 
@@ -156,6 +158,15 @@ print(data.get('fixture_windows', 0) if isinstance(data, dict) else 0)
 import json, sys, collections
 data = json.load(open(sys.argv[1]))
 config = data.get('config', {}) if isinstance(data, dict) else {}
+# Pin launchers that actually exist in this image. krema's shipped default
+# points at Dolphin, Konsole, Kate and System Settings, none of which are
+# installed here, so every item would render as a generic placeholder.
+# Absolute file URLs, not applications: ids. LauncherTasksModel builds the
+# KService straight from the .desktop path, so nothing depends on a ksycoca
+# database being present and keyed to a matching XDG_DATA_DIRS hash.
+config = {'General/PinnedLaunchers': ','.join(
+    'file:///usr/share/applications/org.kde.%s.desktop' % app
+    for app in ('kwrite', 'kfind', 'okular', 'gwenview')), **config}
 if config:
     groups = collections.defaultdict(dict)
     for key, value in config.items():
@@ -188,6 +199,7 @@ print(data.get('max_frames', 0) if isinstance(data, dict) else 0)
                 probe_dir="$dir/frames"
             fi
             env HOME=/tmp/krema-home \
+                XDG_DATA_DIRS="$XDG_DATA_DIRS" \
                 WAYLAND_DISPLAY="$socket" \
                 QT_QPA_PLATFORM=wayland \
                 KREMA_PROBE_NDJSON="$dir/frames.ndjson" \

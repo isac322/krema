@@ -1,5 +1,5 @@
 {
-  "description": "PinnedLaunchers StringList를 빈 값으로 두면 항목 없는 패널이 유지되고 키보드 탐색 진입과 방향키 입력도 안전하게 처리된다.",
+  "description": "With an empty PinnedLaunchers StringList, the panel remains with no items and safely handles entering keyboard navigation and arrow-key input.",
   "config": {
     "General/PinnedLaunchers": ""
   },
@@ -25,7 +25,7 @@
       "qa": "QA-ITEM-025",
       "kind": "count",
       "type": "DockItem",
-      "comment": "PinnedLaunchers StringList의 빈 설정값은 독 항목을 정확히 0개로 만든다",
+      "comment": "An empty PinnedLaunchers StringList setting creates exactly 0 dock items.",
       "frame": 1,
       "value": 0
     },
@@ -34,7 +34,7 @@
       "kind": "equals",
       "item": "0/0",
       "prop": "keyboardNavigating",
-      "comment": "focus-dock QAction을 직접 실행하면 빈 독에서도 안전하게 키보드 모드에 진입하며 Meta+F5 전역 매핑 자체는 검증하지 않는다",
+      "comment": "Running the focus-dock QAction directly safely enters keyboard mode even with an empty dock; the Meta+F5 global mapping itself is not verified.",
       "frame": 15,
       "value": true
     },
@@ -43,7 +43,7 @@
       "kind": "settles",
       "item": "0/0",
       "prop": "hoveredIndex",
-      "comment": "항목이 없으므로 키보드 탐색에 진입해도 선택 인덱스는 -1로 유지된다",
+      "comment": "Because there are no items, the selected index remains -1 after entering keyboard navigation.",
       "frame": 15,
       "value": -1
     },
@@ -51,7 +51,7 @@
       "qa": "QA-ITEM-025",
       "kind": "count",
       "type": "DockItem",
-      "comment": "빈 독에서 오른쪽 방향키를 눌러도 오류나 유령 항목 없이 개수 0이 유지된다",
+      "comment": "Pressing the Right arrow in an empty dock keeps the count at 0 without errors or ghost items.",
       "frame": 30,
       "value": 0
     },
@@ -60,7 +60,7 @@
       "kind": "settles",
       "item": "0/0",
       "prop": "hoveredIndex",
-      "comment": "count가 0인 방향키 탐색은 즉시 반환되어 선택 인덱스를 만들지 않는다",
+      "comment": "Arrow-key navigation with count 0 returns immediately and does not create a selected index.",
       "frame": 30,
       "value": -1
     },
@@ -69,21 +69,21 @@
       "kind": "stable",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "이름 없는 패널의 캡처 path는 항목 0개와 키보드 입력 중에도 유효한 최소 너비를 안정적으로 유지한다"
+      "comment": "The unnamed panel capture path keeps a valid minimum width with 0 items, including during keyboard input."
     },
     {
       "qa": "QA-ITEM-025",
       "kind": "stable",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "빈 독 패널은 항목 없이도 기본 아이콘 크기와 상하 패딩에 해당하는 높이를 안정적으로 유지한다"
+      "comment": "The empty dock panel keeps a stable height equal to the default icon size plus top and bottom padding."
     },
     {
       "qa": "QA-ITEM-025",
       "kind": "equals",
       "item": "0/0/2",
       "prop": "visible",
-      "comment": "항목이 없어도 패널 본체는 크래시나 바인딩 오류 없이 표시 가능한 상태로 남는다",
+      "comment": "Even with no items, the panel body remains displayable without a crash or binding error.",
       "frame": 30,
       "value": true
     },
@@ -91,7 +91,7 @@
       "qa": "QA-ITEM-025",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "항목이 0개이고 방향키를 눌러도 독 창은 크래시 없이 기본 1024x108 서피스로 남는다",
+      "comment": "With 0 items, pressing an arrow key leaves the dock window as the default 1024x108 surface without a crash.",
       "frame": 30,
       "visible": true,
       "w": 1024,
@@ -102,7 +102,7 @@
       "kind": "equals",
       "item": "0/0",
       "prop": "keyboardNavigating",
-      "comment": "Escape 입력으로 빈 독의 키보드 탐색 모드도 정상 종료된다",
+      "comment": "Pressing Escape also exits keyboard navigation normally in the empty dock.",
       "frame": 50,
       "value": false
     }

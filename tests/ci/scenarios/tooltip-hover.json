@@ -1,5 +1,8 @@
 {
-  "description": "미실행 런처를 충분히 오래 호버하면 긴 displayName 전체가 잘리지 않은 텍스트 툴팁으로 표시된다.",
+  "description": "Hovering a launcher that is not running shows a text tooltip with the application name, and a long name stays on one line without being truncated.",
+  "config": {
+    "General/PinnedLaunchers": "file:///usr/share/applications/krema-longname-fixture.desktop,file:///usr/share/applications/org.kde.kwrite.desktop,file:///usr/share/applications/org.kde.kfind.desktop,file:///usr/share/applications/org.kde.okular.desktop"
+  },
   "actions": [
     {
       "frame": 5,
@@ -13,16 +16,7 @@
       "kind": "equals",
       "item": "0/0/5",
       "prop": "show",
-      "comment": "QML Timer 지연 시간 자체는 재지 않고 충분히 뒤 프레임에 이름 없는 툴팁 path의 최종 표시 상태를 확인한다",
-      "frame": 130,
-      "value": true
-    },
-    {
-      "qa": "QA-ITEM-009",
-      "kind": "equals",
-      "item": "0/0/5",
-      "prop": "visible",
-      "comment": "미실행 런처 호버의 최종 상태에서 텍스트 툴팁 배경이 실제로 보인다",
+      "comment": "The tooltip is requested while the cursor rests on a launcher that has no window. Its delay is a QML Timer outside the virtual clock, so only the settled state is checked",
       "frame": 130,
       "value": true
     },
@@ -31,25 +25,26 @@
       "kind": "equals",
       "item": "0/0/5/0",
       "prop": "text",
-      "comment": "툴팁은 호버한 런처의 실제 displayName 전체를 표시한다",
+      "comment": "The tooltip shows the application name from the .desktop file",
       "frame": 130,
-      "value": "org.kde.dolphin.desktop"
+      "value": "Krema Tooltip Layout Fixture Application"
     },
     {
       "qa": "QA-ITEM-011",
       "kind": "equals",
       "item": "0/0/5/0",
       "prop": "truncated",
-      "comment": "긴 org.kde.dolphin.desktop 이름도 툴팁의 암시적 너비 계산으로 잘리지 않는다",
+      "comment": "A long application name is not cut off; the tooltip widens to fit it",
       "frame": 130,
       "value": false
     },
     {
       "qa": "QA-ITEM-011",
-      "kind": "settles",
+      "kind": "equals",
       "item": "0/0/5/0",
       "prop": "lineCount",
-      "comment": "긴 런처 이름이 툴팁 안에서 깨지지 않고 한 줄로 배치된다",
+      "comment": "The name stays on a single line",
+      "frame": 130,
       "value": 1
     }
   ]

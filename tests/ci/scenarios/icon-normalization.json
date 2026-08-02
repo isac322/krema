@@ -1,5 +1,5 @@
 {
-  "description": "아이콘 정규화 설정을 껐다 켜도 아이콘이 계속 정상 표시되고 독 레이아웃이 흔들리지 않는다.",
+  "description": "Toggling icon normalization off and on keeps icons displayed correctly and does not disturb the dock layout.",
   "config": {
     "General/IconNormalization": false
   },
@@ -23,14 +23,14 @@
       "kind": "stable",
       "item": "dockItem0",
       "prop": "w",
-      "comment": "정규화를 바꿔도 항목 크기는 그대로다"
+      "comment": "Changing normalization does not change the item size."
     },
     {
       "qa": "QA-ITEM-021",
       "kind": "settles",
       "item": "0/0/2/1/0/1",
       "prop": "progress",
-      "comment": "정규화를 끈 상태에서도 아이콘이 로드된다",
+      "comment": "The icon loads with normalization disabled.",
       "frame": 20,
       "value": 1.0,
       "tolerance": 0.001
@@ -40,7 +40,7 @@
       "kind": "settles",
       "item": "0/0/2/1/0/1",
       "prop": "progress",
-      "comment": "정규화를 켠 뒤에도 아이콘이 다시 로드된다",
+      "comment": "The icon loads again after normalization is enabled.",
       "frame": 60,
       "value": 1.0,
       "tolerance": 0.001
@@ -50,7 +50,7 @@
       "kind": "equals",
       "item": "0/0/2/1/0/1/0",
       "prop": "visible",
-      "comment": "어느 쪽 설정에서도 플레이스홀더로 떨어지지 않는다",
+      "comment": "Neither setting falls back to the placeholder.",
       "frame": 100,
       "value": false
     }

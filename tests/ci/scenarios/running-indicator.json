@@ -1,5 +1,5 @@
 {
-  "description": "실제 창이 뜨면 독에 그 창의 항목이 생긴다. 핀 런처 4개 옆에 다섯 번째 항목이 나타나고, 그 항목의 이름은 창 제목이다.",
+  "description": "Mapping a real toplevel window adds an item to the dock beside the pinned launchers, and that item is identified by the window, not by another launcher.",
   "fixture_windows": 1,
   "actions": [],
   "assertions": [
@@ -8,7 +8,7 @@
       "kind": "equals",
       "item": "dockItem4",
       "prop": "displayName",
-      "comment": "다섯 번째 항목은 새로 뜬 창이다. 존재만 확인하면 핀 런처가 5개가 되어도 통과해버린다",
+      "comment": "The fifth item is the mapped window. Asserting existence alone would also pass if a fifth launcher were pinned",
       "frame": 10,
       "value": "Fixture 0"
     },
@@ -16,7 +16,7 @@
       "qa": "QA-ITEM-001",
       "kind": "count",
       "type": "DockItem",
-      "comment": "핀 런처 4개 + 창 1개",
+      "comment": "Four pinned launchers plus one window",
       "frame": 10,
       "value": 5
     },
@@ -25,14 +25,14 @@
       "kind": "stable",
       "item": "dockItem4",
       "prop": "visible",
-      "comment": "핀 런처 4개 옆에 창 항목이 하나 더 생긴다"
+      "comment": "The window item is present for the whole capture"
     },
     {
       "qa": "QA-ITEM-008",
       "kind": "settles",
       "item": "dockItem4",
       "prop": "currentScale",
-      "comment": "커서를 올리지 않았으므로 확대되지 않은 상태다",
+      "comment": "With no cursor over it the item stays at its base size",
       "frame": 10,
       "value": 1.0,
       "tolerance": 0.01

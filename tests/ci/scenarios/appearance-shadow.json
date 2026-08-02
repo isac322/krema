@@ -1,5 +1,5 @@
 {
-  "description": "그림자를 켜고 색상·강도와 광원 투영 파라미터를 바꾸면 셰이더 입력과 안전 마진이 즉시 갱신된다.",
+  "description": "Enabling the shadow and changing its color, strength, and light projection parameters immediately updates shader inputs and the safety margin.",
   "actions": [
     {
       "frame": 10,
@@ -92,7 +92,7 @@
       "kind": "equals",
       "item": "0/0/1",
       "prop": "visible",
-      "comment": "이름 없는 그림자 ShaderEffect의 실제 캡처 경로는 기본 설정에서 숨겨져 있다",
+      "comment": "The actual capture path of the unnamed shadow ShaderEffect is hidden with the default settings",
       "frame": 5,
       "value": false
     },
@@ -101,7 +101,7 @@
       "kind": "equals",
       "item": "0/0/1",
       "prop": "visible",
-      "comment": "그림자를 켜면 독 패널 뒤의 ShaderEffect가 즉시 표시된다",
+      "comment": "Enabling the shadow immediately shows the ShaderEffect behind the dock panel",
       "frame": 12,
       "value": true
     },
@@ -110,7 +110,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "shadowA",
-      "comment": "그림자 강도를 100%로 올리면 셰이더 알파 입력이 1이 된다",
+      "comment": "Raising shadow strength to 100% makes the shader alpha input 1",
       "frame": 12,
       "value": 1.0,
       "tolerance": 0.001
@@ -120,7 +120,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "shadowR",
-      "comment": "그림자 색상을 빨강으로 바꾸면 셰이더의 R 채널이 1이 된다",
+      "comment": "Changing the shadow color to red makes the shader R channel 1",
       "frame": 12,
       "value": 1.0,
       "tolerance": 0.001
@@ -130,7 +130,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "shadowG",
-      "comment": "빨간 그림자 색상의 G 채널은 0으로 전달된다",
+      "comment": "The G channel of the red shadow color is passed as 0",
       "frame": 12,
       "value": 0.0,
       "tolerance": 0.001
@@ -140,7 +140,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "shadowB",
-      "comment": "빨간 그림자 색상의 B 채널은 0으로 전달된다",
+      "comment": "The B channel of the red shadow color is passed as 0",
       "frame": 12,
       "value": 0.0,
       "tolerance": 0.001
@@ -150,7 +150,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "lightX",
-      "comment": "가상 광원의 X 위치를 최댓값 300으로 바꾸면 셰이더 입력이 그대로 갱신된다",
+      "comment": "Changing the virtual light X position to the maximum 300 updates the shader input directly",
       "frame": 32,
       "value": 300
     },
@@ -159,7 +159,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "lightY",
-      "comment": "가상 광원의 Y 위치를 최솟값 -300으로 바꾸면 셰이더 입력이 그대로 갱신된다",
+      "comment": "Changing the virtual light Y position to the minimum -300 updates the shader input directly",
       "frame": 32,
       "value": -300
     },
@@ -168,7 +168,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "lightZ",
-      "comment": "광원 높이를 최솟값 100으로 바꾸면 투영식의 Z 입력이 100이 된다",
+      "comment": "Changing light height to the minimum 100 makes the projection Z input 100",
       "frame": 32,
       "value": 100
     },
@@ -177,7 +177,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "lightRadius",
-      "comment": "광원 반경을 최댓값 20으로 올리면 가우시안 부드러움 입력이 20이 된다",
+      "comment": "Raising light radius to the maximum 20 makes the Gaussian smoothing input 20",
       "frame": 32,
       "value": 20.0,
       "tolerance": 0.001
@@ -187,7 +187,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "elevation",
-      "comment": "패널 고도를 최댓값 50으로 올리면 셰이더 투영 입력이 50이 된다",
+      "comment": "Raising panel elevation to the maximum 50 makes the shader projection input 50",
       "frame": 32,
       "value": 50
     },
@@ -196,7 +196,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "margin",
-      "comment": "큰 투영 오프셋은 셰이더 영역 안전 상한인 200px 마진으로 제한된다",
+      "comment": "A large projection offset is limited to the shader area safety cap of a 200px margin",
       "frame": 32,
       "value": 200,
       "tolerance": 0.01
@@ -206,7 +206,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "margin",
-      "comment": "높은 광원과 최소 반경·고도에서는 계산된 셰이더 마진이 유한한 11.5px로 유지된다",
+      "comment": "With high light and minimum radius and elevation, the calculated shader margin remains finite at 11.5px",
       "frame": 52,
       "value": 11.5,
       "tolerance": 0.01
@@ -216,7 +216,7 @@
       "kind": "equals",
       "item": "0/0/1",
       "prop": "visible",
-      "comment": "그림자를 끄면 독 패널 뒤의 ShaderEffect가 다시 숨겨진다",
+      "comment": "Disabling the shadow hides the ShaderEffect behind the dock panel again",
       "frame": 72,
       "value": false
     }

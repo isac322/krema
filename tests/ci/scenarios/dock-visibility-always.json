@@ -1,5 +1,5 @@
 {
-  "description": "AlwaysVisible 모드에서는 커서를 아이콘에서 독 바깥으로 옮기거나 Toggle Dock 액션을 실행해도 패널 위치와 불투명도가 변하지 않는다.",
+  "description": "In AlwaysVisible mode, moving the cursor from an icon outside the dock or running the Toggle Dock action does not change the panel position or opacity.",
   "config": {
     "General/Edge": 1,
     "General/VisibilityMode": 0
@@ -28,21 +28,21 @@
       "kind": "stable",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "이름 없는 패널 경로(0/0/2)의 불투명도는 마우스 이탈과 Toggle Dock 액션 뒤에도 계속 1.0이다"
+      "comment": "The opacity of the unnamed panel path (0/0/2) remains 1.0 after the cursor leaves and after the Toggle Dock action."
     },
     {
       "qa": "QA-VIS-007",
       "kind": "stable",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "AlwaysVisible 패널은 마우스 이탈과 토글 요청에도 표시 위치 y=36에서 움직이지 않는다"
+      "comment": "The AlwaysVisible panel stays at display position y=36 when the cursor leaves and when a toggle is requested."
     },
     {
       "qa": "QA-VIS-007",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "토글 액션을 직접 실행한 뒤 충분히 지나도 독 패널은 완전히 보인다",
+      "comment": "The dock panel remains fully visible after enough time has passed since the toggle action.",
       "value": 1.0,
       "tolerance": 0.001
     },
@@ -50,7 +50,7 @@
       "qa": "QA-VIS-007",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "AlwaysVisible 독 창은 시나리오 끝까지 표시 상태를 유지한다",
+      "comment": "The AlwaysVisible dock window remains visible through the end of the scenario.",
       "visible": true,
       "w": 1024,
       "h": 108

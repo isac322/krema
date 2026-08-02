@@ -1,5 +1,5 @@
 {
-  "description": "kcfg에 정의된 아이콘·간격·줌·모서리·그림자 수치의 최솟값과 최댓값을 한꺼번에 적용해도 독 레이아웃과 셰이더 계산이 유한하게 유지된다.",
+  "description": "Applying the kcfg minimum and maximum values for icon size, spacing, zoom, corners, and shadows together keeps the dock layout and shader calculations finite.",
   "config": {
     "General/IconSize": 24,
     "General/IconSpacing": 0,
@@ -97,7 +97,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "iconSize",
-      "comment": "kcfg 최솟값 IconSize 24에서 독 항목 크기 계산이 0이 되지 않고 24px를 유지한다",
+      "comment": "At the kcfg minimum IconSize of 24, dock item size calculation does not become 0 and stays at 24px.",
       "frame": 5,
       "value": 24
     },
@@ -106,14 +106,14 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "spacing",
-      "comment": "kcfg 최솟값 IconSpacing 0에서도 아이콘 배치가 유효한 0px 간격을 사용한다",
+      "comment": "Even at the kcfg minimum IconSpacing of 0, icon placement uses a valid 0px gap.",
       "frame": 5,
       "value": 0
     },
     {
       "qa": "QA-SET-022",
       "kind": "window",
-      "comment": "최소 아이콘과 줌 값에서도 독 서피스는 1024x84의 유효한 크기를 유지한다",
+      "comment": "Even with the minimum icon and zoom values, the dock surface remains a valid 1024x84 size.",
       "frame": 5,
       "key": "krema::DockView",
       "visible": true,
@@ -125,7 +125,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "이름 없는 패널의 실제 캡처 경로는 최소 아이콘 네 개를 담는 112px 너비를 유지한다",
+      "comment": "The unnamed panel actual capture path keeps a 112px width for four minimum-size icons.",
       "frame": 5,
       "value": 112
     },
@@ -134,7 +134,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "최소 아이콘에서도 패널 높이는 40px로 유지되어 레이아웃이 붕괴하지 않는다",
+      "comment": "Even at the minimum icon size, the panel height stays 40px and the layout does not collapse.",
       "frame": 5,
       "value": 40
     },
@@ -143,7 +143,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "margin",
-      "comment": "최소 광원 반경·고도와 음의 극단 좌표에서도 그림자 마진은 유한한 약 14.29px로 계산된다",
+      "comment": "Even with the minimum light radius and elevation and extreme negative coordinates, the shadow margin calculates to a finite approximately 14.29px.",
       "frame": 5,
       "value": 14.290546,
       "tolerance": 0.02
@@ -153,7 +153,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "최소 줌 1.0에서 작은 아이콘에 커서를 올려도 정확히 1.0 배율을 유지해 히트 테스트가 깨지지 않는다",
+      "comment": "At the minimum zoom of 1.0, hovering a small icon keeps exactly 1.0 so hit testing does not break.",
       "frame": 25,
       "value": 1.0,
       "tolerance": 0.01
@@ -163,7 +163,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "iconSize",
-      "comment": "실행 중 kcfg 최댓값 IconSize 96을 적용하면 독 항목이 즉시 96px 크기로 갱신된다",
+      "comment": "Applying the runtime kcfg maximum IconSize of 96 immediately updates dock items to 96px.",
       "frame": 50,
       "value": 96
     },
@@ -172,14 +172,14 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "spacing",
-      "comment": "실행 중 kcfg 최댓값 IconSpacing 16을 적용하면 독 항목이 즉시 16px 간격을 사용한다",
+      "comment": "Applying the runtime kcfg maximum IconSpacing of 16 makes dock items use a 16px gap immediately.",
       "frame": 50,
       "value": 16
     },
     {
       "qa": "QA-SET-022",
       "kind": "window",
-      "comment": "최대 아이콘 96과 줌 2.0에서도 확대 오버플로우를 담는 1024x216 서피스가 확보된다",
+      "comment": "Even with maximum icon size 96 and zoom 2.0, a 1024x216 surface is provided for zoom overflow.",
       "frame": 55,
       "key": "krema::DockView",
       "visible": true,
@@ -191,7 +191,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "최대 아이콘과 간격에서도 패널 너비가 448px로 정착해 아이콘이 겹치지 않는다",
+      "comment": "Even with maximum icon size and spacing, the panel width settles at 448px and icons do not overlap.",
       "frame": 75,
       "value": 448
     },
@@ -200,7 +200,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "최대 아이콘에서도 패널 높이는 112px로 확보되어 아이콘이 잘리지 않는다",
+      "comment": "Even at maximum icon size, the panel height is 112px, so icons are not clipped.",
       "frame": 75,
       "value": 112
     },
@@ -209,7 +209,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "radius",
-      "comment": "최대 CornerRadius 24에서도 패널의 둥근 모서리 계산이 정상 값을 유지한다",
+      "comment": "Even at maximum CornerRadius 24, panel rounded-corner calculation stays valid.",
       "frame": 75,
       "value": 24
     },
@@ -218,7 +218,7 @@
       "kind": "settles",
       "item": "0/0/1",
       "prop": "margin",
-      "comment": "최대 광원 반경과 고도에서도 그림자 마진은 유한한 70px로 계산된다",
+      "comment": "Even at maximum light radius and elevation, the shadow margin calculates to a finite 70px.",
       "frame": 75,
       "value": 70,
       "tolerance": 0.01
@@ -228,7 +228,7 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "설정으로 최대 배율을 바꾸는 경로는 애니메이션 여부를 판정하지 않는다. 첫 프레임 델타가 실행마다 범위의 39~96%로 흔들려(QUnifiedTimer가 새로 시작한 애니메이션을 지연 등록) 부드러움과 점프를 구분할 수 없다. 마우스 호버로 확대하는 경로는 hover-zoom 시나리오에서 곡선까지 검증한다. 여기서는 새 최대 배율에 도달하는지만 확인한다",
+      "comment": "The path that changes the maximum scale through settings does not determine whether it is animated. The first-frame delta varies from 39–96% of the range between runs because QUnifiedTimer registers newly started animations late, so smooth motion cannot be distinguished from a jump. The mouse-hover zoom path verifies the curve in the hover-zoom scenario. Here, verify only that the new maximum scale is reached.",
       "frame": 110,
       "value": 2.0,
       "tolerance": 0.02

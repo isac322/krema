@@ -1,5 +1,5 @@
 {
-  "description": "Left Edge 세로 독에서는 Down이 다음 아이템으로, Up이 이전 아이템으로 키보드 포커스와 확대 중심을 이동한다.",
+  "description": "On a vertical Left Edge dock, Down moves keyboard focus and the zoom center to the next item, and Up moves them to the previous item.",
   "config": {
     "General/Edge": 2
   },
@@ -14,7 +14,7 @@
       "kind": "equals",
       "item": "dockItem1",
       "prop": "isKeyboardFocused",
-      "comment": "Left Edge 세로 독에서 Down 키는 두 번째 아이템으로 포커스를 이동한다",
+      "comment": "On a vertical Left Edge dock, Down moves focus to the second item.",
       "frame": 35,
       "value": true
     },
@@ -23,7 +23,7 @@
       "kind": "settles",
       "item": "dockItem1",
       "prop": "currentScale",
-      "comment": "Down 키로 선택된 두 번째 아이템이 기본 MaxZoomFactor 1.6까지 확대된다",
+      "comment": "The second item selected with Down zooms to the default MaxZoomFactor of 1.6.",
       "frame": 45,
       "value": 1.6,
       "tolerance": 0.01
@@ -33,7 +33,7 @@
       "kind": "equals",
       "item": "dockItem0",
       "prop": "isKeyboardFocused",
-      "comment": "Up 키는 두 번째 아이템에서 첫 번째 아이템으로 포커스를 되돌린다",
+      "comment": "Up moves focus back from the second item to the first.",
       "frame": 60,
       "value": true
     }

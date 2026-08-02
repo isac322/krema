@@ -1,5 +1,5 @@
 {
-  "description": "표시·숨김 지연 값을 양 끝으로 바꾼 뒤 Auto hide와 Always visible의 최종 독 상태가 올바르게 정착한다.",
+  "description": "After changing show and hide delays to their endpoints, the final dock states for Auto hide and Always visible settle correctly.",
   "actions": [
     {
       "frame": 5,
@@ -44,7 +44,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "QTimer 지연 시간 자체가 아니라 2000ms 값 설정 뒤 Auto hide의 최종 상태가 완전히 숨김인지 확인한다",
+      "comment": "This checks that Auto hide’s final state is fully hidden after setting 2000ms, not the QTimer delay itself",
       "frame": 52,
       "value": 0.0,
       "tolerance": 0.01
@@ -54,7 +54,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "_panelEdgePos",
-      "comment": "Auto hide의 최종 상태에서 하단 패널은 서피스 밖 y=116 위치로 이동한다",
+      "comment": "In Auto hide’s final state, the bottom panel moves outside the surface to y=116",
       "frame": 52,
       "value": 116,
       "tolerance": 0.01
@@ -64,7 +64,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "지연 값을 0ms로 바꾼 뒤 Always visible로 복귀하면 독의 최종 불투명도가 1로 정착한다",
+      "comment": "After changing delays to 0ms and returning to Always visible, the dock’s final opacity settles at 1",
       "frame": 112,
       "value": 1.0,
       "tolerance": 0.01
@@ -74,7 +74,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "_panelEdgePos",
-      "comment": "Always visible의 최종 상태에서 하단 패널은 플로팅 위치 y=36으로 돌아온다",
+      "comment": "In Always visible’s final state, the bottom panel returns to floating position y=36",
       "frame": 112,
       "value": 36,
       "tolerance": 0.01

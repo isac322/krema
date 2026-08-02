@@ -1,5 +1,5 @@
 {
-  "description": "기본 핀 런처 4개의 아이콘이 모두 실제로 로드되어 표시되고, 플레이스홀더는 나타나지 않는다.",
+  "description": "Every pinned launcher renders its real application icon; the fallback placeholder never appears.",
   "actions": [],
   "assertions": [
     {
@@ -7,16 +7,16 @@
       "kind": "equals",
       "item": "dockItem0",
       "prop": "displayName",
-      "comment": "첫 항목은 Dolphin 런처다",
+      "comment": "The first item is the KWrite launcher, resolved from its .desktop file rather than shown as a raw id",
       "frame": 10,
-      "value": "org.kde.dolphin.desktop"
+      "value": "KWrite"
     },
     {
       "qa": "QA-ITEM-024",
       "kind": "settles",
       "item": "0/0/2/1/0/1",
       "prop": "progress",
-      "comment": "아이콘 이미지가 끝까지 로드된다",
+      "comment": "The icon image finishes loading",
       "frame": 10,
       "value": 1.0,
       "tolerance": 0.001
@@ -26,7 +26,7 @@
       "kind": "equals",
       "item": "0/0/2/1/0/1/0",
       "prop": "visible",
-      "comment": "아이콘이 로드됐으므로 대체 플레이스홀더는 숨어 있다. 플레이스홀더가 실제로 그려지는 경로는 아이콘을 못 찾는 런처가 있어야 확인할 수 있다",
+      "comment": "With a real icon loaded the placeholder stays hidden. The placeholder path itself needs a launcher whose icon cannot be resolved, which this image no longer has",
       "frame": 10,
       "value": false
     },
@@ -35,7 +35,7 @@
       "kind": "settles",
       "item": "0/0/2/1/0/1",
       "prop": "w",
-      "comment": "아이콘이 설정된 크기(기본 48px)로 그려진다",
+      "comment": "The icon is drawn at the configured size, 48 px by default",
       "frame": 10,
       "value": 48,
       "tolerance": 0.5

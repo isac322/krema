@@ -1,5 +1,5 @@
 {
-  "description": "AutoHide 독에서 우클릭 메뉴를 연 채 커서를 독 밖으로 옮겨도 상호작용 잠금이 패널을 계속 표시한다.",
+  "description": "In an AutoHide dock, moving the cursor outside while a right-click menu is open keeps the panel visible through the interaction lock.",
   "config": {
     "General/Edge": 1,
     "General/VisibilityMode": 1,
@@ -30,7 +30,7 @@
     {
       "qa": "QA-VIS-012",
       "kind": "menu",
-      "comment": "첫 번째 핀 런처의 우클릭 메뉴가 열린 채 Unpin과 Settings 및 Quit 항목을 제공한다",
+      "comment": "The first pinned launcher’s right-click menu remains open and provides Unpin, Settings, and Quit",
       "frame": 50,
       "contains": [
         "Unpin from Dock",
@@ -43,7 +43,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "이름 없는 패널 경로(0/0/2)는 메뉴가 열린 동안 커서가 밖에 있어도 완전히 보인다",
+      "comment": "The unnamed panel path (0/0/2) remains fully visible while the menu is open even with the cursor outside",
       "frame": 100,
       "value": 1.0,
       "tolerance": 0.001
@@ -53,7 +53,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "상호작용 잠금 중 패널은 숨김 위치로 이동하지 않고 표시 위치 y=36을 유지한다",
+      "comment": "While interaction is locked, the panel does not move to its hidden position and stays at visible position y=36",
       "frame": 100,
       "value": 36,
       "tolerance": 0.01

@@ -1,5 +1,5 @@
 {
-  "description": "AutoHide 독은 가장자리 트리거 진입 뒤 슬라이드와 페이드로 나타나고, 커서 이탈 뒤 반대 방향으로 숨는다.",
+  "description": "The AutoHide dock appears with a slide and fade after entering the edge trigger, then hides in the opposite direction after the cursor leaves.",
   "config": {
     "General/Edge": 1,
     "General/Floating": true,
@@ -31,7 +31,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "가장자리 트리거에 머물면 설정된 ShowDelay 뒤 독이 완전히 표시된다. 실시간 지연 길이 자체는 측정하지 않는다",
+      "comment": "While the cursor stays on the edge trigger, the dock becomes fully visible after the configured ShowDelay. The real-time delay itself is not measured.",
       "frame": 65,
       "value": 1.0,
       "tolerance": 0.001
@@ -41,7 +41,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "이름 없는 패널 경로(0/0/2)는 표시가 끝나면 하단 표시 위치 y=36에 도착한다",
+      "comment": "The unnamed panel path (0/0/2) reaches the bottom display position y=36 when showing finishes.",
       "frame": 65,
       "value": 36,
       "tolerance": 0.01
@@ -51,7 +51,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "커서를 독 바깥으로 옮기면 설정된 HideDelay 뒤 독이 완전히 투명해진다. 숨김은 실시간 타이머가 좌우하므로 중간 프레임이 아니라 캡처 마지막 상태로 확인한다",
+      "comment": "When the cursor moves outside the dock, the dock becomes fully transparent after the configured HideDelay. Hiding is controlled by a real-time timer, so verify the final capture state rather than an intermediate frame.",
       "value": 0.0,
       "tolerance": 0.001
     },
@@ -60,7 +60,7 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "숨김이 끝난 패널은 하단 서피스 바깥 위치 y=116으로 이동한다. 숨김은 실시간 타이머가 좌우하므로 중간 프레임이 아니라 캡처 마지막 상태로 확인한다",
+      "comment": "When hiding finishes, the panel moves to y=116 outside the bottom surface. Hiding is controlled by a real-time timer, so verify the final capture state rather than an intermediate frame.",
       "value": 116,
       "tolerance": 0.01
     },
@@ -69,7 +69,7 @@
       "kind": "animates",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "패널은 y=116에서 y=36까지 250ms InOutQuad 슬라이드로 부드럽게 나타난다",
+      "comment": "The panel appears smoothly from y=116 to y=36 with a 250ms InOutQuad slide.",
       "from": 116,
       "to": 36,
       "start_after": 5,
@@ -83,7 +83,7 @@
       "kind": "animates",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "독이 나타날 때 패널 불투명도도 0에서 1까지 250ms 동안 부드럽게 증가한다",
+      "comment": "As the dock appears, the panel opacity also increases smoothly from 0 to 1 over 250ms.",
       "from": 0.0,
       "to": 1.0,
       "start_after": 5,
@@ -97,7 +97,7 @@
       "kind": "animates",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "커서 이탈 뒤 패널은 y=36에서 y=116까지 같은 250ms 곡선으로 화면 밖으로 슬라이드한다",
+      "comment": "After the cursor leaves, the panel slides off-screen from y=36 to y=116 with the same 250ms curve.",
       "from": 36,
       "to": 116,
       "start_after": 70,
@@ -111,7 +111,7 @@
       "kind": "animates",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "독이 숨을 때 패널 불투명도도 1에서 0까지 부드럽게 감소한다",
+      "comment": "As the dock hides, the panel opacity also decreases smoothly from 1 to 0.",
       "from": 1.0,
       "to": 0.0,
       "start_after": 70,

@@ -376,16 +376,16 @@ def write_review(scenario: dict, rows: list[dict], run_dir: pathlib.Path,
     }
     (run_dir / 'review.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
-    lines = [f"# 스크린샷 리뷰: {manifest['scenario']}", '',
-             f'총 {total} 프레임. 각 항목의 기대 결과와 해당 프레임 이미지를 비교하라.', '']
+    lines = [f"# Screenshot review: {manifest['scenario']}", '',
+             f'{total} frames. Compare each expectation below against its frames.', '']
     for entry in entries:
         lines.append(f"## {entry['qa']} — {entry['result']}")
-        lines.append(f"- 검사 종류: `{entry['kind']}`")
-        lines.append(f"- 기대: {entry['expectation']}")
+        lines.append(f"- Check: `{entry['kind']}`")
+        lines.append(f"- Expected: {entry['expectation']}")
         for shot in entry['frames']:
             lines.append(f'- ![{shot}]({shot})')
         for failure in entry['failures']:
-            lines.append(f'- 실패: {failure}')
+            lines.append(f'- Failure: {failure}')
         lines.append('')
     (run_dir / 'review.md').write_text('\n'.join(lines))
 

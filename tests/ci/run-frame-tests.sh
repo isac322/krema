@@ -73,14 +73,20 @@ cmake -S "$KREMA_SRC" -B "$build" -G Ninja \
     -DKREMA_TEST_HOOKS=ON \
     -DCMAKE_INSTALL_PREFIX=/usr >"$KREMA_OUT/cmake-configure.log" 2>&1 || {
     echo "configure failed" >&2
-    tail -n 40 "$KREMA_OUT/cmake-configure.log" >&2
+    # The feature summary CMake prints on failure is ~40 lines by itself, so a
+    # short tail hides the actual error. Show the error lines first, then more
+    # context than the summary occupies.
+    grep -nE "CMake Error|Could NOT find|CMAKE_[A-Z_]*NOTFOUND" \
+        "$KREMA_OUT/cmake-configure.log" >&2 || true
+    tail -n 120 "$KREMA_OUT/cmake-configure.log" >&2
     exit 1
 }
 
 echo "== build =="
 cmake --build "$build" -j"$(nproc)" >"$KREMA_OUT/cmake-build.log" 2>&1 || {
     echo "build failed" >&2
-    grep -i error "$KREMA_OUT/cmake-build.log" | head -n 40 >&2
+    grep -nE "error:|Error [0-9]|FAILED:" "$KREMA_OUT/cmake-build.log" | head -n 40 >&2
+    tail -n 40 "$KREMA_OUT/cmake-build.log" >&2
     exit 1
 }
 cmake --install "$build" >"$KREMA_OUT/cmake-install.log" 2>&1

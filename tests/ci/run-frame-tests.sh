@@ -267,11 +267,28 @@ print(data.get('max_frames', 0) if isinstance(data, dict) else 0)
             ((failures++))
         fi
 
+        # A passing assertion can still be watching a screen where nothing
+        # moved, so every assertion has to point at pixels that changed. This
+        # runs per scenario, before that scenario's frames are pruned, so peak
+        # disk stays at one scenario's worth of PNGs. The verdict is banked in
+        # evidence.json and totalled after the loop.
+        if [[ "$KREMA_SCREENSHOTS" == "1" ]]; then
+            python3 "$KREMA_SRC/tests/ci/evidence_check.py" \
+                --src "$KREMA_SRC" --run-dir "$KREMA_OUT" --scenario "$name" || true
+        fi
+
         # After review.json exists, drop every frame it does not reference.
         if [[ "$KREMA_SCREENSHOTS" == "1" && "$KREMA_KEEP_FRAMES" != "1" ]]; then
             python3 "$KREMA_SRC/tests/ci/prune_frames.py" --run-dir "$KREMA_OUT/$name" || true
         fi
     done
+
+    if [[ "$KREMA_SCREENSHOTS" == "1" ]]; then
+        if ! python3 "$KREMA_SRC/tests/ci/evidence_check.py" \
+            --src "$KREMA_SRC" --run-dir "$KREMA_OUT"; then
+            ((failures++))
+        fi
+    fi
 
     kill "$kwin_pid" 2>/dev/null
 

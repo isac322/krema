@@ -104,12 +104,8 @@ def crop_differs(frames_dir: pathlib.Path, box, before: int, after: int) -> bool
     return ImageChops.difference(ia.crop(clipped), ib.crop(clipped)).getbbox() is not None
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--src', required=True, type=pathlib.Path)
-    parser.add_argument('--run-dir', required=True, type=pathlib.Path)
-    args = parser.parse_args()
-
+def check_scenario(path: pathlib.Path, run: pathlib.Path) -> dict:
+    """Judge one scenario's assertions against its captured frames."""
     unbacked: list[str] = []
     backed = 0
     exempt = 0
@@ -119,116 +115,145 @@ def main() -> int:
     baseline: dict[tuple[str, str], int] = {}
     control_failures: list[str] = []
     controls_run = 0
+    scenario = json.loads(path.read_text())
 
-    for path in sorted((args.src / 'tests/ci/scenarios').glob('*.json')):
-        scenario = json.loads(path.read_text())
-        run = args.run_dir / path.stem
-        rows = load_rows(run)
-        frames_dir = run / 'pass1' / 'frames'
-        if not rows or not frames_dir.is_dir():
-            # A gate that quietly examines nothing is worse than no gate: run
-            # the suite with KREMA_SCREENSHOTS=1 or this proves nothing.
-            missing_frames.append(path.stem)
+    rows = load_rows(run)
+    frames_dir = run / 'pass1' / 'frames'
+    if not rows or not frames_dir.is_dir():
+        # A gate that quietly examines nothing is worse than no gate: run
+        # the suite with KREMA_SCREENSHOTS=1 or this proves nothing.
+        missing_frames.append(path.stem)
+        return {
+            'scenario': path.stem, 'backed': 0, 'exempt': 0, 'skipped': [],
+            'unbacked': [], 'examined': 0, 'missing_frames': missing_frames,
+            'baseline': 0, 'controls_run': 0, 'control_failures': [],
+        }
+    examined += 1
+    by_frame = {r['frame']: r for r in rows}
+    total = max(by_frame)
+    actions = scenario.get('actions', [])
+
+    first_action = min((a['frame'] for a in actions), default=None)
+    # Two settled frames before anything is injected. Startup animation is
+    # done by frame 3 in this harness, so a pair at or after that is quiet.
+    quiet = None
+    if first_action is not None and first_action >= 6:
+        candidate = (first_action - 3, first_action - 1)
+        if all(f in by_frame for f in candidate):
+            quiet = candidate
+
+    for spec in scenario.get('assertions', []):
+        qa, kind = spec.get('qa', '?'), spec['kind']
+        if spec.get('invariant'):
+            exempt += 1
             continue
-        examined += 1
-        by_frame = {r['frame']: r for r in rows}
-        total = max(by_frame)
-        actions = scenario.get('actions', [])
+        if spec.get('pixel_exempt'):
+            skipped.append(f"{qa} {path.stem} ({kind}): {spec['pixel_exempt']}")
+            continue
 
-        first_action = min((a['frame'] for a in actions), default=None)
-        # Two settled frames before anything is injected. Startup animation is
-        # done by frame 3 in this harness, so a pair at or after that is quiet.
-        quiet = None
-        if first_action is not None and first_action >= 6:
-            candidate = (first_action - 3, first_action - 1)
-            if all(f in by_frame for f in candidate):
-                quiet = candidate
+        target = assertion_frames(spec, total)
+        if not target:
+            unbacked.append(f'{qa:16} {path.stem:26} no frame to check')
+            continue
+        after, explicit_before = target
 
-        for spec in scenario.get('assertions', []):
-            qa, kind = spec.get('qa', '?'), spec['kind']
-            if spec.get('invariant'):
-                exempt += 1
+        # An assertion placed before the first action is the baseline half
+        # of a pair: it records the state the stimulus then changes. It
+        # cannot show a delta of its own, and requiring one would push
+        # authors to delete exactly the assertion that makes the pair
+        # meaningful. Its partner still has to show one.
+        if first_action is not None and after < first_action:
+            baseline.setdefault((path.stem, qa), 0)
+            baseline[(path.stem, qa)] += 1
+            continue
+
+        before = explicit_before if explicit_before is not None \
+            else stimulus_before(actions, after)
+        if before <= 0 or before not in by_frame:
+            unbacked.append(f'{qa:16} {path.stem:26} no pre-stimulus frame for f{after}')
+            continue
+
+        row_after, row_before = by_frame.get(after), by_frame[before]
+        if not row_after:
+            unbacked.append(f'{qa:16} {path.stem:26} frame {after} not captured')
+            continue
+
+        if kind == 'window':
+            idents = [spec['key']]
+            boxes = [union(window_box(row_before, spec['key']),
+                           window_box(row_after, spec['key']))]
+        else:
+            idents = spec.get('items') or ([spec['item']] if spec.get('item')
+                                           else [spec.get('container', '0/0/2')])
+            boxes = [union(item_box(row_before, i), item_box(row_after, i))
+                     for i in idents]
+
+        verdicts = []
+        for ident, box in zip(idents, boxes):
+            if box is None:
+                unbacked.append(f'{qa:16} {path.stem:26} {ident} has no recorded rect')
+                verdicts.append(False)
                 continue
-            if spec.get('pixel_exempt'):
-                skipped.append(f"{qa} {path.stem} ({kind}): {spec['pixel_exempt']}")
-                continue
-
-            target = assertion_frames(spec, total)
-            if not target:
-                unbacked.append(f'{qa:16} {path.stem:26} no frame to check')
-                continue
-            after, explicit_before = target
-
-            # An assertion placed before the first action is the baseline half
-            # of a pair: it records the state the stimulus then changes. It
-            # cannot show a delta of its own, and requiring one would push
-            # authors to delete exactly the assertion that makes the pair
-            # meaningful. Its partner still has to show one.
-            if first_action is not None and after < first_action:
-                baseline.setdefault((path.stem, qa), 0)
-                baseline[(path.stem, qa)] += 1
-                continue
-
-            before = explicit_before if explicit_before is not None \
-                else stimulus_before(actions, after)
-            if before <= 0 or before not in by_frame:
-                unbacked.append(f'{qa:16} {path.stem:26} no pre-stimulus frame for f{after}')
-                continue
-
-            row_after, row_before = by_frame.get(after), by_frame[before]
-            if not row_after:
-                unbacked.append(f'{qa:16} {path.stem:26} frame {after} not captured')
-                continue
-
-            if kind == 'window':
-                idents = [spec['key']]
-                boxes = [union(window_box(row_before, spec['key']),
-                               window_box(row_after, spec['key']))]
-            else:
-                idents = spec.get('items') or ([spec['item']] if spec.get('item')
-                                               else [spec.get('container', '0/0/2')])
-                boxes = [union(item_box(row_before, i), item_box(row_after, i))
-                         for i in idents]
-
-            verdicts = []
-            for ident, box in zip(idents, boxes):
-                if box is None:
-                    unbacked.append(f'{qa:16} {path.stem:26} {ident} has no recorded rect')
-                    verdicts.append(False)
-                    continue
-                result = crop_differs(frames_dir, box, before, after)
-                if result is None:
-                    unbacked.append(
-                        f'{qa:16} {path.stem:26} {ident} rect falls outside the frame; '
-                        f'cannot compare f{before} with f{after}')
-                    verdicts.append(False)
-                else:
-                    verdicts.append(result)
-            if any(verdicts):
-                backed += 1
-                # The gate widens each crop to cover the item in both frames.
-                # A union wide enough to catch unrelated motion would report a
-                # change for any pair, so every positive is re-checked over a
-                # quiet stretch: the two frames just before the first action,
-                # where the scene has settled and nothing has been injected. A
-                # crop that also "changes" there is measuring noise and its
-                # positive is withdrawn.
-                if quiet is not None:
-                    for ident, box in zip(idents, boxes):
-                        controls_run += 1
-                        if box is not None and \
-                                crop_differs(frames_dir, box, quiet[0], quiet[1]):
-                            control_failures.append(
-                                f'{qa:16} {path.stem:26} {ident} also changes over the '
-                                f'quiet pair f{quiet[0]}-f{quiet[1]}')
-            elif verdicts:
+            result = crop_differs(frames_dir, box, before, after)
+            if result is None:
                 unbacked.append(
-                    f'{qa:16} {path.stem:26} {", ".join(idents)} unchanged on screen '
-                    f'between f{before} and f{after}')
+                    f'{qa:16} {path.stem:26} {ident} rect falls outside the frame; '
+                    f'cannot compare f{before} with f{after}')
+                verdicts.append(False)
+            else:
+                verdicts.append(result)
+        if any(verdicts):
+            backed += 1
+            # The gate widens each crop to cover the item in both frames.
+            # A union wide enough to catch unrelated motion would report a
+            # change for any pair, so every positive is re-checked over a
+            # quiet stretch: the two frames just before the first action,
+            # where the scene has settled and nothing has been injected. A
+            # crop that also "changes" there is measuring noise and its
+            # positive is withdrawn.
+            if quiet is not None:
+                for ident, box in zip(idents, boxes):
+                    controls_run += 1
+                    if box is not None and \
+                            crop_differs(frames_dir, box, quiet[0], quiet[1]):
+                        control_failures.append(
+                            f'{qa:16} {path.stem:26} {ident} also changes over the '
+                            f'quiet pair f{quiet[0]}-f{quiet[1]}')
+        elif verdicts:
+            unbacked.append(
+                f'{qa:16} {path.stem:26} {", ".join(idents)} unchanged on screen '
+                f'between f{before} and f{after}')
+
+    return {
+        'scenario': path.stem,
+        'backed': backed,
+        'exempt': exempt,
+        'skipped': skipped,
+        'unbacked': unbacked,
+        'examined': examined,
+        'missing_frames': missing_frames,
+        'baseline': sum(baseline.values()),
+        'controls_run': controls_run,
+        'control_failures': control_failures,
+    }
+
+
+def report(results: list[dict], src: pathlib.Path) -> int:
+    """Total the per-scenario results and hold them to the committed budget."""
+    def gather(key):
+        return [item for r in results for item in r[key]]
+
+    backed = sum(r['backed'] for r in results)
+    exempt = sum(r['exempt'] for r in results)
+    examined = sum(r['examined'] for r in results)
+    controls_run = sum(r['controls_run'] for r in results)
+    skipped, unbacked = gather('skipped'), gather('unbacked')
+    missing_frames, control_failures = gather('missing_frames'), gather('control_failures')
 
     print(f'assertions backed by a visible change: {backed}')
     print(f'assertions exempt as declared invariants: {exempt}')
-    print(f'baseline halves recorded before the first action: {sum(baseline.values())}')
+    print(f'baseline halves recorded before the first action: '
+          f'{sum(r["baseline"] for r in results)}')
     if skipped:
         print(f'assertions not pixel-checkable ({len(skipped)}), vacuity control only:')
         for line in skipped:
@@ -241,8 +266,6 @@ def main() -> int:
         print(f'scenarios with no captured frames ({len(missing_frames)}): '
               f'{", ".join(missing_frames)}')
         print('run the suite with KREMA_SCREENSHOTS=1 before checking evidence')
-    # A control that never ran proves nothing about the crops it was meant to
-    # police, so report its coverage rather than letting silence read as a pass.
     print(f'positives re-checked over a quiet pre-stimulus pair: {controls_run}')
     if backed and not controls_run:
         print('the crop control never ran; it cannot vouch for any positive')
@@ -262,7 +285,7 @@ def main() -> int:
     # frames, or move an assertion into pixel_exempt, and it stays green while
     # checking less. The budget is committed, so any erosion has to appear in
     # the diff with its reason.
-    budget_path = args.src / 'tests/ci/evidence_baseline.json'
+    budget_path = src / 'tests/ci/evidence_baseline.json'
     failed = bool(unbacked or missing_frames)
     if budget_path.exists():
         budget = json.loads(budget_path.read_text())
@@ -271,12 +294,42 @@ def main() -> int:
                 ('declared invariants', exempt, budget['invariant_max'], 'more'),
                 ('pixel-exempt assertions', len(skipped),
                  budget['pixel_exempt_max'], 'more')):
-            over = actual < limit if worse == 'fewer' else actual > limit
-            if over:
+            if actual < limit if worse == 'fewer' else actual > limit:
                 print(f'{label}: {actual}, budget says no {worse} than {limit} '
                       f'-- update {budget_path.name} with the reason if intended')
                 failed = True
     return 1 if failed else 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--src', required=True, type=pathlib.Path)
+    parser.add_argument('--run-dir', required=True, type=pathlib.Path)
+    # Frames are pruned per scenario to keep peak disk to one scenario's worth,
+    # so the gate runs per scenario too and banks its result. --summary then
+    # totals the banked results and applies the budget once.
+    parser.add_argument('--scenario')
+    parser.add_argument('--summary', action='store_true')
+    args = parser.parse_args()
+
+    if args.scenario:
+        path = args.src / 'tests/ci/scenarios' / f'{args.scenario}.json'
+        run = args.run_dir / args.scenario
+        result = check_scenario(path, run)
+        run.mkdir(parents=True, exist_ok=True)
+        (run / 'evidence.json').write_text(json.dumps(result, indent=2))
+        for line in result['unbacked']:
+            print(f'  no visible change: {line}')
+        return 0
+
+    banked = sorted(args.run_dir.glob('*/evidence.json'))
+    if banked:
+        return report([json.loads(p.read_text()) for p in banked], args.src)
+
+    # No banked results: judge everything now, for a run whose frames survived.
+    results = [check_scenario(path, args.run_dir / path.stem)
+               for path in sorted((args.src / 'tests/ci/scenarios').glob('*.json'))]
+    return report(results, args.src)
 
 
 if __name__ == '__main__':

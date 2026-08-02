@@ -56,21 +56,6 @@ jobs:
             krema-ui-ci:local \
             bash /src/tests/ci/run-frame-tests.sh
 
-      # A passing assertion can still be watching a screen where nothing moved.
-      # This crops each assertion's item out of the frame it names and the frame
-      # before its stimulus and requires the pixels to differ, so a scenario
-      # cannot report coverage for behaviour the capture never shows. Assertions
-      # whose observable is a non-change declare `invariant` with the scenario
-      # that discriminates them; ones that cannot be seen at all declare
-      # `pixel_exempt` with the reason.
-      - name: Evidence gate
-        run: |
-          docker run --rm \
-            -v "$PWD:/src:ro" \
-            -v "$RUNNER_TEMP/frames:/out" \
-            krema-ui-ci:local \
-            python3 /src/tests/ci/evidence_check.py --src /src --run-dir /out
-
       # Artifacts download as a zip and cannot be played in the browser, so the
       # numbers a reviewer needs go on the job page itself. The videos are for
       # when the numbers are not enough.

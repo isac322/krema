@@ -90,30 +90,51 @@ jobs:
             echo "fork pull request: cannot push previews"
             exit 0
           fi
-          # Keep other pull requests' previews, drop this one's older runs, and
-          # commit the result with no parent: force-pushing a parentless commit
-          # means the branch never accumulates history, while cloning the
-          # existing tree first means another PR's comment does not 404.
-          work="$RUNNER_TEMP/ci-media"
-          git clone --depth 1 --branch ci-media \
-            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
-            "$work" 2>/dev/null || git init -q "$work"
-          rm -rf "${work:?}/.git"
-          git init -q "$work"
-          rm -rf "${work:?}/pr-$PR"
-          # A unique directory per run, because GitHub proxies markdown images
-          # through camo and caches them by URL: reusing a path would keep
-          # serving the previous run's animation next to current numbers.
-          mkdir -p "$work/pr-$PR/$GITHUB_RUN_ID"
-          cp "${previews[@]}" "$work/pr-$PR/$GITHUB_RUN_ID/"
-          git -C "$work" config user.name "github-actions[bot]"
-          git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$work" add -A
-          git -C "$work" commit -q -m "ci: preview animations for pr-$PR run $GITHUB_RUN_ID"
-          git -C "$work" push -q --force \
-            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
-            HEAD:ci-media
-          echo "published=true" >> "$GITHUB_OUTPUT"
+          # Two workflows write this branch (publish and cleanup) and two pull
+          # requests can publish at once. Each writer does clone-modify-push, so
+          # a plain force push would silently drop whatever landed in between.
+          # --force-with-lease against the ref we cloned turns that into a
+          # rejection, and we retry the whole read-modify-write.
+          publish_previews() {
+            local work="$RUNNER_TEMP/ci-media"
+            rm -rf "$work"
+            local base
+            if git clone --depth 1 --branch ci-media \
+                 "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+                 "$work" 2>/dev/null; then
+              base=$(git -C "$work" rev-parse HEAD)
+            else
+              rm -rf "$work"; mkdir -p "$work"; base=""
+            fi
+            rm -rf "${work:?}/.git"
+            git init -q "$work"
+            rm -rf "${work:?}/pr-$PR"
+            # A unique directory per run: GitHub proxies markdown images through
+            # camo and caches by URL, so a fixed path would keep serving the
+            # previous run's animation beside current numbers.
+            mkdir -p "$work/pr-$PR/$GITHUB_RUN_ID"
+            cp "${previews[@]}" "$work/pr-$PR/$GITHUB_RUN_ID/"
+            git -C "$work" config user.name "github-actions[bot]"
+            git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$work" add -A
+            git -C "$work" commit -q -m "ci: preview animations for pr-$PR run $GITHUB_RUN_ID"
+            local lease=("--force")
+            if [[ -n "$base" ]]; then
+              lease=("--force-with-lease=ci-media:$base")
+            fi
+            git -C "$work" push -q "${lease[@]}" \
+              "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+              HEAD:ci-media
+          }
+          for attempt in 1 2 3 4 5; do
+            if publish_previews; then
+              echo "published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "ci-media moved under us; retry $attempt"
+            sleep $((attempt * 5))
+          done
+          echo "could not publish previews"
 
       # `gh pr comment --edit-last` created a second comment instead of editing,
       # leaving a stale red summary with 404 images above the current one. Find

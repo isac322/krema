@@ -22,16 +22,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          work="$RUNNER_TEMP/ci-media"
-          git clone --depth 1 --branch ci-media \
-            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
-            "$work" || exit 0
-          rm -rf "${work:?}/.git" "${work:?}/pr-$PR"
-          git init -q "$work"
-          git -C "$work" config user.name "github-actions[bot]"
-          git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$work" add -A
-          git -C "$work" commit -q -m "ci: drop previews for pr-$PR" --allow-empty
-          git -C "$work" push -q --force \
-            "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
-            HEAD:ci-media
+          drop_previews() {
+            local work="$RUNNER_TEMP/ci-media"
+            rm -rf "$work"
+            git clone --depth 1 --branch ci-media \
+              "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+              "$work" || return 0
+            local base
+            base=$(git -C "$work" rev-parse HEAD)
+            rm -rf "${work:?}/.git" "${work:?}/pr-$PR"
+            git init -q "$work"
+            git -C "$work" config user.name "github-actions[bot]"
+            git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$work" add -A
+            git -C "$work" commit -q -m "ci: drop previews for pr-$PR" --allow-empty
+            # Same lease as the publisher: a concurrent write must not be lost.
+            git -C "$work" push -q "--force-with-lease=ci-media:$base" \
+              "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+              HEAD:ci-media
+          }
+          for attempt in 1 2 3; do
+            drop_previews && exit 0
+            echo "ci-media moved under us; retry $attempt"
+            sleep $((attempt * 5))
+          done

@@ -66,8 +66,19 @@ else
 fi
 export KREMA_SCENARIOS="${selected[*]}"
 
+# ECM's kde_configure_git_pre_commit_hook writes into .git/hooks, and the
+# checkout is mounted read-only, so configure aborts on "Read-only file system".
+# Build from a copy without .git: ECM then skips the hook entirely and nothing
+# in the build can reach back into the mounted tree.
+echo "== stage source =="
+src_copy=/tmp/krema-src
+rm -rf "$src_copy"
+mkdir -p "$src_copy"
+tar -c -C "$KREMA_SRC" --exclude=.git --exclude=build . | tar -x -C "$src_copy"
+KREMA_SRC_BUILD="$src_copy"
+
 echo "== configure =="
-cmake -S "$KREMA_SRC" -B "$build" -G Ninja \
+cmake -S "$KREMA_SRC_BUILD" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \
     -DKREMA_TEST_HOOKS=ON \

@@ -4,6 +4,7 @@
 #include "frameprobe.h"
 
 #include <QAnimationDriver>
+#include <private/qabstractanimation_p.h>
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
@@ -23,7 +24,11 @@
 #include <QPointer>
 #include <QAction>
 #include <QApplication>
+#include <QWidget>
 #include <QMenu>
+#include <QScreen>
+#include <QMargins>
+#include <QPainter>
 #include <QQmlEngine>
 #include <QWindow>
 #include <QQuickItem>
@@ -31,6 +36,8 @@
 #include <QTest>
 #include <QTextStream>
 #include <QVariantAnimation>
+
+#include <LayerShellQt/Window>
 
 #include <functional>
 #include <memory>
@@ -137,6 +144,16 @@ void collectItems(QQuickItem *item, const QString &path, QJsonArray &out)
     entry[QStringLiteral("opacity")] = item->opacity();
     entry[QStringLiteral("rotation")] = item->rotation();
     entry[QStringLiteral("visible")] = item->isVisible();
+    // The rect this item actually occupies in the window, with every transform
+    // on it and its ancestors applied. Summing x/y up the parent chain would
+    // miss scale and rotation, and krema's zoom is precisely a scale effect --
+    // a checker cropping the wrong rectangle would fail and pass the wrong
+    // things.
+    const QRectF scene = item->mapRectToScene(item->boundingRect());
+    entry[QStringLiteral("sx")] = scene.x();
+    entry[QStringLiteral("sy")] = scene.y();
+    entry[QStringLiteral("sw")] = scene.width();
+    entry[QStringLiteral("sh")] = scene.height();
 
     // QML-declared properties (currentScale, _showAttentionAnim, ...) live past
     // QQuickItem's own metaobject. They carry most of krema's animation state,
@@ -231,6 +248,77 @@ QJsonValue activeMenu()
     }
     out[QStringLiteral("entries")] = entries;
     return out;
+}
+
+/**
+ * Where a window sits on the output, as the client asked for it.
+ *
+ * Wayland never tells a client its global position, so QWindow::geometry()
+ * reports (0, 0) for the dock and compositing there would draw a bottom
+ * anchored dock at the top-left -- a recording that looks authoritative and is
+ * wrong about the one thing the edge scenarios are about. The layer-shell
+ * anchors and margins are client-known, so derive the rect from those. This is
+ * the requested placement, not a confirmation of what the compositor did.
+ */
+QPoint requestedTopLeft(QWindow *window, const QSize &output)
+{
+    auto *layer = LayerShellQt::Window::get(window);
+    if (!layer) {
+        return window->geometry().topLeft();
+    }
+    const auto anchors = layer->anchors();
+    const QMargins margins = layer->margins();
+    const QSize size = window->size();
+
+    int x = (output.width() - size.width()) / 2;
+    if (anchors.testFlag(LayerShellQt::Window::AnchorLeft)) {
+        x = margins.left();
+    } else if (anchors.testFlag(LayerShellQt::Window::AnchorRight)) {
+        x = output.width() - size.width() - margins.right();
+    }
+
+    int y = (output.height() - size.height()) / 2;
+    if (anchors.testFlag(LayerShellQt::Window::AnchorTop)) {
+        y = margins.top();
+    } else if (anchors.testFlag(LayerShellQt::Window::AnchorBottom)) {
+        y = output.height() - size.height() - margins.bottom();
+    }
+    return {x, y};
+}
+
+/**
+ * Capture everything the user would see, not just the dock.
+ *
+ * The settings dialog is a separate top-level window, so grabbing only the dock
+ * would leave it out of the frame entirely and a scenario could assert it
+ * opened while the recording showed nothing. Windows the compositor has not
+ * mapped are skipped: an unmapped QMenu has no laid-out contents, and drawing
+ * its placeholder would imply the menu appeared when it did not.
+ */
+QImage captureScreen(QQuickWindow *primary)
+{
+    QScreen *screen = primary->screen();
+    const QSize output = screen ? screen->geometry().size() : primary->size();
+    QImage canvas(output, QImage::Format_RGB32);
+    canvas.fill(QColor(18, 18, 18));
+
+    QPainter painter(&canvas);
+    const QWindowList windows = QGuiApplication::topLevelWindows();
+    for (QWindow *window : windows) {
+        if (!window->isVisible() || !window->isExposed()) {
+            continue;
+        }
+        QImage image;
+        if (auto *quick = qobject_cast<QQuickWindow *>(window)) {
+            image = quick->grabWindow();
+        } else if (QWidget *widget = QWidget::find(window->winId())) {
+            image = widget->grab().toImage();
+        }
+        if (!image.isNull()) {
+            painter.drawImage(requestedTopLeft(window, output), image);
+        }
+    }
+    return canvas;
 }
 
 QList<QQuickWindow *> quickWindows()
@@ -525,6 +613,16 @@ void FrameProbe::installIfEnabled()
             // the first animation started after an idle gap is charged the
             // entire elapsed virtual time as a single delta and completes in
             // one frame instead of animating.
+            // Without this, QUnifiedTimer measures each tick against the real
+            // clock and compensates when it thinks it fell behind, so an
+            // animation's first delta after registration is a coin flip:
+            // measured on dock-visibility-autohide, frames 1-7 are identical
+            // across runs and the 250 ms reveal's first tick lands at either
+            // 0.080 or 0.095 of its range, after which the run either eases
+            // over ~30 frames or completes in 2. Consistent timing makes every
+            // tick advance by exactly the driver's step, which is the whole
+            // premise of capturing animation state by frame number.
+            QUnifiedTimer::instance()->setConsistentTiming(true);
             auto *keepAlive = new QVariantAnimation(app);
             keepAlive->setStartValue(0.0);
             keepAlive->setEndValue(1.0);
@@ -577,15 +675,22 @@ void FrameProbe::installIfEnabled()
         // critically, it is what guarantees exactly one render per captured
         // frame. Skipping it when screenshots are off would let the compositor
         // pace rendering instead, and animation state would then advance once
-        // every few captured frames. Always grab; only PNG encoding is gated,
-        // which is the expensive part.
-        const QImage image = window->grabWindow();
+        // every few captured frames. Always capture; only PNG encoding is
+        // gated, which is the expensive part.
+        const QImage image = captureScreen(window);
 
         QJsonArray windowRows;
         for (QQuickWindow *quick : windows) {
             QJsonObject entry;
             entry[QStringLiteral("key")] = windowKey(quick);
             entry[QStringLiteral("target")] = quick == window;
+            // Where this window was drawn on the composited frame, so a check
+            // can map an item's rect back to pixels.
+            QScreen *quickScreen = quick->screen();
+            const QPoint origin = requestedTopLeft(
+                quick, quickScreen ? quickScreen->geometry().size() : quick->size());
+            entry[QStringLiteral("ox")] = origin.x();
+            entry[QStringLiteral("oy")] = origin.y();
             entry[QStringLiteral("visible")] = quick->isVisible();
             entry[QStringLiteral("w")] = quick->width();
             entry[QStringLiteral("h")] = quick->height();

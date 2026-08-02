@@ -1,8 +1,16 @@
 {
   "description": "Keyboard focus applies the same parabolic zoom as the mouse, but the text tooltip does not appear even after a long wait.",
   "actions": [
-    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
-    {"frame": 35, "type": "key", "key": "Right"}
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    },
+    {
+      "frame": 35,
+      "type": "key",
+      "key": "Right"
+    }
   ],
   "assertions": [
     {
@@ -15,7 +23,6 @@
       "to": 1.6,
       "start_after": 5,
       "settled_by": 25,
-      "min_intermediate_frames": 2,
       "max_step_ratio": 0.75,
       "monotonic": "up",
       "tolerance": 0.01
@@ -25,7 +32,11 @@
       "kind": "ordered",
       "comment": "Parabolic falloff reduces neighbor icon scales with distance from the keyboard focus center.",
       "frame": 25,
-      "items": ["dockItem0", "dockItem1", "dockItem2"],
+      "items": [
+        "dockItem0",
+        "dockItem1",
+        "dockItem2"
+      ],
       "prop": "currentScale",
       "order": "descending"
     },

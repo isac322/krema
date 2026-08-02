@@ -1,16 +1,56 @@
 {
   "description": "After entering keyboard navigation on a horizontal dock, Left and Right move focus and clamp at both ends; unsupported Home/End safely keep the current focus.",
   "actions": [
-    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
-    {"frame": 30, "type": "key", "key": "Right"},
-    {"frame": 50, "type": "key", "key": "Home"},
-    {"frame": 60, "type": "key", "key": "End"},
-    {"frame": 70, "type": "key", "key": "Left"},
-    {"frame": 85, "type": "key", "key": "Left"},
-    {"frame": 95, "type": "key", "key": "Right"},
-    {"frame": 105, "type": "key", "key": "Right"},
-    {"frame": 115, "type": "key", "key": "Right"},
-    {"frame": 125, "type": "key", "key": "Right"}
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    },
+    {
+      "frame": 30,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 50,
+      "type": "key",
+      "key": "Home"
+    },
+    {
+      "frame": 60,
+      "type": "key",
+      "key": "End"
+    },
+    {
+      "frame": 70,
+      "type": "key",
+      "key": "Left"
+    },
+    {
+      "frame": 85,
+      "type": "key",
+      "key": "Left"
+    },
+    {
+      "frame": 95,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 105,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 115,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 125,
+      "type": "key",
+      "key": "Right"
+    }
   ],
   "assertions": [
     {
@@ -73,18 +113,20 @@
       "kind": "equals",
       "item": "dockItem1",
       "prop": "isKeyboardFocused",
-      "comment": "Home is unsupported in the current implementation and keeps focus on the second item without an exception.",
+      "comment": "Home is unsupported in the current implementation and keeps focus on the second item without an exception. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
       "frame": 55,
-      "value": true
+      "value": true,
+      "invariant": true
     },
     {
       "qa": "QA-KEY-005",
       "kind": "equals",
       "item": "dockItem1",
       "prop": "isKeyboardFocused",
-      "comment": "End is also unsupported in the current implementation and keeps focus on the second item without an exception.",
+      "comment": "End is also unsupported in the current implementation and keeps focus on the second item without an exception. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
       "frame": 65,
-      "value": true
+      "value": true,
+      "invariant": true
     },
     {
       "qa": "QA-KEY-002",
@@ -100,18 +142,20 @@
       "kind": "equals",
       "item": "dockItem0",
       "prop": "isKeyboardFocused",
-      "comment": "Further Left presses on the first item stay on the first item without wrap-around.",
+      "comment": "Further Left presses on the first item stay on the first item without wrap-around. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
       "frame": 90,
-      "value": true
+      "value": true,
+      "invariant": true
     },
     {
       "qa": "QA-KEY-004",
       "kind": "equals",
       "item": "dockItem3",
       "prop": "isKeyboardFocused",
-      "comment": "Further Right presses on the last item stay on the last item.",
+      "comment": "Further Right presses on the last item stay on the last item. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
       "frame": 130,
-      "value": true
+      "value": true,
+      "invariant": true
     }
   ]
 }

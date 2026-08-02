@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QCursor>
 #include <QMenu>
+#include <QWindow>
 
 namespace krema
 {
@@ -25,6 +26,11 @@ DockContextMenu::DockContextMenu(DockModel *model, DockActions *actions, Notific
     , m_actions(actions)
     , m_tracker(tracker)
 {
+}
+
+void DockContextMenu::setParentWindow(QWindow *window)
+{
+    m_parentWindow = window;
 }
 
 void DockContextMenu::showForTask(int index)
@@ -104,6 +110,15 @@ void DockContextMenu::showForTask(int index)
     connect(menu, &QMenu::aboutToHide, this, [this]() {
         Q_EMIT visibleChanged(false);
     });
+
+    if (m_parentWindow) {
+        // The popup surface needs a parent before it is mapped, so realise the
+        // window handle first and attach it.
+        menu->winId();
+        if (QWindow *handle = menu->windowHandle()) {
+            handle->setTransientParent(m_parentWindow);
+        }
+    }
 
     menu->popup(QCursor::pos());
 }

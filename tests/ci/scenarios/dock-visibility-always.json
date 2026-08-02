@@ -1,12 +1,8 @@
 {
-  "description": "In AlwaysVisible mode, moving the cursor from an icon outside the dock or running the Toggle Dock action does not change the panel position or opacity.",
-  "config": {
-    "General/Edge": 1,
-    "General/VisibilityMode": 0
-  },
+  "description": "In the default AlwaysVisible mode, the dock remains fully shown after the pointer moves onto an icon, moves away, and leaves the dock window.",
   "actions": [
     {
-      "frame": 5,
+      "frame": 10,
       "type": "move",
       "item": "dockItem0"
     },
@@ -17,43 +13,82 @@
       "y": 10
     },
     {
-      "frame": 60,
-      "type": "shortcut",
-      "name": "toggle-dock"
+      "frame": 40,
+      "type": "leave"
     }
   ],
   "assertions": [
     {
       "qa": "QA-VIS-007",
-      "kind": "stable",
+      "kind": "equals",
       "item": "0/0/2",
-      "prop": "opacity",
-      "comment": "The opacity of the unnamed panel path (0/0/2) remains 1.0 after the cursor leaves and after the Toggle Dock action."
-    },
-    {
-      "qa": "QA-VIS-007",
-      "kind": "stable",
-      "item": "0/0/2",
-      "prop": "y",
-      "comment": "The AlwaysVisible panel stays at display position y=36 when the cursor leaves and when a toggle is requested."
+      "prop": "mouseInside",
+      "comment": "Before I move the pointer away, the hovered dock reports that my pointer is inside the panel.",
+      "frame": 25,
+      "value": true
     },
     {
       "qa": "QA-VIS-007",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "The dock panel remains fully visible after enough time has passed since the toggle action.",
+      "comment": "Before I move the pointer away, I see the AlwaysVisible panel fully opaque.",
+      "frame": 25,
       "value": 1.0,
       "tolerance": 0.001
     },
     {
       "qa": "QA-VIS-007",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "Before I move the pointer away, I see the bottom panel fully shown at y=36.",
+      "frame": 25,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-007",
+      "kind": "equals",
+      "item": "0/0/2",
+      "prop": "mouseInside",
+      "comment": "After I move away and leave the dock window, the panel reports that my pointer is outside. Marked invariant: AlwaysVisible means the leave must change nothing. The discriminator is dock-visibility-autohide, where the same leave slides the same panel off screen.",
+      "frame": 90,
+      "value": false,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-007",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "After I move away and leave the dock window, I still see the AlwaysVisible panel fully opaque. Marked invariant: AlwaysVisible means the leave must change nothing. The discriminator is dock-visibility-autohide, where the same leave slides the same panel off screen.",
+      "frame": 90,
+      "value": 1.0,
+      "tolerance": 0.001,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-007",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "After I move away and leave the dock window, I still see the bottom panel fully shown at y=36. Marked invariant: AlwaysVisible means the leave must change nothing. The discriminator is dock-visibility-autohide, where the same leave slides the same panel off screen.",
+      "frame": 90,
+      "value": 36,
+      "tolerance": 0.6,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-007",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "The AlwaysVisible dock window remains visible through the end of the scenario.",
+      "comment": "After my pointer leaves, I still see the AlwaysVisible dock window mapped at its full 1024x108 size. Marked invariant: AlwaysVisible means the leave must change nothing. The discriminator is dock-visibility-autohide, where the same leave slides the same panel off screen.",
+      "frame": 90,
       "visible": true,
       "w": 1024,
-      "h": 108
+      "h": 108,
+      "invariant": true
     }
   ]
 }

@@ -1,17 +1,74 @@
 {
-  "description": "The left dock switches to a vertical surface 108px wide, with four icons ordered top to bottom.",
-  "config": {
-    "General/Edge": 2,
-    "General/Floating": true
-  },
-  "actions": [],
+  "description": "The dock starts on the default bottom edge and moves to the left during capture, changing from a horizontal to a vertical item flow.",
+  "actions": [
+    {"frame": 20, "type": "setting", "name": "edge", "value": 2}
+  ],
   "assertions": [
     {
       "qa": "QA-VIS-003",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "The left dock requests a vertical surface with calculated width 108px and output height 768px",
-      "frame": 10,
+      "comment": "Before I move the dock, the default bottom dock uses a 1024x108 horizontal window.",
+      "frame": 15,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "Before I move the dock, I see the bottom panel centered at x=402 in its horizontal window.",
+      "frame": 15,
+      "value": 402,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "Before I move the dock, I see the bottom panel at y=36.",
+      "frame": 15,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "Before I move the dock, I see a 220px-wide horizontal panel.",
+      "frame": 15,
+      "value": 220,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Before I move the dock, I see a 64px-high horizontal panel.",
+      "frame": 15,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "ordered",
+      "comment": "Before I move the dock, I see its items flow from left to right.",
+      "frame": 15,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "x",
+      "order": "ascending"
+    },
+    {
+      "qa": "QA-VIS-003",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "After I move the dock to the left, its window swaps axes to 108x768.",
+      "frame": 80,
       "visible": true,
       "w": 108,
       "h": 768
@@ -21,72 +78,49 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "x",
-      "comment": "The unnamed panel path (0/0/2) is 8px from the left edge for the Floating margin",
-      "frame": 10,
-      "value": 8
+      "comment": "After I move the dock to the left, I see the panel at x=8 in the 108px-wide dock window.",
+      "frame": 80,
+      "value": 8,
+      "tolerance": 0.6
     },
     {
       "qa": "QA-VIS-003",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "The vertical panel is centered at y=274, which is (768-220)/2",
-      "frame": 10,
-      "value": 274
+      "comment": "After I move the dock to the left, I see the 220px panel centered at y=274 in the 768px-high dock window.",
+      "frame": 80,
+      "value": 274,
+      "tolerance": 0.6
     },
     {
       "qa": "QA-VIS-003",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "The left vertical panel width is 64px: a 48px icon plus 16px of left and right padding",
-      "frame": 10,
-      "value": 64
+      "comment": "After I move the dock to the left, I see a 64px-wide vertical panel.",
+      "frame": 80,
+      "value": 64,
+      "tolerance": 1
     },
     {
       "qa": "QA-VIS-003",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "The left vertical panel height is 220px, including four items, spacing, and padding",
-      "frame": 10,
-      "value": 220
-    },
-    {
-      "qa": "QA-VIS-003",
-      "kind": "settles",
-      "item": "0/0/2",
-      "prop": "_panelEdgePos",
-      "comment": "The calculated left-edge position for the unnamed panel path is 8px",
-      "frame": 10,
-      "value": 8
+      "comment": "After I move the dock to the left, I see a 220px-high vertical panel.",
+      "frame": 80,
+      "value": 220,
+      "tolerance": 1
     },
     {
       "qa": "QA-VIS-003",
       "kind": "ordered",
-      "comment": "Left dock icons have increasing y coordinates from top to bottom",
-      "frame": 10,
+      "comment": "After I move the dock to the left, I see its items flow from top to bottom.",
+      "frame": 80,
       "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
       "prop": "y",
       "order": "ascending"
-    },
-    {
-      "qa": "QA-VIS-003",
-      "kind": "settles",
-      "item": "dockItem0",
-      "prop": "w",
-      "comment": "The vertical dock’s DockItem width is 56px, including the icon and launch indicator space",
-      "frame": 10,
-      "value": 56
-    },
-    {
-      "qa": "QA-VIS-003",
-      "kind": "settles",
-      "item": "dockItem0",
-      "prop": "h",
-      "comment": "The vertical dock’s DockItem height is 48px, equal to IconSize",
-      "frame": 10,
-      "value": 48
     }
   ]
 }

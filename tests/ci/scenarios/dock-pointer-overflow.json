@@ -1,5 +1,5 @@
 {
-  "description": "Moving the cursor to a point 2px above the panel edge over the enlarged icon keeps hover and zoom through the Zoom Overflow input area.",
+  "description": "Hovering an icon zooms it; moving 2px above the panel edge, still over the enlarged icon, keeps that zoom through the Zoom Overflow input area; moving past the end of the panel releases it.",
   "config": {
     "General/Edge": 1,
     "General/VisibilityMode": 0,
@@ -9,13 +9,22 @@
     {
       "frame": 5,
       "type": "move",
-      "item": "dockItem0"
+      "item": "dockItem0",
+      "comment": "Hover the first icon at its centre, inside the panel."
     },
     {
       "frame": 30,
       "type": "move",
-      "item": "dockItem0",
-      "y": -34
+      "x": 434,
+      "y": 34,
+      "comment": "Move 2px above the panel top edge, still over the enlarged icon."
+    },
+    {
+      "frame": 70,
+      "type": "move",
+      "x": 1000,
+      "y": 8,
+      "comment": "Move past the right end of the panel, out of every input area."
     }
   ],
   "assertions": [
@@ -24,29 +33,62 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "After moving into the Zoom Overflow area above the panel, the first icon remains at maximum zoom 1.6",
-      "frame": 45,
+      "frame": 25,
       "value": 1.6,
-      "tolerance": 0.01
+      "tolerance": 0.01,
+      "comment": "Hovering the first icon zooms it to the 1.6 maximum."
+    },
+    {
+      "qa": "QA-VIS-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "frame": 60,
+      "value": 1.6,
+      "tolerance": 0.01,
+      "invariant": true,
+      "comment": "Marked invariant: crossing 2px above the panel edge must keep the zoom, so nothing changes on screen. The discriminator is the frame-70 move in this same run, where leaving every input area does collapse it."
     },
     {
       "qa": "QA-VIS-017",
       "kind": "equals",
-      "item": "dockItem0",
-      "prop": "panelMouseInside",
-      "comment": "Even 2px above the default panel boundary, DockItem considers the pointer inside the zoom interaction area",
-      "frame": 45,
-      "value": true
+      "item": "0/0/2",
+      "prop": "mouseInside",
+      "frame": 60,
+      "value": true,
+      "invariant": true,
+      "comment": "Marked invariant: above the panel edge the pointer still counts as inside the zoom interaction area. Same discriminator as above."
     },
     {
       "qa": "QA-VIS-017",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "mouseY",
-      "comment": "With the cursor at the icon center, panel-relative y is negative — the pointer is captured in the area where the enlarged icon extends above the panel",
-      "frame": 45,
-      "value": -19,
-      "tolerance": 1
+      "frame": 60,
+      "value": -2,
+      "tolerance": 1,
+      "invariant": true,
+      "comment": "Marked invariant: panel-relative y is negative, so the pointer is held in the area where the enlarged icon rises above the panel."
+    },
+    {
+      "qa": "QA-VIS-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "frame": 110,
+      "value": 1.0,
+      "tolerance": 0.01,
+      "comment": "Moving past the end of the panel releases the zoom back to 1.0."
+    },
+    {
+      "qa": "QA-VIS-017",
+      "kind": "equals",
+      "item": "0/0/2",
+      "prop": "mouseInside",
+      "frame": 110,
+      "value": false,
+      "comment": "Past the end of the panel the pointer is no longer in any input area."
     }
-  ]
+  ],
+  "max_frames": 140
 }

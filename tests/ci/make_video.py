@@ -71,6 +71,10 @@ def annotate(src: pathlib.Path, dst: pathlib.Path, frame: int, vt: int,
     canvas.paste(image, (0, BANNER_HEIGHT))
     draw = ImageDraw.Draw(canvas)
     draw.text((8, 6), f'f{frame:04d}  vt {vt} ms', fill=(220, 220, 220), font=font)
+    # Wayland does not report a client's global position, so window placement in
+    # the composite is what the client requested, not what the compositor did.
+    draw.text((canvas_size[0] - 210, 8), 'placement: requested', fill=(150, 150, 150),
+              font=small)
     if action:
         draw.text((190, 8), f'\u25b6 {action}', fill=(120, 200, 255), font=small)
     if assertion:

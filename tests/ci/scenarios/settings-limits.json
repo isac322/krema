@@ -153,10 +153,11 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "At the minimum zoom of 1.0, hovering a small icon keeps exactly 1.0 so hit testing does not break.",
+      "comment": "At the minimum zoom of 1.0, hovering a small icon keeps exactly 1.0 so hit testing does not break. Marked invariant: at the minimum zoom limit the hover must not scale the icon. The discriminator is hover-zoom at the default limit.",
       "frame": 25,
       "value": 1.0,
-      "tolerance": 0.01
+      "tolerance": 0.01,
+      "invariant": true
     },
     {
       "qa": "QA-SET-022",

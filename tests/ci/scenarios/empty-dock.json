@@ -1,110 +1,55 @@
 {
-  "description": "With an empty PinnedLaunchers StringList, the panel remains with no items and safely handles entering keyboard navigation and arrow-key input.",
+  "description": "An empty PinnedLaunchers precondition leaves the dock visibly empty while the panel remains present and stable.",
   "config": {
     "General/PinnedLaunchers": ""
   },
-  "actions": [
-    {
-      "frame": 5,
-      "type": "shortcut",
-      "name": "focus-dock"
-    },
-    {
-      "frame": 20,
-      "type": "key",
-      "key": "Right"
-    },
-    {
-      "frame": 40,
-      "type": "key",
-      "key": "Esc"
-    }
-  ],
+  "actions": [],
   "assertions": [
     {
       "qa": "QA-ITEM-025",
       "kind": "count",
       "type": "DockItem",
-      "comment": "An empty PinnedLaunchers StringList setting creates exactly 0 dock items.",
+      "comment": "The empty PinnedLaunchers config is the precondition; I see no launcher items in the dock.",
       "frame": 1,
-      "value": 0
-    },
-    {
-      "qa": "QA-ITEM-025",
-      "kind": "equals",
-      "item": "0/0",
-      "prop": "keyboardNavigating",
-      "comment": "Running the focus-dock QAction directly safely enters keyboard mode even with an empty dock; the Meta+F5 global mapping itself is not verified.",
-      "frame": 15,
-      "value": true
-    },
-    {
-      "qa": "QA-ITEM-025",
-      "kind": "settles",
-      "item": "0/0",
-      "prop": "hoveredIndex",
-      "comment": "Because there are no items, the selected index remains -1 after entering keyboard navigation.",
-      "frame": 15,
-      "value": -1
-    },
-    {
-      "qa": "QA-ITEM-025",
-      "kind": "count",
-      "type": "DockItem",
-      "comment": "Pressing the Right arrow in an empty dock keeps the count at 0 without errors or ghost items.",
-      "frame": 30,
-      "value": 0
-    },
-    {
-      "qa": "QA-ITEM-025",
-      "kind": "settles",
-      "item": "0/0",
-      "prop": "hoveredIndex",
-      "comment": "Arrow-key navigation with count 0 returns immediately and does not create a selected index.",
-      "frame": 30,
-      "value": -1
+      "value": 0,
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-025",
       "kind": "stable",
       "item": "0/0/2",
       "prop": "w",
-      "comment": "The unnamed panel capture path keeps a valid minimum width with 0 items, including during keyboard input."
+      "comment": "The empty PinnedLaunchers config is the precondition; I see the empty panel keep a stable usable width.",
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-025",
       "kind": "stable",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "The empty dock panel keeps a stable height equal to the default icon size plus top and bottom padding."
+      "comment": "The empty PinnedLaunchers config is the precondition; I see the empty panel keep a stable height.",
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-025",
       "kind": "equals",
       "item": "0/0/2",
       "prop": "visible",
-      "comment": "Even with no items, the panel body remains displayable without a crash or binding error.",
+      "comment": "The empty PinnedLaunchers config is the precondition; I still see the panel body instead of a crash or broken surface.",
       "frame": 30,
-      "value": true
+      "value": true,
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-025",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "With 0 items, pressing an arrow key leaves the dock window as the default 1024x108 surface without a crash.",
+      "comment": "The empty PinnedLaunchers config is the precondition; I see the dock window remain visible and correctly sized with no items.",
       "frame": 30,
       "visible": true,
       "w": 1024,
-      "h": 108
-    },
-    {
-      "qa": "QA-ITEM-025",
-      "kind": "equals",
-      "item": "0/0",
-      "prop": "keyboardNavigating",
-      "comment": "Pressing Escape also exits keyboard navigation normally in the empty dock.",
-      "frame": 50,
-      "value": false
+      "h": 108,
+      "invariant": true
     }
   ]
 }

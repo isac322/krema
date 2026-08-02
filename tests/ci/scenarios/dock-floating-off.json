@@ -1,17 +1,46 @@
 {
-  "description": "Disabling Floating removes the 8px bottom gap, puts the panel against the screen edge, and reduces dock surface height to 100px.",
-  "config": {
-    "General/Edge": 1,
-    "General/Floating": false
-  },
-  "actions": [],
+  "description": "The bottom dock starts with the default floating gap, moves flush to the screen edge when Floating is disabled, and then returns to the gap.",
+  "actions": [
+    {"frame": 30, "type": "setting", "name": "floating", "value": false},
+    {"frame": 90, "type": "setting", "name": "floating", "value": true}
+  ],
   "assertions": [
     {
       "qa": "QA-VIS-006",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "With Floating=false, removing the 8px bottom gap reduces dock surface height from 108px to 100px",
-      "frame": 10,
+      "comment": "Before I disable Floating, I see the default 108px-high surface that includes room for the bottom gap.",
+      "frame": 15,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-006",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "Before I disable Floating, I see the panel start at y=36.",
+      "frame": 15,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-006",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Before I disable Floating, I see the 64px panel end at y=100, leaving 8px below it in the 108px surface.",
+      "frame": 15,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-006",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "After I disable Floating, I see the surface shrink to 100px so the panel can meet the screen edge.",
+      "frame": 80,
       "visible": true,
       "w": 1024,
       "h": 100
@@ -21,27 +50,31 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "The unnamed panel path (0/0/2) occupies 64px from y=36 to the end of the 100px surface and sits against the bottom",
-      "frame": 10,
-      "value": 36
+      "comment": "After I disable Floating, I see the flush panel start at y=36.",
+      "frame": 80,
+      "value": 36,
+      "tolerance": 0.6
     },
     {
       "qa": "QA-VIS-006",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "Disabling Floating does not change the visible panel height of 64px",
-      "frame": 10,
-      "value": 64
+      "comment": "After I disable Floating, I see the 64px panel end exactly at y=100 with no gap below it.",
+      "frame": 80,
+      "value": 64,
+      "tolerance": 1
     },
     {
       "qa": "QA-VIS-006",
-      "kind": "settles",
-      "item": "0/0/2",
-      "prop": "_panelEdgePos",
-      "comment": "The unnamed panel path ends at y=36; 36+64=100 exactly meets the surface bottom",
-      "frame": 10,
-      "value": 36
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "When I turn Floating back on, I see the 108px-high surface and its gap return.",
+      "frame": 145,
+      "visible": true,
+      "w": 1024,
+      "h": 108
     }
-  ]
+  ],
+  "max_frames": 160
 }

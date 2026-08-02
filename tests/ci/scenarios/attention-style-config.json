@@ -1,28 +1,11 @@
 {
-  "description": "Switching the AttentionAnimation setting from 1 through 6 in the initial config and at runtime immediately updates each DockItem’s selected type, while inactive animation state keeps its normal value.",
-  "config": {
-    "General/AttentionAnimation": 1,
-    "General/AttentionAnimationDuration": 5
-  },
-  "actions": [
-    {"frame": 10, "type": "setting", "name": "attentionAnimation", "value": 2},
-    {"frame": 20, "type": "setting", "name": "attentionAnimation", "value": 3},
-    {"frame": 30, "type": "setting", "name": "attentionAnimation", "value": 4},
-    {"frame": 40, "type": "setting", "name": "attentionAnimation", "value": 5},
-    {"frame": 50, "type": "setting", "name": "attentionAnimation", "value": 6}
+  "description": "Attention animation style cannot be verified visually until the CI session can put a dock item into a demanding-attention state.",
+  "blocked": [
+    {
+      "qa": "QA-NOTI-012",
+      "reason": "Needs a fixture window that sets demands-attention; without an item demanding attention, changing attentionAnimation selects an inactive style but paints nothing."
+    }
   ],
-  "assertions": [
-    {"qa": "QA-NOTI-012", "kind": "count", "type": "DockItem", "comment": "The dock starts normally with the saved Bounce(1) config and shows the four default launchers", "frame": 2, "value": 4},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "The initial config’s Bounce value 1 is reflected in DockItem", "frame": 2, "value": 1},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionBounceTarget", "comment": "The default Bottom dock’s Bounce element is prepared with an upward offset of -14px", "frame": 2, "value": -14},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "Wiggle value 2 is reflected immediately without a restart", "frame": 11, "value": 2},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "Pulse value 3 is reflected immediately without a restart", "frame": 21, "value": 3},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "Glow value 4 is reflected immediately without a restart", "frame": 31, "value": 4},
-    {"qa": "QA-NOTI-012", "kind": "equals", "item": "0/0/2/1/0/2", "prop": "visible", "comment": "The unnamed fixed child path’s Glow MultiEffect exists and is hidden before Attention", "frame": 31, "value": false},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "DotColor value 5 is reflected immediately without a restart", "frame": 41, "value": 5},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_dotBlinkOpacity", "comment": "The DotColor blink property is prepared at the normal opacity 1.0 before Attention", "frame": 41, "value": 1.0},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_attentionType", "comment": "Blink value 6 is reflected immediately without a restart", "frame": 51, "value": 6},
-    {"qa": "QA-NOTI-012", "kind": "settles", "item": "dockItem0", "prop": "_blinkOpacity", "comment": "The Blink property is prepared at the normal opacity 1.0 before Attention", "frame": 51, "value": 1.0},
-    {"qa": "QA-NOTI-012", "kind": "equals", "item": "dockItem0", "prop": "_showAttentionAnim", "comment": "With no Attention input, a style change alone does not falsely start the animation", "frame": 51, "value": false}
-  ]
+  "actions": [],
+  "assertions": []
 }

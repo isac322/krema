@@ -1,5 +1,5 @@
 {
-  "description": "Hovering a launcher that is not running shows a text tooltip with the application name, and a long name stays on one line without being truncated.",
+  "description": "Hovering a launcher with a long application name changes the tooltip from absent to visible and shows the full name on one line.",
   "config": {
     "General/PinnedLaunchers": "file:///usr/share/applications/krema-longname-fixture.desktop,file:///usr/share/applications/org.kde.kwrite.desktop,file:///usr/share/applications/org.kde.kfind.desktop,file:///usr/share/applications/org.kde.okular.desktop"
   },
@@ -16,7 +16,16 @@
       "kind": "equals",
       "item": "0/0/5",
       "prop": "show",
-      "comment": "The tooltip is requested while the cursor rests on a launcher that has no window. Its delay is a QML Timer outside the virtual clock, so only the settled state is checked",
+      "comment": "Before I hover the launcher, no text tooltip is requested.",
+      "frame": 2,
+      "value": false
+    },
+    {
+      "qa": "QA-ITEM-009",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "show",
+      "comment": "After I rest the pointer on a launcher with no window, its text tooltip appears; the timer is outside the virtual clock, so I check the settled state.",
       "frame": 130,
       "value": true
     },
@@ -25,7 +34,34 @@
       "kind": "equals",
       "item": "0/0/5/0",
       "prop": "text",
-      "comment": "The tooltip shows the application name from the .desktop file",
+      "comment": "The tooltip I opened shows the application name from the launcher file.",
+      "frame": 130,
+      "value": "Krema Tooltip Layout Fixture Application"
+    },
+    {
+      "qa": "QA-ITEM-011",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "visible",
+      "comment": "Before I hover the long-name launcher, its tooltip is absent from view.",
+      "frame": 2,
+      "value": false
+    },
+    {
+      "qa": "QA-ITEM-011",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "visible",
+      "comment": "After I hover the long-name launcher, the tooltip is visible so its layout is actually exercised.",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-ITEM-011",
+      "kind": "equals",
+      "item": "0/0/5/0",
+      "prop": "text",
+      "comment": "The visible tooltip shows the full long application name rather than shortened text.",
       "frame": 130,
       "value": "Krema Tooltip Layout Fixture Application"
     },
@@ -34,7 +70,7 @@
       "kind": "equals",
       "item": "0/0/5/0",
       "prop": "truncated",
-      "comment": "A long application name is not cut off; the tooltip widens to fit it",
+      "comment": "The full application name I see is not clipped or elided.",
       "frame": 130,
       "value": false
     },
@@ -43,7 +79,7 @@
       "kind": "equals",
       "item": "0/0/5/0",
       "prop": "lineCount",
-      "comment": "The name stays on a single line",
+      "comment": "The long application name I see remains readable on one line.",
       "frame": 130,
       "value": 1
     }

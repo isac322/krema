@@ -1,5 +1,5 @@
 {
-  "description": "Every pinned launcher renders its real application icon; the fallback placeholder never appears.",
+  "description": "The installed KWrite launcher resolves to its real icon and never uses the fallback placeholder; this is an invariant of the fixture image.",
   "actions": [],
   "assertions": [
     {
@@ -7,38 +7,42 @@
       "kind": "equals",
       "item": "dockItem0",
       "prop": "displayName",
-      "comment": "The first item is the KWrite launcher, resolved from its .desktop file rather than shown as a raw id",
+      "comment": "I see the resolved KWrite launcher rather than a raw launcher id; this is an invariant because resolving an installed icon has no runtime stimulus.",
       "frame": 10,
-      "value": "KWrite"
+      "value": "KWrite",
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-024",
       "kind": "settles",
       "item": "0/0/2/1/0/1",
       "prop": "progress",
-      "comment": "The icon image finishes loading",
+      "comment": "I see the real application icon finish loading; this is an invariant because the fixture starts with a resolvable installed icon.",
       "frame": 10,
       "value": 1.0,
-      "tolerance": 0.001
+      "tolerance": 0.001,
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-024",
       "kind": "equals",
       "item": "0/0/2/1/0/1/0",
       "prop": "visible",
-      "comment": "With a real icon loaded the placeholder stays hidden. The placeholder path itself needs a launcher whose icon cannot be resolved, which this image no longer has",
+      "comment": "I never see the fallback placeholder for this real icon; exercising the placeholder path itself needs a launcher whose icon cannot be resolved, which this image does not provide.",
       "frame": 10,
-      "value": false
+      "value": false,
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-024",
       "kind": "settles",
       "item": "0/0/2/1/0/1",
       "prop": "w",
-      "comment": "The icon is drawn at the configured size, 48 px by default",
+      "comment": "I see the resolved icon drawn at the default 48px size; this is an invariant of the installed launcher rather than a caused change.",
       "frame": 10,
       "value": 48,
-      "tolerance": 0.5
+      "tolerance": 0.5,
+      "invariant": true
     }
   ]
 }

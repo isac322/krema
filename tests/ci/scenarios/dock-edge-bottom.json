@@ -1,17 +1,26 @@
 {
-  "description": "The bottom dock is centered in a horizontal surface spanning the 1024px output width, with four icons ordered left to right.",
-  "config": {
-    "General/Edge": 1,
-    "General/Floating": true
-  },
-  "actions": [],
+  "description": "Starting from the default bottom edge, the dock moves to the top during capture and then returns to the bottom with a horizontal, left-to-right item flow.",
+  "actions": [
+    {"frame": 20, "type": "setting", "name": "edge", "value": 0},
+    {"frame": 80, "type": "setting", "name": "edge", "value": 1}
+  ],
   "assertions": [
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "At startup, I see the default bottom panel at y=36 in its 108px-high dock window.",
+      "frame": 15,
+      "value": 36,
+      "tolerance": 0.6
+    },
     {
       "qa": "QA-VIS-001",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "The bottom dock client surface requests the 1024px output width and calculated height of 108px",
-      "frame": 10,
+      "comment": "Before I return the dock to the bottom, the top-edge dock window is a 1024x108 horizontal surface.",
+      "frame": 70,
       "visible": true,
       "w": 1024,
       "h": 108
@@ -21,54 +30,109 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "x",
-      "comment": "The unnamed panel path (0/0/2) is centered at x=402, which is (1024-220)/2",
-      "frame": 10,
-      "value": 402
+      "comment": "Before the bottom-edge change, I see the 220px top panel centered at x=402 in the 1024px dock window.",
+      "frame": 70,
+      "value": 402,
+      "tolerance": 0.6
     },
     {
       "qa": "QA-VIS-001",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "The bottom panel is at y=36 on the 108px surface, accounting for the 64px panel and 8px Floating margin",
-      "frame": 10,
-      "value": 36
+      "comment": "Before the bottom-edge change, I see the floating top panel at y=8.",
+      "frame": 70,
+      "value": 8,
+      "tolerance": 0.6
     },
     {
       "qa": "QA-VIS-001",
       "kind": "settles",
       "item": "0/0/2",
-      "prop": "_panelEdgePos",
-      "comment": "The calculated bottom-edge position for the unnamed panel path is 36px",
-      "frame": 10,
-      "value": 36
+      "prop": "w",
+      "comment": "Before the bottom-edge change, I see a 220px-wide horizontal panel.",
+      "frame": 70,
+      "value": 220,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Before the bottom-edge change, I see a 64px-high horizontal panel.",
+      "frame": 70,
+      "value": 64,
+      "tolerance": 1
     },
     {
       "qa": "QA-VIS-001",
       "kind": "ordered",
-      "comment": "Bottom dock icons have increasing x coordinates from left to right",
-      "frame": 10,
+      "comment": "Before the bottom-edge change, I see the top dock items flow from left to right.",
+      "frame": 70,
       "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
       "prop": "x",
       "order": "ascending"
     },
     {
       "qa": "QA-VIS-001",
-      "kind": "settles",
-      "item": "dockItem0",
-      "prop": "w",
-      "comment": "The horizontal dock’s default DockItem width is 48px, equal to IconSize",
-      "frame": 10,
-      "value": 48
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "After I move the dock back to the bottom, its window is again the 1024x108 horizontal surface.",
+      "frame": 140,
+      "visible": true,
+      "w": 1024,
+      "h": 108
     },
     {
       "qa": "QA-VIS-001",
       "kind": "settles",
-      "item": "dockItem0",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "After I move the dock back to the bottom, I see the 220px panel centered at x=402 in the dock window.",
+      "frame": 140,
+      "value": 402,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "After I move the dock back to the bottom, I see the panel at y=36, leaving its 8px floating gap below.",
+      "frame": 140,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "After I move the dock back to the bottom, I see a 220px-wide horizontal panel.",
+      "frame": 140,
+      "value": 220,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "settles",
+      "item": "0/0/2",
       "prop": "h",
-      "comment": "The horizontal dock’s DockItem height is 56px: a 48px icon plus 8px for the launch indicator",
-      "frame": 10,
-      "value": 56
+      "comment": "After I move the dock back to the bottom, I see a 64px-high horizontal panel.",
+      "frame": 140,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-001",
+      "kind": "ordered",
+      "comment": "After I move the dock back to the bottom, I see the items flow from left to right.",
+      "frame": 140,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "x",
+      "order": "ascending"
     }
-  ]
+  ],
+  "max_frames": 160
 }

@@ -15,7 +15,7 @@
       "item": "dockItem0",
       "prop": "iconSize",
       "comment": "Immediately before the setting action, the default IconSize of 48px is used.",
-      "frame": 5,
+      "frame": 4,
       "value": 48
     },
     {

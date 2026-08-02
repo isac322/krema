@@ -10,6 +10,24 @@
       "kind": "equals",
       "item": "0/0",
       "prop": "keyboardNavigating",
+      "comment": "After I invoke focus-dock, keyboard navigation is active before I press Escape.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "After I invoke focus-dock, the first launcher has keyboard focus before I press Escape.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
       "comment": "After Esc, the root keyboard navigation state turns off immediately.",
       "frame": 35,
       "value": false

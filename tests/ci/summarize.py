@@ -19,6 +19,7 @@ import sys
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--run-dir', required=True, type=pathlib.Path)
+    parser.add_argument('--src', type=pathlib.Path, default=pathlib.Path('.'))
     args = parser.parse_args()
 
     results = [json.loads(p.read_text()) for p in sorted(args.run_dir.glob('*/result.json'))]
@@ -44,10 +45,26 @@ def main() -> int:
                            f"{failure[:160]} |")
         out.append('')
 
-    identical = sum(1 for r in results if r['repro'] == 'byte-identical')
-    out.append(f'Reproducibility: {identical}/{len(results)} scenarios byte-identical across '
-               f'two passes. The rest differ only at frames where an action lands; every '
-               f'settled value is reproducible.')
+    # A scenario that verifies nothing reports "0 QA items passed", which reads
+    # the same as a broken one. Name what is deliberately unverified and why, so
+    # the gap is a stated limit rather than a silent hole in the coverage count.
+    unverified = blocked_rows(args.src)
+    if unverified:
+        out += [f'### Not verified here ({len(unverified)})', '',
+                '| QA | Scenario | Why |', '|---|---|---|']
+        for qa, scenario, reason in unverified:
+            out.append(f'| `{qa}` | {scenario} | {reason} |')
+        out.append('')
+
+    compared = [r for r in results if r['repro'] != 'single pass']
+    if compared:
+        identical = sum(1 for r in compared if r['repro'] == 'byte-identical')
+        out.append(f'Reproducibility: {identical}/{len(compared)} scenarios byte-identical '
+                   f'across two passes. The rest differ only at frames where an action '
+                   f'lands; every settled value is reproducible.')
+    else:
+        out.append('Reproducibility: not measured — this run captured a single pass per '
+                   'scenario, so no two captures were compared.')
     out.append('')
     if videos:
         out.append(f'{len(videos)} annotated videos in the `frame-captures` artifact — '
@@ -67,6 +84,18 @@ def main() -> int:
     print('\n'.join(out))
     return 0
 
+
+def blocked_rows(src: pathlib.Path):
+    """QA ids a scenario deliberately does not verify, with the reason.
+
+    A scenario that reports "0 QA item(s) passed" is indistinguishable from a
+    broken one unless the reason travels with it.
+    """
+    rows = []
+    for path in sorted((src / 'tests/ci/scenarios').glob('*.json')):
+        for entry in json.loads(path.read_text()).get('blocked', []):
+            rows.append((entry['qa'], path.stem, entry['reason']))
+    return rows
 
 if __name__ == '__main__':
     sys.exit(main())

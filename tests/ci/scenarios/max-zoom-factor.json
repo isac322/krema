@@ -22,20 +22,22 @@
       "kind": "settles",
       "item": "dockItem0",
       "prop": "maxZoomFactor",
-      "comment": "The saved minimum MaxZoomFactor of 1.0 applies to the DockItem.",
+      "comment": "The saved minimum MaxZoomFactor of 1.0 applies to the DockItem. Marked invariant: with MaxZoomFactor 1.0 the hover must not zoom. The discriminator is hover-zoom, where the same hover at the default factor reaches 1.6.",
       "frame": 20,
       "value": 1.0,
-      "tolerance": 0.01
+      "tolerance": 0.01,
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-020",
       "kind": "settles",
       "item": "dockItem0",
       "prop": "currentScale",
-      "comment": "When MaxZoomFactor is 1.0, hovering the icon center causes no zoom.",
+      "comment": "When MaxZoomFactor is 1.0, hovering the icon center causes no zoom. Marked invariant: with MaxZoomFactor 1.0 the hover must not zoom. The discriminator is hover-zoom, where the same hover at the default factor reaches 1.6.",
       "frame": 20,
       "value": 1.0,
-      "tolerance": 0.01
+      "tolerance": 0.01,
+      "invariant": true
     },
     {
       "qa": "QA-ITEM-020",

@@ -23,6 +23,9 @@
 #   KREMA_VIDEO_FPS playback fps for the video (default 30, about half speed)
 #   KREMA_PREVIEW_BASE_URL  raw URL prefix the published GIFs will live at; the
 #                   generated comment.md embeds them from there
+#   KREMA_SCENARIO_DIR  directory of scenario JSON to run (default
+#                   tests/ci/scenarios); used by vacuity_check.py to run
+#                   stimulus-free controls
 #   KREMA_KEEP_FRAMES  1 = keep every raw PNG. Default 0 prunes them after
 #                   encoding, keeping only the keyframes review.md links.
 
@@ -57,7 +60,7 @@ chmod 700 "$XDG_RUNTIME_DIR"
 # tries to run nested instead of using its own virtual backend.
 unset WAYLAND_DISPLAY QT_QPA_PLATFORM
 
-scenario_dir="$KREMA_SRC/tests/ci/scenarios"
+scenario_dir="${KREMA_SCENARIO_DIR:-$KREMA_SRC/tests/ci/scenarios}"
 if (($# > 0)); then
     selected=()
     for name in "$@"; do selected+=("$scenario_dir/$name.json"); done

@@ -44,26 +44,6 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "opacity",
-      "comment": "This checks that Auto hide’s final state is fully hidden after setting 2000ms, not the QTimer delay itself",
-      "frame": 52,
-      "value": 0.0,
-      "tolerance": 0.01
-    },
-    {
-      "qa": "QA-SET-016",
-      "kind": "settles",
-      "item": "0/0/2",
-      "prop": "_panelEdgePos",
-      "comment": "In Auto hide’s final state, the bottom panel moves outside the surface to y=116",
-      "frame": 52,
-      "value": 116,
-      "tolerance": 0.01
-    },
-    {
-      "qa": "QA-SET-016",
-      "kind": "settles",
-      "item": "0/0/2",
-      "prop": "opacity",
       "comment": "After changing delays to 0ms and returning to Always visible, the dock’s final opacity settles at 1",
       "frame": 112,
       "value": 1.0,

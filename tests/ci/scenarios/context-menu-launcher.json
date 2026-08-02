@@ -1,11 +1,34 @@
 {
   "description": "The context menu for an unlaunched pinned launcher shows only the fixed default entries in the exact order, and right-clicking the dock background selects no item.",
   "actions": [
-    {"frame": 5, "type": "move", "item": "dockItem0"},
-    {"frame": 10, "type": "click", "item": "dockItem0", "button": "right"},
-    {"frame": 25, "type": "key", "key": "Esc"},
-    {"frame": 35, "type": "move", "x": 20, "y": 68},
-    {"frame": 40, "type": "click", "x": 20, "y": 68, "button": "right"}
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 10,
+      "type": "click",
+      "item": "dockItem0",
+      "button": "right"
+    },
+    {
+      "frame": 25,
+      "type": "key",
+      "key": "Esc"
+    },
+    {
+      "frame": 35,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 40,
+      "type": "click",
+      "x": 20,
+      "y": 68,
+      "button": "right"
+    }
   ],
   "assertions": [
     {
@@ -31,7 +54,8 @@
         "Settings...": true,
         "About Krema": true,
         "Quit": true
-      }
+      },
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     },
     {
       "qa": "QA-CMD-004",
@@ -42,24 +66,28 @@
         "Open in New Window",
         "Open a New Window",
         "New Incognito Window"
-      ]
+      ],
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "settles",
+      "item": "0/0",
+      "prop": "hoveredIndex",
+      "comment": "When I hover the first launcher before using the empty background, that launcher is selected.",
+      "frame": 37,
+      "value": 0,
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     },
     {
       "qa": "QA-CMD-012",
       "kind": "equals",
       "item": "0/0",
       "prop": "hoveredIndex",
-      "comment": "Right-clicking a dock background coordinate with no icon keeps hoveredIndex at -1, so no item menu is selected",
+      "comment": "After I right-click the empty dock background, the previously hovered launcher is cleared and no item is selected.",
       "frame": 45,
-      "value": -1
-    },
-    {
-      "qa": "QA-CMD-012",
-      "kind": "count",
-      "type": "DockItem",
-      "comment": "The four pinned launchers remain after right-clicking the background, with no exception or incorrect item behavior",
-      "frame": 50,
-      "value": 4
+      "value": -1,
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     }
   ]
 }

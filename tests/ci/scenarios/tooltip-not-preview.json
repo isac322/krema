@@ -53,18 +53,20 @@
       "kind": "equals",
       "item": "0/0/0/0",
       "prop": "visible",
-      "comment": "The unique child path absent from DockView confirms that the preview popup content Column is hidden.",
+      "comment": "The unique child path absent from DockView confirms that the preview popup content Column is hidden. Marked invariant: hovering an item must not open the preview surface. The discriminator is the preview scenarios, where a hover on a running window does open it.",
       "frame": 130,
-      "value": false
+      "value": false,
+      "invariant": true
     },
     {
       "qa": "QA-PRE-002",
       "kind": "window",
-      "comment": "The preview QQuickView surface always exists, but hovering a launcher does not create a new popup window.",
+      "comment": "The preview QQuickView surface always exists, but hovering a launcher does not create a new popup window. Marked invariant: hovering an item must not open the preview surface. The discriminator is the preview scenarios, where a hover on a running window does open it.",
       "key": "QQuickView",
       "visible": true,
       "w": 1024,
-      "h": 400
+      "h": 400,
+      "invariant": true
     }
   ]
 }

@@ -1,17 +1,16 @@
 {
-  "description": "Enabling Floating increases dock surface height to include the 8px gap between the bottom panel and screen edge.",
-  "config": {
-    "General/Edge": 1,
-    "General/Floating": true
-  },
-  "actions": [],
+  "description": "The bottom dock starts with its default floating gap, moves flush to the screen edge during capture, and then floats again.",
+  "actions": [
+    {"frame": 30, "type": "setting", "name": "floating", "value": false},
+    {"frame": 90, "type": "setting", "name": "floating", "value": true}
+  ],
   "assertions": [
     {
       "qa": "QA-VIS-005",
       "kind": "window",
       "key": "krema::DockView",
-      "comment": "With Floating=true, the dock requests a 108px surface: a 64px panel, 36px top space, and 8px bottom gap",
-      "frame": 10,
+      "comment": "At startup, I see the default floating dock use a 108px-high surface.",
+      "frame": 15,
       "visible": true,
       "w": 1024,
       "h": 108
@@ -21,27 +20,81 @@
       "kind": "settles",
       "item": "0/0/2",
       "prop": "y",
-      "comment": "The unnamed panel path (0/0/2) is at y=36 on the 108px surface, leaving 8px below",
-      "frame": 10,
-      "value": 36
+      "comment": "At startup, I see the floating panel begin at y=36 in its 108px-high surface.",
+      "frame": 15,
+      "value": 36,
+      "tolerance": 0.6
     },
     {
       "qa": "QA-VIS-005",
       "kind": "settles",
       "item": "0/0/2",
       "prop": "h",
-      "comment": "The visible panel height is 64px: IconSize 48px plus 16px padding",
-      "frame": 10,
-      "value": 64
+      "comment": "At startup, I see the 64px panel end at y=100, leaving the default 8px floating gap in the 108px surface.",
+      "frame": 15,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "Before I re-enable Floating, I see the dock use a 100px-high surface with no room below the panel.",
+      "frame": 80,
+      "visible": true,
+      "w": 1024,
+      "h": 100
     },
     {
       "qa": "QA-VIS-005",
       "kind": "settles",
       "item": "0/0/2",
-      "prop": "radius",
-      "comment": "The Floating panel corners are rounded with the default CornerRadius of 12px",
-      "frame": 10,
-      "value": 12
+      "prop": "y",
+      "comment": "Before I re-enable Floating, I see the flush panel start at y=36.",
+      "frame": 80,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Before I re-enable Floating, I see the 64px panel end exactly at the 100px surface edge.",
+      "frame": 80,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "After I re-enable Floating, I see the dock surface grow back to 108px.",
+      "frame": 145,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "After I re-enable Floating, I see the panel at y=36 again.",
+      "frame": 145,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-005",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "After I re-enable Floating, I see the 64px panel end at y=100 and restore the 8px gap below it.",
+      "frame": 145,
+      "value": 64,
+      "tolerance": 1
     }
-  ]
+  ],
+  "max_frames": 160
 }

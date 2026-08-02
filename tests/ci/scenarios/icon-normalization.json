@@ -1,58 +1,24 @@
 {
-  "description": "Toggling icon normalization off and on keeps icons displayed correctly and does not disturb the dock layout.",
-  "config": {
-    "General/IconNormalization": false
-  },
+  "description": "Icon normalization cannot be verified with the icon resources installed in this image because toggling it produces no observable pixel or geometry difference.",
   "actions": [
     {
-      "frame": 30,
+      "frame": 20,
       "type": "setting",
       "name": "iconNormalization",
-      "value": true
+      "value": false
     },
     {
       "frame": 70,
       "type": "setting",
       "name": "iconNormalization",
-      "value": false
+      "value": true
     }
   ],
-  "assertions": [
+  "not_verifiable": [
     {
       "qa": "QA-ITEM-021",
-      "kind": "stable",
-      "item": "dockItem0",
-      "prop": "w",
-      "comment": "Changing normalization does not change the item size."
-    },
-    {
-      "qa": "QA-ITEM-021",
-      "kind": "settles",
-      "item": "0/0/2/1/0/1",
-      "prop": "progress",
-      "comment": "The icon loads with normalization disabled.",
-      "frame": 20,
-      "value": 1.0,
-      "tolerance": 0.001
-    },
-    {
-      "qa": "QA-ITEM-021",
-      "kind": "settles",
-      "item": "0/0/2/1/0/1",
-      "prop": "progress",
-      "comment": "The icon loads again after normalization is enabled.",
-      "frame": 60,
-      "value": 1.0,
-      "tolerance": 0.001
-    },
-    {
-      "qa": "QA-ITEM-021",
-      "kind": "equals",
-      "item": "0/0/2/1/0/1/0",
-      "prop": "visible",
-      "comment": "Neither setting falls back to the placeholder.",
-      "frame": 100,
-      "value": false
+      "reason": "The image is missing a launcher icon with measurable transparent internal padding. The installed Breeze icons render with the same painted bounds and item geometry in both normalization states, so the capture cannot prove that padding was detected, cropped, and rescaled."
     }
-  ]
+  ],
+  "assertions": []
 }

@@ -264,16 +264,26 @@ Measured on this image (Fedora 43, KWin 6.7.3, Qt 6.10, aarch64, llvmpipe).
   runs. Set `KREMA_PROBE_PACE=1` to make each tick consume `stepMs` of real time
   so timers and the virtual clock advance together, or keep timer-gated items
   out of byte-exact assertions.
-- **An animation's first frame is not reproducible.** Everything after it is.
-  `QUnifiedTimer` registers a newly started animation through a deferred 0 ms
-  timer, so the registration lands on either side of the next clock advance
-  depending on sub-frame timing, and the first delta varies: measured 39%, 43%,
-  51%, 53%, 54%, 69% and 100% of range across runs of the same scenario.
-  Draining posted events before advancing does not fix it (measured, made it
-  worse). Consequences:
-  - `animates` skips the first two frames when judging whether a value snapped
-    or eased (`skip_onset_frames`), because that judgement on the onset frame is
-    a coin flip. A real one-frame snap still fails, through the
+- **Animation ticks advance by the driver step, not the real clock.** By default
+  `QUnifiedTimer` measures each tick against the wall clock and compensates when
+  it believes it fell behind, so an animation's first delta was a coin flip and
+  the rest of the animation could be handed a single catch-up delta. Measured on
+  `dock-visibility-autohide`: frames 1-7 identical across runs, then the reveal's
+  first tick landed at either 0.080 or 0.095 of its range, after which 3 of 5
+  runs covered 93% of the slide in one frame while the other 2 eased across ~30
+  frames. Pacing the loop (`KREMA_PROBE_PACE=1`) and draining posted events
+  before advancing were both measured and neither fixed it.
+
+  The probe calls `QUnifiedTimer::setConsistentTiming(true)`, which is why it
+  links `Qt6::CorePrivate`, and that is what makes a frame number mean the same
+  thing on every run. The same scenario now reports a largest early step of 28%
+  of range at frame 12 in 5 of 5 runs.
+
+  What remains is a one-frame shift in where the onset lands.
+  `keyboard-zoom-tooltip`, the shortest animation in the product at 150 ms,
+  reports 69% at frame 8 or 45% at frame 9 depending on the run. So:
+  - `animates` still skips the first two frames when judging snapped versus
+    eased (`skip_onset_frames`). A real one-frame snap still fails, through the
     intermediate-value floor.
   - Never assert an exact value on an animation's first two frames.
   - Roughly half the scenarios are byte-identical across two passes; the rest

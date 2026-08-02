@@ -1,41 +1,12 @@
 {
-  "description": "Mapping a real toplevel window adds an item to the dock beside the pinned launchers, and that item is identified by the window, not by another launcher.",
+  "description": "A mapped fixture window creates a window-backed dock row, but the current harness cannot create or remove that fixture during capture.",
   "fixture_windows": 1,
   "actions": [],
-  "assertions": [
+  "not_verifiable": [
     {
       "qa": "QA-ITEM-001",
-      "kind": "equals",
-      "item": "dockItem4",
-      "prop": "displayName",
-      "comment": "The fifth item is the mapped window. Asserting existence alone would also pass if a fifth launcher were pinned",
-      "frame": 10,
-      "value": "Fixture 0"
-    },
-    {
-      "qa": "QA-ITEM-001",
-      "kind": "count",
-      "type": "DockItem",
-      "comment": "Four pinned launchers plus one window",
-      "frame": 10,
-      "value": 5
-    },
-    {
-      "qa": "QA-ITEM-001",
-      "kind": "stable",
-      "item": "dockItem4",
-      "prop": "visible",
-      "comment": "The window item is present for the whole capture"
-    },
-    {
-      "qa": "QA-ITEM-008",
-      "kind": "settles",
-      "item": "dockItem4",
-      "prop": "currentScale",
-      "comment": "With no cursor over it the item stays at its base size",
-      "frame": 10,
-      "value": 1.0,
-      "tolerance": 0.01
+      "reason": "The negative control removes actions but leaves fixture_windows enabled, so the fixture row, its displayName \"Fixture 0\", and its window-child state all survive. Proving the row appeared requires a fixture-toggle action that maps a window after an earlier frame, which the harness does not have."
     }
-  ]
+  ],
+  "assertions": []
 }

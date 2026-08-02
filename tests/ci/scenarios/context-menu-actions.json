@@ -36,7 +36,8 @@
       ],
       "excludes": [
         "Pin to Dock"
-      ]
+      ],
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     },
     {
       "qa": "QA-CMD-005",
@@ -48,7 +49,8 @@
       ],
       "excludes": [
         "Unpin from Dock"
-      ]
+      ],
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     },
     {
       "qa": "QA-CMD-005",
@@ -57,7 +59,8 @@
       "frame": 50,
       "contains": [
         "Close"
-      ]
+      ],
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     },
     {
       "qa": "QA-CMD-009",
@@ -71,7 +74,8 @@
       "enabled": {
         "Settings...": true,
         "About Krema": true
-      }
+      },
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     },
     {
       "qa": "QA-CMD-010",
@@ -83,7 +87,8 @@
       ],
       "enabled": {
         "Quit": true
-      }
+      },
+      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
     }
   ]
 }

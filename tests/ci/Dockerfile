@@ -33,7 +33,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
         breeze-icon-theme hicolor-icon-theme \
         kwrite kfind okular gwenview \
         extra-cmake-modules cmake ninja-build gcc-c++ pkgconf-pkg-config \
-        qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtwayland-devel \
+        qt6-qtbase-devel qt6-qtbase-private-devel qt6-qtdeclarative-devel qt6-qtwayland-devel \
         qt6-qtshadertools-devel qt6-qtquickcontrols2 \
         kf6-kwindowsystem-devel kf6-kconfig-devel kf6-kcoreaddons-devel \
         kf6-kdbusaddons-devel kf6-ki18n-devel kf6-kglobalaccel-devel \

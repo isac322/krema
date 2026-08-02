@@ -620,7 +620,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: The order of menu items changes, the `Close` item is shown incorrectly, or the header name is not displayed in bold.
 - **Evidence**: `src/models/dockcontextmenu.cpp:48-102`
 - **Priority**: P0
-- **Automation**: `AUTO`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-002: Verify menu composition when right-clicking a running window icon
 - **User action**: Right-click a dock icon that has one or more running windows.
@@ -644,7 +644,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: Menu creation fails due to a parsing error, or a crash occurs.
 - **Evidence**: `src/models/dockcontextmenu.cpp:30-109`
 - **Priority**: P2
-- **Automation**: `AUTO`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-005: Menu item — running "Pin to Dock" / "Unpin from Dock"
 - **User action**: Right-click an app icon that is not pinned and click `Pin to Dock`, or right-click a pinned app icon and click `Unpin from Dock`.
@@ -652,7 +652,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: The pinned state of the icon does not change, or it is not saved to the `kremarc` settings file.
 - **Evidence**: `src/models/dockcontextmenu.cpp:57-65`, `src/models/dockactions.cpp:63-79`
 - **Priority**: P0
-- **Automation**: `AUTO`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-006: Menu item — running "New Instance"
 - **User action**: Right-click a dock icon and click the `New Instance` item.
@@ -684,7 +684,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: The settings window does not appear, or the wrong tab opens.
 - **Evidence**: `src/models/dockcontextmenu.cpp:91-100`, `src/shell/dockshell.cpp:185-190`
 - **Priority**: P1
-- **Automation**: `AUTO`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-010: Menu item — running "Quit"
 - **User action**: Click the `Quit` item in the right-click menu.
@@ -692,7 +692,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: The process does not exit and keeps running.
 - **Evidence**: `src/models/dockcontextmenu.cpp:101`
 - **Priority**: P0
-- **Automation**: `AUTO`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-011: Preventing dock auto-hide while the context menu is open, and closing it with Esc or an outside click
 - **User action**: With the dock set to AutoHide, open the menu by right-clicking an icon, then 1) move the mouse outside the menu, 2) press the Esc key or click outside the dock.
@@ -700,7 +700,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: The dock hides while the menu is open, or the menu does not close.
 - **Evidence**: `src/models/dockcontextmenu.cpp:104-107`, `src/shell/dockshell.cpp:183`
 - **Priority**: P1
-- **Automation**: `FIXTURE: the context menu must actually be mapped. Currently dockcontextmenu.cpp:43 creates a QMenu with no parent, so Wayland refuses to create the popup and "closes on outside click or Esc" cannot be observed`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-012: Right-click behavior on empty dock space (background)
 - **User action**: Right-click an empty panel area of the dock that has no icons.
@@ -708,7 +708,7 @@ The 13 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: An exception occurs, or a menu for the wrong item appears.
 - **Evidence**: `src/qml/main.qml:490`
 - **Priority**: P2
-- **Automation**: `AUTO`
+- **Automation**: `FIXTURE: real compositor input`. The menu is built and its entries are asserted in-process, but the popup never appears on screen here: Wayland requires a popup to have a transient parent **and** for that parent surface to have received real input, and synthetic Qt input never reaches the compositor. The missing transient parent was a genuine defect and is now fixed in `src/models/dockcontextmenu.cpp`, but the input half cannot be satisfied without a real pointer. Nothing about the menu is verified visually.
 
 #### QA-CMD-013: Global shortcuts Toggle Dock and Focus Dock behavior
 - **User action**: Press the `Meta+`` key or the `Meta+F5` key on the keyboard.

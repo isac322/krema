@@ -1,15 +1,11 @@
 {
-  "description": "Switching BadgeDisplayMode from Dot to Off on a launcher with no notifications prepares the Dot element as a small textless shape and hides the badge in Off mode.",
-  "config": {"General/BadgeDisplayMode": 1},
-  "actions": [
-    {"frame": 30, "type": "setting", "name": "badgeDisplayMode", "value": 2}
+  "description": "Badge display mode cannot be verified visually until the CI session can supply an unread notification.",
+  "blocked": [
+    {
+      "qa": "QA-NOTI-016",
+      "reason": "Needs an org.freedesktop.Notifications D-Bus stub that can raise an unread count; with no notification daemon there is no badge to show or hide, so changing badgeDisplayMode paints nothing."
+    }
   ],
-  "assertions": [
-    {"qa": "QA-NOTI-016", "kind": "settles", "item": "dockItem0", "prop": "_badgeCount", "comment": "With no notification daemon and no unread notifications, the badge count is 0", "frame": 2, "value": 0},
-    {"qa": "QA-NOTI-016", "kind": "settles", "item": "0/0/2/1/0/3", "prop": "w", "comment": "The Dot badge width on the unnamed fixed child path is 9px, rounded from 18% of the 48px icon", "frame": 2, "value": 9},
-    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3/0", "prop": "visible", "comment": "Dot mode does not show numeric text in the unnamed badge Label", "frame": 2, "value": false},
-    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3", "prop": "visible", "comment": "Even in Dot mode, the badge element is not visible when unread notifications are 0", "frame": 2, "value": false},
-    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3", "prop": "visible", "comment": "Changing immediately to Off(2) keeps the unnamed badge element hidden", "frame": 31, "value": false},
-    {"qa": "QA-NOTI-016", "kind": "equals", "item": "0/0/2/1/0/3/0", "prop": "visible", "comment": "Off mode also hides the badge number Label", "frame": 31, "value": false}
-  ]
+  "actions": [],
+  "assertions": []
 }

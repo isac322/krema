@@ -18,7 +18,6 @@ add_library(krema_frameprobe STATIC
 )
 
 qt_generate_wayland_protocol_client_sources(krema_frameprobe
-    PRIVATE_CODE
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/fake-input.xml
 )
 

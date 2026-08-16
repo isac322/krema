@@ -161,6 +161,7 @@ struct Action {
     int frame = 0;
     QString type;
     bool native = false; // deliver through KWin so Wayland supplies a real input serial
+    bool waitForMenu = false;
     QPoint pos;
     QString button;
     QString key;
@@ -288,6 +289,37 @@ QMenu *visibleMenu()
 }
 
 QPoint requestedTopLeft(QWindow *window, const QSize &output);
+
+void waitForMappedMenu(int frame)
+{
+    QElapsedTimer timeout;
+    timeout.start();
+    while (timeout.elapsed() < 2000) {
+        if (QMenu *popup = visibleMenu()) {
+            QWindow *handle = popup->windowHandle();
+            if (handle && handle->isVisible() && handle->isExposed()) {
+                return;
+            }
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+    qFatal("scenario frame %d timed out waiting for a mapped context menu", frame);
+}
+
+void waitForMenuClosed(int frame)
+{
+    QElapsedTimer timeout;
+    timeout.start();
+    while (timeout.elapsed() < 2000) {
+        if (!visibleMenu()) {
+            return;
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+    qFatal("scenario frame %d timed out waiting for the context menu to close", frame);
+}
 
 /**
  * The dock context menu is a native QMenu, i.e. a QWidget popup, so it never
@@ -444,6 +476,7 @@ QList<Action> loadScript(const QString &path)
         action.frame = object.value(QStringLiteral("frame")).toInt();
         action.type = object.value(QStringLiteral("type")).toString();
         action.native = object.value(QStringLiteral("native")).toBool();
+        action.waitForMenu = object.value(QStringLiteral("wait_for_menu")).toBool();
         action.pos = QPoint(object.value(QStringLiteral("x")).toInt(), object.value(QStringLiteral("y")).toInt());
         action.button = object.value(QStringLiteral("button")).toString(QStringLiteral("left"));
         action.key = object.value(QStringLiteral("key")).toString();
@@ -529,7 +562,10 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
                 ? window->screen()->geometry().size()
                 : window->size();
             if (!fakeInput->clickAt(requestedTopLeft(window, output) + pos, button)) {
-                qCWarning(lcProbe) << "native fake input is unavailable";
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
+            }
+            if (action.waitForMenu) {
+                waitForMappedMenu(action.frame);
             }
         } else {
             QTest::mouseClick(window, button, Qt::NoModifier, pos);
@@ -539,8 +575,10 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             const QSize output = window->screen()
                 ? window->screen()->geometry().size()
                 : window->size();
-            fakeInput->moveTo(requestedTopLeft(window, output) + pos);
-            fakeInput->sendButton(buttonFromName(action.button), true);
+            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)
+                || !fakeInput->sendButton(buttonFromName(action.button), true)) {
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
+            }
         } else {
             QTest::mousePress(window, buttonFromName(action.button), Qt::NoModifier, pos);
         }
@@ -549,8 +587,10 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             const QSize output = window->screen()
                 ? window->screen()->geometry().size()
                 : window->size();
-            fakeInput->moveTo(requestedTopLeft(window, output) + pos);
-            fakeInput->sendButton(buttonFromName(action.button), false);
+            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)
+                || !fakeInput->sendButton(buttonFromName(action.button), false)) {
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
+            }
         } else {
             QTest::mouseRelease(window, buttonFromName(action.button), Qt::NoModifier, pos);
         }
@@ -609,8 +649,9 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             ? requestedTopLeft(handle, output)
             : requestedTopLeft(window, output) + popup->pos();
         if (!fakeInput->clickAt(topLeft + actionRect.center(), Qt::LeftButton)) {
-            qCWarning(lcProbe) << "native fake input is unavailable";
+            qFatal("scenario frame %d requires KWin fake-input support", action.frame);
         }
+        waitForMenuClosed(action.frame);
     } else if (action.type == QLatin1String("shortcut")) {
         // Krema's keyboard navigation is only reachable through the global
         // shortcut (focus-dock), and KGlobalAccel key delivery does not work in

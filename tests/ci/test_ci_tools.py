@@ -144,6 +144,19 @@ class MenuAndReportingTests(unittest.TestCase):
             failures.append)
         self.assertEqual([], failures)
 
+    def test_native_context_menu_clicks_wait_for_mapping(self):
+        for path in (ROOT / 'tests/ci/scenarios').glob('*.json'):
+            scenario = json.loads(path.read_text())
+            for action in scenario.get('actions', []):
+                opens_menu = (action.get('type') == 'click'
+                              and action.get('button') == 'right'
+                              and action.get('native')
+                              and action.get('item'))
+                if opens_menu:
+                    self.assertTrue(
+                        action.get('wait_for_menu'),
+                        f'{path.name} frame {action["frame"]} has no menu barrier')
+
     def test_not_verified_scenario_is_neutral_in_preview(self):
         result = {
             'scenario': 'neutral',

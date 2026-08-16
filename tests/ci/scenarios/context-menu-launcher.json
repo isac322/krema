@@ -11,7 +11,8 @@
       "type": "click",
       "item": "dockItem0",
       "button": "right",
-      "native": true
+      "native": true,
+      "wait_for_menu": true
     },
     {
       "frame": 25,

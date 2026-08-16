@@ -138,6 +138,9 @@ Mouse actions with `"native": true` travel through KWin's test-only fake-input
 protocol, so Qt receives a compositor-delivered event with a real Wayland
 serial. Native context-menu clicks require this; `QTest` events never reach the
 compositor and cannot authorize an `xdg_popup`.
+Set `"wait_for_menu": true` on a native click that should open a menu. The
+probe processes events until the popup window is visible and exposed, with a
+two-second hard timeout, before it advances the deterministic frame counter.
 
 `menuitem` activates an entry of the open context menu by its label
 (`{"type": "menuitem", "name": "Settings..."}`). The probe resolves the

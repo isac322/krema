@@ -11,7 +11,8 @@
       "frame": 10,
       "type": "click",
       "item": "dockItem4",
-      "button": "right"
+      "button": "right",
+      "native": true
     },
     {
       "frame": 20,
@@ -22,7 +23,8 @@
       "frame": 30,
       "type": "click",
       "item": "dockItem4",
-      "button": "right"
+      "button": "right",
+      "native": true
     },
     {
       "frame": 40,
@@ -33,7 +35,8 @@
       "frame": 50,
       "type": "click",
       "item": "dockItem4",
-      "button": "right"
+      "button": "right",
+      "native": true
     }
   ],
   "assertions": [

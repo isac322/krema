@@ -8,13 +8,18 @@
 # Qml: the probe resolves the DockSettings singleton to drive settings changes.
 # CorePrivate carries QUnifiedTimer, whose consistent-timing mode is what
 # makes an animation advance by the driver step instead of the real clock.
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test Widgets Qml CorePrivate)
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test Widgets Qml CorePrivate WaylandClient)
 # The probe derives window placement from the layer-shell anchors the client set.
 find_package(LayerShellQt REQUIRED)
 
 add_library(krema_frameprobe STATIC
     frameprobe.h
     frameprobe.cpp
+)
+
+qt_generate_wayland_protocol_client_sources(krema_frameprobe
+    PRIVATE_CODE
+    FILES fake-input.xml
 )
 
 target_link_libraries(krema_frameprobe PUBLIC
@@ -29,6 +34,7 @@ target_link_libraries(krema_frameprobe PUBLIC
     Qt6::Quick
     Qt6::Test
     Qt6::Widgets
+    Qt6::WaylandClient
     LayerShellQt::Interface
 )
 

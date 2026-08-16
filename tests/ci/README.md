@@ -131,18 +131,19 @@ depends on `TasksModel` window rows (previews, running indicators, active
 state) needs this; krema alone shows only the pinned launchers.
 
 Actions run at the named frame: `move`, `click`, `press`, `release`, `key`,
-`setting`, `shortcut`, `menuitem`. Target an item by `objectName` (`"item": "dockItem0"`, with optional
-`x`/`y` offset from its centre) rather than raw coordinates — a raw point
-silently lands in the gap between icons if the icon size changes, and the
-failure then reads as "the animation never happened". Add `"window": "<key>"`
-to address a surface other than the dock.
+`setting`, `shortcut`, `menuitem`. Target an item by `objectName`
+(`"item": "dockItem0"`, with optional `x`/`y` offset from its centre) rather
+than raw coordinates. Add `"window": "<key>"` to address another surface.
+Mouse actions with `"native": true` travel through KWin's test-only fake-input
+protocol, so Qt receives a compositor-delivered event with a real Wayland
+serial. Native context-menu clicks require this; `QTest` events never reach the
+compositor and cannot authorize an `xdg_popup`.
 
 `menuitem` activates an entry of the open context menu by its label
-(`{"type": "menuitem", "name": "Settings..."}`). The menu is a native QMenu, so
-the probe resolves the QAction geometry and sends a normal QWidget mouse click
-to the mapped popup. Menu assertions require `"mapped": true`, and the frame
-capture composites the exposed popup window, so a constructed menu with a blank
-screenshot fails.
+(`{"type": "menuitem", "name": "Settings..."}`). The probe resolves the
+`QAction` geometry and clicks it through the same KWin fake-input path. Menu
+assertions require `"mapped": true`, and frame capture composites the exposed
+popup window, so a constructed menu with a blank screenshot fails.
 
 `shortcut` triggers a registered global action by name
 (`{"type": "shortcut", "name": "focus-dock"}`). Krema's keyboard navigation is

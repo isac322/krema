@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 #include "frameprobe.h"
+#include "qwayland-fake-input.h"
 
 #include <QAnimationDriver>
 #include <private/qabstractanimation_p.h>
@@ -37,6 +38,10 @@
 #include <QTextStream>
 #include <QVariantAnimation>
 
+#include <QtWaylandClient/QWaylandClientExtension>
+
+#include <linux/input-event-codes.h>
+#include <wayland-client-protocol.h>
 #include <LayerShellQt/Window>
 
 #include <functional>
@@ -85,9 +90,77 @@ private:
     qint64 m_virtual = 0;
 };
 
+class NativeFakeInput final
+    : public QWaylandClientExtensionTemplate<NativeFakeInput>
+    , public QtWayland::org_kde_kwin_fake_input
+{
+public:
+    NativeFakeInput()
+        : QWaylandClientExtensionTemplate<NativeFakeInput>(6)
+    {
+    }
+
+    bool moveTo(const QPointF &globalPosition)
+    {
+        if (!ensureAuthenticated()) {
+            return false;
+        }
+        pointer_motion_absolute(
+            wl_fixed_from_double(globalPosition.x()),
+            wl_fixed_from_double(globalPosition.y()));
+        return true;
+    }
+
+    bool clickAt(const QPointF &globalPosition, Qt::MouseButton button)
+    {
+        if (!moveTo(globalPosition)) {
+            return false;
+        }
+        sendButton(button, true);
+        sendButton(button, false);
+        return true;
+    }
+
+    bool sendButton(Qt::MouseButton button, bool pressed)
+    {
+        if (!ensureAuthenticated()) {
+            return false;
+        }
+        uint32_t nativeButton = BTN_LEFT;
+        if (button == Qt::RightButton) {
+            nativeButton = BTN_RIGHT;
+        } else if (button == Qt::MiddleButton) {
+            nativeButton = BTN_MIDDLE;
+        }
+        QtWayland::org_kde_kwin_fake_input::button(
+            nativeButton,
+            pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
+        return true;
+    }
+
+private:
+    bool ensureAuthenticated()
+    {
+        if (!isActive()) {
+            return false;
+        }
+        if (!m_authenticated) {
+            QtWayland::org_kde_kwin_fake_input::authenticate(
+                QStringLiteral("Krema frame probe"),
+                QStringLiteral("Deterministic native input for CI"));
+            m_authenticated = true;
+        }
+        return true;
+    }
+
+    bool m_authenticated = false;
+};
+
+
 struct Action {
     int frame = 0;
     QString type;
+    bool native = false; // deliver through KWin so Wayland supplies a real input serial
     QPoint pos;
     QString button;
     QString key;
@@ -214,6 +287,8 @@ QMenu *visibleMenu()
     return nullptr;
 }
 
+QPoint requestedTopLeft(QWindow *window, const QSize &output);
+
 /**
  * The dock context menu is a native QMenu, i.e. a QWidget popup, so it never
  * appears in a QQuickItem walk. Record both its actions and its mapped window
@@ -233,8 +308,12 @@ QJsonValue activeMenu()
     out[QStringLiteral("mapped")] =
         handle != nullptr && handle->isVisible() && handle->isExposed();
     const QRect geometry = handle ? handle->geometry() : popup->geometry();
-    out[QStringLiteral("x")] = geometry.x();
-    out[QStringLiteral("y")] = geometry.y();
+    const QSize output = handle && handle->screen()
+        ? handle->screen()->geometry().size()
+        : geometry.size();
+    const QPoint topLeft = handle ? requestedTopLeft(handle, output) : geometry.topLeft();
+    out[QStringLiteral("x")] = topLeft.x();
+    out[QStringLiteral("y")] = topLeft.y();
     out[QStringLiteral("w")] = geometry.width();
     out[QStringLiteral("h")] = geometry.height();
 
@@ -272,6 +351,9 @@ QPoint requestedTopLeft(QWindow *window, const QSize &output)
 {
     auto *layer = LayerShellQt::Window::get(window);
     if (!layer) {
+        if (QWindow *parent = window->transientParent()) {
+            return requestedTopLeft(parent, output) + window->geometry().topLeft();
+        }
         return window->geometry().topLeft();
     }
     const auto anchors = layer->anchors();
@@ -361,6 +443,7 @@ QList<Action> loadScript(const QString &path)
         Action action;
         action.frame = object.value(QStringLiteral("frame")).toInt();
         action.type = object.value(QStringLiteral("type")).toString();
+        action.native = object.value(QStringLiteral("native")).toBool();
         action.pos = QPoint(object.value(QStringLiteral("x")).toInt(), object.value(QStringLiteral("y")).toInt());
         action.button = object.value(QStringLiteral("button")).toString(QStringLiteral("left"));
         action.key = object.value(QStringLiteral("key")).toString();
@@ -422,20 +505,55 @@ bool resolvePos(QQuickWindow *window, const Action &action, QPoint &out)
     return true;
 }
 
-void applyAction(QQuickWindow *window, const Action &action)
+void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fakeInput)
 {
     QPoint pos;
     if (!resolvePos(window, action, pos)) {
         return;
     }
     if (action.type == QLatin1String("move")) {
-        QTest::mouseMove(window, pos);
+        if (action.native) {
+            const QSize output = window->screen()
+                ? window->screen()->geometry().size()
+                : window->size();
+            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
+                qCWarning(lcProbe) << "native fake input is unavailable";
+            }
+        } else {
+            QTest::mouseMove(window, pos);
+        }
     } else if (action.type == QLatin1String("click")) {
-        QTest::mouseClick(window, buttonFromName(action.button), Qt::NoModifier, pos);
+        const Qt::MouseButton button = buttonFromName(action.button);
+        if (action.native) {
+            const QSize output = window->screen()
+                ? window->screen()->geometry().size()
+                : window->size();
+            if (!fakeInput->clickAt(requestedTopLeft(window, output) + pos, button)) {
+                qCWarning(lcProbe) << "native fake input is unavailable";
+            }
+        } else {
+            QTest::mouseClick(window, button, Qt::NoModifier, pos);
+        }
     } else if (action.type == QLatin1String("press")) {
-        QTest::mousePress(window, buttonFromName(action.button), Qt::NoModifier, pos);
+        if (action.native) {
+            const QSize output = window->screen()
+                ? window->screen()->geometry().size()
+                : window->size();
+            fakeInput->moveTo(requestedTopLeft(window, output) + pos);
+            fakeInput->sendButton(buttonFromName(action.button), true);
+        } else {
+            QTest::mousePress(window, buttonFromName(action.button), Qt::NoModifier, pos);
+        }
     } else if (action.type == QLatin1String("release")) {
-        QTest::mouseRelease(window, buttonFromName(action.button), Qt::NoModifier, pos);
+        if (action.native) {
+            const QSize output = window->screen()
+                ? window->screen()->geometry().size()
+                : window->size();
+            fakeInput->moveTo(requestedTopLeft(window, output) + pos);
+            fakeInput->sendButton(buttonFromName(action.button), false);
+        } else {
+            QTest::mouseRelease(window, buttonFromName(action.button), Qt::NoModifier, pos);
+        }
     } else if (action.type == QLatin1String("key")) {
         const QKeySequence sequence(action.key);
         if (sequence.count() > 0) {
@@ -458,9 +576,9 @@ void applyAction(QQuickWindow *window, const Action &action)
         QEvent leave(QEvent::Leave);
         QCoreApplication::sendEvent(window, &leave);
     } else if (action.type == QLatin1String("menuitem")) {
-        // Click the visible QAction geometry through QMenu's normal QWidget
-        // event path. The earlier menu assertion separately proves the Wayland
-        // popup mapped; a direct QAction::trigger() would skip menu input.
+        // Click the QAction through KWin's fake-input protocol. The compositor
+        // delivers a real wl_pointer event to the mapped popup, exercising the
+        // same QWidget and Wayland path as a physical click.
         QMenu *popup = visibleMenu();
         if (!popup) {
             qCWarning(lcProbe) << "scenario frame" << action.frame << "has no context menu";
@@ -483,7 +601,16 @@ void applyAction(QQuickWindow *window, const Action &action)
             return;
         }
         const QRect actionRect = popup->actionGeometry(match);
-        QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, actionRect.center());
+        QWindow *handle = popup->windowHandle();
+        const QSize output = handle && handle->screen()
+            ? handle->screen()->geometry().size()
+            : popup->size();
+        const QPoint topLeft = handle
+            ? requestedTopLeft(handle, output)
+            : requestedTopLeft(window, output) + popup->pos();
+        if (!fakeInput->clickAt(topLeft + actionRect.center(), Qt::LeftButton)) {
+            qCWarning(lcProbe) << "native fake input is unavailable";
+        }
     } else if (action.type == QLatin1String("shortcut")) {
         // Krema's keyboard navigation is only reachable through the global
         // shortcut (focus-dock), and KGlobalAccel key delivery does not work in
@@ -577,6 +704,8 @@ void FrameProbe::installIfEnabled()
     const QList<Action> script = loadScript(scriptPath);
 
     auto *owner = new QObject(app);
+    auto *fakeInput = new NativeFakeInput;
+    fakeInput->setParent(app);
     auto frame = std::make_shared<int>(0);
     auto settled = std::make_shared<int>(0);
     // Resolved once, after settle: krema opens a second layer-shell surface for
@@ -737,7 +866,7 @@ void FrameProbe::installIfEnabled()
                     continue;
                 }
             }
-            applyAction(destination, action);
+            applyAction(destination, action, fakeInput);
 
         }
 

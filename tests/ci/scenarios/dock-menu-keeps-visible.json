@@ -17,7 +17,8 @@
       "frame": 35,
       "type": "click",
       "item": "dockItem0",
-      "button": "right"
+      "button": "right",
+      "native": true
     },
     {
       "frame": 40,

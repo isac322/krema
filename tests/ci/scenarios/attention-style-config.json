@@ -1,6 +1,6 @@
 {
   "description": "Attention animation style cannot be verified visually until the CI session can put a dock item into a demanding-attention state.",
-  "blocked": [
+  "not_verified": [
     {
       "qa": "QA-NOTI-012",
       "reason": "Needs a fixture window that sets demands-attention; without an item demanding attention, changing attentionAnimation selects an inactive style but paints nothing."

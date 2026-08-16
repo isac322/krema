@@ -12,9 +12,9 @@ DOCKER_HOST=tcp://localhost:2375 docker run --rm \
     krema-ui-ci bash /src/tests/ci/run-frame-tests.sh
 ```
 
-Roughly 25 s per run after the image is cached (build + two capture passes +
-assertions). No `--privileged`, no `--cap-add`, no `/dev/dri`, nothing on the
-host but a container runtime.
+Runtime, artifact size, and architecture support must be measured again after
+the strict comparator, native-menu mapping checks, and release-build guard run
+in CI. The runner still needs no `--privileged`, `--cap-add`, or `/dev/dri`.
 
 ## How it differs from `tests/docker/`
 
@@ -32,11 +32,13 @@ animation regressions belong here.
 
 ```
 container (unprivileged)
+├── release build (-DKREMA_TEST_HOOKS=OFF)
+│   └── dependency/symbol check: no Qt6Test or FrameProbe
 ├── dbus-run-session                     isolated session bus
 │   └── kwin_wayland --virtual           KDE compositor, headless, llvmpipe
 │       └── krema (built with -DKREMA_TEST_HOOKS=ON)
 │           └── tests/ci/frameprobe      fixed-step clock + capture + input
-└── tests/ci/assert_frames.py            assertions over the captured stream
+└── tests/ci/assert_frames.py            assertions + strict pass comparison
 ```
 
 ### The determinism trick
@@ -90,6 +92,23 @@ to catch, silently passing.
 }
 ```
 
+A scenario that cannot verify its QA item declares that gap instead of
+pretending to pass with zero assertions:
+
+```json
+{
+  "description": "Why this scenario exists",
+  "actions": [],
+  "not_verified": [
+    {"qa": "QA-NOTI-012", "reason": "Needs a demanding-attention fixture"}
+  ],
+  "assertions": []
+}
+```
+
+An empty assertion list without at least one `not_verified` row is a test
+failure. The old `blocked` and `not_verifiable` keys are rejected.
+
 `config` becomes `~/.config/kremarc` before krema starts — that is how a user's
 saved settings reach the dock. Keys are `Group/Entry`; the group defaults to
 `General`. Names and defaults come from `src/config/krema.kcfg`.
@@ -120,8 +139,10 @@ to address a surface other than the dock.
 
 `menuitem` activates an entry of the open context menu by its label
 (`{"type": "menuitem", "name": "Settings..."}`). The menu is a native QMenu, so
-a synthetic click on the Quick window cannot reach it; triggering the QAction is
-what the user's click ends up doing. Open the menu with a right `click` first.
+the probe resolves the QAction geometry and sends a normal QWidget mouse click
+to the mapped popup. Menu assertions require `"mapped": true`, and the frame
+capture composites the exposed popup window, so a constructed menu with a blank
+screenshot fails.
 
 `shortcut` triggers a registered global action by name
 (`{"type": "shortcut", "name": "focus-dock"}`). Krema's keyboard navigation is
@@ -177,20 +198,23 @@ docker run --rm -e KREMA_VIDEO=1 \
     krema-ui-ci bash /src/tests/ci/run-frame-tests.sh hover-zoom
 ```
 
-Both are off by default: PNG encoding dominates runtime, and the raw frames are
-about 170x the size of the video. After encoding, `prune_frames.py` keeps only
-the keyframes `review.md` links and gzips the first pass's capture stream,
-which takes a full run from ~600 MB to ~17 MB.
+Both are off by default because PNG encoding dominates runtime. After encoding,
+`prune_frames.py` keeps only the keyframes `review.md` links and gzips the first
+pass's capture stream. The first CI run of the strict harness must establish the
+new runtime and artifact-size baseline.
 
-Numeric assertions still decide pass/fail. The video is for the part that is
-genuinely visual — whether the glow reads as a glow.
+Numeric assertions and strict capture reproducibility decide pass/fail. Every
+pass must have the same frame numbers and complete captured window, item, menu,
+geometry, and property payload. The video remains for the part that is genuinely
+visual — whether the glow reads as a glow.
 
 ## Reading results in CI
 
 Three places, in the order a reviewer needs them.
 
-**Job summary** — `summarize.py` writes which QA items failed, at which frame,
-expected versus measured, plus per-scenario reproducibility. No download.
+**Job summary** — `summarize.py` writes assertion-group and unique-QA counts,
+which QA items failed or were not verified, expected versus measured values,
+and strict per-scenario reproducibility. No download.
 
 **Pull request comment** — an animated GIF of every scenario, embedded inline,
 failures first and the rest folded per feature area. This is the only way to see
@@ -202,8 +226,8 @@ The GIFs keep every captured frame — none are dropped. Decimating to a lower
 frame rate would hide what the suite exists to catch: a 150 ms animation is nine
 frames, and throwing five away leaves a blur indistinguishable from a snap. They
 are fitted inside a 620x380 box rather than scaled to a fixed width, because a
-vertical dock is a 108 px wide window and upscaling it turned a 32 KiB animation
-into 1.6 MB of interpolated noise. All 42 come to about 2.8 MB.
+vertical dock is a 108 px wide window, so upscaling adds interpolated noise and
+unnecessary artifact weight.
 
 They live on a `ci-media` branch under `pr-<n>/<run id>/`. Each run clones the
 existing tree, drops only its own older runs, and force-pushes the result as a
@@ -211,27 +235,34 @@ parentless commit, so other pull requests keep working previews and the branch
 never accumulates history. The run id is in the path because GitHub proxies
 markdown images through camo and caches by URL — a fixed path would serve the
 previous run's animation beside current numbers. A separate workflow drops the
-directory when the pull request closes. Fork pull requests get a read-only token
-and the step no-ops.
+directory when the pull request closes.
 
-The comment is found by a hidden `<!-- krema-frame-tests -->` marker and
-patched in place; `gh pr comment --edit-last` posted a second one instead,
-leaving a stale summary with dead images above the current result. If the body
-would exceed GitHub's size limit it degrades to failures only.
+The test job has only `contents: read`, checks out with
+`persist-credentials: false`, and uploads an artifact. A second job downloads
+that artifact without checking out or executing pull-request source; only that
+publication job has `contents: write` and `pull-requests: write`. Fork pull
+requests skip publication.
+
+The comment is found by a hidden `<!-- krema-frame-tests -->` marker and patched
+in place; `gh pr comment --edit-last` posted a second one instead, leaving a
+stale summary with dead images above the current result. If the body would
+exceed GitHub's size limit it degrades to failures and not-verified scenarios.
 
 **`frame-captures` artifact** — MP4 for every scenario, `result.json`, the
-gzipped capture streams, and the keyframes `review.md` links. ~8 MB.
+gzipped capture streams, and the keyframes `review.md` links.
 
 ## What to test
 
 `tests/ci/qa-checklist.md` lists 140 user-facing QA items with an automation
-tag each. Scenarios here implement the `AUTO` and `AUTO-REQ` ones.
+tag each. `qa_coverage.py` derives and validates the coverage table directly
+from those entries, so category totals cannot drift from the checklist.
 
-## Verified behaviour and limits
+## Previously observed behaviour and current limits
 
-Measured on this image (Fedora 43, KWin 6.7.3, Qt 6.10, aarch64, llvmpipe).
+Previously observed on Fedora 43, KWin 6.7.3, Qt 6.10, aarch64, and llvmpipe;
+the current strict harness still requires its first CI validation.
 
-**Works:**
+**Previously observed with the earlier harness:**
 
 - `kwin_wayland --virtual` starts unprivileged with no `/dev/dri`, advertising
   66 globals including `zwlr_layer_shell_v1`, `org_kde_plasma_window_management`,
@@ -265,43 +296,24 @@ Measured on this image (Fedora 43, KWin 6.7.3, Qt 6.10, aarch64, llvmpipe).
   so timers and the virtual clock advance together, or keep timer-gated items
   out of byte-exact assertions.
 - **Animation ticks advance by the driver step, not the real clock.** By default
-  `QUnifiedTimer` measures each tick against the wall clock and compensates when
-  it believes it fell behind, so an animation's first delta was a coin flip and
-  the rest of the animation could be handed a single catch-up delta. Measured on
-  `dock-visibility-autohide`: frames 1-7 identical across runs, then the reveal's
-  first tick landed at either 0.080 or 0.095 of its range, after which 3 of 5
-  runs covered 93% of the slide in one frame while the other 2 eased across ~30
-  frames. Pacing the loop (`KREMA_PROBE_PACE=1`) and draining posted events
-  before advancing were both measured and neither fixed it.
+  `QUnifiedTimer` measures each tick against the wall clock and may hand a new
+  animation a catch-up delta. The probe calls
+  `QUnifiedTimer::setConsistentTiming(true)`, which is why the test-only target
+  links `Qt6::CorePrivate`; a permanently running `QVariantAnimation` keeps the
+  unified timer active between user actions.
 
-  The probe calls `QUnifiedTimer::setConsistentTiming(true)`, which is why it
-  links `Qt6::CorePrivate`, and that is what makes a frame number mean the same
-  thing on every run. The same scenario now reports a largest early step of 28%
-  of range at frame 12 in 5 of 5 runs.
-
-  What remains is a one-frame shift in where the onset lands.
-  `keyboard-zoom-tooltip`, the shortest animation in the product at 150 ms,
-  reports 69% at frame 8 or 45% at frame 9 depending on the run. So:
-  - `animates` still skips the first two frames when judging snapped versus
-    eased (`skip_onset_frames`). A real one-frame snap still fails, through the
-    intermediate-value floor.
-  - Never assert an exact value on an animation's first two frames.
-  - Roughly half the scenarios are byte-identical across two passes; the rest
-    differ only at frames where an action or an animation starts. Frame count,
-    item set, every settled value and the shape of the animation body are
-    reproducible, which is what the assertions here rest on. Each scenario
-    reports `repro: byte-identical` or the largest gap and where it is.
+  The capture is now a strict gate rather than a diagnostic. Every pass must
+  contain the same number and sequence of frames and the same complete
+  canonical payload, excluding only the derived virtual-time field. Frame
+  shifting, omitted edge frames, changed item identity, popup mapping changes,
+  or any numeric/property difference fails the scenario.
 - **No `Animator` types.** `ScaleAnimator`, `OpacityAnimator` and friends run on
   the render thread outside `QUnifiedTimer` and would escape the fixed-step
   clock. `src/qml` currently uses none; keep it that way, or frame-stepped
   determinism breaks silently.
-- **Only exercised on aarch64 so far.** Every measurement above comes from an
-  `linux/arm64` container. `frame-tests.yml` runs on `ubuntu-latest`, i.e.
-  x86_64, where nothing here has executed yet: the unprivileged compositor
-  start, the `setcap -r` workaround, llvmpipe `MultiEffect` rasterisation, the
-  ~25 s runtime and the exact onset floats are all unvalidated on that arch.
-  Treat the first x86_64 CI run as the validation step, not as a regression
-  gate — the base image is multi-arch, so no image change should be needed.
+- **GitHub x86_64 validation is pending.** The previous GitHub run predates the
+  strict comparator, mapped-popup requirement, real menu-click path, and
+  release-build guard. It is not evidence that the current harness passes.
 - **Window rows need a window fixture — but they do work.** Measured: krema
   alone shows 4 `DockItem`s (the pinned launchers); mapping one plain
   `xdg_toplevel` Qt client in the same container makes it 5. The virtual backend

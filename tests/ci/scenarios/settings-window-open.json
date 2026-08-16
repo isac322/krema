@@ -1,5 +1,5 @@
 {
-  "description": "Verify the settings entry in the dock icon right-click menu. The settings window itself is not opened because the frame probe cannot click the native QMenu.",
+  "description": "The visibly mapped dock context menu opens the real settings window through its Settings action.",
   "actions": [
     {
       "frame": 5,
@@ -11,13 +11,18 @@
       "type": "click",
       "item": "dockItem0",
       "button": "right"
+    },
+    {
+      "frame": 20,
+      "type": "menuitem",
+      "name": "Settings..."
     }
   ],
   "assertions": [
     {
       "qa": "QA-SET-001",
       "kind": "menu",
-      "comment": "The right-click menu shows entries for the settings window and information page in the actual order.",
+      "comment": "The mapped right-click menu shows enabled entries for the settings window and information page in the actual order.",
       "frame": 15,
       "entries": [
         "KWrite",
@@ -35,7 +40,15 @@
         "Settings...": true,
         "About Krema": true
       },
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
+    },
+    {
+      "qa": "QA-SET-001",
+      "kind": "window",
+      "comment": "Clicking Settings through the mapped QMenu opens the real configuration window.",
+      "frame": 40,
+      "key": "kremaSettingsWindow",
+      "visible": true
     }
   ]
 }

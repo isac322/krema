@@ -44,6 +44,7 @@ if [[ "$KREMA_VIDEO" == "1" ]]; then
     KREMA_SCREENSHOTS=1
 fi
 build=/tmp/krema-build
+release_build=/tmp/krema-release-build
 
 export XDG_RUNTIME_DIR=/tmp/krema-runtime
 export KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
@@ -80,7 +81,42 @@ mkdir -p "$src_copy"
 tar -c -C "$KREMA_SRC" --exclude=.git --exclude=build . | tar -x -C "$src_copy"
 KREMA_SRC_BUILD="$src_copy"
 
-echo "== configure =="
+echo "== verify release build (KREMA_TEST_HOOKS=OFF) =="
+rm -rf "$release_build"
+cmake -S "$KREMA_SRC_BUILD" -B "$release_build" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF \
+    -DKREMA_TEST_HOOKS=OFF \
+    -DCMAKE_INSTALL_PREFIX=/usr >"$KREMA_OUT/release-configure.log" 2>&1 || {
+    echo "release configure failed" >&2
+    grep -nE "CMake Error|Could NOT find|CMAKE_[A-Z_]*NOTFOUND" \
+        "$KREMA_OUT/release-configure.log" >&2 || true
+    tail -n 120 "$KREMA_OUT/release-configure.log" >&2
+    exit 1
+}
+cmake --build "$release_build" --target krema -j"$(nproc)" \
+    >"$KREMA_OUT/release-build.log" 2>&1 || {
+    echo "release build failed" >&2
+    grep -nE "error:|Error [0-9]|FAILED:" "$KREMA_OUT/release-build.log" \
+        | head -n 40 >&2
+    tail -n 40 "$KREMA_OUT/release-build.log" >&2
+    exit 1
+}
+release_binary="$release_build/src/krema"
+readelf -d "$release_binary" >"$KREMA_OUT/release-dynamic.txt"
+if grep -q 'Qt6Test' "$KREMA_OUT/release-dynamic.txt"; then
+    echo "release binary unexpectedly links Qt6Test" >&2
+    exit 1
+fi
+nm -C "$release_binary" >"$KREMA_OUT/release-symbols.txt"
+if grep -qE 'krema::testing::FrameProbe|krema_frameprobe' \
+        "$KREMA_OUT/release-symbols.txt"; then
+    echo "release binary unexpectedly contains frame-probe symbols" >&2
+    exit 1
+fi
+echo "   release binary has no Qt6Test dependency or frame-probe symbols"
+
+echo "== configure frame-test build (KREMA_TEST_HOOKS=ON) =="
 cmake -S "$KREMA_SRC_BUILD" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \

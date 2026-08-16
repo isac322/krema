@@ -1,6 +1,6 @@
 {
-  "_comment": "Budget for the evidence gate. backed_min stops the gate silently checking fewer assertions; the exempt caps stop the escape hatches growing without a reviewer seeing it in the diff. Raising any cap must come with the reason in the scenario file that needed it.",
-  "backed_min": 172,
-  "invariant_max": 31,
-  "pixel_exempt_max": 13
+  "_comment": "Provisional gate for the first strict CI run: 187 backed assertions, at most 32 invariants, and no pixel exemptions. CI must confirm these counts; adjust only from the produced evidence.json with a reviewed reason.",
+  "backed_min": 187,
+  "invariant_max": 32,
+  "pixel_exempt_max": 0
 }

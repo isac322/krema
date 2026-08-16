@@ -16,16 +16,24 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   frame-tests:
     name: Deterministic UI frame capture
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare artifact directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/frames"
+          touch "$RUNNER_TEMP/frames/.keep"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -47,7 +55,6 @@ jobs:
 
       - name: Run frame scenarios
         run: |
-          mkdir -p "$RUNNER_TEMP/frames"
           docker run --rm \
             -e KREMA_VIDEO=1 \
             -e KREMA_PREVIEW_BASE_URL="https://raw.githubusercontent.com/${{ github.repository }}/ci-media/pr-${{ github.event.pull_request.number || 0 }}/${{ github.run_id }}" \
@@ -56,6 +63,12 @@ jobs:
             krema-ui-ci:local \
             bash /src/tests/ci/run-frame-tests.sh
 
+      - name: Validate CI tools and QA coverage
+        if: always()
+        run: |
+          python3 -m unittest tests/ci/test_ci_tools.py
+          python3 tests/ci/qa_coverage.py --check
+
       # Artifacts download as a zip and cannot be played in the browser, so the
       # numbers a reviewer needs go on the job page itself. The videos are for
       # when the numbers are not enough.
@@ -63,16 +76,40 @@ jobs:
         if: always()
         run: python3 tests/ci/summarize.py --src . --run-dir "$RUNNER_TEMP/frames" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload frame artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frame-captures
+          path: ${{ runner.temp }}/frames
+          include-hidden-files: true
+          retention-days: 14
+
+  publish-previews:
+    name: Publish inline previews
+    needs: frame-tests
+    if: >-
+      ${{ always()
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # This job never checks out or executes pull-request source. Its write
+      # token is exposed only to the fixed publication steps below.
+      - name: Download frame artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frame-captures
+          path: ${{ runner.temp }}/frames
+
       # GitHub will not play a video inline: raw .mp4 and release assets both
-      # come back as application/octet-stream with content-disposition:
-      # attachment. Raw image URLs do return a real image/* type, so animated
-      # GIFs on a side branch are the only thing that shows without a download.
-      # The branch is orphan and force-pushed, and only failing scenarios plus
-      # two canonical ones are animated, because force-pushing does not reclaim
-      # the old blobs.
+      # download as application/octet-stream. Raw GIF URLs render inline, so the
+      # generated animations live on a parentless ci-media branch.
       - name: Publish preview animations
         id: previews
-        if: always() && github.event_name == 'pull_request'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,16 +122,7 @@ jobs:
             echo "no animations to publish"
             exit 0
           fi
-          # A pull request from a fork gets a read-only token; skip rather than fail.
-          if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
-            echo "fork pull request: cannot push previews"
-            exit 0
-          fi
-          # Two workflows write this branch (publish and cleanup) and two pull
-          # requests can publish at once. Each writer does clone-modify-push, so
-          # a plain force push would silently drop whatever landed in between.
-          # --force-with-lease against the ref we cloned turns that into a
-          # rejection, and we retry the whole read-modify-write.
+
           publish_previews() {
             local work="$RUNNER_TEMP/ci-media"
             rm -rf "$work"
@@ -109,9 +137,6 @@ jobs:
             rm -rf "${work:?}/.git"
             git init -q "$work"
             rm -rf "${work:?}/pr-$PR"
-            # A unique directory per run: GitHub proxies markdown images through
-            # camo and caches by URL, so a fixed path would keep serving the
-            # previous run's animation beside current numbers.
             mkdir -p "$work/pr-$PR/$GITHUB_RUN_ID"
             cp "${previews[@]}" "$work/pr-$PR/$GITHUB_RUN_ID/"
             git -C "$work" config user.name "github-actions[bot]"
@@ -126,6 +151,7 @@ jobs:
               "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
               HEAD:ci-media
           }
+
           for attempt in 1 2 3 4 5; do
             if publish_previews; then
               echo "published=true" >> "$GITHUB_OUTPUT"
@@ -136,11 +162,10 @@ jobs:
           done
           echo "could not publish previews"
 
-      # `gh pr comment --edit-last` created a second comment instead of editing,
-      # leaving a stale red summary with 404 images above the current one. Find
-      # our own comment by a hidden marker and PATCH it.
+      # Find the bot's marker comment and PATCH it. `gh pr comment --edit-last`
+      # can create a second stale comment instead of editing the existing one.
       - name: Comment on the pull request
-        if: always() && github.event_name == 'pull_request' && steps.previews.outputs.published == 'true'
+        if: steps.previews.outputs.published == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -158,11 +183,3 @@ jobs:
               -F body=@"$body" >/dev/null
             echo "created comment"
           fi
-
-      - name: Upload frame artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frame-captures
-          path: ${{ runner.temp }}/frames
-          retention-days: 14

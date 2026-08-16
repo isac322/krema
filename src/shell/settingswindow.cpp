@@ -114,6 +114,7 @@ void SettingsWindow::trackConfigWindow(QObject *configView)
     }
 
     m_configWindow = win;
+    win->setObjectName(QStringLiteral("kremaSettingsWindow"));
     win->setIcon(QGuiApplication::windowIcon());
 
     connect(win, &QWindow::visibleChanged, this, [this](bool visible) {

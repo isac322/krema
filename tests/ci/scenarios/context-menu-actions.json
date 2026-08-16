@@ -1,25 +1,36 @@
 {
-  "description": "Pin/Unpin menu actions for a running unpinned window actually change its pinned state, and Settings, About, and Quit are provided enabled.",
+  "description": "A mapped context menu changes a running window item between pinned and unpinned states through real QMenu clicks, and exposes the expected window and application actions.",
   "fixture_windows": 1,
   "actions": [
     {
       "frame": 5,
       "type": "move",
-      "item": "dockItem0"
+      "item": "dockItem4"
     },
     {
       "frame": 10,
       "type": "click",
-      "item": "dockItem0",
+      "item": "dockItem4",
+      "button": "right"
+    },
+    {
+      "frame": 20,
+      "type": "menuitem",
+      "name": "Pin to Dock"
+    },
+    {
+      "frame": 30,
+      "type": "click",
+      "item": "dockItem4",
       "button": "right"
     },
     {
       "frame": 40,
-      "type": "move",
-      "item": "dockItem4"
+      "type": "menuitem",
+      "name": "Unpin from Dock"
     },
     {
-      "frame": 45,
+      "frame": 50,
       "type": "click",
       "item": "dockItem4",
       "button": "right"
@@ -29,43 +40,30 @@
     {
       "qa": "QA-CMD-005",
       "kind": "menu",
-      "comment": "Right-clicking a pinned launcher offers unpinning",
+      "comment": "The initially unpinned running window offers Pin to Dock in a visibly mapped menu.",
       "frame": 15,
       "contains": [
-        "Unpin from Dock"
-      ],
-      "excludes": [
-        "Pin to Dock"
-      ],
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
-    },
-    {
-      "qa": "QA-CMD-005",
-      "kind": "menu",
-      "comment": "Right-clicking an unpinned window item offers pinning",
-      "frame": 50,
-      "contains": [
         "Pin to Dock"
       ],
       "excludes": [
         "Unpin from Dock"
       ],
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
     },
     {
-      "qa": "QA-CMD-005",
+      "qa": "QA-CMD-002",
       "kind": "menu",
-      "comment": "Close appears only for an item with a window",
-      "frame": 50,
+      "comment": "A running window item exposes Close in the visibly mapped menu.",
+      "frame": 15,
       "contains": [
         "Close"
       ],
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
     },
     {
       "qa": "QA-CMD-009",
       "kind": "menu",
-      "comment": "Settings and About are provided and enabled from every icon",
+      "comment": "Settings and About are provided and enabled from the mapped menu.",
       "frame": 15,
       "contains": [
         "Settings...",
@@ -75,12 +73,12 @@
         "Settings...": true,
         "About Krema": true
       },
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
     },
     {
       "qa": "QA-CMD-010",
       "kind": "menu",
-      "comment": "Quit is provided and enabled. Clicking it kills the app and stops capture, so only presence and enabled state are checked",
+      "comment": "Quit is provided and enabled. Clicking it would terminate capture, so its mapped presence and enabled state are checked.",
       "frame": 15,
       "contains": [
         "Quit"
@@ -88,7 +86,33 @@
       "enabled": {
         "Quit": true
       },
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "After clicking Pin to Dock through QMenu, reopening the menu offers Unpin from Dock.",
+      "frame": 35,
+      "contains": [
+        "Unpin from Dock"
+      ],
+      "excludes": [
+        "Pin to Dock"
+      ],
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "After clicking Unpin from Dock through QMenu, reopening the running item menu offers Pin to Dock again.",
+      "frame": 55,
+      "contains": [
+        "Pin to Dock"
+      ],
+      "excludes": [
+        "Unpin from Dock"
+      ],
+      "mapped": true
     }
   ]
 }

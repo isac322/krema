@@ -33,7 +33,7 @@ void DockContextMenu::setParentWindow(QWindow *window)
     m_parentWindow = window;
 }
 
-void DockContextMenu::showForTask(int index)
+void DockContextMenu::showForTask(int index, const QPointF &globalPosition)
 {
     auto *tasksModel = m_model->tasksModel();
     const QModelIndex idx = tasksModel->index(index, 0);
@@ -112,15 +112,18 @@ void DockContextMenu::showForTask(int index)
     });
 
     if (m_parentWindow) {
-        // The popup surface needs a parent before it is mapped, so realise the
-        // window handle first and attach it.
+        // LayerShellQt attaches an xdg-popup to the layer surface when the
+        // native popup handle already has the DockView as transient parent.
+        // The relationship must exist before QMenu asks Wayland to map it.
+        menu->setScreen(m_parentWindow->screen());
+        menu->setAttribute(Qt::WA_NativeWindow);
         menu->winId();
         if (QWindow *handle = menu->windowHandle()) {
             handle->setTransientParent(m_parentWindow);
         }
     }
 
-    menu->popup(QCursor::pos());
+    menu->popup(globalPosition.toPoint());
 }
 
 } // namespace krema

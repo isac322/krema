@@ -215,9 +215,16 @@ def check_count(rows, spec, fail):
 def check_menu(rows, spec, fail):
     frame = spec.get('frame', 1)
     menu = row_at(rows, frame).get('menu')
+    if spec.get('exists') is False:
+        if menu is not None:
+            fail(f"popup menu exists at frame {frame}, expected none")
+        return
     if menu is None:
         fail(f"no popup menu open at frame {frame}")
         return
+    for key in ('visible', 'mapped'):
+        if key in spec and menu.get(key) != spec[key]:
+            fail(f"menu {key} at frame {frame}: {menu.get(key)}, expected {spec[key]}")
     entries = menu['entries']
     labels = ['---' if e.get('separator') else e['text'] for e in entries]
     if 'entries' in spec and labels != spec['entries']:
@@ -268,68 +275,65 @@ CHECKS = {
 }
 
 
-# --- run-to-run divergence -------------------------------------------------
+# --- run-to-run reproducibility --------------------------------------------
 
-def signature(row: dict) -> tuple:
-    out = []
-    for window in row['windows']:
-        for item in window['items']:
-            out.append(tuple(item[k] for k in BASE_KEYS))
-            props = item.get('props', {})
-            out.append(tuple(sorted((k, v) for k, v in props.items())))
-    return tuple(out)
+def canonical_payload(row: dict) -> dict:
+    """Captured state whose equality is required across passes.
 
-
-def divergence(a: list[dict], b: list[dict]) -> tuple[int, list[str]]:
-    """Compare two passes, allowing a small whole-frame shift.
-
-    Animations start one frame apart between runs: whether the frame that
-    applies an action also sees its first animation step depends on sub-frame
-    timing. That is a phase difference, not a different result, so a run is
-    reproducible if the second pass matches the first after shifting by a few
-    frames. A mismatch that no shift can align is a real divergence.
+    `frame` is checked separately and `vt` is derived from it. Everything else
+    is observable capture output and must be byte-for-byte reproducible.
     """
-    sa = [signature(r) for r in a]
-    sb = [signature(r) for r in b]
-    best_shift, best_bad = 0, None
-    for shift in (0, 1, -1, 2, -2, 3, -3):
-        bad = 0
-        for i, x in enumerate(sa):
-            j = i + shift
-            if 0 <= j < len(sb) and sb[j] != x:
-                bad += 1
-            elif not 0 <= j < len(sb):
-                continue
-        if best_bad is None or bad < best_bad:
-            best_bad, best_shift = bad, shift
+    return {key: value for key, value in row.items() if key not in ('frame', 'vt')}
 
-    # Report magnitude, not just "differs": a 0.0005 wobble on currentScale and
-    # a 222 px panel offset are not the same finding.
-    notes = []
-    worst = (0.0, '')
-    if best_bad:
-        for i, row in enumerate(a):
-            j = i + best_shift
-            if not 0 <= j < len(b):
-                continue
-            for wa, wb in zip(row['windows'], b[j]['windows']):
-                for ia, ib in zip(wa['items'], wb['items']):
-                    for key in BASE_KEYS:
-                        if isinstance(ia[key], (int, float)) and ia[key] != ib[key]:
-                            delta = abs(ia[key] - ib[key])
-                            if delta > worst[0]:
-                                worst = (delta, f"{ia['path']}.{key} frame {row['frame']}: "
-                                                f"{ia[key]} vs {ib[key]}")
-                    pa, pb = ia.get('props', {}), ib.get('props', {})
-                    for key in set(pa) & set(pb):
-                        if isinstance(pa[key], (int, float)) and not isinstance(pa[key], bool) \
-                                and pa[key] != pb[key]:
-                            delta = abs(pa[key] - pb[key])
-                            if delta > worst[0]:
-                                worst = (delta, f"{ia['path']}.props.{key} frame {row['frame']}: "
-                                                f"{pa[key]} vs {pb[key]}")
-        notes.append(f'{best_bad}/{len(a)} frames differ; largest gap {worst[0]:.4g} at {worst[1]}')
-    return best_shift, notes
+
+def first_difference(left, right, path: str = 'capture') -> str | None:
+    """Describe the first structural difference between two JSON values."""
+    if type(left) is not type(right):
+        return f'{path}: type {type(left).__name__} != {type(right).__name__}'
+    if isinstance(left, dict):
+        left_keys, right_keys = set(left), set(right)
+        if left_keys != right_keys:
+            missing = sorted(left_keys - right_keys)
+            extra = sorted(right_keys - left_keys)
+            return f'{path}: missing keys {missing}, extra keys {extra}'
+        for key in sorted(left):
+            difference = first_difference(left[key], right[key], f'{path}.{key}')
+            if difference:
+                return difference
+        return None
+    if isinstance(left, list):
+        if len(left) != len(right):
+            return f'{path}: length {len(left)} != {len(right)}'
+        for index, (left_item, right_item) in enumerate(zip(left, right)):
+            difference = first_difference(left_item, right_item, f'{path}[{index}]')
+            if difference:
+                return difference
+        return None
+    if left != right:
+        return f'{path}: {left!r} != {right!r}'
+    return None
+
+
+def reproducibility_failures(reference: list[dict], candidate: list[dict],
+                             label: str = 'pass2') -> list[str]:
+    """Return strict capture differences; no frame shifting or omission."""
+    failures = []
+    if len(reference) != len(candidate):
+        failures.append(f'{label}: frame count {len(candidate)}, expected {len(reference)}')
+
+    for index, (left, right) in enumerate(zip(reference, candidate)):
+        left_frame = left.get('frame')
+        right_frame = right.get('frame')
+        if left_frame != right_frame:
+            failures.append(
+                f'{label}: row {index + 1} has frame {right_frame}, expected {left_frame}')
+        difference = first_difference(canonical_payload(left), canonical_payload(right))
+        if difference:
+            failures.append(f'{label} frame {left_frame}: {difference}')
+        if len(failures) >= 8:
+            failures.append(f'{label}: additional differences omitted')
+            break
+    return failures
 
 
 # --- screenshot review manifest --------------------------------------------
@@ -404,6 +408,27 @@ def main() -> int:
     if isinstance(scenario, list):
         scenario = {'actions': scenario, 'assertions': []}
 
+    assertions = scenario.get('assertions', [])
+    not_verified = scenario.get('not_verified', [])
+    scenario_failures: list[str] = []
+    for obsolete in ('blocked', 'not_verifiable'):
+        if obsolete in scenario:
+            scenario_failures.append(
+                f"obsolete scenario metadata {obsolete!r}; use 'not_verified'")
+    if not isinstance(assertions, list):
+        scenario_failures.append("'assertions' must be a list")
+        assertions = []
+    if not isinstance(not_verified, list):
+        scenario_failures.append("'not_verified' must be a list")
+        not_verified = []
+    for index, entry in enumerate(not_verified):
+        if not isinstance(entry, dict) or not entry.get('qa') or not entry.get('reason'):
+            scenario_failures.append(
+                f'not_verified[{index}] must contain non-empty qa and reason')
+    if not assertions and not not_verified:
+        scenario_failures.append(
+            "scenario has no assertions and declares no 'not_verified' QA rows")
+
     passes = sorted(args.run_dir.glob('pass*/frames.ndjson'))
     if not passes:
         print(f'  FAIL no capture under {args.run_dir}')
@@ -412,7 +437,7 @@ def main() -> int:
 
     results: dict[str, list[str]] = {}
     covered: list[str] = []
-    for spec in scenario.get('assertions', []):
+    for spec in assertions:
         qa = spec.get('qa', '(no QA id)')
         if qa not in covered:
             covered.append(qa)
@@ -425,37 +450,50 @@ def main() -> int:
         except (IndexError, KeyError, TypeError) as exc:
             results.setdefault(qa, []).append(f'{type(exc).__name__}: {exc}')
 
+    repro_failures: list[str] = []
+    repro_ok: bool | None = None
     repro = 'single pass'
     if len(passes) > 1:
-        shift, notes = divergence(rows, load(passes[1]))
-        repro = notes[0] if notes else ('byte-identical' if not shift
-                                        else f'identical after a {shift:+d} frame shift')
-        if notes:
-            print(f'  REPRO differs beyond a {shift:+d} frame shift:')
-            for note in notes:
-                print(f'    {note}')
-        elif shift:
-            print(f'  repro: identical after a {shift:+d} frame shift (animation onset phase)')
+        for pass_index, path in enumerate(passes[1:], start=2):
+            repro_failures.extend(
+                reproducibility_failures(rows, load(path), f'pass{pass_index}'))
+        repro_ok = not repro_failures
+        repro = 'byte-identical' if repro_ok else repro_failures[0]
+        if repro_ok:
+            print(f'  repro: byte-identical across {len(passes)} passes')
         else:
-            print('  repro: byte-identical')
+            print('  REPRO capture differs:')
+            for failure in repro_failures:
+                print(f'    {failure}')
 
     if args.review:
         write_review(scenario, rows, args.run_dir, results)
         print(f'  review manifest: {args.run_dir / "review.md"}')
 
     detail = {}
-    for spec in scenario.get('assertions', []):
+    for spec in assertions:
         qa = spec.get('qa', '(no QA id)')
         detail.setdefault(qa, spec.get('comment', ''))
     (args.run_dir / 'result.json').write_text(json.dumps({
         'scenario': args.run_dir.name,
         'description': scenario.get('description', ''),
         'frames': len(rows),
+        'assertions': len(assertions),
         'repro': repro,
+        'repro_ok': repro_ok,
+        'repro_failures': repro_failures,
+        'scenario_failures': scenario_failures,
+        'not_verified': [
+            {'id': entry['qa'], 'reason': entry['reason']}
+            for entry in not_verified
+            if isinstance(entry, dict) and entry.get('qa') and entry.get('reason')
+        ],
         'qa': [{'id': qa, 'expectation': detail.get(qa, ''),
                 'failures': results.get(qa, [])} for qa in covered],
     }, indent=2, ensure_ascii=False))
 
+    for failure in scenario_failures:
+        print(f'  FAIL scenario: {failure}')
     for qa in covered:
         if qa in results:
             print(f'  FAIL {qa}')
@@ -463,11 +501,17 @@ def main() -> int:
                 print(f'    {failure}')
         else:
             print(f'  pass {qa}')
+    for entry in not_verified:
+        if isinstance(entry, dict) and entry.get('qa') and entry.get('reason'):
+            print(f"  not verified {entry['qa']}: {entry['reason']}")
 
-    if results:
-        print(f'  {len(results)}/{len(covered)} QA item(s) failed over {len(rows)} frames')
+    failed = bool(results or repro_failures or scenario_failures)
+    if failed:
+        print(f'  scenario failed over {len(rows)} frames')
         return 1
-    print(f'  {len(covered)} QA item(s) passed over {len(rows)} frames')
+    print(f'  {len(covered)} QA result group(s) passed from '
+          f'{len(assertions)} assertion(s) over {len(rows)} frames; '
+          f'{len(not_verified)} not verified')
     return 0
 
 

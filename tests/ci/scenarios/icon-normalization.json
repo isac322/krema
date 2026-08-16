@@ -14,7 +14,7 @@
       "value": true
     }
   ],
-  "not_verifiable": [
+  "not_verified": [
     {
       "qa": "QA-ITEM-021",
       "reason": "The image is missing a launcher icon with measurable transparent internal padding. The installed Breeze icons render with the same painted bounds and item geometry in both normalization states, so the capture cannot prove that padding was detected, cropped, and rescaled."

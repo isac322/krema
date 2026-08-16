@@ -199,37 +199,45 @@ void collectItems(QQuickItem *item, const QString &path, QJsonArray &out)
     }
 }
 
+QMenu *visibleMenu()
+{
+    if (auto *popup = qobject_cast<QMenu *>(QApplication::activePopupWidget())) {
+        return popup;
+    }
+    const QWidgetList widgets = QApplication::topLevelWidgets();
+    for (QWidget *widget : widgets) {
+        if (auto *candidate = qobject_cast<QMenu *>(widget);
+            candidate && candidate->isVisible()) {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
 /**
  * The dock context menu is a native QMenu, i.e. a QWidget popup, so it never
- * appears in a QQuickItem walk. Without this a scenario cannot assert what the
- * right-click menu offers -- which is most of what a user does with it.
+ * appears in a QQuickItem walk. Record both its actions and its mapped window
+ * state; a constructed-but-unmapped menu is a user-visible failure.
  */
 QJsonValue activeMenu()
 {
-    auto *popup = qobject_cast<QMenu *>(QApplication::activePopupWidget());
-    if (!popup) {
-        // Krema builds the menu with `new QMenu()` and no parent
-        // (dockcontextmenu.cpp:43), so on Wayland it has no transientParent and
-        // the compositor refuses to map it unless the parent surface has
-        // received real input, which synthetic input does not provide
-        // ("Failed to create grabbing popup" in the log). The menu object still
-        // exists and its actions are live, so fall back to it: composition and
-        // action behaviour stay testable; only the mapping does not.
-        const QWidgetList widgets = QApplication::topLevelWidgets();
-        for (QWidget *widget : widgets) {
-            if (auto *candidate = qobject_cast<QMenu *>(widget)) {
-                popup = candidate;
-                break;
-            }
-        }
-    }
+    QMenu *popup = visibleMenu();
     if (!popup) {
         return QJsonValue();
     }
+
     QJsonObject out;
     out[QStringLiteral("title")] = popup->title();
     out[QStringLiteral("visible")] = popup->isVisible();
-    out[QStringLiteral("mapped")] = popup->windowHandle() != nullptr && popup->windowHandle()->isVisible();
+    QWindow *handle = popup->windowHandle();
+    out[QStringLiteral("mapped")] =
+        handle != nullptr && handle->isVisible() && handle->isExposed();
+    const QRect geometry = handle ? handle->geometry() : popup->geometry();
+    out[QStringLiteral("x")] = geometry.x();
+    out[QStringLiteral("y")] = geometry.y();
+    out[QStringLiteral("w")] = geometry.width();
+    out[QStringLiteral("h")] = geometry.height();
+
     QJsonArray entries;
     const QList<QAction *> actions = popup->actions();
     for (QAction *action : actions) {
@@ -432,6 +440,13 @@ void applyAction(QQuickWindow *window, const Action &action)
         const QKeySequence sequence(action.key);
         if (sequence.count() > 0) {
             const QKeyCombination combination = sequence[0];
+            if (combination.key() == Qt::Key_Escape) {
+                if (QMenu *popup = visibleMenu()) {
+                    QTest::keyClick(
+                        popup, combination.key(), combination.keyboardModifiers());
+                    return;
+                }
+            }
             QTest::keyClick(window, combination.key(), combination.keyboardModifiers());
         }
     } else if (action.type == QLatin1String("leave")) {
@@ -443,21 +458,10 @@ void applyAction(QQuickWindow *window, const Action &action)
         QEvent leave(QEvent::Leave);
         QCoreApplication::sendEvent(window, &leave);
     } else if (action.type == QLatin1String("menuitem")) {
-        // The context menu is a native QMenu, so a synthetic click on the Quick
-        // window cannot reach it. Triggering the QAction by its visible label
-        // is what the user's click ends up doing.
-        auto *popup = qobject_cast<QMenu *>(QApplication::activePopupWidget());
-        if (!popup) {
-            // Same reason as activeMenu(): the popup may exist without being
-            // mapped by the compositor.
-            const QWidgetList widgets = QApplication::topLevelWidgets();
-            for (QWidget *widget : widgets) {
-                if (auto *candidate = qobject_cast<QMenu *>(widget)) {
-                    popup = candidate;
-                    break;
-                }
-            }
-        }
+        // Click the visible QAction geometry through QMenu's normal QWidget
+        // event path. The earlier menu assertion separately proves the Wayland
+        // popup mapped; a direct QAction::trigger() would skip menu input.
+        QMenu *popup = visibleMenu();
         if (!popup) {
             qCWarning(lcProbe) << "scenario frame" << action.frame << "has no context menu";
             return;
@@ -478,8 +482,8 @@ void applyAction(QQuickWindow *window, const Action &action)
             qCWarning(lcProbe) << "scenario frame" << action.frame << "menu has no entry" << action.name << "; has" << labels;
             return;
         }
-        popup->close();
-        match->trigger();
+        const QRect actionRect = popup->actionGeometry(match);
+        QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, actionRect.center());
     } else if (action.type == QLatin1String("shortcut")) {
         // Krema's keyboard navigation is only reachable through the global
         // shortcut (focus-dock), and KGlobalAccel key delivery does not work in
@@ -580,7 +584,8 @@ void FrameProbe::installIfEnabled()
     // mid-scenario and send later actions to the wrong surface.
     auto target = std::make_shared<QPointer<QQuickWindow>>();
     auto tick = std::make_shared<std::function<void()>>();
-    auto lastMenu = std::make_shared<QJsonValue>();
+    // Menu state is sampled live on every frame; retaining the creation-time
+    // snapshot would let an unmapped or already-closed popup look successful.
     auto installed = std::make_shared<bool>(false);
     auto warmed = std::make_shared<bool>(false);
     auto pace = std::make_shared<QElapsedTimer>();
@@ -704,8 +709,9 @@ void FrameProbe::installIfEnabled()
         event[QStringLiteral("frame")] = *frame;
         event[QStringLiteral("vt")] = driver->virtualTime();
         event[QStringLiteral("windows")] = windowRows;
-        if (!lastMenu->isNull()) {
-            event[QStringLiteral("menu")] = *lastMenu;
+        const QJsonValue menu = activeMenu();
+        if (!menu.isNull()) {
+            event[QStringLiteral("menu")] = menu;
         }
         if (!image.isNull()) {
             image.save(QStringLiteral("%1/f%2.png").arg(frameDir).arg(*frame, 5, 10, QLatin1Char('0')));
@@ -733,17 +739,6 @@ void FrameProbe::installIfEnabled()
             }
             applyAction(destination, action);
 
-            // The menu must be sampled here, not at the next frame's write:
-            // krema's QMenu is WA_DeleteOnClose and the Wayland popup creation
-            // fails (no transientParent), so Qt closes and deletes it within
-            // this same event-loop turn. The snapshot then stays until the menu
-            // is dismissed or an entry is activated.
-            if (action.type == QLatin1String("click") && action.button == QLatin1String("right")) {
-                *lastMenu = activeMenu();
-            } else if (action.type == QLatin1String("menuitem")
-                       || (action.type == QLatin1String("key") && action.key == QLatin1String("Esc"))) {
-                *lastMenu = QJsonValue();
-            }
         }
 
         driver->advance();

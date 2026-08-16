@@ -59,8 +59,15 @@ def encode_gif(src: pathlib.Path, dst: pathlib.Path, width: int, height: int,
     return True
 
 
+def result_failed(result: dict) -> bool:
+    return (bool(result.get('scenario_failures'))
+            or result.get('repro_ok') is False
+            or any(item.get('failures') for item in result.get('qa', [])))
+
+
 def area_of(result: dict) -> str:
-    for item in result['qa']:
+    rows = [*result.get('qa', []), *result.get('not_verified', [])]
+    for item in rows:
         parts = item['id'].split('-')
         if len(parts) > 1 and parts[1] in AREA_NAMES:
             return parts[1]
@@ -69,20 +76,43 @@ def area_of(result: dict) -> str:
 
 def render(results: list[dict], gifs: dict[str, str], base_url: str,
            failures_only: bool) -> str:
-    total = sum(len(r['qa']) for r in results)
-    bad = sum(1 for r in results for i in r['qa'] if i['failures'])
+    qa_groups = [(result, item) for result in results for item in result.get('qa', [])]
+    bad_groups = sum(1 for _, item in qa_groups if item.get('failures'))
+    assertions = sum(result.get('assertions', len(result.get('qa', [])))
+                     for result in results)
+    unique_qa = {item['id'] for _, item in qa_groups}
+    not_verified_count = sum(len(result.get('not_verified', [])) for result in results)
+    failed = [result for result in results if result_failed(result)]
+    not_verified = [result for result in results
+                    if not result_failed(result) and result.get('not_verified')]
 
     lines = ['<!-- krema-frame-tests -->', '## UI frame tests', '',
-             f"{'❌' if bad else '✅'} **{total - bad}/{total}** QA items passed "
-             f'across {len(results)} scenarios.', '']
+             f"{'❌' if failed else '✅'} "
+             f"**{len(qa_groups) - bad_groups}/{len(qa_groups)}** QA result groups "
+             f'passed from {assertions} assertions ({len(unique_qa)} unique QA IDs) '
+             f'across {len(results)} scenarios; {not_verified_count} QA rows are not '
+             f'verified.', '']
 
     def block(result: dict) -> list[str]:
-        failing = [(i['id'], f) for i in result['qa'] for f in i['failures']]
-        out = [f"**{'❌' if failing else '✅'} {result['scenario']}** — "
-               f"{result['description']}", '']
+        failing = [(item['id'], failure) for item in result.get('qa', [])
+                   for failure in item.get('failures', [])]
+        harness = [*result.get('scenario_failures', []),
+                   *result.get('repro_failures', [])]
+        neutral = result.get('not_verified', [])
+        if failing or harness:
+            icon = '❌'
+        elif neutral and not result.get('qa'):
+            icon = '⚪'
+        else:
+            icon = '✅'
+        out = [f"**{icon} {result['scenario']}** — {result['description']}", '']
         for qa, failure in failing:
             out.append(f'- `{qa}` — {failure}')
-        if failing:
+        for failure in harness:
+            out.append(f'- Harness — {failure}')
+        for item in neutral:
+            out.append(f"- `{item['id']}` not verified — {item['reason']}")
+        if failing or harness or neutral:
             out.append('')
         name = gifs.get(result['scenario'])
         out.append(f"![{result['scenario']}]({base_url}/{name})" if name and base_url
@@ -90,17 +120,20 @@ def render(results: list[dict], gifs: dict[str, str], base_url: str,
         out.append('')
         return out
 
-    failed = [r for r in results if any(i['failures'] for i in r['qa'])]
     if failed:
-        lines.append('### Failing')
-        lines.append('')
+        lines += ['### Failing', '']
         for result in failed:
+            lines += block(result)
+
+    if not_verified:
+        lines += ['### Not verified', '']
+        for result in not_verified:
             lines += block(result)
 
     if not failures_only:
         by_area: dict[str, list[dict]] = {}
         for result in results:
-            if result in failed:
+            if result in failed or result in not_verified:
                 continue
             by_area.setdefault(area_of(result), []).append(result)
         for area, group in sorted(by_area.items()):

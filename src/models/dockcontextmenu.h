@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QObject>
+#include <QPointF>
 
 class QWindow;
 
@@ -38,8 +39,8 @@ public:
      */
     void setParentWindow(QWindow *window);
 
-    /// Show the native context menu for the task at @p index.
-    Q_INVOKABLE void showForTask(int index);
+    /// Show the native context menu for the task at @p index near @p globalPosition.
+    Q_INVOKABLE void showForTask(int index, const QPointF &globalPosition);
 
 Q_SIGNALS:
     void settingsRequested();

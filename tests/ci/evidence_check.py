@@ -61,6 +61,13 @@ def window_box(row: dict, key: str) -> tuple[int, int, int, int] | None:
             return (ox, oy, ox + window['w'], oy + window['h'])
     return None
 
+def menu_box(row: dict) -> tuple[int, int, int, int] | None:
+    menu = row.get('menu')
+    if not menu or not menu.get('mapped'):
+        return None
+    x, y = int(menu['x']), int(menu['y'])
+    return (x, y, x + int(menu['w']), y + int(menu['h']))
+
 
 def union(a, b):
     """Cover the item in both frames.
@@ -182,6 +189,9 @@ def check_scenario(path: pathlib.Path, run: pathlib.Path) -> dict:
             idents = [spec['key']]
             boxes = [union(window_box(row_before, spec['key']),
                            window_box(row_after, spec['key']))]
+        elif kind == 'menu':
+            idents = ['menu']
+            boxes = [union(menu_box(row_before), menu_box(row_after))]
         else:
             idents = spec.get('items') or ([spec['item']] if spec.get('item')
                                            else [spec.get('container', '0/0/2')])

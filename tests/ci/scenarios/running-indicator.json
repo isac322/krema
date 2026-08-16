@@ -2,7 +2,7 @@
   "description": "A mapped fixture window creates a window-backed dock row, but the current harness cannot create or remove that fixture during capture.",
   "fixture_windows": 1,
   "actions": [],
-  "not_verifiable": [
+  "not_verified": [
     {
       "qa": "QA-ITEM-001",
       "reason": "The negative control removes actions but leaves fixture_windows enabled, so the fixture row, its displayName \"Fixture 0\", and its window-child state all survive. Proving the row appeared requires a fixture-toggle action that maps a window after an earlier frame, which the harness does not have."

@@ -16,6 +16,22 @@ import pathlib
 import sys
 
 
+def result_failed(result: dict) -> bool:
+    return (bool(result.get('scenario_failures'))
+            or result.get('repro_ok') is False
+            or any(item.get('failures') for item in result.get('qa', [])))
+
+
+def scenario_status(result: dict) -> str:
+    if result_failed(result):
+        return '❌ Failed'
+    if result.get('not_verified') and not result.get('qa'):
+        return '⚪ Not verified'
+    if result.get('not_verified'):
+        return f"✅ Passed; ⚪ {len(result['not_verified'])} not verified"
+    return '✅ Passed'
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--run-dir', required=True, type=pathlib.Path)
@@ -27,45 +43,67 @@ def main() -> int:
         print('No scenario results found.')
         return 0
 
-    total = sum(len(r['qa']) for r in results)
-    failed = [(r, item) for r in results for item in r['qa'] if item['failures']]
+    qa_groups = [(result, item) for result in results for item in result.get('qa', [])]
+    failed_qa = [(result, item) for result, item in qa_groups if item.get('failures')]
+    assertions = sum(result.get('assertions', len(result.get('qa', [])))
+                     for result in results)
+    unique_qa = {item['id'] for _, item in qa_groups}
+    not_verified = [(result, item) for result in results
+                    for item in result.get('not_verified', [])]
+    broken = [result for result in results if result_failed(result)]
     videos = sorted(args.run_dir.glob('*/*.mp4'))
 
     out: list[str] = ['## UI frame tests', '']
-    out.append(f"{'❌' if failed else '✅'} **{total - len(failed)}/{total}** QA items "
-               f'passed across {len(results)} scenarios.')
+    icon = '❌' if broken else '✅'
+    out.append(f'{icon} **{len(qa_groups) - len(failed_qa)}/{len(qa_groups)}** '
+               f'QA result groups passed from {assertions} assertions '
+               f'({len(unique_qa)} unique QA IDs) across {len(results)} scenarios; '
+               f'{len(not_verified)} QA rows are not verified.')
     out.append('')
 
-    if failed:
-        out += ['### Failures', '', '| QA | Scenario | Expected | Measured |', '|---|---|---|---|']
-        for result, item in failed:
-            expectation = (item['expectation'] or result['description'])[:110]
+    if failed_qa:
+        out += ['### Assertion failures', '',
+                '| QA | Scenario | Expected | Measured |',
+                '|---|---|---|---|']
+        for result, item in failed_qa:
+            expectation = (item.get('expectation') or result.get('description', ''))[:110]
             for failure in item['failures']:
                 out.append(f"| `{item['id']}` | {result['scenario']} | {expectation} | "
                            f"{failure[:160]} |")
         out.append('')
 
-    # A scenario that verifies nothing reports "0 QA items passed", which reads
-    # the same as a broken one. Name what is deliberately unverified and why, so
-    # the gap is a stated limit rather than a silent hole in the coverage count.
-    unverified = blocked_rows(args.src)
-    if unverified:
-        out += [f'### Not verified here ({len(unverified)})', '',
-                '| QA | Scenario | Why |', '|---|---|---|']
-        for qa, scenario, reason in unverified:
-            out.append(f'| `{qa}` | {scenario} | {reason} |')
+    harness_failures = []
+    for result in results:
+        for failure in result.get('scenario_failures', []):
+            harness_failures.append((result['scenario'], 'Scenario', failure))
+        for failure in result.get('repro_failures', []):
+            harness_failures.append((result['scenario'], 'Reproducibility', failure))
+    if harness_failures:
+        out += ['### Harness failures', '',
+                '| Scenario | Gate | Failure |', '|---|---|---|']
+        for scenario, gate, failure in harness_failures:
+            out.append(f'| {scenario} | {gate} | {failure[:200]} |')
         out.append('')
 
-    compared = [r for r in results if r['repro'] != 'single pass']
+    if not_verified:
+        out += [f'### Not verified here ({len(not_verified)})', '',
+                '| QA | Scenario | Why |', '|---|---|---|']
+        for result, item in not_verified:
+            out.append(f"| `{item['id']}` | {result['scenario']} | {item['reason']} |")
+        out.append('')
+
+    compared = [result for result in results if result.get('repro_ok') is not None]
     if compared:
-        identical = sum(1 for r in compared if r['repro'] == 'byte-identical')
-        out.append(f'Reproducibility: {identical}/{len(compared)} scenarios byte-identical '
-                   f'across two passes. The rest differ only at frames where an action '
-                   f'lands; every settled value is reproducible.')
+        identical = sum(1 for result in compared if result.get('repro_ok'))
+        out.append(f'Reproducibility: {identical}/{len(compared)} scenarios are '
+                   f'byte-identical across every captured pass. Any frame-count, '
+                   f'frame-number, item, property, window, or menu-state difference '
+                   f'fails the scenario.')
     else:
         out.append('Reproducibility: not measured — this run captured a single pass per '
                    'scenario, so no two captures were compared.')
     out.append('')
+
     if videos:
         out.append(f'{len(videos)} annotated videos in the `frame-captures` artifact — '
                    f'download to play. Every frame is stamped with its number, virtual '
@@ -74,28 +112,19 @@ def main() -> int:
         out.append('')
 
     out += ['<details><summary>All scenarios</summary>', '',
-            '| Scenario | QA | Frames | Repro |', '|---|---:|---:|---|']
+            '| Scenario | Status | QA groups | Assertions | Frames | Repro |',
+            '|---|---|---:|---:|---:|---|']
     for result in results:
-        bad = sum(1 for i in result['qa'] if i['failures'])
-        out.append(f"| {result['scenario']} | {len(result['qa']) - bad}/{len(result['qa'])} | "
-                   f"{result['frames']} | {result['repro'][:60]} |")
+        bad = sum(1 for item in result.get('qa', []) if item.get('failures'))
+        qa = result.get('qa', [])
+        out.append(f"| {result['scenario']} | {scenario_status(result)} | "
+                   f"{len(qa) - bad}/{len(qa)} | "
+                   f"{result.get('assertions', len(qa))} | {result['frames']} | "
+                   f"{result.get('repro', 'unknown')[:80]} |")
     out += ['', '</details>']
 
     print('\n'.join(out))
     return 0
-
-
-def blocked_rows(src: pathlib.Path):
-    """QA ids a scenario deliberately does not verify, with the reason.
-
-    A scenario that reports "0 QA item(s) passed" is indistinguishable from a
-    broken one unless the reason travels with it.
-    """
-    rows = []
-    for path in sorted((src / 'tests/ci/scenarios').glob('*.json')):
-        for entry in json.loads(path.read_text()).get('blocked', []):
-            rows.append((entry['qa'], path.stem, entry['reason']))
-    return rows
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -55,7 +55,7 @@
         "About Krema": true,
         "Quit": true
       },
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
     },
     {
       "qa": "QA-CMD-004",
@@ -67,7 +67,7 @@
         "Open a New Window",
         "New Incognito Window"
       ],
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "mapped": true
     },
     {
       "qa": "QA-CMD-012",
@@ -76,8 +76,7 @@
       "prop": "hoveredIndex",
       "comment": "When I hover the first launcher before using the empty background, that launcher is selected.",
       "frame": 37,
-      "value": 0,
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "value": 0
     },
     {
       "qa": "QA-CMD-012",
@@ -86,8 +85,15 @@
       "prop": "hoveredIndex",
       "comment": "After I right-click the empty dock background, the previously hovered launcher is cleared and no item is selected.",
       "frame": 45,
-      "value": -1,
-      "pixel_exempt": "The menu is built and its entries are read in-process, but Wayland only maps a popup for a real grabbing parent surface, so whether anything paints here is a race. Judged on the menu model, never on pixels."
+      "value": -1
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "menu",
+      "comment": "Right-clicking empty dock background opens no context menu.",
+      "frame": 45,
+      "exists": false,
+      "invariant": true
     }
   ]
 }

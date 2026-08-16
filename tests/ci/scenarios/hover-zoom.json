@@ -1,0 +1,85 @@
+{
+  "description": "Parabolic zoom grows the hovered icon and its neighbors, transfers to another icon, and returns to the base scale only after the pointer leaves the dock.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 45,
+      "type": "move",
+      "item": "dockItem2"
+    },
+    {
+      "frame": 90,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-007",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "When I hover the first icon, it grows smoothly from 1.0 to the default maximum zoom of 1.6.",
+      "from": 1.0,
+      "to": 1.6,
+      "start_after": 5,
+      "settled_by": 25,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-007",
+      "kind": "ordered",
+      "comment": "While I hover the first icon, each neighboring icon is less enlarged as its distance from the pointer increases.",
+      "frame": 25,
+      "items": [
+        "dockItem0",
+        "dockItem1",
+        "dockItem2"
+      ],
+      "prop": "currentScale",
+      "order": "descending"
+    },
+    {
+      "qa": "QA-ITEM-007",
+      "kind": "animates",
+      "item": "dockItem2",
+      "prop": "currentScale",
+      "comment": "When I move to the third icon, the maximum zoom transfers smoothly to it.",
+      "from": 1.023,
+      "to": 1.6,
+      "start_after": 45,
+      "settled_by": 75,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-008",
+      "kind": "settles",
+      "item": "dockItem2",
+      "prop": "currentScale",
+      "comment": "Before I leave the dock, the icon under my pointer is visibly zoomed to 1.6.",
+      "frame": 75,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-ITEM-008",
+      "kind": "settles",
+      "item": "dockItem2",
+      "prop": "currentScale",
+      "comment": "After I move the pointer outside the dock, the previously hovered icon returns to its base scale of 1.0.",
+      "value": 1.0,
+      "tolerance": 0.01
+    }
+  ]
+}

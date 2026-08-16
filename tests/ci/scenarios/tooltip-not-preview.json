@@ -1,0 +1,72 @@
+{
+  "description": "Hovering a pinned launcher with no running window shows a text tooltip while the preview popup content remains hidden.",
+  "config": {
+    "General/PreviewEnabled": true,
+    "General/PreviewHoverDelay": 1
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-PRE-002",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "_childCount",
+      "comment": "The hovered target is a launcher-only item with no running window.",
+      "frame": 2,
+      "value": 0
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "visible",
+      "comment": "The text tooltip background at the unnamed fixed child path is eventually visible after hovering.",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "show",
+      "comment": "The tooltip show state is enabled in the launcher-only branch.",
+      "frame": 130,
+      "value": true
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/5/0",
+      "prop": "text",
+      "comment": "The tooltip Label at the unnamed fixed child path shows only the launcher name.",
+      "frame": 130,
+      "value": "KWrite"
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "equals",
+      "item": "0/0/0/0",
+      "prop": "visible",
+      "comment": "The unique child path absent from DockView confirms that the preview popup content Column is hidden. Marked invariant: hovering an item must not open the preview surface. The discriminator is the preview scenarios, where a hover on a running window does open it.",
+      "frame": 130,
+      "value": false,
+      "invariant": true
+    },
+    {
+      "qa": "QA-PRE-002",
+      "kind": "window",
+      "comment": "The preview QQuickView surface always exists, but hovering a launcher does not create a new popup window. Marked invariant: hovering an item must not open the preview surface. The discriminator is the preview scenarios, where a hover on a running window does open it.",
+      "key": "QQuickView",
+      "visible": true,
+      "w": 1024,
+      "h": 400,
+      "invariant": true
+    }
+  ]
+}

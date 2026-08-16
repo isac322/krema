@@ -1,0 +1,24 @@
+{
+  "description": "Icon normalization cannot be verified with the icon resources installed in this image because toggling it produces no observable pixel or geometry difference.",
+  "actions": [
+    {
+      "frame": 20,
+      "type": "setting",
+      "name": "iconNormalization",
+      "value": false
+    },
+    {
+      "frame": 70,
+      "type": "setting",
+      "name": "iconNormalization",
+      "value": true
+    }
+  ],
+  "not_verified": [
+    {
+      "qa": "QA-ITEM-021",
+      "reason": "The image is missing a launcher icon with measurable transparent internal padding. The installed Breeze icons render with the same painted bounds and item geometry in both normalization states, so the capture cannot prove that padding was detected, cropped, and rescaled."
+    }
+  ],
+  "assertions": []
+}

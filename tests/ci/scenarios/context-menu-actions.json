@@ -1,0 +1,124 @@
+{
+  "description": "A mapped context menu changes a running window item between pinned and unpinned states through real QMenu clicks, and exposes the expected window and application actions.",
+  "fixture_windows": 1,
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem4"
+    },
+    {
+      "frame": 10,
+      "type": "click",
+      "item": "dockItem4",
+      "button": "right",
+      "native": true,
+      "wait_for_menu": true
+    },
+    {
+      "frame": 20,
+      "type": "menuitem",
+      "name": "Pin to Dock"
+    },
+    {
+      "frame": 30,
+      "type": "click",
+      "item": "dockItem4",
+      "button": "right",
+      "native": true,
+      "wait_for_menu": true
+    },
+    {
+      "frame": 40,
+      "type": "menuitem",
+      "name": "Unpin from Dock"
+    },
+    {
+      "frame": 50,
+      "type": "click",
+      "item": "dockItem4",
+      "button": "right",
+      "native": true,
+      "wait_for_menu": true
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "The initially unpinned running window offers Pin to Dock in a visibly mapped menu.",
+      "frame": 15,
+      "contains": [
+        "Pin to Dock"
+      ],
+      "excludes": [
+        "Unpin from Dock"
+      ],
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-002",
+      "kind": "menu",
+      "comment": "A running window item exposes Close in the visibly mapped menu.",
+      "frame": 15,
+      "contains": [
+        "Close"
+      ],
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-009",
+      "kind": "menu",
+      "comment": "Settings and About are provided and enabled from the mapped menu.",
+      "frame": 15,
+      "contains": [
+        "Settings...",
+        "About Krema"
+      ],
+      "enabled": {
+        "Settings...": true,
+        "About Krema": true
+      },
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-010",
+      "kind": "menu",
+      "comment": "Quit is provided and enabled. Clicking it would terminate capture, so its mapped presence and enabled state are checked.",
+      "frame": 15,
+      "contains": [
+        "Quit"
+      ],
+      "enabled": {
+        "Quit": true
+      },
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "After clicking Pin to Dock through QMenu, reopening the menu offers Unpin from Dock.",
+      "frame": 35,
+      "contains": [
+        "Unpin from Dock"
+      ],
+      "excludes": [
+        "Pin to Dock"
+      ],
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-005",
+      "kind": "menu",
+      "comment": "After clicking Unpin from Dock through QMenu, reopening the running item menu offers Pin to Dock again.",
+      "frame": 55,
+      "contains": [
+        "Pin to Dock"
+      ],
+      "excludes": [
+        "Unpin from Dock"
+      ],
+      "mapped": true
+    }
+  ]
+}

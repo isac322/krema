@@ -1,0 +1,94 @@
+{
+  "description": "In an AutoHide dock, starting keyboard navigation with the Focus Dock action keeps the dock visible and focused outside the dock, then hides it again after Escape.",
+  "config": {
+    "General/Edge": 1,
+    "General/VisibilityMode": 1,
+    "General/ShowDelay": 0,
+    "General/HideDelay": 0
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    },
+    {
+      "frame": 20,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 60,
+      "type": "key",
+      "key": "Esc"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "The first dock icon has focus when keyboard navigation starts",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Pressing Right moves focus to the second icon, confirming that key input reaches the dock",
+      "frame": 30,
+      "value": true
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "After moving to the second icon, the first icon’s keyboard focus is cleared",
+      "frame": 30,
+      "value": false
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "The unnamed panel path (0/0/2) remains fully visible during keyboard navigation without pointer hover",
+      "frame": 50,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "During keyboard navigation, the panel does not move to the AutoHide hidden position and stays at visible position y=36",
+      "frame": 50,
+      "value": 36,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Pressing Escape clears the second icon’s keyboard focus, confirming that navigation ended",
+      "frame": 70,
+      "value": false
+    },
+    {
+      "qa": "QA-VIS-013",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "After navigation ends, the pointer is outside the dock, so the panel hides again under the AutoHide policy",
+      "frame": 115,
+      "value": 0.0,
+      "tolerance": 0.001
+    }
+  ]
+}

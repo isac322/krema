@@ -1,0 +1,91 @@
+{
+  "description": "Changing the dock edge in Left, Right, Top, Bottom order switches the surface orientation and icon Flow for each edge.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "edge",
+      "value": 2
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "edge",
+      "value": 3
+    },
+    {
+      "frame": 95,
+      "type": "setting",
+      "name": "edge",
+      "value": 0
+    },
+    {
+      "frame": 140,
+      "type": "setting",
+      "name": "edge",
+      "value": 1
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "Left edge: the panel sits against the left side of the screen with only the 8px Floating margin",
+      "frame": 45,
+      "value": 8,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "At the left edge, the panel is vertical, so its width shrinks to one icon row",
+      "frame": 45,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "Right edge: coordinates use the dock window, whose width is 108px, so an 8px right margin puts the panel at x=36",
+      "frame": 90,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "Top edge: the panel lies at the top of the screen with an 8px margin",
+      "frame": 135,
+      "value": 8,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "At the top edge, the panel is horizontal again, so its height returns to one row",
+      "frame": 135,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-SET-015",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "Returning to the bottom edge (the default) returns the panel to its bottom position",
+      "value": 36,
+      "tolerance": 0.6
+    }
+  ],
+  "max_frames": 200
+}

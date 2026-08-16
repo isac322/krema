@@ -154,7 +154,7 @@ bool DockModel::isPinned(int index) const
     }
 
     const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
-    return url.isValid() && m_tasksModel->launcherList().contains(url.toString());
+    return url.isValid() && m_tasksModel->launcherPosition(url) != -1;
 }
 
 QVariantList DockModel::windowIds(int index) const

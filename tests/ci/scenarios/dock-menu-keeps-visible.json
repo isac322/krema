@@ -1,0 +1,68 @@
+{
+  "description": "In an AutoHide dock, moving the cursor outside while a right-click menu is open keeps the panel visible through the interaction lock.",
+  "config": {
+    "General/Edge": 1,
+    "General/VisibilityMode": 1,
+    "General/ShowDelay": 0,
+    "General/HideDelay": 0
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "x": 512,
+      "y": 106
+    },
+    {
+      "frame": 35,
+      "type": "click",
+      "item": "dockItem0",
+      "button": "right",
+      "native": true,
+      "wait_for_menu": true
+    },
+    {
+      "frame": 40,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-VIS-012",
+      "kind": "menu",
+      "comment": "The first pinned launcher’s right-click menu remains open and provides Unpin, Settings, and Quit",
+      "frame": 50,
+      "contains": [
+        "Unpin from Dock",
+        "Settings...",
+        "Quit"
+      ],
+      "mapped": true,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-012",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "The unnamed panel path (0/0/2) remains fully visible while the menu is open even with the cursor outside",
+      "frame": 100,
+      "value": 1.0,
+      "tolerance": 0.001,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-012",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "While interaction is locked, the panel does not move to its hidden position and stays at visible position y=36",
+      "frame": 100,
+      "value": 36,
+      "tolerance": 0.01,
+      "invariant": true
+    }
+  ]
+}

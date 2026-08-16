@@ -25,6 +25,10 @@
 #include <QQuickStyle>
 #include <QtQml>
 
+#ifdef KREMA_TEST_HOOKS
+#include "frameprobe.h"
+#endif
+
 Q_LOGGING_CATEGORY(lcApp, "krema.app")
 
 // Static library resources must be explicitly initialized.
@@ -169,6 +173,11 @@ int Application::run()
 
     // Register global shortcuts (KGlobalAccel)
     registerGlobalShortcuts();
+
+#ifdef KREMA_TEST_HOOKS
+    // CI-only: inert unless KREMA_PROBE_NDJSON is set. See tests/ci/README.md.
+    testing::FrameProbe::installIfEnabled();
+#endif
 
     return exec();
 }

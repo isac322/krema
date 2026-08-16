@@ -1,0 +1,118 @@
+{
+  "description": "Increasing icon size and spacing and raising maximum zoom to 2x immediately updates dock size and hover zoom.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    },
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "iconSpacing",
+      "value": 16
+    },
+    {
+      "frame": 60,
+      "type": "setting",
+      "name": "maxZoomFactor",
+      "value": 2.0
+    },
+    {
+      "frame": 60,
+      "type": "setting",
+      "name": "iconNormalization",
+      "value": false
+    },
+    {
+      "frame": 60,
+      "type": "setting",
+      "name": "iconScale",
+      "value": 0.5
+    },
+    {
+      "frame": 100,
+      "type": "move",
+      "item": "dockItem0"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "Changing icon size to 96px immediately sets the actual dock item cell size to 96px",
+      "value": 96
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "dockItem1",
+      "prop": "spacing",
+      "comment": "Changing icon spacing to 16px immediately gives each dock item the new spacing value",
+      "value": 16
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "0/0/2/1",
+      "prop": "spacing",
+      "comment": "The actual capture path of the unnamed Flow also reflects the 16px icon spacing",
+      "value": 16
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "The actual capture path of the unnamed panel expands to 448px to contain four icons and their spacing. Panel width and height animate through Behavior, so inspect a settled frame rather than the frame immediately after the setting applies.",
+      "value": 448
+    },
+    {
+      "qa": "QA-SET-004",
+      "kind": "window",
+      "comment": "Dock surface height is recalculated as 178px for 96px icons and the default 1.6 zoom",
+      "frame": 45,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 178
+    },
+    {
+      "qa": "QA-SET-005",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "maxZoomFactor",
+      "comment": "Changing maximum zoom factor to 2.0 makes dock items use the new factor immediately",
+      "value": 2.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-005",
+      "kind": "window",
+      "comment": "Dock surface height is set to 216px so 96px icons remain unclipped at 2x. The dock window itself grows when icon size changes, so inspect after layout settles.",
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 216,
+      "frame": 95
+    },
+    {
+      "qa": "QA-SET-005",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "The hovered icon smoothly zooms from 1.0 to the configured maximum factor of 2.0",
+      "from": 1.0,
+      "to": 2.0,
+      "start_after": 100,
+      "settled_by": 135,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    }
+  ]
+}

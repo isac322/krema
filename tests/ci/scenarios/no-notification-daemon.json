@@ -1,0 +1,86 @@
+{
+  "description": "Even in a container without a notification daemon, the dock shows four launchers and performs hover zoom without showing notification badges.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 90,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "window",
+      "comment": "The dock window displays normally at 1024x108 even when notification-daemon registration fails.",
+      "key": "krema::DockView",
+      "frame": 2,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "count",
+      "type": "DockItem",
+      "comment": "All four default pinned launchers are created without a notification daemon.",
+      "frame": 2,
+      "value": 4
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "Launcher hover zoom works from 1.0 to the default 1.6 without a notification daemon.",
+      "from": 1.0,
+      "to": 1.6,
+      "start_after": 5,
+      "settled_by": 25,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "Moving the cursor outside the dock returns the scale to 1.0 regardless of the notification daemon.",
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "_badgeCount",
+      "comment": "With no notification daemon or notification input, the first launcher has 0 unread badges.",
+      "value": 0
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "equals",
+      "item": "0/0/2/1/0/3",
+      "prop": "visible",
+      "comment": "The badge element at the unnamed fixed child path is not visible when there are no notifications.",
+      "frame": 130,
+      "value": false
+    },
+    {
+      "qa": "QA-NOTI-017",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "_animationActive",
+      "comment": "The attention state is not activated incorrectly without a fake notification.",
+      "frame": 130,
+      "value": false
+    }
+  ]
+}

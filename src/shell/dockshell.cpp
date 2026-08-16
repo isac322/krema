@@ -56,6 +56,10 @@ void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode
     // Initialize dock view (creates DockVisibility, registers it, loads QML, shows window)
     m_view->initialize(m_model->tasksModel(), m_model->virtualDesktopInfo(), m_model->activityInfo(), edge, visibilityMode);
 
+    // The context menu is a Wayland popup and needs a parent surface, otherwise
+    // the compositor refuses to map it and the menu never appears.
+    m_contextMenu->setParentWindow(m_view.get());
+
     // Configure and initialize preview surface (needs dock height for margins)
     m_previewController->setHideDelay(m_settings->previewHideDelay());
     m_previewController->initialize();

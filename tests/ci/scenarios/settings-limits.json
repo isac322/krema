@@ -1,0 +1,238 @@
+{
+  "description": "Applying the kcfg minimum and maximum values for icon size, spacing, zoom, corners, and shadows together keeps the dock layout and shader calculations finite.",
+  "config": {
+    "General/IconSize": 24,
+    "General/IconSpacing": 0,
+    "General/MaxZoomFactor": 1.0,
+    "General/IconScale": 0.5,
+    "General/CornerRadius": 0,
+    "General/ShadowEnabled": true,
+    "General/ShadowLightX": -300,
+    "General/ShadowLightY": -300,
+    "General/ShadowLightZ": 100,
+    "General/ShadowLightRadius": 0.5,
+    "General/ShadowElevation": 1
+  },
+  "actions": [
+    {
+      "frame": 10,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 35,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "iconSpacing",
+      "value": 16
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "maxZoomFactor",
+      "value": 2.0
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "iconScale",
+      "value": 1.0
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "cornerRadius",
+      "value": 24
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightX",
+      "value": 300
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightY",
+      "value": 300
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightZ",
+      "value": 2000
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowLightRadius",
+      "value": 20.0
+    },
+    {
+      "frame": 45,
+      "type": "setting",
+      "name": "shadowElevation",
+      "value": 50
+    },
+    {
+      "frame": 85,
+      "type": "move",
+      "item": "dockItem0"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "At the kcfg minimum IconSize of 24, dock item size calculation does not become 0 and stays at 24px.",
+      "frame": 5,
+      "value": 24
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "spacing",
+      "comment": "Even at the kcfg minimum IconSpacing of 0, icon placement uses a valid 0px gap.",
+      "frame": 5,
+      "value": 0
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "window",
+      "comment": "Even with the minimum icon and zoom values, the dock surface remains a valid 1024x84 size.",
+      "frame": 5,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 84
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "The unnamed panel actual capture path keeps a 112px width for four minimum-size icons.",
+      "frame": 5,
+      "value": 112
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Even at the minimum icon size, the panel height stays 40px and the layout does not collapse.",
+      "frame": 5,
+      "value": 40
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "margin",
+      "comment": "Even with the minimum light radius and elevation and extreme negative coordinates, the shadow margin calculates to a finite approximately 14.29px.",
+      "frame": 5,
+      "value": 14.290546,
+      "tolerance": 0.02
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "At the minimum zoom of 1.0, hovering a small icon keeps exactly 1.0 so hit testing does not break. Marked invariant: at the minimum zoom limit the hover must not scale the icon. The discriminator is hover-zoom at the default limit.",
+      "frame": 25,
+      "value": 1.0,
+      "tolerance": 0.01,
+      "invariant": true
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "Applying the runtime kcfg maximum IconSize of 96 immediately updates dock items to 96px.",
+      "frame": 50,
+      "value": 96
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "spacing",
+      "comment": "Applying the runtime kcfg maximum IconSpacing of 16 makes dock items use a 16px gap immediately.",
+      "frame": 50,
+      "value": 16
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "window",
+      "comment": "Even with maximum icon size 96 and zoom 2.0, a 1024x216 surface is provided for zoom overflow.",
+      "frame": 55,
+      "key": "krema::DockView",
+      "visible": true,
+      "w": 1024,
+      "h": 216
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "Even with maximum icon size and spacing, the panel width settles at 448px and icons do not overlap.",
+      "frame": 75,
+      "value": 448
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Even at maximum icon size, the panel height is 112px, so icons are not clipped.",
+      "frame": 75,
+      "value": 112
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "radius",
+      "comment": "Even at maximum CornerRadius 24, panel rounded-corner calculation stays valid.",
+      "frame": 75,
+      "value": 24
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "margin",
+      "comment": "Even at maximum light radius and elevation, the shadow margin calculates to a finite 70px.",
+      "frame": 75,
+      "value": 70,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-022",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "The path that changes the maximum scale through settings does not determine whether it is animated. The first-frame delta varies from 39–96% of the range between runs because QUnifiedTimer registers newly started animations late, so smooth motion cannot be distinguished from a jump. The mouse-hover zoom path verifies the curve in the hover-zoom scenario. Here, verify only that the new maximum scale is reached.",
+      "frame": 110,
+      "value": 2.0,
+      "tolerance": 0.02
+    }
+  ]
+}

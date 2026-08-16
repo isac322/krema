@@ -1,0 +1,166 @@
+name: Publish UI frame previews
+
+on:
+  workflow_run:
+    workflows: ["UI frame tests"]
+    types: [completed]
+
+concurrency:
+  group: frame-previews-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+# workflow_run executes this default-branch workflow rather than pull-request
+# source. The write token therefore never reaches code checked out from the PR.
+jobs:
+  publish:
+    if: >-
+      ${{ github.event.workflow_run.event == 'pull_request'
+          && github.event.workflow_run.pull_requests[0].number != null }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    env:
+      PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Download frame artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frame-captures
+          path: ${{ runner.temp }}/frames
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      # The artifact is produced by pull-request-controlled code. Treat it only
+      # as data: accept bounded, plainly named GIFs and a comment whose links all
+      # target this repository's expected ci-media directory.
+      - name: Validate preview artifact
+        id: validate
+        env:
+          FRAMES: ${{ runner.temp }}/frames
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          root = pathlib.Path(os.environ['FRAMES']) / 'previews'
+          output = pathlib.Path(os.environ['GITHUB_OUTPUT'])
+          comment = root / 'comment.md'
+          gifs = sorted(root.glob('*.gif')) if root.is_dir() else []
+          if not comment.is_file() or not gifs:
+              print('no complete preview set to publish')
+              with output.open('a') as handle:
+                  handle.write('valid=false\n')
+              raise SystemExit(0)
+
+          entries = list(root.iterdir())
+          if any(entry.is_symlink() for entry in entries):
+              raise SystemExit('preview artifact contains a symbolic link')
+          unexpected = [entry.name for entry in entries
+                        if entry.name != 'comment.md' and entry.suffix != '.gif']
+          if unexpected:
+              raise SystemExit(f'unexpected preview files: {unexpected}')
+          if len(gifs) > 100:
+              raise SystemExit(f'too many preview GIFs: {len(gifs)}')
+          for gif in gifs:
+              if not re.fullmatch(r'[a-z0-9][a-z0-9-]*\.gif', gif.name):
+                  raise SystemExit(f'unsafe GIF name: {gif.name}')
+              if gif.stat().st_size > 10 * 1024 * 1024:
+                  raise SystemExit(f'GIF exceeds 10 MiB: {gif.name}')
+              if gif.read_bytes()[:6] not in (b'GIF87a', b'GIF89a'):
+                  raise SystemExit(f'not a GIF: {gif.name}')
+
+          body = comment.read_text()
+          if len(body.encode()) > 60000:
+              raise SystemExit('preview comment exceeds 60000 bytes')
+          if '<!-- krema-frame-tests -->' not in body:
+              raise SystemExit('preview comment marker is missing')
+          expected = (f"https://raw.githubusercontent.com/"
+                      f"{os.environ['REPOSITORY']}/ci-media/"
+                      f"pr-{os.environ['PR']}/{os.environ['SOURCE_RUN_ID']}/")
+          urls = re.findall(r'https?://[^\s)>]+', body)
+          foreign = [url for url in urls if not url.startswith(expected)]
+          if foreign:
+              raise SystemExit(f'preview comment has unexpected URLs: {foreign}')
+          with output.open('a') as handle:
+              handle.write('valid=true\n')
+          print(f'validated {len(gifs)} GIFs and {len(body)} comment characters')
+          PY
+
+      # GitHub does not render artifact videos inline. Publish only the validated
+      # GIF data to the parentless ci-media branch, preserving no branch history.
+      - name: Publish preview animations
+        id: previews
+        if: steps.validate.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          previews=("$RUNNER_TEMP/frames/previews"/*.gif)
+
+          publish_previews() {
+            local work="$RUNNER_TEMP/ci-media"
+            rm -rf "$work"
+            local base
+            if git clone --depth 1 --branch ci-media \
+                 "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+                 "$work" 2>/dev/null; then
+              base=$(git -C "$work" rev-parse HEAD)
+            else
+              rm -rf "$work"; mkdir -p "$work"; base=""
+            fi
+            rm -rf "${work:?}/.git"
+            git init -q "$work"
+            rm -rf "${work:?}/pr-$PR"
+            mkdir -p "$work/pr-$PR/$SOURCE_RUN_ID"
+            cp -- "${previews[@]}" "$work/pr-$PR/$SOURCE_RUN_ID/"
+            git -C "$work" config user.name "github-actions[bot]"
+            git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$work" add -A
+            git -C "$work" commit -q -m "ci: preview animations for pr-$PR run $SOURCE_RUN_ID"
+            local lease=("--force")
+            if [[ -n "$base" ]]; then
+              lease=("--force-with-lease=ci-media:$base")
+            fi
+            git -C "$work" push -q "${lease[@]}" \
+              "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
+              HEAD:ci-media
+          }
+
+          for attempt in 1 2 3 4 5; do
+            if publish_previews; then
+              echo "published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "ci-media moved under us; retry $attempt"
+            sleep $((attempt * 5))
+          done
+          echo "could not publish previews"
+
+      - name: Comment on the pull request
+        if: steps.previews.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$RUNNER_TEMP/frames/previews/comment.md"
+          existing=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+            --jq 'map(select(.body | contains("<!-- krema-frame-tests -->"))) | .[-1].id // empty')
+          if [[ -n "$existing" ]]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$existing" \
+              -F body=@"$body" >/dev/null
+            echo "updated comment $existing"
+          else
+            gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" \
+              -F body=@"$body" >/dev/null
+            echo "created comment"
+          fi

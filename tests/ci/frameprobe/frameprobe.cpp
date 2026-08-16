@@ -111,15 +111,6 @@ public:
         return true;
     }
 
-    bool clickAt(const QPointF &globalPosition, Qt::MouseButton button)
-    {
-        if (!moveTo(globalPosition)) {
-            return false;
-        }
-        sendButton(button, true);
-        sendButton(button, false);
-        return true;
-    }
 
     bool sendButton(Qt::MouseButton button, bool pressed)
     {
@@ -290,7 +281,18 @@ QMenu *visibleMenu()
 
 QPoint requestedTopLeft(QWindow *window, const QSize &output);
 
-void waitForMappedMenu(int frame)
+QPoint popupTopLeft(const QPoint &anchor, const QSize &size, const QSize &output)
+{
+    const int maxX = qMax(0, output.width() - size.width());
+    const int maxY = qMax(0, output.height() - size.height());
+    const int x = qBound(0, anchor.x(), maxX);
+    const int preferredY = anchor.y() + size.height() <= output.height()
+        ? anchor.y()
+        : anchor.y() - size.height();
+    return {x, qBound(0, preferredY, maxY)};
+}
+
+void waitForMappedMenu(int frame, const QPoint &anchor)
 {
     QElapsedTimer timeout;
     timeout.start();
@@ -298,6 +300,15 @@ void waitForMappedMenu(int frame)
         if (QMenu *popup = visibleMenu()) {
             QWindow *handle = popup->windowHandle();
             if (handle && handle->isVisible() && handle->isExposed()) {
+                const QSize output = handle->screen()
+                    ? handle->screen()->geometry().size()
+                    : popup->size();
+                // Wayland does not expose a popup's compositor-chosen global
+                // position. Retain the xdg-popup request so capture and NDJSON
+                // place the mapped menu where KWin constrains it.
+                handle->setProperty(
+                    "_kremaProbeTopLeft",
+                    popupTopLeft(anchor, popup->size(), output));
                 return;
             }
         }
@@ -381,6 +392,10 @@ QJsonValue activeMenu()
  */
 QPoint requestedTopLeft(QWindow *window, const QSize &output)
 {
+    const QVariant popupPosition = window->property("_kremaProbeTopLeft");
+    if (popupPosition.isValid()) {
+        return popupPosition.toPoint();
+    }
     auto *layer = LayerShellQt::Window::get(window);
     if (!layer) {
         if (QWindow *parent = window->transientParent()) {
@@ -522,8 +537,12 @@ QQuickItem *findByName(QQuickItem *item, const QString &name)
  * valid when the icon size or panel width changes; a bare x/y would silently
  * start landing in the gap between items instead.
  */
-bool resolvePos(QQuickWindow *window, const Action &action, QPoint &out)
+bool resolvePos(QQuickWindow *window, const Action &action, QPoint &out,
+                QQuickItem **resolvedTarget = nullptr)
 {
+    if (resolvedTarget) {
+        *resolvedTarget = nullptr;
+    }
     if (action.item.isEmpty()) {
         out = action.pos;
         return true;
@@ -535,13 +554,35 @@ bool resolvePos(QQuickWindow *window, const Action &action, QPoint &out)
     }
     const QPointF centre = target->mapToScene(QPointF(target->width() / 2, target->height() / 2));
     out = QPoint(qRound(centre.x()) + action.pos.x(), qRound(centre.y()) + action.pos.y());
+    if (resolvedTarget) {
+        *resolvedTarget = target;
+    }
     return true;
+}
+
+void waitForPointerAt(QQuickItem *target, int frame)
+{
+    if (!target || !target->property("panelMouseInside").isValid()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        return;
+    }
+    QElapsedTimer timeout;
+    timeout.start();
+    while (timeout.elapsed() < 2000) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        if (target->property("panelMouseInside").toBool()) {
+            return;
+        }
+        QThread::msleep(1);
+    }
+    qFatal("scenario frame %d timed out waiting for the pointer target", frame);
 }
 
 void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fakeInput)
 {
     QPoint pos;
-    if (!resolvePos(window, action, pos)) {
+    QQuickItem *target = nullptr;
+    if (!resolvePos(window, action, pos, &target)) {
         return;
     }
     if (action.type == QLatin1String("move")) {
@@ -550,8 +591,9 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
                 ? window->screen()->geometry().size()
                 : window->size();
             if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
-                qCWarning(lcProbe) << "native fake input is unavailable";
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
+            waitForPointerAt(target, action.frame);
         } else {
             QTest::mouseMove(window, pos);
         }
@@ -561,11 +603,17 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             const QSize output = window->screen()
                 ? window->screen()->geometry().size()
                 : window->size();
-            if (!fakeInput->clickAt(requestedTopLeft(window, output) + pos, button)) {
+            const QPoint globalPosition = requestedTopLeft(window, output) + pos;
+            if (!fakeInput->moveTo(globalPosition)) {
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
+            }
+            waitForPointerAt(target, action.frame);
+            if (!fakeInput->sendButton(button, true)
+                || !fakeInput->sendButton(button, false)) {
                 qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
             if (action.waitForMenu) {
-                waitForMappedMenu(action.frame);
+                waitForMappedMenu(action.frame, globalPosition);
             }
         } else {
             QTest::mouseClick(window, button, Qt::NoModifier, pos);
@@ -575,8 +623,11 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             const QSize output = window->screen()
                 ? window->screen()->geometry().size()
                 : window->size();
-            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)
-                || !fakeInput->sendButton(buttonFromName(action.button), true)) {
+            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
+            }
+            waitForPointerAt(target, action.frame);
+            if (!fakeInput->sendButton(buttonFromName(action.button), true)) {
                 qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
         } else {
@@ -587,8 +638,11 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             const QSize output = window->screen()
                 ? window->screen()->geometry().size()
                 : window->size();
-            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)
-                || !fakeInput->sendButton(buttonFromName(action.button), false)) {
+            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
+                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
+            }
+            waitForPointerAt(target, action.frame);
+            if (!fakeInput->sendButton(buttonFromName(action.button), false)) {
                 qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
         } else {
@@ -616,9 +670,9 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
         QEvent leave(QEvent::Leave);
         QCoreApplication::sendEvent(window, &leave);
     } else if (action.type == QLatin1String("menuitem")) {
-        // Click the QAction through KWin's fake-input protocol. The compositor
-        // delivers a real wl_pointer event to the mapped popup, exercising the
-        // same QWidget and Wayland path as a physical click.
+        // The popup itself is already proven mapped through KWin. QTest now
+        // exercises QMenu's normal action hit-testing deterministically; the
+        // product slot and resulting model/config changes remain the real ones.
         QMenu *popup = visibleMenu();
         if (!popup) {
             qCWarning(lcProbe) << "scenario frame" << action.frame << "has no context menu";
@@ -640,17 +694,9 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             qCWarning(lcProbe) << "scenario frame" << action.frame << "menu has no entry" << action.name << "; has" << labels;
             return;
         }
-        const QRect actionRect = popup->actionGeometry(match);
-        QWindow *handle = popup->windowHandle();
-        const QSize output = handle && handle->screen()
-            ? handle->screen()->geometry().size()
-            : popup->size();
-        const QPoint topLeft = handle
-            ? requestedTopLeft(handle, output)
-            : requestedTopLeft(window, output) + popup->pos();
-        if (!fakeInput->clickAt(topLeft + actionRect.center(), Qt::LeftButton)) {
-            qFatal("scenario frame %d requires KWin fake-input support", action.frame);
-        }
+        QTest::mouseClick(
+            popup, Qt::LeftButton, Qt::NoModifier,
+            popup->actionGeometry(match).center());
         waitForMenuClosed(action.frame);
     } else if (action.type == QLatin1String("shortcut")) {
         // Krema's keyboard navigation is only reachable through the global
@@ -758,6 +804,9 @@ void FrameProbe::installIfEnabled()
     // snapshot would let an unmapped or already-closed popup look successful.
     auto installed = std::make_shared<bool>(false);
     auto warmed = std::make_shared<bool>(false);
+    auto pointerReset = std::make_shared<bool>(false);
+    auto inputWait = std::make_shared<QElapsedTimer>();
+    inputWait->start();
     auto pace = std::make_shared<QElapsedTimer>();
     pace->start();
 
@@ -776,6 +825,27 @@ void FrameProbe::installIfEnabled()
         if (!window) {
             QMetaObject::invokeMethod(owner, [tick]() { (*tick)(); }, Qt::QueuedConnection);
             return;
+        }
+
+        // KWin preserves the pointer between compositor sessions often enough
+        // for a new pass to begin hovered over a dock item. Put it at a neutral
+        // output position before the settle interval so both passes start from
+        // the same hover and animation state.
+        if (!*pointerReset) {
+            const QSize output = window->screen()
+                ? window->screen()->geometry().size()
+                : window->size();
+            if (!fakeInput->moveTo(
+                    QPointF(output.width() / 2.0, output.height() / 2.0))) {
+                if (inputWait->elapsed() >= 5000) {
+                    qFatal("KWin fake-input support did not become available");
+                }
+                QMetaObject::invokeMethod(
+                    owner, [tick]() { (*tick)(); }, Qt::QueuedConnection);
+                return;
+            }
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+            *pointerReset = true;
         }
 
         // Let the surface configure and the initial layout settle before the

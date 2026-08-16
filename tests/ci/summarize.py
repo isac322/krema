@@ -94,11 +94,12 @@ def main() -> int:
 
     compared = [result for result in results if result.get('repro_ok') is not None]
     if compared:
-        identical = sum(1 for result in compared if result.get('repro_ok'))
-        out.append(f'Reproducibility: {identical}/{len(compared)} scenarios are '
-                   f'byte-identical across every captured pass. Any frame-count, '
-                   f'frame-number, item, property, window, or menu-state difference '
-                   f'fails the scenario.')
+        reproducible = sum(1 for result in compared if result.get('repro_ok'))
+        out.append(f'Reproducibility: {reproducible}/{len(compared)} scenarios have '
+                   f'exact pre-action and settled states, matching transition '
+                   f'envelopes, and no more than the allowed transient-frame budget. '
+                   f'Frame-count, identity, endpoint, menu-state, or out-of-range '
+                   f'property differences fail the scenario.')
     else:
         out.append('Reproducibility: not measured — this run captured a single pass per '
                    'scenario, so no two captures were compared.')

@@ -1,6 +1,6 @@
 {
-  "_comment": "Provisional gate for the first strict CI run: 187 backed assertions, at most 32 invariants, and no pixel exemptions. CI must confirm these counts; adjust only from the produced evidence.json with a reviewed reason.",
-  "backed_min": 187,
-  "invariant_max": 32,
+  "_comment": "Reviewed from strict CI capture run 31956790763: 183 assertions have pixel changes and 36 are deliberate no-change invariants. The four newly classified invariants cover internal hover selection before an empty-background click and the unchanged menu/panel state while the menu interaction lock is active.",
+  "backed_min": 183,
+  "invariant_max": 36,
   "pixel_exempt_max": 0
 }

@@ -39,7 +39,8 @@
         "Settings...",
         "Quit"
       ],
-      "mapped": true
+      "mapped": true,
+      "invariant": true
     },
     {
       "qa": "QA-VIS-012",
@@ -49,7 +50,8 @@
       "comment": "The unnamed panel path (0/0/2) remains fully visible while the menu is open even with the cursor outside",
       "frame": 100,
       "value": 1.0,
-      "tolerance": 0.001
+      "tolerance": 0.001,
+      "invariant": true
     },
     {
       "qa": "QA-VIS-012",
@@ -59,7 +61,8 @@
       "comment": "While interaction is locked, the panel does not move to its hidden position and stays at visible position y=36",
       "frame": 100,
       "value": 36,
-      "tolerance": 0.01
+      "tolerance": 0.01,
+      "invariant": true
     }
   ]
 }

@@ -87,6 +87,7 @@ cmake -S "$KREMA_SRC_BUILD" -B "$release_build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \
     -DKREMA_TEST_HOOKS=OFF \
+    -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="$release_build/bin" \
     -DCMAKE_INSTALL_PREFIX=/usr >"$KREMA_OUT/release-configure.log" 2>&1 || {
     echo "release configure failed" >&2
     grep -nE "CMake Error|Could NOT find|CMAKE_[A-Z_]*NOTFOUND" \
@@ -102,7 +103,11 @@ cmake --build "$release_build" --target krema -j"$(nproc)" \
     tail -n 40 "$KREMA_OUT/release-build.log" >&2
     exit 1
 }
-release_binary="$release_build/src/krema"
+release_binary="$release_build/bin/krema"
+if [[ ! -x "$release_binary" ]]; then
+    echo "release binary was not produced at $release_binary" >&2
+    exit 1
+fi
 readelf -d "$release_binary" >"$KREMA_OUT/release-dynamic.txt"
 if grep -q 'Qt6Test' "$KREMA_OUT/release-dynamic.txt"; then
     echo "release binary unexpectedly links Qt6Test" >&2

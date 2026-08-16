@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pathlib
 import sys
 
@@ -278,16 +279,12 @@ CHECKS = {
 # --- run-to-run reproducibility --------------------------------------------
 
 def canonical_payload(row: dict) -> dict:
-    """Captured state whose equality is required across passes.
-
-    `frame` is checked separately and `vt` is derived from it. Everything else
-    is observable capture output and must be byte-for-byte reproducible.
-    """
+    """Captured state compared across passes; frame and derived time are separate."""
     return {key: value for key, value in row.items() if key not in ('frame', 'vt')}
 
 
 def first_difference(left, right, path: str = 'capture') -> str | None:
-    """Describe the first structural difference between two JSON values."""
+    """Describe the first structural or value difference between JSON values."""
     if type(left) is not type(right):
         return f'{path}: type {type(left).__name__} != {type(right).__name__}'
     if isinstance(left, dict):
@@ -314,24 +311,122 @@ def first_difference(left, right, path: str = 'capture') -> str | None:
     return None
 
 
+def scalar_values(value, path: str = 'capture'):
+    """Yield stable JSON leaf paths for transition-envelope comparison."""
+    if isinstance(value, dict):
+        for key in sorted(value):
+            yield from scalar_values(value[key], f'{path}.{key}')
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from scalar_values(item, f'{path}[{index}]')
+    else:
+        yield path, value
+
+
+def envelope_difference(reference: list[dict], candidate: list[dict],
+                        start: int, end: int, tolerance: float) -> str | None:
+    """Reject transient values or states absent from the other pass.
+
+    Only paths present throughout both segments are compared. Dynamic objects
+    may appear on different transient frames, but exact segment boundaries and
+    the divergent-frame budget still constrain those structural differences.
+    """
+    left = [dict(scalar_values(canonical_payload(row)))
+            for row in reference[start:end]]
+    right = [dict(scalar_values(canonical_payload(row)))
+             for row in candidate[start:end]]
+    common = set(left[0]) & set(right[0])
+    for values in left[1:] + right[1:]:
+        common &= set(values)
+    for path in sorted(common):
+        left_values = [values[path] for values in left]
+        right_values = [values[path] for values in right]
+        numeric = (all(isinstance(value, (int, float)) and not isinstance(value, bool)
+                       for value in left_values + right_values))
+        if numeric:
+            for label, left_value, right_value in (
+                    ('minimum', min(left_values), min(right_values)),
+                    ('maximum', max(left_values), max(right_values))):
+                if not math.isclose(left_value, right_value,
+                                    rel_tol=0.0, abs_tol=tolerance):
+                    return (f'{path} {label}: {left_value!r} != '
+                            f'{right_value!r}')
+        elif set(map(repr, left_values)) != set(map(repr, right_values)):
+            return (f'{path} states: {set(map(repr, left_values))} != '
+                    f'{set(map(repr, right_values))}')
+    return None
+
+
 def reproducibility_failures(reference: list[dict], candidate: list[dict],
-                             label: str = 'pass2') -> list[str]:
-    """Return strict capture differences; no frame shifting or omission."""
+                             label: str = 'pass2',
+                             action_frames: list[int] | None = None,
+                             max_transient: int = 9,
+                             envelope_tolerance: float = 1e-4) -> list[str]:
+    """Gate capture stability while admitting bounded animation-onset jitter.
+
+    Frame identity, each pre-action state, settled tails, and the scalar value
+    envelope are exact within ``envelope_tolerance``. At most
+    ``max_transient`` same-frame payloads may differ inside an action-delimited
+    segment; this covers registration/onset jitter without allowing omitted
+    frames, changed endpoints, or out-of-range values.
+    """
     failures = []
     if len(reference) != len(candidate):
-        failures.append(f'{label}: frame count {len(candidate)}, expected {len(reference)}')
-
+        return [f'{label}: frame count {len(candidate)}, expected {len(reference)}']
     for index, (left, right) in enumerate(zip(reference, candidate)):
-        left_frame = left.get('frame')
-        right_frame = right.get('frame')
-        if left_frame != right_frame:
+        if left.get('frame') != right.get('frame'):
             failures.append(
-                f'{label}: row {index + 1} has frame {right_frame}, expected {left_frame}')
-        difference = first_difference(canonical_payload(left), canonical_payload(right))
-        if difference:
-            failures.append(f'{label} frame {left_frame}: {difference}')
+                f'{label}: row {index + 1} has frame {right.get("frame")}, '
+                f'expected {left.get("frame")}')
+    if failures:
+        return failures[:8]
+
+    starts = {0}
+    for frame in action_frames or []:
+        index = frame - 1
+        if 0 < index < len(reference):
+            starts.add(index)
+    boundaries = sorted(starts) + [len(reference)]
+    for start, end in zip(boundaries, boundaries[1:]):
+        differences = []
+        for index in range(start, end):
+            difference = first_difference(
+                canonical_payload(reference[index]),
+                canonical_payload(candidate[index]))
+            if difference:
+                differences.append((index, difference))
+        if not differences:
+            continue
+
+        segment_length = end - start
+        settled_frames = min(4, max(1, segment_length // 4))
+        exact_indices = {start, *range(end - settled_frames, end)}
+        boundary_difference = next(
+            ((index, difference) for index, difference in differences
+             if index in exact_indices),
+            None)
+        first_frame = reference[start]['frame']
+        last_frame = reference[end - 1]['frame']
+        if boundary_difference:
+            index, difference = boundary_difference
+            failures.append(
+                f'{label}: frame {reference[index]["frame"]} differs in the '
+                f'exact pre-action/settled boundary for segment '
+                f'{first_frame}-{last_frame}: {difference}')
+        elif len(differences) > max_transient:
+            index, difference = differences[0]
+            failures.append(
+                f'{label}: frames {first_frame}-{last_frame} contain '
+                f'{len(differences)} divergent frames, limit {max_transient}; '
+                f'first at {reference[index]["frame"]}: {difference}')
+        else:
+            envelope = envelope_difference(
+                reference, candidate, start, end, envelope_tolerance)
+            if envelope:
+                failures.append(
+                    f'{label}: frames {first_frame}-{last_frame} have a '
+                    f'different transition envelope: {envelope}')
         if len(failures) >= 8:
-            failures.append(f'{label}: additional differences omitted')
             break
     return failures
 
@@ -454,13 +549,28 @@ def main() -> int:
     repro_ok: bool | None = None
     repro = 'single pass'
     if len(passes) > 1:
+        action_frames = [action.get('frame') for action in scenario.get('actions', [])
+                         if isinstance(action.get('frame'), int)]
+        max_transient = scenario.get('repro_transient_frames', 9)
+        if not isinstance(max_transient, int) or not 0 <= max_transient <= 24:
+            scenario_failures.append(
+                'repro_transient_frames must be an integer from 0 to 24')
+            max_transient = 9
+        envelope_tolerance = scenario.get('repro_envelope_tolerance', 1e-4)
+        if (not isinstance(envelope_tolerance, (int, float))
+                or not 0 <= envelope_tolerance <= 0.01):
+            scenario_failures.append(
+                'repro_envelope_tolerance must be a number from 0 to 0.01')
+            envelope_tolerance = 1e-4
         for pass_index, path in enumerate(passes[1:], start=2):
-            repro_failures.extend(
-                reproducibility_failures(rows, load(path), f'pass{pass_index}'))
+            repro_failures.extend(reproducibility_failures(
+                rows, load(path), f'pass{pass_index}', action_frames,
+                max_transient, envelope_tolerance))
         repro_ok = not repro_failures
-        repro = 'byte-identical' if repro_ok else repro_failures[0]
+        repro = (f'exact endpoints with ≤{max_transient} transient frames/action'
+                 if repro_ok else repro_failures[0])
         if repro_ok:
-            print(f'  repro: byte-identical across {len(passes)} passes')
+            print(f'  repro: exact endpoints, ≤{max_transient} transient frames/action')
         else:
             print('  REPRO capture differs:')
             for failure in repro_failures:

@@ -62,6 +62,74 @@ class ReproducibilityTests(unittest.TestCase):
         self.assertTrue(failures)
         self.assertIn('capture.windows[0].items[0].x', failures[0])
 
+    def test_bounded_action_transients_pass_with_exact_edges(self):
+        reference = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=1),
+            frame(4, x=2), frame(5, x=2),
+        ]
+        candidate = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=0),
+            frame(4, x=1), frame(5, x=2),
+        ]
+        self.assertEqual([], assert_frames.reproducibility_failures(
+            reference, candidate, action_frames=[2], max_transient=2))
+
+    def test_transient_difference_cannot_change_pre_action_edge(self):
+        reference = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=1),
+            frame(4, x=2), frame(5, x=2),
+        ]
+        candidate = [
+            frame(1, x=0), frame(2, x=9), frame(3, x=0),
+            frame(4, x=1), frame(5, x=2),
+        ]
+        self.assertTrue(assert_frames.reproducibility_failures(
+            reference, candidate, action_frames=[2], max_transient=3))
+
+    def test_transient_difference_cannot_exceed_reference_envelope(self):
+        reference = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=1),
+            frame(4, x=2), frame(5, x=2), frame(6, x=2),
+        ]
+        candidate = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=9),
+            frame(4, x=2), frame(5, x=2), frame(6, x=2),
+        ]
+        failures = assert_frames.reproducibility_failures(
+            reference, candidate, action_frames=[2], max_transient=3)
+        self.assertTrue(any('transition envelope' in failure for failure in failures))
+
+    def test_transition_envelope_uses_explicit_absolute_tolerance(self):
+        reference = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=1.0),
+            frame(4, x=0), frame(5, x=0), frame(6, x=0),
+        ]
+        close = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=1.00005),
+            frame(4, x=0), frame(5, x=0), frame(6, x=0),
+        ]
+        far = [
+            frame(1, x=0), frame(2, x=0), frame(3, x=1.001),
+            frame(4, x=0), frame(5, x=0), frame(6, x=0),
+        ]
+        self.assertEqual([], assert_frames.reproducibility_failures(
+            reference, close, action_frames=[2], max_transient=1,
+            envelope_tolerance=1e-4))
+        self.assertTrue(assert_frames.reproducibility_failures(
+            reference, far, action_frames=[2], max_transient=1,
+            envelope_tolerance=1e-4))
+
+    def test_transient_difference_budget_is_enforced(self):
+        reference_values = [0, 0] + [1] * 5 + [0] * 8
+        candidate_values = [0, 0] + [0] * 5 + [1] * 5 + [0] * 3
+        reference = [frame(index, x=value)
+                     for index, value in enumerate(reference_values, 1)]
+        candidate = [frame(index, x=value)
+                     for index, value in enumerate(candidate_values, 1)]
+        failures = assert_frames.reproducibility_failures(
+            reference, candidate, action_frames=[2], max_transient=9)
+        self.assertTrue(any('divergent frames' in failure for failure in failures))
+
     def test_frame_count_fails(self):
         failures = assert_frames.reproducibility_failures(
             [frame(1), frame(2)], [frame(1)])

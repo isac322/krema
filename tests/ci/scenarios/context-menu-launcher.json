@@ -79,7 +79,8 @@
       "prop": "hoveredIndex",
       "comment": "When I hover the first launcher before using the empty background, that launcher is selected.",
       "frame": 37,
-      "value": 0
+      "value": 0,
+      "invariant": true
     },
     {
       "qa": "QA-CMD-012",

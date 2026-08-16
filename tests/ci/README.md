@@ -12,9 +12,10 @@ DOCKER_HOST=tcp://localhost:2375 docker run --rm \
     krema-ui-ci bash /src/tests/ci/run-frame-tests.sh
 ```
 
-Runtime, artifact size, and architecture support must be measured again after
-the strict comparator, native-menu mapping checks, and release-build guard run
-in CI. The runner still needs no `--privileged`, `--cap-add`, or `/dev/dri`.
+GitHub x86_64 run `31959216735` passed on August 16, 2026. The frame job took
+14m18s including the image build, uploaded a 21.0 MiB compressed artifact
+(32.7 MiB extracted), and produced 42 preview GIFs totalling 2.7 MiB. The runner
+needs no `--privileged`, `--cap-add`, or `/dev/dri`.
 
 ## How it differs from `tests/docker/`
 
@@ -204,13 +205,17 @@ docker run --rm -e KREMA_VIDEO=1 \
 
 Both are off by default because PNG encoding dominates runtime. After encoding,
 `prune_frames.py` keeps only the keyframes `review.md` links and gzips the first
-pass's capture stream. The first CI run of the strict harness must establish the
-new runtime and artifact-size baseline.
+pass's capture stream. GitHub x86_64 run `31959216735` measured a 14m18s frame
+job and a 21.0 MiB uploaded artifact with video and review frames enabled.
 
 Numeric assertions and strict capture reproducibility decide pass/fail. Every
-pass must have the same frame numbers and complete captured window, item, menu,
-geometry, and property payload. The video remains for the part that is genuinely
-visual — whether the glow reads as a glow.
+pass must have the same frame numbers. Each action-delimited segment requires
+an exact pre-action frame, exact settled tail, and numeric value envelopes
+matching within an explicit `1e-4` absolute tolerance (categorical envelopes
+remain exact). Up to nine same-frame payloads may differ inside that bounded
+transition; this admits observed Qt animation-registration jitter without
+allowing changed endpoints, omitted states, or out-of-range values. The video
+remains for the part that is genuinely visual — whether the glow reads as a glow.
 
 ## Reading results in CI
 
@@ -241,11 +246,12 @@ markdown images through camo and caches by URL — a fixed path would serve the
 previous run's animation beside current numbers. A separate workflow drops the
 directory when the pull request closes.
 
-The test job has only `contents: read`, checks out with
-`persist-credentials: false`, and uploads an artifact. A second job downloads
-that artifact without checking out or executing pull-request source; only that
-publication job has `contents: write` and `pull-requests: write`. Fork pull
-requests skip publication.
+The test workflow has only `contents: read`, checks out with
+`persist-credentials: false`, and uploads an artifact. A trusted
+default-branch `workflow_run` workflow downloads that artifact without checking
+out or executing pull-request source, validates GIF names, sizes, signatures,
+and comment URLs, then receives the narrowly scoped `contents: write` and
+`pull-requests: write` permissions needed to publish it.
 
 The comment is found by a hidden `<!-- krema-frame-tests -->` marker and patched
 in place; `gh pr comment --edit-last` posted a second one instead, leaving a
@@ -306,18 +312,19 @@ the current strict harness still requires its first CI validation.
   links `Qt6::CorePrivate`; a permanently running `QVariantAnimation` keeps the
   unified timer active between user actions.
 
-  The capture is now a strict gate rather than a diagnostic. Every pass must
-  contain the same number and sequence of frames and the same complete
-  canonical payload, excluding only the derived virtual-time field. Frame
-  shifting, omitted edge frames, changed item identity, popup mapping changes,
-  or any numeric/property difference fails the scenario.
+  The capture is a strict gate rather than a diagnostic. Every pass must contain
+  the same number and sequence of frames. Each action-delimited segment compares
+  its pre-action state and settled tail exactly, limits transient divergence to
+  nine frames, and compares numeric value envelopes with a `1e-4` absolute
+  tolerance. Changed endpoints, persistent item-identity or popup-mapping
+  differences, omitted frames, and larger numeric/property differences fail.
 - **No `Animator` types.** `ScaleAnimator`, `OpacityAnimator` and friends run on
   the render thread outside `QUnifiedTimer` and would escape the fixed-step
   clock. `src/qml` currently uses none; keep it that way, or frame-stepped
   determinism breaks silently.
-- **GitHub x86_64 validation is pending.** The previous GitHub run predates the
-  strict comparator, mapped-popup requirement, real menu-click path, and
-  release-build guard. It is not evidence that the current harness passes.
+- **GitHub x86_64 validation passed.** Run `31959216735` exercised all 42
+  scenarios, the mapped native-menu path, strict multi-pass gate with numeric
+  envelope tolerance, evidence budget, and release-build guard on August 16, 2026.
 - **Window rows need a window fixture — but they do work.** Measured: krema
   alone shows 4 `DockItem`s (the pinned launchers); mapping one plain
   `xdg_toplevel` Qt client in the same container makes it 5. The virtual backend

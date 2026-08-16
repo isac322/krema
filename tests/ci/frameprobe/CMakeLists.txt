@@ -4,6 +4,10 @@
 # Frame-stepped CI capture hook. Only built when KREMA_TEST_HOOKS=ON so release
 # packages never link Qt6::Test or carry the capture code.
 
+# wayland-scanner emits a C translation unit containing the protocol interface
+# symbol consumed by the generated Qt C++ wrapper.
+enable_language(C)
+
 # Widgets: the dock context menu is a native QMenu.
 # Qml: the probe resolves the DockSettings singleton to drive settings changes.
 # CorePrivate carries QUnifiedTimer, whose consistent-timing mode is what

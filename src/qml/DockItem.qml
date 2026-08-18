@@ -429,6 +429,13 @@ Item {
             // Without this, the binding only tracks dockItem.index and won't
             // re-evaluate when different data appears at the same position.
             let _dep = model.display
+            // Also depend on model.decoration: LibTaskManager resolves a
+            // window's icon asynchronously after the row is first inserted
+            // (title/appId can already be known before the icon is). Without
+            // this, a window opened while the dock is already running keeps
+            // whatever (possibly empty) icon name was computed at creation,
+            // even after the real icon becomes available moments later.
+            let _dep2 = model.decoration
             let name = DockModel.iconName(dockItem.index)
             if (name && name.length > 0) {
                 return "image://icon/" + name + "?v=" + DockView.iconCacheVersion

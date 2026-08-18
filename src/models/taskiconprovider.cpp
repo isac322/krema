@@ -12,10 +12,17 @@
 namespace krema
 {
 
+QHash<QString, QIcon> TaskIconProvider::s_rawIcons;
+
 TaskIconProvider::TaskIconProvider(bool normalizationEnabled)
     : QQuickImageProvider(QQuickImageProvider::Pixmap)
     , m_normalizationEnabled(normalizationEnabled)
 {
+}
+
+void TaskIconProvider::registerRawIcon(const QString &key, const QIcon &icon)
+{
+    s_rawIcons.insert(key, icon);
 }
 
 QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QSize &requestedSize)
@@ -28,7 +35,13 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
     const int height = requestedSize.height() > 0 ? requestedSize.height() : 48;
     const int targetSize = std::max(width, height);
 
-    QIcon icon = QIcon::fromTheme(iconName);
+    // Icons resolved from an absolute file path (Snap/Flatpak/AppImage .desktop
+    // entries commonly do this) have no theme name, so DockModel registers them
+    // here under a synthetic key instead of a QIcon::fromTheme()-resolvable name.
+    QIcon icon = s_rawIcons.value(iconName);
+    if (icon.isNull()) {
+        icon = QIcon::fromTheme(iconName);
+    }
     if (icon.isNull()) {
         icon = QIcon(iconName);
     }

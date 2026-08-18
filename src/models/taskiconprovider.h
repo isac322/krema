@@ -45,6 +45,12 @@ public:
     void setIconScale(qreal scale);
     void clearCache();
 
+    /// Register a QIcon that has no theme name (e.g. resolved from an absolute
+    /// file path, as with Snap/Flatpak/AppImage .desktop entries) under a
+    /// synthetic key so requestPixmap() can still find it. Runs on the GUI
+    /// thread only (QQuickImageProvider::Pixmap providers are not threaded).
+    static void registerRawIcon(const QString &key, const QIcon &icon);
+
 private:
     /// Find the bounding rect of non-transparent content in an image.
     static QRect findContentBounds(const QImage &image, int threshold = 25);
@@ -61,6 +67,8 @@ private:
     QHash<QString, IconNormalizationInfo> m_cache;
     bool m_normalizationEnabled = true;
     qreal m_iconScale = 1.0;
+
+    static QHash<QString, QIcon> s_rawIcons;
 
     static constexpr int kAlphaThreshold = 25;
     static constexpr qreal kMinContentRatio = 0.92;

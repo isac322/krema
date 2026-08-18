@@ -3,6 +3,8 @@
 
 #include "dockmodel.h"
 
+#include "taskiconprovider.h"
+
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
@@ -10,6 +12,7 @@
 #include <QIcon>
 #include <QLoggingCategory>
 #include <QScreen>
+#include <QSet>
 
 Q_LOGGING_CATEGORY(lcModel, "krema.model")
 
@@ -123,7 +126,43 @@ QString DockModel::iconName(int index) const
     }
 
     const QIcon icon = idx.data(Qt::DecorationRole).value<QIcon>();
-    return icon.name();
+    QString name = icon.name();
+
+    // Icons resolved from an absolute file path (Snap/Flatpak/AppImage .desktop
+    // entries commonly use Icon=/path/to/icon.png instead of a theme name) have
+    // no QIcon::name(). Register the actual pixmap under a synthetic key so
+    // TaskIconProvider can still find and normalize it, instead of silently
+    // falling back to the dock's generic letter-tile placeholder.
+    if (name.isEmpty() && !icon.isNull()) {
+        name = QStringLiteral("raw:") + appId(index);
+        TaskIconProvider::registerRawIcon(name, icon);
+    }
+
+    // KWin/LibTaskManager hand back a generic placeholder icon (name "wayland")
+    // for windows it can't otherwise identify, instead of leaving the
+    // decoration null. It resolves to a real (but meaningless) theme icon, so
+    // it isn't caught by the empty-or-unresolvable check below — treat it the
+    // same as having no icon at all.
+    static const QSet<QString> genericPlaceholderIconNames{QStringLiteral("wayland"), QStringLiteral("unknown")};
+    if (genericPlaceholderIconNames.contains(name)) {
+        name.clear();
+    }
+
+    // Whenever we still don't have a theme name that actually resolves to a
+    // real icon — no decoration at all (common on Wayland when no installed
+    // .desktop file matches the window's app_id), or a name LibTaskManager
+    // handed back that doesn't correspond to anything installed — fall back
+    // to the window's app_id itself. Many toolkits (Flutter apps in
+    // particular) name their installed icon after their app_id, even when no
+    // matching .desktop file exists to supply Icon= directly.
+    if (name.isEmpty() || (!name.startsWith(QLatin1String("raw:")) && QIcon::fromTheme(name).isNull())) {
+        const QString app = appId(index);
+        if (!app.isEmpty() && !QIcon::fromTheme(app).isNull()) {
+            name = app;
+        }
+    }
+
+    return name;
 }
 
 QUrl DockModel::launcherUrl(int index) const

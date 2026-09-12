@@ -31,6 +31,7 @@ public:
     void setVisibilityMode(VisibilityMode mode) override;
     void setSize(const QSize &size) override;
     void setInputRegion(const QRegion &region) override;
+    void setBlurRegion(const QRegion &region) override;
     [[nodiscard]] Edge edge() const override;
     void setKeyboardInteractivity(bool enabled) override;
 

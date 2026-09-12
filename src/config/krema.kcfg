@@ -9,9 +9,38 @@
     <entry name="IconSize" type="Int">
       <label>Icon size in pixels</label>
       <default>48</default>
-      <min>24</min>
+      <min>12</min>
       <max>96</max>
     </entry>
+
+    <entry name="PanelHeight" type="Int">
+      <label>Height/Thickness of the dock panel</label>
+      <default>60</default>
+      <min>10</min>
+      <max>300</max>
+    </entry>
+
+    <entry name="MaxLength" type="Int">
+      <label>Maximum dock length as a percentage of screen width/height</label>
+      <default>100</default>
+      <min>10</min>
+      <max>100</max>
+    </entry>
+
+    <entry name="PanelLengthMode" type="Int">
+      <label>0: Adaptive (Hugs icons), 1: Span (Stretches to MaxLength)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+
+    <entry name="IslandMargin" type="Int">
+      <label>Symmetrical margin between the Glass Pill and the dock panel edges</label>
+      <default>8</default>
+      <min>0</min>
+      <max>20</max>
+    </entry>
+
 
     <entry name="IconSpacing" type="Int">
       <label>Spacing between icons</label>
@@ -32,18 +61,30 @@
       <default>true</default>
     </entry>
 
-    <entry name="IconScale" type="Double">
+    <entry name="IndicatorOffset" type="Double">
       <label>Icon scale within the allocated cell (1.0 = fill, smaller = more padding)</label>
       <default>1.0</default>
       <min>0.5</min>
       <max>1.0</max>
     </entry>
 
+    <entry name="IndicatorSize" type="Int">
+      <label>Size of the status indicator dots/dashes</label>
+      <default>4</default>
+      <min>2</min>
+      <max>12</max>
+    </entry>
+
+    <entry name="SyncPanelThickness" type="Bool">
+      <label>Scale panel thickness proportionally with icon size</label>
+      <default>true</default>
+    </entry>
+
     <entry name="CornerRadius" type="Int">
       <label>Panel corner radius</label>
       <default>12</default>
       <min>0</min>
-      <max>24</max>
+      <max>100</max>
     </entry>
 
     <entry name="Floating" type="Bool">
@@ -51,9 +92,33 @@
       <default>true</default>
     </entry>
 
+    <entry name="Alignment" type="Int">
+      <label>Alignment of the dock along the screen edge (0: Center, 1: Left/Top, 2: Right/Bottom)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
     <entry name="VisibilityMode" type="Int">
       <label>Dock visibility mode (0=Always, 1=AutoHide, 2=Dodge)</label>
       <default>0</default>
+    </entry>
+
+    <entry name="AllowOverflow" type="Bool">
+      <label>Allow the dock panel to shrink smaller than the icons</label>
+      <default>false</default>
+    </entry>
+
+     <entry name="reserveSpace" type="Bool">
+      <label>Reserve screen space for the dock</label>
+      <default>true</default>
+    </entry>
+
+    <entry name="reserveMode" type="Int">
+      <label>Reserve mode (0=Panel, 1=Icons)</label>
+      <default>1</default>
+      <min>0</min>
+      <max>1</max>
     </entry>
 
     <entry name="DodgeActiveOnly" type="Bool">
@@ -79,15 +144,15 @@
     <entry name="BackgroundOpacity" type="Double">
       <label>Background opacity</label>
       <default>0.6</default>
-      <min>0.1</min>
+      <min>0.3</min>
       <max>1.0</max>
     </entry>
 
     <entry name="BackgroundStyle" type="Int">
-      <label>Background style (0=PanelInherit, 1=Transparent, 2=Tinted, 3=Acrylic)</label>
+      <label>Background style (0=Adaptive, 1=Transparent, 2=Solid, 3=Acrylic, 4=Mica)</label>
       <default>0</default>
       <min>0</min>
-      <max>3</max>
+      <max>4</max>
     </entry>
 
     <entry name="UseAccentColor" type="Bool">
@@ -231,7 +296,7 @@
     <entry name="OtherDesktopOpacity" type="Double">
       <label>Opacity for windows on other virtual desktops (DimOtherDesktops mode)</label>
       <default>0.4</default>
-      <min>0.1</min>
+      <min>0.0</min>
       <max>0.9</max>
     </entry>
 
@@ -239,5 +304,55 @@
       <label>Pinned launcher URLs</label>
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>
     </entry>
+
+    <entry name="SeparatorStyle" type="Int">
+      <label>0=Classic, 1=Dots, 2=Gradient</label>
+      <default>0</default>
+    </entry>
+
+    <entry name="SeparatorWidth" type="Int">
+      <label>Thickness of the separator line or dots</label>
+      <default>3</default>
+      <min>1</min>
+      <max>20</max>
+    </entry>
+
+    <entry name="SeparatorLength" type="Int">
+      <label>Length of the separator</label>
+      <default>40</default>
+      <min>10</min>
+      <max>150</max>
+    </entry>
+
+    <entry name="SeparatorSpacing" type="Int">
+      <label>Spacing between dots</label>
+      <default>4</default>
+      <min>1</min>
+      <max>15</max>
+    </entry>
+
+    <entry name="SeparatorOpacity" type="Double">
+      <default>0.5</default>
+    </entry>
+
+    <entry name="SettingsThemeMode" type="Int">
+      <label>Settings UI theme (0=Light, 1=Dark)</label>
+      <default>1</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+
+    <entry name="RimLightEnabled" type="Bool">
+      <label>Enable a subtle glowing border around the dock panel</label>
+      <default>false</default>
+    </entry>
+
+    <entry name="RimLightOpacity" type="Double">
+      <label>Rim light intensity</label>
+      <default>0.1</default>
+      <min>0.05</min>
+      <max>0.5</max>
+    </entry>
+
   </group>
 </kcfg>

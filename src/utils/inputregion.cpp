@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 #include "inputregion.h"
-
 #include <algorithm>
 
 namespace krema
@@ -10,102 +9,110 @@ namespace krema
 
 QRegion computeDockInputRegion(const InputRegionParams &p)
 {
-    // Trigger strip: thin strip along the screen edge to detect mouse entry
+    if (p.panelWidth == 0 || p.panelHeight == 0) {
+        return QRegion();
+    }
+
+    // 1. Create the Trigger Strip (The invisible 4px line that unhides the dock)
     QRegion triggerStrip;
+    int ts = p.triggerStripHeight;
+
+    // Rule 17 Compliance: The "Hysteresis Bridge"
+    // If the dock is hovered, we expand the trigger strip to 64px.
+    // This creates a solid block of Wayland input region to catch rapid mouse twitches,
+    // ensuring the mouse doesn't fall out of the region while the dock is hidden or animating up.
+    if (p.hovered) {
+        ts = std::max(ts, 64);
+    }
+
     switch (p.edge) {
     case 0: // Top
-        triggerStrip = QRegion(0, 0, p.surfaceWidth, p.triggerStripHeight);
+        triggerStrip = QRegion(0, 0, p.surfaceWidth, ts);
         break;
     case 1: // Bottom
-        triggerStrip = QRegion(0, p.surfaceHeight - p.triggerStripHeight, p.surfaceWidth, p.triggerStripHeight);
+        triggerStrip = QRegion(0, p.surfaceHeight - ts, p.surfaceWidth, ts);
         break;
     case 2: // Left
-        triggerStrip = QRegion(0, 0, p.triggerStripHeight, p.surfaceHeight);
+        triggerStrip = QRegion(0, 0, ts, p.surfaceHeight);
         break;
     case 3: // Right
-        triggerStrip = QRegion(p.surfaceWidth - p.triggerStripHeight, 0, p.triggerStripHeight, p.surfaceHeight);
+        triggerStrip = QRegion(p.surfaceWidth - ts, 0, ts, p.surfaceHeight);
         break;
     }
 
-    if (!p.visible) {
+    // If dock is hidden, not hovered, and settings are closed, only the trigger line is active
+    if (!p.visible && !p.hovered && !p.settingsVisible) {
         return triggerStrip;
     }
 
-    if (p.edge <= 1) {
-        // Horizontal (Top/Bottom)
-        if (p.panelWidth <= 0) {
-            return {};
+    QRegion finalRegion = triggerStrip;
+
+    // 2. Add the Dock Hitbox (The "Hole" for the icons)
+    if (p.visible || p.hovered) {
+        // FIX: The `p.margin` (64px) is exclusively for drawing the soft drop shadow.
+        // It must NOT be added to the input region, otherwise it creates a massive invisible click-blocking wall!
+        // Instead, we only use a small 5px buffer around the sides.
+        int horizontalBuffer = 5;
+
+        // FIX: Only expand the input region to `zoomOverflowHeight` if actively hovering.
+        // If not hovering, we only provide 24px of overflow (enough to catch the tops of unzoomed protruding icons).
+        // This dynamically frees the screen for background window clicks!
+        int overflow = p.hovered ? p.zoomOverflowHeight : 24;
+
+        int x, y, w, h;
+        if (p.edge <= 1) { // Horizontal (Top=0, Bottom=1)
+            x = std::max(0, p.panelX - horizontalBuffer);
+            w = p.panelWidth + 2 * horizontalBuffer;
+
+            if (p.edge == 1) { // Bottom
+                // Rule 17 Compliance: Dynamically cover zoom area
+                y = std::max(0, p.panelY - overflow - horizontalBuffer);
+                h = p.surfaceHeight - y;
+            } else { // Top
+                y = 0;
+                h = p.panelY + p.panelHeight + overflow + horizontalBuffer;
+            }
+        } else { // Vertical (Left=2, Right=3)
+            y = std::max(0, p.panelY - horizontalBuffer);
+            h = p.panelHeight + 2 * horizontalBuffer;
+
+            if (p.edge == 3) { // Right
+                x = std::max(0, p.panelX - overflow - horizontalBuffer);
+                w = p.surfaceWidth - x;
+            } else { // Left
+                x = 0;
+                w = p.panelX + p.panelWidth + overflow + horizontalBuffer;
+            }
         }
-
-        const int regionX = std::max(0, p.panelX - p.margin);
-        const int regionW = p.panelWidth + 2 * p.margin;
-
-        int regionY;
-        int regionH;
-        if (p.edge == 0) {
-            // Top: panel at top, zoom extends downward
-            regionY = 0;
-            int bottom = p.hovered ? (p.panelY + p.panelHeight + p.zoomOverflowHeight + p.margin) : (p.panelY + p.panelHeight + p.margin);
-            regionH = std::min(bottom, p.surfaceHeight);
-        } else {
-            // Bottom: panel at bottom, zoom extends upward
-            regionY = p.hovered ? std::max(0, p.panelY - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelY - p.margin);
-            regionH = p.surfaceHeight - regionY;
-        }
-
-        QRegion region(regionX, regionY, regionW, regionH);
-        return region.united(triggerStrip);
-    } else {
-        // Vertical (Left/Right)
-        if (p.panelHeight <= 0) {
-            return {};
-        }
-
-        const int regionY = std::max(0, p.panelY - p.margin);
-        const int regionH = p.panelHeight + 2 * p.margin;
-
-        int regionX;
-        int regionW;
-        if (p.edge == 2) {
-            // Left: panel at left, zoom extends rightward
-            regionX = 0;
-            int right = p.hovered ? (p.panelX + p.panelWidth + p.zoomOverflowHeight + p.margin) : (p.panelX + p.panelWidth + p.margin);
-            regionW = std::min(right, p.surfaceWidth);
-        } else {
-            // Right: panel at right, zoom extends leftward
-            regionX = p.hovered ? std::max(0, p.panelX - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelX - p.margin);
-            regionW = p.surfaceWidth - regionX;
-        }
-
-        QRegion region(regionX, regionY, regionW, regionH);
-        return region.united(triggerStrip);
+        finalRegion += QRect(x, y, w, h);
     }
+
+    // 3. Add the Settings Hitbox (Solid interaction for the menu)
+    if (p.settingsVisible) {
+        int sx = (p.surfaceWidth - p.settingsWidth) / 2;
+        int sy = p.surfaceHeight - p.panelHeight - p.settingsMargin - p.settingsHeight;
+        finalRegion += QRect(sx, sy, p.settingsWidth, p.settingsHeight);
+    }
+
+    return finalRegion;
 }
 
 QRect computeDockScreenRect(const DockScreenRectParams &p)
 {
-    int surfaceX = 0;
-    int surfaceY = 0;
-
+    int surfaceX = p.screenX;
+    int surfaceY = p.screenY;
     switch (p.edge) {
-    case 0: // Top
-        surfaceX = p.screenX;
-        surfaceY = p.screenY;
-        break;
-    case 1: // Bottom
-        surfaceX = p.screenX;
-        surfaceY = p.screenY + p.screenHeight - p.surfaceHeight;
-        break;
-    case 2: // Left
-        surfaceX = p.screenX;
-        surfaceY = p.screenY;
-        break;
-    case 3: // Right
-        surfaceX = p.screenX + p.screenWidth - p.surfaceWidth;
-        surfaceY = p.screenY;
-        break;
+    case 0:
+        break; // Top anchor
+    case 1:
+        surfaceY += p.screenHeight - p.surfaceHeight;
+        break; // Bottom anchor
+    case 2:
+        break; // Left anchor
+    case 3:
+        surfaceX += p.screenWidth - p.surfaceWidth;
+        break; // Right anchor
     }
-
     return QRect(surfaceX + p.panelX, surfaceY + p.panelRefY, p.panelWidth, p.panelHeight);
 }
 

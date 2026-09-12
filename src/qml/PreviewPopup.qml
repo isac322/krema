@@ -18,6 +18,7 @@ import com.bhyoo.krema 1.0
  * PreviewController C++ properties (previewKeyboardActive, focusedThumbnailIndex).
  * This avoids unreliable focus transfer between layer-shell surfaces.
  */
+// --- Layer 1: Window Previews (Thumbnail overlay surface) ---
 Item {
     id: root
     anchors.fill: parent
@@ -28,23 +29,6 @@ Item {
         Accessible.announce(
             i18n("Preview for %1, %2 windows", appName, count),
             Accessible.Polite)
-    }
-
-    // Surface-level hover detection: keep preview visible when mouse is anywhere
-    // on this surface. The C++ input region (updateInputRegion) already constrains
-    // which events reach this surface to the popup area + margins, so detecting
-    // hover at the surface root is equivalent to detecting hover on the popup.
-    // This is more reliable than a popup-child MouseArea because it doesn't depend
-    // on popup geometry, which can shift during layout.
-    HoverHandler {
-        id: surfaceHover
-        onHoveredChanged: {
-            PreviewController.setPreviewHovered(hovered)
-            // Mouse movement cancels keyboard navigation in preview
-            if (hovered && PreviewController.previewKeyboardActive) {
-                PreviewController.endPreviewKeyboardNav()
-            }
-        }
     }
 
     // Parent's window IDs — used by both grouped and single preview.
@@ -196,24 +180,30 @@ Item {
     // The visible popup container
     Rectangle {
         id: popup
-        visible: PreviewController.visible && PreviewController.parentIndex >= 0
+        visible: PreviewController.visible && PreviewController.parentIndex >= 0 && childWindowModel.count > 0
+
+        // --- Icon-Gated Visibility (Trial 4) ---
+        // Move the HoverHandler inside the visible content box.
+        // This ensures the mouse-catching 'Authority' only applies
+        // when the cursor is explicitly over the thumbnails.
+        HoverHandler {
+            id: popupHover
+            onHoveredChanged: {
+                PreviewController.setPreviewHovered(hovered)
+                if (hovered && PreviewController.previewKeyboardActive) {
+                    PreviewController.endPreviewKeyboardNav()
+                }
+            }
+        }
 
         Accessible.role: Accessible.PopupMenu
         Accessible.name: PreviewController.appName
             ? i18n("Preview for %1", PreviewController.appName)
             : ""
-        x: {
-            if (DockView.edge === 2) return 0                            // Left → left edge
-            if (DockView.edge === 3) return parent.width - width         // Right → right edge
-            return PreviewController.contentX                            // Top/Bottom → centered
-        }
+        x: PreviewController.contentX
         width: popupContent.implicitWidth + 2 * Kirigami.Units.largeSpacing
         height: popupContent.implicitHeight + 2 * Kirigami.Units.largeSpacing
-        y: {
-            if (DockView.edge === 0) return 0                            // Top → top edge
-            if (DockView.edge === 1) return parent.height - height       // Bottom → bottom edge
-            return PreviewController.contentY                            // Left/Right → centered
-        }
+        y: PreviewController.contentY
         radius: Kirigami.Units.cornerRadius
         color: Kirigami.Theme.backgroundColor
 

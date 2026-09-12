@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name="kremadockrc"/>
+
+  <group name="Geometry">
+    <entry name="DockHeight" type="Int">
+      <label>Base height of the dock in pixels</label>
+      <default>64</default>
+      <min>32</min>
+      <max>128</max>
+    </entry>
+    <entry name="ItemSpacing" type="Int">
+      <label>Space between items in pixels</label>
+      <default>8</default>
+      <min>0</min>
+      <max>32</max>
+    </entry>
+    <entry name="HoverBuffer" type="Int">
+      <label>Buffer zone for mouse hover detection</label>
+      <default>200</default>
+      <min>0</min>
+      <max>400</max>
+    </entry>
+    <entry name="MaxDockWidth" type="Int">
+      <label>Maximum width of the dock in pixels</label>
+      <default>1200</default>
+      <min>300</min>
+      <max>3840</max>
+    </entry>
+  </group>
+
+  <group name="Behavior">
+    <entry name="DebugGeom" type="Bool">
+      <label>Enable geometry debugging logging</label>
+      <default>false</default>
+    </entry>
+    <entry name="DebugHit" type="Bool">
+      <label>Enable hit-test debugging logging</label>
+      <default>false</default>
+    </entry>
+    <entry name="AnimationDuration" type="Int">
+      <label>Global animation duration in ms</label>
+      <default>200</default>
+      <min>50</min>
+      <max>1000</max>
+    </entry>
+    <entry name="AnimationEasing" type="Int">
+      <label>Global animation easing type (Qt::EasingCurve::Type)</label>
+      <default>27</default>
+    </entry>
+    <entry name="LayoutMode" type="Int">
+      <label>0: Icon-Only, 1: Icon-Label</label>
+      <default>0</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+  </group>
+</kcfg>

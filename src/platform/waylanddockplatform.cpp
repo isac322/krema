@@ -3,6 +3,7 @@
 
 #include "waylanddockplatform.h"
 
+#include <KWindowEffects>
 #include <LayerShellQt/Window>
 
 #include <QLoggingCategory>
@@ -89,8 +90,9 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
         break;
     case VisibilityMode::AutoHide:
     case VisibilityMode::DodgeWindows:
-        // Ignore other surfaces' exclusive zones — stay at the real screen edge
-        m_layerWindow->setExclusiveZone(-1);
+        // Respect other surfaces' exclusive zones (like shell panels)
+        // by setting to 0, which anchors to the usable area instead of absolute edge.
+        m_layerWindow->setExclusiveZone(0);
         break;
     }
 }
@@ -112,6 +114,21 @@ void WaylandDockPlatform::setInputRegion(const QRegion &region)
 {
     if (m_window) {
         m_window->setMask(region);
+    }
+}
+
+void WaylandDockPlatform::setBlurRegion(const QRegion &region)
+{
+    if (m_window) {
+        // --- RED 2: THE BLUR REGION (The "Ghost Sheet") ---
+        // Tells KWin where to apply the blur effect.
+        // This now uses the precise region provided by the controller,
+        // avoiding the "Ghost Sheet" bounding box bug (Rule 18).
+        if (!region.isEmpty()) {
+            KWindowEffects::enableBlurBehind(m_window, true, region);
+        } else {
+            KWindowEffects::enableBlurBehind(m_window, false);
+        }
     }
 }
 

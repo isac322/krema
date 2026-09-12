@@ -15,6 +15,10 @@ void applyBackgroundToWindow(QWindow *window, BackgroundStyleType type, const QR
         return;
     }
 
+    if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE")) {
+        return;
+    }
+
     // Always remove previous effects first
     removeBackgroundFromWindow(window);
 
@@ -29,6 +33,7 @@ void applyBackgroundToWindow(QWindow *window, BackgroundStyleType type, const QR
         break;
 
     case BackgroundStyleType::Acrylic:
+    case BackgroundStyleType::Mica:
         if (KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind)) {
             KWindowEffects::enableBlurBehind(window, true, region);
         }
@@ -47,6 +52,9 @@ void removeBackgroundFromWindow(QWindow *window)
         return;
     }
 
+    if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE")) {
+        return;
+    }
     KWindowEffects::enableBlurBehind(window, false);
     KWindowEffects::enableBackgroundContrast(window, false);
 }
@@ -61,7 +69,8 @@ QColor computeBackgroundColor(BackgroundStyleType type, const QString &tintColor
 
     switch (type) {
     case BackgroundStyleType::PanelInherit:
-    case BackgroundStyleType::Acrylic: {
+    case BackgroundStyleType::Acrylic:
+    case BackgroundStyleType::Mica: {
         if (useAccentColor) {
             KColorScheme scheme(QPalette::Normal, KColorScheme::Selection);
             color = scheme.background(KColorScheme::NormalBackground).color();
@@ -104,7 +113,7 @@ QColor computeBackgroundColor(BackgroundStyleType type, const QString &tintColor
 
 bool styleUsesBlur(BackgroundStyleType type)
 {
-    return type == BackgroundStyleType::PanelInherit || type == BackgroundStyleType::Acrylic;
+    return type == BackgroundStyleType::PanelInherit || type == BackgroundStyleType::Acrylic || type == BackgroundStyleType::Mica;
 }
 
 bool isStyleAvailable(BackgroundStyleType /* type */)

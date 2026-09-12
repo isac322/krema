@@ -14,6 +14,14 @@ add_library(krema_lib STATIC
     platform/dockplatformfactory.cpp
     platform/waylanddockplatform.h
     platform/waylanddockplatform.cpp
+    platform/hyprlanddockplatform.h
+    platform/hyprlanddockplatform.cpp
+
+    utils/hyprlandipc.h
+    utils/hyprlandipc.cpp
+
+    models/hyprlandtasksmodel.h
+    models/hyprlandtasksmodel.cpp
 
     shell/dockshell.h
     shell/dockshell.cpp
@@ -25,8 +33,8 @@ add_library(krema_lib STATIC
     shell/dockvisibilitycontroller.cpp
     shell/previewcontroller.h
     shell/previewcontroller.cpp
-    shell/dockwidget.h
-    shell/dockwidget.cpp
+    shell/dockmodule.h
+    shell/dockmodule.cpp
     shell/settingswindow.h
     shell/settingswindow.cpp
 
@@ -36,8 +44,12 @@ add_library(krema_lib STATIC
     style/backgroundstyle.h
     style/backgroundstyle.cpp
 
+    models/baseisland.h
+    models/baseisland.cpp
     models/dockmodel.h
     models/dockmodel.cpp
+    models/kdetasksproxymodel.h
+    models/kdetasksproxymodel.cpp
     models/dockactions.h
     models/dockactions.cpp
     models/dockcontextmenu.h
@@ -51,6 +63,12 @@ add_library(krema_lib STATIC
     utils/surfacegeometry.h
     utils/inputregion.h
     utils/inputregion.cpp
+    utils/identitymanager.h
+    utils/identitymanager.cpp
+    utils/peiconextractor.cpp
+    utils/peiconextractor.h
+    utils/debugmanager.cpp
+    utils/debugmanager.h
 
     ${KREMA_KCFG_SRCS}
     ${QML_RESOURCES}

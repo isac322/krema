@@ -93,6 +93,8 @@ private:
     void onMouseScreenChanged();
     void setShellVisible(DockShell *shell, bool visible);
 
+    void onScreenLockChanged(bool active);
+
     KremaSettings *m_settings;
     DockModel *m_model;
     NotificationTracker *m_tracker;

@@ -14,6 +14,7 @@ enum class BackgroundStyleType : int {
     Transparent = 1,
     Tinted = 2, // UseSystemColor → Header color; otherwise user tint
     Acrylic = 3,
+    Mica = 4,
 };
 
 /// Apply compositor effects (blur, contrast) to @p window for the given style.

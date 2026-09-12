@@ -41,6 +41,13 @@ class PreviewController : public QObject
     Q_PROPERTY(qreal contentY READ contentY NOTIFY positionChanged)
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
     Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
+    Q_PROPERTY(qreal dockHeight READ dockHeight NOTIFY dockHeightChanged)
+
+    // Icon geometry for absolute positioning
+    Q_PROPERTY(qreal itemGlobalX READ itemGlobalX NOTIFY positionChanged)
+    Q_PROPERTY(qreal itemGlobalY READ itemGlobalY NOTIFY positionChanged)
+    Q_PROPERTY(qreal itemWidth READ itemWidth NOTIFY positionChanged)
+    Q_PROPERTY(qreal itemHeight READ itemHeight NOTIFY positionChanged)
 
     // Preview keyboard navigation state (driven from dock)
     Q_PROPERTY(bool previewKeyboardActive READ isPreviewKeyboardActive NOTIFY previewKeyboardActiveChanged)
@@ -66,11 +73,15 @@ public:
 
     [[nodiscard]] bool isPreviewKeyboardActive() const;
     [[nodiscard]] int focusedThumbnailIndex() const;
+    [[nodiscard]] qreal dockHeight() const;
 
     /// Show preview for the task at @p index, positioned near the icon.
-    /// @p itemGlobalPos is the icon's global X (horizontal) or Y (vertical).
-    /// @p itemExtent is the icon's width (horizontal) or height (vertical).
-    Q_INVOKABLE void showPreview(int index, qreal itemGlobalPos, qreal itemExtent);
+    /// @p itemGlobalX and @p itemGlobalY are the icon's top-left global coordinates.
+    /// @p itemWidth and @p itemHeight are the icon's dimensions.
+    Q_INVOKABLE void showPreview(int index, qreal itemGlobalX, qreal itemGlobalY, qreal itemWidth, qreal itemHeight);
+
+    /// Update the dock height from QML.
+    Q_INVOKABLE void setDockHeight(qreal height);
 
     /// Reconfigure preview surface anchors/margins after edge change.
     void updateEdge();
@@ -120,6 +131,24 @@ public:
     /// Set the hide delay timer interval (from settings).
     void setHideDelay(int ms);
 
+    /// Get the icon's global X/Y and size for positioning in QML
+    [[nodiscard]] qreal itemGlobalX() const
+    {
+        return m_itemGlobalX;
+    }
+    [[nodiscard]] qreal itemGlobalY() const
+    {
+        return m_itemGlobalY;
+    }
+    [[nodiscard]] qreal itemWidth() const
+    {
+        return m_itemWidth;
+    }
+    [[nodiscard]] qreal itemHeight() const
+    {
+        return m_itemHeight;
+    }
+
 Q_SIGNALS:
     void visibleChanged(bool visible);
     void parentIndexChanged();
@@ -127,6 +156,7 @@ Q_SIGNALS:
     void contentSizeChanged();
     void previewKeyboardActiveChanged();
     void focusedThumbnailIndexChanged();
+    void dockHeightChanged();
 
 private:
     void updateInputRegion();
@@ -151,8 +181,13 @@ private:
     qreal m_contentY = 0;
     qreal m_contentWidth = 280;
     qreal m_contentHeight = 200;
-    qreal m_itemGlobalPos = 0;
-    qreal m_itemExtent = 0;
+    qreal m_dockHeight = 0;
+
+    // --- Placement: Icon Global Geometry (For absolute positioning) ---
+    qreal m_itemGlobalX = 0;
+    qreal m_itemGlobalY = 0;
+    qreal m_itemWidth = 0;
+    qreal m_itemHeight = 0;
 
     // Preview keyboard navigation state
     bool m_previewKeyboardActive = false;

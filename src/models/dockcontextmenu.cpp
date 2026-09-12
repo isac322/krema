@@ -100,8 +100,10 @@ void DockContextMenu::showForTask(int index)
     menu->addAction(i18nc("@action:inmenu", "Quit"), qApp, &QApplication::quit);
 
     // Track menu visibility for interaction lock (dock stays visible while menu is open)
+    m_visible = true;
     Q_EMIT visibleChanged(true);
     connect(menu, &QMenu::aboutToHide, this, [this]() {
+        m_visible = false;
         Q_EMIT visibleChanged(false);
     });
 

@@ -1,203 +1,161 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// SPDX-FileCopyrightText: 2026 Krema Contributors
-
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
+import "../components"
 
-FormCard.FormCardPage {
-    title: i18n("Behavior")
+QQC2.ScrollView {
+   id: behaviorPage
+   contentWidth: availableWidth
+   clip: true
+   topPadding: 16
+   bottomPadding: 32
+   leftPadding: 16
+   rightPadding: 16
 
-    FormCard.FormHeader {
-        title: i18n("Behavior")
-    }
+   ColumnLayout {
+       width: parent.width
+       spacing: 32
 
-    FormCard.FormCard {
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Visibility mode")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Always visible"),
-                i18n("Auto hide"),
-                i18n("Dodge windows")
-            ]
-            currentIndex: DockSettings.visibilityMode
-            onActivated: function(index) {
-                DockSettings.visibilityMode = index
-            }
-        }
+       ColumnLayout {
+           Layout.fillWidth: true
+           spacing: 8
+           
+           QQC2.Label { 
+               text: i18n("App Attention & Badges")
+               color: theme.textDim
+               font.bold: true; font.letterSpacing: 1.1; font.pixelSize: 12
+               Layout.leftMargin: 8
+           }
+           
+           KremaCard {
+               RowLayout {
+                   Layout.fillWidth: true
+                   ColumnLayout {
+                       Layout.fillWidth: true; spacing: 2
+                       QQC2.Label { text: i18n("Attention Animation"); color: theme.text; font.bold: true }
+                       QQC2.Label { 
+                          text: i18n("Visual feedback when an app needs you.")
+                          color: theme.textDim; font.pixelSize: 12
+                          wrapMode: Text.WordWrap; Layout.fillWidth: true 
+                      }
+                  }
 
-        FormCard.FormDelegateSeparator {
-            visible: DockSettings.visibilityMode === 2
-        }
+                  RowLayout {
+                      spacing: 4
+                      Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                      Repeater {
+                          model: [
+                              { icon: "dialog-close", label: i18n("None"), value: 0 },
+                              { icon: "go-up", label: i18n("Bounce"), value: 1 },
+                              { icon: "fill-color", label: i18n("Glow"), value: 4 }
+                          ]
+                          delegate: QQC2.Button {
+                              id: attBtn
+                              property bool isSelected: DockSettings.attentionAnimation === modelData.value
+                              leftPadding: 12; rightPadding: 12
 
-        FormCard.FormSwitchDelegate {
-            text: i18n("Only dodge active window")
-            description: i18n("When off, hides for any overlapping window")
-            checked: DockSettings.dodgeActiveOnly
-            onCheckedChanged: DockSettings.dodgeActiveOnly = checked
-            visible: DockSettings.visibilityMode === 2
-        }
+                              contentItem: RowLayout {
+                                  spacing: 8
+                                  Kirigami.Icon {
+                                      source: modelData.icon
+                                      color: attBtn.isSelected ? theme.text : theme.textDim
+                                      implicitWidth: 16; implicitHeight: 16
+                                  }
+                                  QQC2.Label {
+                                      text: modelData.label
+                                      color: attBtn.isSelected ? theme.text : theme.textDim
+                                      font.pointSize: 9; font.bold: attBtn.isSelected
+                                  }
+                              }
 
-        FormCard.FormDelegateSeparator {}
+                              background: Rectangle {
+                                  implicitHeight: 34; radius: 8
+                                  color: attBtn.isSelected ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.25) : (attBtn.hovered ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.12) : "transparent")
+                                  border.color: attBtn.isSelected ? theme.accent : "transparent"; border.width: 1
+                                  Behavior on color { ColorAnimation { duration: 150 } }
+                              }
+                              onClicked: { DockSettings.attentionAnimation = modelData.value; DockSettings.save(); }
+                          }
+                      }
+                  }
+               }
 
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Screen edge")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Top"),
-                i18n("Bottom"),
-                i18n("Left"),
-                i18n("Right")
-            ]
-            currentIndex: DockSettings.edge
-            onActivated: function(index) {
-                DockSettings.edge = index
-            }
-        }
+               Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#2A282A" }
 
-        // Show/hide delay controls — only visible in hide-capable modes
-        FormCard.FormDelegateSeparator {
-            visible: DockSettings.visibilityMode !== 0
-        }
+               ColumnLayout {
+                   Layout.fillWidth: true
+                   RowLayout {
+                       QQC2.Label { Layout.fillWidth: true; text: i18n("Animation Duration"); color: theme.text; font.bold: true }
+                       QQC2.Label { 
+                           text: attentionDurationSlider.value === 0 ? i18n("Infinite") : attentionDurationSlider.value + "s"
+                           color: theme.textDim; font.bold: true 
+                       }
+                   }
+                   QQC2.Slider {
+                       id: attentionDurationSlider; Layout.fillWidth: true; 
+                       from: 0; to: 60; stepSize: 1; 
+                       value: DockSettings.attentionAnimationDuration; 
+                       onMoved: { DockSettings.attentionAnimationDuration = value; DockSettings.save(); }
+                   }
+               }
 
-        FormCard.FormSpinBoxDelegate {
-            label: i18n("Show delay (ms)")
-            from: 0; to: 2000; stepSize: 50
-            value: DockSettings.showDelay
-            onValueChanged: DockSettings.showDelay = value
-            visible: DockSettings.visibilityMode !== 0
-        }
+               Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#2A282A" }
 
-        FormCard.FormDelegateSeparator {
-            visible: DockSettings.visibilityMode !== 0
-        }
+               RowLayout {
+                   Layout.fillWidth: true
+                   ColumnLayout {
+                       Layout.fillWidth: true; spacing: 2
+                       QQC2.Label { text: i18n("Badge Display"); color: theme.text; font.bold: true }
+                       QQC2.Label { 
+                          text: i18n("Notification count styles.")
+                          color: theme.textDim; font.pixelSize: 12
+                          wrapMode: Text.WordWrap; Layout.fillWidth: true 
+                      }
+                  }
 
-        FormCard.FormSpinBoxDelegate {
-            label: i18n("Hide delay (ms)")
-            from: 0; to: 2000; stepSize: 50
-            value: DockSettings.hideDelay
-            onValueChanged: DockSettings.hideDelay = value
-            visible: DockSettings.visibilityMode !== 0
-        }
-    }
+                  RowLayout {
+                      spacing: 4
+                      Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                      Repeater {
+                          model: [
+                              { icon: "dialog-close", label: i18n("Off"), value: 2 },
+                              { icon: "category-dot", label: i18n("Dot"), value: 1 },
+                              { icon: "format-list-ordered", label: i18n("Number"), value: 0 }
+                          ]
+                          delegate: QQC2.Button {
+                              id: badgeBtn
+                              property bool isSelected: DockSettings.badgeDisplayMode === modelData.value
+                              leftPadding: 12; rightPadding: 12
 
-    FormCard.FormHeader {
-        title: i18n("Multi-Monitor")
-    }
+                              contentItem: RowLayout {
+                                  spacing: 8
+                                  Kirigami.Icon {
+                                      source: modelData.icon
+                                      color: badgeBtn.isSelected ? theme.text : theme.textDim
+                                      implicitWidth: 16; implicitHeight: 16
+                                  }
+                                  QQC2.Label {
+                                      text: modelData.label
+                                      color: badgeBtn.isSelected ? theme.text : theme.textDim
+                                      font.pointSize: 9; font.bold: badgeBtn.isSelected
+                                  }
+                              }
 
-    FormCard.FormCard {
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Monitor mode")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Primary monitor only"),
-                i18n("All monitors"),
-                i18n("Follow active screen")
-            ]
-            currentIndex: DockSettings.monitorMode
-            onActivated: function(index) {
-                DockSettings.monitorMode = index
-            }
-        }
-    }
-
-    FormCard.FormDelegateSeparator {
-        visible: DockSettings.monitorMode === 2
-    }
-
-    FormCard.FormCard {
-        visible: DockSettings.monitorMode === 2
-
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Follow trigger")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Mouse position"),
-                i18n("Active window focus"),
-                i18n("Composite (focus + mouse)")
-            ]
-            currentIndex: DockSettings.followActiveTrigger
-            onActivated: function(index) {
-                DockSettings.followActiveTrigger = index
-            }
-        }
-
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Screen transition")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Fade"),
-                i18n("Slide"),
-                i18n("Instant")
-            ]
-            currentIndex: DockSettings.screenTransition
-            onActivated: function(index) {
-                DockSettings.screenTransition = index
-            }
-        }
-    }
-
-    FormCard.FormHeader {
-        title: i18n("Virtual Desktops")
-    }
-
-    FormCard.FormCard {
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Display mode")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Show all windows"),
-                i18n("Dim other desktops"),
-                i18n("Current desktop only")
-            ]
-            currentIndex: DockSettings.virtualDesktopMode
-            onActivated: function(index) {
-                DockSettings.virtualDesktopMode = index
-            }
-        }
-
-        FormCard.FormDelegateSeparator {
-            visible: DockSettings.virtualDesktopMode === 1
-        }
-
-        FormCard.AbstractFormDelegate {
-            id: dimOpacityDelegate
-            visible: DockSettings.virtualDesktopMode === 1
-            Accessible.name: i18n("Other desktop opacity")
-            background: null
-
-            contentItem: ColumnLayout {
-                RowLayout {
-                    Layout.fillWidth: true
-                    QQC2.Label {
-                        text: i18n("Other desktop opacity")
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        maximumLineCount: 2
-                        color: dimOpacityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
-                    }
-
-                    QQC2.Label {
-                        text: Math.round(dimOpacitySlider.value * 100) + "%"
-                        color: Kirigami.Theme.disabledTextColor
-                    }
-                }
-
-                QQC2.Slider {
-                    id: dimOpacitySlider
-                    Layout.fillWidth: true
-                    from: 0.1; to: 0.9; stepSize: 0.05
-                    value: DockSettings.otherDesktopOpacity
-                    onMoved: DockSettings.otherDesktopOpacity = value
-                    Accessible.name: i18n("Other desktop opacity")
-                }
-            }
-        }
-    }
+                              background: Rectangle {
+                                  implicitHeight: 34; radius: 8
+                                  color: badgeBtn.isSelected ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.25) : (badgeBtn.hovered ? Qt.rgba(theme.accent.r, theme.accent.g, theme.accent.b, 0.12) : "transparent")
+                                  border.color: badgeBtn.isSelected ? theme.accent : "transparent"; border.width: 1
+                                  Behavior on color { ColorAnimation { duration: 150 } }
+                              }
+                              onClicked: { DockSettings.badgeDisplayMode = modelData.value; DockSettings.save(); }
+                          }
+                      }
+                  }
+               }
+           }
+       }
+   }
 }

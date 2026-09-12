@@ -10,6 +10,8 @@
 
 #include <memory>
 
+class QAbstractItemModel;
+
 namespace TaskManager
 {
 class ActivityInfo;
@@ -43,13 +45,14 @@ class DockView : public QQuickView
     Q_PROPERTY(int iconCacheVersion READ iconCacheVersion NOTIFY iconCacheVersionChanged)
     Q_PROPERTY(int edge READ edge NOTIFY edgeChanged)
     Q_PROPERTY(bool isVertical READ isVertical NOTIFY edgeChanged)
+    Q_PROPERTY(QObject *screenSettings READ screenSettings CONSTANT)
 
 public:
     explicit DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settings, QWindow *parent = nullptr);
     ~DockView() override;
 
     /// Initialize the dock view. @p tasksModel is used for visibility control.
-    void initialize(TaskManager::TasksModel *tasksModel,
+    void initialize(QAbstractItemModel *tasksModel,
                     TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
                     TaskManager::ActivityInfo *activityInfo,
                     DockPlatform::Edge edge,
@@ -62,6 +65,7 @@ public:
     [[nodiscard]] int iconCacheVersion() const;
     [[nodiscard]] int edge() const;
     [[nodiscard]] bool isVertical() const;
+    [[nodiscard]] QObject *screenSettings() const;
 
     /// Update the dock edge and recalculate surface size.
     void setEdge(DockPlatform::Edge edge);
@@ -101,9 +105,6 @@ private:
 
     void handleScreenChanged(QScreen *newScreen);
     void handleScreenGeometryChanged();
-
-private Q_SLOTS:
-    void handleScreenLockChanged(bool active);
 
 private:
     std::unique_ptr<DockPlatform> m_platform;

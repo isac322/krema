@@ -21,12 +21,18 @@ class NotificationTracker;
 class DockContextMenu : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool visible READ isVisible NOTIFY visibleChanged)
 
 public:
     explicit DockContextMenu(DockModel *model, DockActions *actions, NotificationTracker *tracker, QObject *parent = nullptr);
 
     /// Show the native context menu for the task at @p index.
     Q_INVOKABLE void showForTask(int index);
+
+    bool isVisible() const
+    {
+        return m_visible;
+    }
 
 Q_SIGNALS:
     void settingsRequested();
@@ -37,6 +43,7 @@ private:
     DockModel *m_model;
     DockActions *m_actions;
     NotificationTracker *m_tracker;
+    bool m_visible = false;
 };
 
 } // namespace krema

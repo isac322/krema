@@ -44,11 +44,12 @@ void main() {
     // Convert tex coords to ground-plane coordinates (panel center = origin)
     vec2 groundPos = qt_TexCoord0 * totalSize - totalSize * 0.5;
 
-    // Project: ray from light L through ground pixel P hits panel plane (z = elevation)
-    // t = (Lz - elevation) / Lz
-    float t = (lightZ - elevation) / lightZ;
-    vec2 lightXY = vec2(lightX, lightY);
-    vec2 Q = lightXY + t * (groundPos - lightXY);
+    // Project: Orthographic (directional) projection instead of perspective.
+    // Perspective projection causes the shadow size to grow proportionally with the panel width.
+    // For very wide panels (maxLength > 50%), this growth exceeded the fixed 64px `margin`
+    // bounding box, causing the shadow to be physically chopped off and resulting in the sharp blur artifact.
+    vec2 offset = vec2(lightX, lightY) * (elevation / max(lightZ - elevation, 1.0));
+    vec2 Q = groundPos + offset; // Note: adding offset because Q is the coordinate evaluated against the SDF
 
     // Evaluate panel SDF at projected point
     vec2 halfSize = vec2(panelWidth, panelHeight) * 0.5;
@@ -60,6 +61,13 @@ void main() {
     // erf-based Gaussian-convolved SDF shadow
     // erf(d / (sigma * sqrt(2))) gives exact Gaussian blur for straight edges
     float shadow = 0.5 - 0.5 * erf_approx(d / (sigma * 1.4142135));
+
+    // FIX: Smoothly clamp the Gaussian tail to exactly 0.0 before it hits the bounding box.
+    // This perfectly defines a rounded alpha mask for Hyprland's `ignorealpha 0.0`, 
+    // eliminating the sharp rectangular artifacts caused by the Wayland input region.
+    shadow = max(0.0, (shadow - 0.02) / 0.98);
+
+
 
     // Mask out shadow inside the panel body (prevents dark overlay on panel)
     float panelDist = roundedBoxSDF(groundPos, halfSize, cornerRadius);

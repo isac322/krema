@@ -59,6 +59,10 @@ public:
     /// Used to define a thin trigger strip when the dock is hidden.
     virtual void setInputRegion(const QRegion &region) = 0;
 
+    /// Set the blur region for the dock window.
+    /// Defines exactly where the background blur should be applied.
+    virtual void setBlurRegion(const QRegion &region) = 0;
+
     /// Current edge.
     [[nodiscard]] virtual Edge edge() const = 0;
 

@@ -8,6 +8,8 @@
 #include <QObject>
 #include <QTimer>
 
+class QAbstractItemModel;
+
 namespace TaskManager
 {
 class ActivityInfo;
@@ -38,9 +40,16 @@ class DockVisibilityController : public QObject
 
     Q_PROPERTY(bool dockVisible READ isDockVisible NOTIFY dockVisibleChanged)
     Q_PROPERTY(int mode READ mode WRITE setMode NOTIFY modeChanged)
+    Q_PROPERTY(bool interacting READ isInteracting NOTIFY interactingChanged)
+    Q_PROPERTY(bool liveEditMode READ liveEditMode WRITE setLiveEditMode NOTIFY liveEditModeChanged)
+    Q_PROPERTY(QRect panelRect READ panelRect NOTIFY panelRectChanged)
+    Q_PROPERTY(bool hovered READ isHovered NOTIFY hoveredChanged)
+
 public:
+    void updateRegionGeometry();
+    [[nodiscard]] bool liveEditMode() const;
     explicit DockVisibilityController(DockPlatform *platform,
-                                      TaskManager::TasksModel *tasksModel,
+                                      QAbstractItemModel *tasksModel,
                                       TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
                                       TaskManager::ActivityInfo *activityInfo,
                                       QWindow *dockWindow,
@@ -48,6 +57,14 @@ public:
     ~DockVisibilityController() override;
 
     [[nodiscard]] bool isDockVisible() const;
+    bool isInteracting() const;
+    bool isHovered() const;
+
+    [[nodiscard]] bool isLiveEditMode() const;
+    void setLiveEditMode(bool edit);
+
+    // Q_INVOKABLE means we allow the QML file to talk to this specific function
+    Q_INVOKABLE void setSettingsRect(qreal x, qreal y, qreal width, qreal height);
 
     [[nodiscard]] int mode() const;
     void setMode(int mode);
@@ -72,7 +89,8 @@ public:
 
     /// Set the zoom overflow height so the hovered input region excludes
     /// non-interactive space above the zoom area (e.g. tooltip reserve).
-    void setZoomOverflowHeight(int height);
+    // Change line 95 to this:
+    Q_INVOKABLE void setZoomOverflowHeight(int height);
 
     /// Increment/decrement interaction lock (context menu, settings window open).
     /// While interacting, the dock will never hide.
@@ -89,13 +107,28 @@ public:
 
     /// Set whether DodgeWindows mode only dodges the active window.
     void setDodgeActiveOnly(bool activeOnly);
+    void setReserveSpace(bool reserve);
+    void setReserveMode(int mode);
+    void setFloatingPadding(int padding);
+
+    /// Set unzoomed content dimensions (the icon envelope) for reserve space calculation.
+    Q_INVOKABLE void setContentDimensions(qreal width, qreal height);
 
 Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();
     void panelRectChanged();
+    void interactingChanged();
+    void liveEditModeChanged();
+    void hoveredChanged();
 
 private:
+    // These are the "Storage Boxes" for the settings dimensions
+    int m_settingsX = 0;
+    int m_settingsY = 0;
+    int m_settingsWidth = 0;
+    int m_settingsHeight = 0;
+
     void evaluateVisibility();
     void setVisible(bool visible);
 
@@ -103,25 +136,24 @@ private:
     /// @param activeOnly If true, only checks if an active window overlaps.
     [[nodiscard]] bool hasOverlappingWindow(bool activeOnly = false) const;
 
-    /// Check if any window is maximized or fullscreen.
-    [[nodiscard]] bool hasMaximizedOrFullscreenWindow() const;
-
     void connectModelSignals();
 
     DockPlatform *m_platform;
-    TaskManager::TasksModel *m_tasksModel;
-    TaskManager::TasksModel *m_overlapModel = nullptr;
+    QAbstractItemModel *m_tasksModel;
+    TaskManager::TasksModel *m_overlapModel = nullptr; // Note: Overlap model currently still relies on KDE TasksModel for geometry filtering.
     TaskManager::VirtualDesktopInfo *m_virtualDesktopInfo = nullptr;
     TaskManager::ActivityInfo *m_activityInfo = nullptr;
     QWindow *m_dockWindow;
 
     void applyInputRegion();
-    void updateRegionGeometry();
 
     /// Calculate the dock panel rect in screen coordinates.
     /// Layer-shell surfaces don't report screen position via QWindow::geometry(),
     /// so we compute it from screen geometry + edge + panel position.
     [[nodiscard]] QRect dockScreenRect() const;
+
+    QRect m_dockScreenRect;
+    bool m_liveEditMode = false;
 
     DockPlatform::VisibilityMode m_mode = DockPlatform::VisibilityMode::AlwaysVisible;
     bool m_visible = true;
@@ -133,13 +165,13 @@ private:
     int m_panelWidth = 0;
     int m_panelHeight = 0;
 
-    // Panel Y coordinate when the dock is visible (for overlap detection).
-    // This value persists even while m_panelY moves off-screen during hide animation.
-    int m_panelRefY = 0;
-
-    // Zoom overflow height (pixels above the panel that zoomed icons occupy).
-    // Used to restrict hovered input region to only the interactive area.
+    // --- Interaction: m_zoomOverflowHeight (Extra interaction "catch zone" above icons) ---
     int m_zoomOverflowHeight = 0;
+
+    // Panel coordinates when the dock is visible (for overlap detection).
+    // These values persist even while m_panelY moves off-screen during hide animation.
+    int m_panelRefY = 0;
+    int m_panelRefX = 0;
 
     // Interaction lock: dock stays visible while context menu / settings window is open
     int m_interactingCount = 0;
@@ -149,6 +181,13 @@ private:
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;
+    bool m_reserveSpace = true;
+    int m_reserveMode = 1; // 0 = Panel, 1 = Icons
+    int m_floatingPadding = 0;
+
+    // Unzoomed content dimensions (the icon envelope) for reserve space
+    int m_contentWidth = 0;
+    int m_contentHeight = 0;
 
     // Show timer: fires after mouse dwells in trigger area for showDelay ms
     QTimer m_showTimer;

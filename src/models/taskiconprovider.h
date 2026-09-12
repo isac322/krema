@@ -42,10 +42,14 @@ public:
     QPixmap requestPixmap(const QString &id, QSize *size, const QSize &requestedSize) override;
 
     void setNormalizationEnabled(bool enabled);
-    void setIconScale(qreal scale);
+    void setIndicatorOffset(qreal offset);
     void clearCache();
 
 private:
+    // Steam Icon Hunters
+    QString resolveSteamExePath(const QString &appId);
+    QIcon resolveSteamIconLocal(const QString &appId);
+
     /// Find the bounding rect of non-transparent content in an image.
     static QRect findContentBounds(const QImage &image, int threshold = 25);
 
@@ -60,7 +64,7 @@ private:
 
     QHash<QString, IconNormalizationInfo> m_cache;
     bool m_normalizationEnabled = true;
-    qreal m_iconScale = 1.0;
+    qreal m_indicatorOffset = 1.0;
 
     static constexpr int kAlphaThreshold = 25;
     static constexpr qreal kMinContentRatio = 0.92;

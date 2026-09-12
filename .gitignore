@@ -223,4 +223,6 @@ build/
 *.swo
 
 .claude/worktrees
+.gemini/
+gha-creds-*.json
 .omo/

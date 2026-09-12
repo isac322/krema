@@ -3,5 +3,6 @@ ClassName=KremaSettings
 Mutators=true
 DefaultValueGetters=true
 GenerateProperties=true
+GenerateSignals=true
 ParentInConstructor=true
 Singleton=false

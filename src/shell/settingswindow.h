@@ -2,51 +2,48 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 #pragma once
-
 #include <QObject>
-#include <QPointer>
+#include <QString>
 
 class KremaSettings;
-class QQmlApplicationEngine;
-class QQuickWindow;
 
 namespace krema
 {
-
 class DockView;
 
-/**
- * Settings dialog window.
- *
- * Opens a ConfigurationView-based settings window with sidebar navigation.
- * Uses QQmlApplicationEngine to load a host ApplicationWindow, which then
- * opens a ConfigurationView (creates its own ConfigWindow on desktop).
- */
 class SettingsWindow : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool visible READ visible WRITE setVisible NOTIFY visibleChanged)
+    Q_PROPERTY(QString module READ module WRITE setModule NOTIFY moduleChanged)
 
 public:
     explicit SettingsWindow(KremaSettings *settings, DockView *dockView, QObject *parent = nullptr);
     ~SettingsWindow() override;
 
-    /// Show the settings dialog, or raise it if already visible.
-    void show();
+    bool visible() const
+    {
+        return m_visible;
+    }
+    void setVisible(bool v);
 
-    /// Show the settings dialog with a specific module pre-selected.
-    void show(const QString &defaultModule);
+    QString module() const
+    {
+        return m_module;
+    }
+    void setModule(const QString &m);
+
+    Q_INVOKABLE void show();
+    Q_INVOKABLE void show(const QString &module);
+    Q_INVOKABLE void sync();
 
 Q_SIGNALS:
     void visibleChanged(bool visible);
+    void moduleChanged(const QString &module);
+    void requestSync();
 
 private:
-    void ensureEngine();
-    void trackConfigWindow(QObject *configView);
-
-    KremaSettings *m_settings;
-    DockView *m_dockView;
-    QQmlApplicationEngine *m_engine = nullptr;
-    QPointer<QQuickWindow> m_configWindow;
+    bool m_visible = false;
+    QString m_module;
 };
-
-} // namespace krema
+}

@@ -19,12 +19,17 @@ struct InputRegionParams {
     int zoomOverflowHeight;
     bool visible;
     bool hovered;
-    int triggerStripHeight = 4;
+    int triggerStripHeight = 8;
     int margin = 4;
     int edge = 1; // 0=Top, 1=Bottom, 2=Left, 3=Right
+
+    // --- NEW SETTINGS FIELDS ---
+    bool settingsVisible = false;
+    int settingsWidth = 600;
+    int settingsHeight = 650;
+    int settingsMargin = 60;
 };
 
-/// Compute the input region mask for the dock surface.
 QRegion computeDockInputRegion(const InputRegionParams &p);
 
 struct DockScreenRectParams {
@@ -38,10 +43,9 @@ struct DockScreenRectParams {
     int panelRefY;
     int panelWidth;
     int panelHeight;
-    int edge; // 0=Top, 1=Bottom, 2=Left, 3=Right
+    int edge;
 };
 
-/// Compute the dock panel rectangle in screen coordinates.
 QRect computeDockScreenRect(const DockScreenRectParams &p);
 
 } // namespace krema

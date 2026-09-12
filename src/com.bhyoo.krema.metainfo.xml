@@ -52,6 +52,11 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.8.0" date="2026-05-12">
+      <description>
+        <p>Major architectural stabilization and multi-monitor features. This release introduces full support for multiple displays with per-screen settings overrides, virtual desktop filtering, and a new "Split Mode" for task organization. We have also resolved critical interaction bugs, including hover drop-offs over icon centers, visual gaps during startup, and sluggish UI reactivity when applying new configurations. Parabolic zoom and mouse hit-testing are now perfectly synchronized at all panel sizes.</p>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-03-28">
       <description>
         <p>Task progress bars on dock icons, configurable badge display modes (Number, Dot, Off), attention animation auto-stop with adjustable duration, manual notification clearing via context menu, and Do Not Disturb integration. Fixed notification badge clearing on focus and dodge mode resumption after settings close.</p>

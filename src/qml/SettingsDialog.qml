@@ -28,6 +28,12 @@ Kirigami.ApplicationWindow {
                 page: () => Qt.createComponent(Qt.resolvedUrl("settings/AppearancePage.qml"))
             },
             KirigamiSettings.ConfigurationModule {
+                moduleId: "effects"
+                text: i18n("Effects")
+                icon.name: "speedometer"
+                page: () => Qt.createComponent(Qt.resolvedUrl("settings/EffectsPage.qml"))
+            },
+            KirigamiSettings.ConfigurationModule {
                 moduleId: "behavior"
                 text: i18n("Behavior")
                 icon.name: "preferences-system"

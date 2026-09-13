@@ -280,6 +280,44 @@ void requestPublishDelegateGeometry(const QModelIndex &index, const QRect &geome
 void requestToggleGrouping(const QModelIndex &index);
 ```
 
+### Verified: Toggle Minimize on Click
+
+Dock-style toggle behavior (verified against Plasma's Task Tools `activateTask()` and
+`TaskGroupingProxyModel::requestToggleMinimized` in plasma-workspace master):
+
+1. **Minimized window** → `requestToggleMinimized()` then `requestActivate()` (unminimize + focus).
+2. **Active single window** → `requestToggleMinimized()` (minimize). Check `IsGroupParent`
+   first — clicking a group parent must NOT minimize the whole group, only `requestActivate()`.
+3. **Grouped task with multiple windows** → cycle to the next instance (see below);
+   `requestActivate()` on a group parent is a **no-op** when one of its windows is already
+   active — it does not rotate instances.
+4. **Otherwise** (inactive single window) → `requestActivate()` (focus/raise).
+
+Notes:
+- `requestToggleMinimized()` on a **group parent index** (GroupApplications mode) toggles ALL
+  children to the same hidden state — see `TaskGroupingProxyModel::requestToggleMinimized`.
+  This is why the click handler must exclude group parents from the minimize branch.
+- `IsActive` on a group parent is `any(child.IsActive)` — not usable to decide "toggle from"
+  state for a single window.
+- Unminimizing: `requestToggleMinimized()` alone leaves the window unfocused on Wayland, so
+  always pair it with `requestActivate()` when the goal is "bring to front".
+
+### Verified: Cycling Grouped Instances
+
+Cycling child windows of a group parent (used for click-rotate and mouse-wheel):
+
+- Enumerate children with `TasksModel::makeModelIndex(parentRow, childRow)`; child count is
+  `tasksModel->rowCount(parentIndex)`.
+- Find the active child via `IsActive` on each child index. When one is active, "next" is
+  `(activeChild + 1) % childCount`.
+- When **no** child is active (all minimized, or another app focused), start from the most
+  recently used child using the `LastActivated` role (QDateTime) instead of an arbitrary
+  first row — verified present in `abstracttasksmodel.h` (`LastActivated` = "timestamp of
+  the last time a task was the active task").
+- `requestActivate(childIndex)` raises that instance; KWin's Slide Back effect then animates
+  the previously covering window aside (dock scope must be `"dock"`, see
+  `docs/kde/kwindow-effects.md`).
+
 ---
 
 ## TaskFilterProxyModel Q_PROPERTIES

@@ -119,7 +119,7 @@ int DockView::backgroundStyleType() const
 
 int DockView::floatingPadding() const
 {
-    return m_settings->floating() ? s_floatingMargin : 0;
+    return m_settings->floating() ? m_settings->floatingMargin() : 0;
 }
 
 int DockView::iconCacheVersion() const
@@ -188,7 +188,9 @@ void DockView::updateSize()
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
     const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
-    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, s_tooltipReserve, floatingPadding());
+    // Include the cursor trigger distance so the surface can receive mouse
+    // events before the cursor reaches the icons (parabolic zoom activation).
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, s_tooltipReserve, floatingPadding(), m_settings->zoomTriggerDistance());
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {
@@ -207,6 +209,7 @@ void DockView::updateSize()
 
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
+        m_visibilityController->setTriggerRadius(std::max(0, m_settings->zoomTriggerDistance()));
     }
 }
 
@@ -214,7 +217,9 @@ int DockView::zoomOverflowHeight() const
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
     const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
-    return krema::zoomOverflowHeight(iconSize, maxZoom);
+    // Include the cursor trigger distance so the input region extends beyond
+    // the zoom overflow — the surface must accept events where zoom activates.
+    return krema::zoomOverflowHeight(iconSize, maxZoom) + std::max(0, m_settings->zoomTriggerDistance());
 }
 
 void DockView::handleScreenChanged(QScreen *newScreen)

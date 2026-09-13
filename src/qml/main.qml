@@ -88,7 +88,8 @@ Item {
         } else {
             hoveredIndex = Math.max(0, Math.min(count - 1, hoveredIndex + delta))
         }
-        hoveredName = dockRepeater.itemAt(hoveredIndex)?.displayName ?? ""
+        let hoveredItem = dockRepeater.itemAt(hoveredIndex)
+        hoveredName = hoveredItem ? hoveredItem.displayName : ""
 
         // Reuse zoom logic: set panelMouseX to the focused item's center
         let item = dockRepeater.itemAt(hoveredIndex)
@@ -340,16 +341,26 @@ Item {
             return
         }
 
-        // Rough vertical check: outside the dockRow + zoom extension → reset zoom
+        // Rough depth check: outside the dockRow + zoom extension + cursor
+        // activation radius → reset zoom. The radius applies on BOTH sides of
+        // the row (above and below for horizontal docks) so zoom engages from
+        // any direction and stays until the cursor leaves the zone.
         let rowTop = dockRow.y
         let rowBottom = dockRow.y + dockRow.height
         let maxExt = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
-        if (dockPanel.mouseY < rowTop - maxExt || dockPanel.mouseY > rowBottom) {
+                     + DockSettings.zoomTriggerDistance
+        if (dockPanel.mouseY < rowTop - maxExt || dockPanel.mouseY > rowBottom + maxExt) {
             hoveredIndex = -1
             hoveredName = ""
             _zoomActive = false
             return
         }
+
+        // Cursor is within the activation radius of the dock row: engage zoom
+        // immediately (not only once an icon is touched). The nearest icon to
+        // the cursor (along the dock axis) becomes the zoom target — the
+        // Gaussian curve in DockItem handles falloff from there.
+        _zoomActive = true
 
         // Find the closest icon whose SCALED 2D bounds contain the mouse.
         // Uses Schmitt-trigger hysteresis: the currently-hovered icon has a wider
@@ -489,6 +500,10 @@ Item {
             }
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
+                // Publish the (possibly zoomed) icon rect so Magic Lamp animates
+                // into the icon the user actually clicked.
+                let clicked = dockRepeater.itemAt(root.hoveredIndex)
+                if (clicked) clicked.publishGeometry()
                 DockActions.activate(root.hoveredIndex)
             } else if (mouse.button === Qt.MiddleButton) {
                 DockActions.newInstance(root.hoveredIndex)
@@ -539,15 +554,21 @@ Item {
             // Remap mouse coordinates: mouseX = primary axis (along dock),
             // mouseY = secondary axis (depth). This lets all zoom/hover logic
             // work identically regardless of orientation.
+            // Trigger zone = zoom overflow + user-configured radius
+            // (ZoomTriggerDistance, Settings → Effects). The radius surrounds
+            // the panel on ALL sides — the cursor activates zoom from any
+            // direction, not just the screen edge.
             let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
+            let trig = DockSettings.zoomTriggerDistance
 
             if (DockView.isVertical) {
                 // Vertical: primary = Y screen axis, secondary = X screen axis
                 let panelNear = dockPanel.x
                 let panelFar = dockPanel.x + dockPanel.width
-                let inZone = (DockView.edge === 2)
-                    ? (mouse.x >= panelNear && mouse.x <= panelFar + zoomExtension)    // Left
-                    : (mouse.x >= panelNear - zoomExtension && mouse.x <= panelFar)    // Right
+                let inZone = (mouse.x >= panelNear - zoomExtension - trig)
+                             && (mouse.x <= panelFar + zoomExtension + trig)
+                             && (mouse.y >= dockPanel.y - trig)
+                             && (mouse.y <= dockPanel.y + dockPanel.height + trig)
                 if (inZone) {
                     dockPanel.mouseX = mouse.y - dockPanel.y   // primary = Y
                     dockPanel.mouseY = mouse.x - dockPanel.x   // secondary = X
@@ -559,9 +580,10 @@ Item {
                 // Horizontal: primary = X screen axis, secondary = Y screen axis
                 let panelTop = dockPanel.y
                 let panelBottom = dockPanel.y + dockPanel.height
-                let inZone = (DockView.edge === 0)
-                    ? (mouse.y >= panelTop && mouse.y <= panelBottom + zoomExtension)   // Top
-                    : (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom)   // Bottom
+                let inZone = (mouse.y >= panelTop - zoomExtension - trig)
+                             && (mouse.y <= panelBottom + zoomExtension + trig)
+                             && (mouse.x >= dockPanel.x - trig)
+                             && (mouse.x <= dockPanel.x + dockPanel.width + trig)
                 if (inZone) {
                     dockPanel.mouseX = mouse.x - dockPanel.x
                     dockPanel.mouseY = mouse.y - dockPanel.y
@@ -636,22 +658,28 @@ Item {
                ? "transparent"
                : DockView.backgroundColor
 
-        // Position: center on the non-edge axis, slide on the edge axis
-        x: DockView.isVertical ? _panelEdgePos : (parent.width - width) / 2
-        y: DockView.isVertical ? (parent.height - height) / 2 : _panelEdgePos
+        // Position: center on the non-edge axis (+ user offsets), slide on the edge axis.
+        // DockOffsetX/Y (Settings → Behavior → Placement) shift the dock from
+        // its default position along each screen axis — on the edge axis they
+        // add to (or subtract from) the edge gap, on the other axis they move
+        // it away from center.
+        x: (DockView.isVertical ? _panelEdgePos : (parent.width - width) / 2 + DockSettings.dockOffsetX)
+        y: (DockView.isVertical ? (parent.height - height) / 2 + DockSettings.dockOffsetY : _panelEdgePos)
 
         property real _panelEdgePos: {
             let fp = DockView.floatingPadding
             let sp = Kirigami.Units.largeSpacing
+            // User offset along the edge axis: positive = away from the edge
+            let off = DockView.isVertical ? DockSettings.dockOffsetX : DockSettings.dockOffsetY
             switch (DockView.edge) {
             case 0: // Top
-                return DockVisibility.dockVisible ? fp : -height - sp
+                return DockVisibility.dockVisible ? fp + off : -height - sp
             case 1: // Bottom
-                return DockVisibility.dockVisible ? parent.height - height - fp : parent.height + sp
+                return DockVisibility.dockVisible ? parent.height - height - fp - off : parent.height + sp
             case 2: // Left
-                return DockVisibility.dockVisible ? fp : -width - sp
+                return DockVisibility.dockVisible ? fp + off : -width - sp
             case 3: // Right
-                return DockVisibility.dockVisible ? parent.width - width - fp : parent.width + sp
+                return DockVisibility.dockVisible ? parent.width - width - fp - off : parent.width + sp
             }
             return 0
         }
@@ -936,6 +964,21 @@ Item {
     // Auto-trigger preview when a hovered launcher becomes a window.
     // Polls only while the text tooltip is visible (launcher hover state).
     // When IsWindow becomes true → switches from text tooltip to preview popup.
+    // Publish icon geometries to KWin after layout settles (mirrors Plasma's
+    // 500ms iconGeometryTimer pattern), so Magic Lamp targets correct rects
+    // after add/remove/zoom settles.
+    Timer {
+        id: iconGeometryTimer
+        interval: 500
+        repeat: false
+        onTriggered: {
+            for (let i = 0; i < dockRepeater.count; ++i) {
+                let item = dockRepeater.itemAt(i)
+                if (item) item.publishGeometry()
+            }
+        }
+    }
+
     Timer {
         id: autoPreviewTimer
         interval: 200
@@ -1059,6 +1102,8 @@ Item {
     Connections {
         target: DockModel.tasksModel
         function onRowsInserted() {
+            // Publish new window icons after a settle so Magic Lamp can find them.
+            iconGeometryTimer.restart()
             if (root.hoveredIndex < 0) return
             if (PreviewController.visible) return
             let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)

@@ -277,6 +277,15 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     applyInputRegion();
 }
 
+void DockVisibilityController::setTriggerRadius(int radius)
+{
+    if (m_triggerRadius == radius) {
+        return;
+    }
+    m_triggerRadius = radius;
+    applyInputRegion();
+}
+
 void DockVisibilityController::setKeyboardActive(bool active)
 {
     if (m_keyboardActive == active) {
@@ -367,6 +376,7 @@ void DockVisibilityController::applyInputRegion()
     params.visible = m_visible;
     params.hovered = m_hovered;
     params.edge = static_cast<int>(m_platform->edge());
+    params.triggerRadius = m_triggerRadius;
 
     m_platform->setInputRegion(computeDockInputRegion(params));
 }

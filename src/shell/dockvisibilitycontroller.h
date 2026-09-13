@@ -74,6 +74,10 @@ public:
     /// non-interactive space above the zoom area (e.g. tooltip reserve).
     void setZoomOverflowHeight(int height);
 
+    /// Set the cursor activation radius around the panel (Settings → Effects).
+    /// Extends the input region sideways so zoom triggers from any direction.
+    void setTriggerRadius(int radius);
+
     /// Increment/decrement interaction lock (context menu, settings window open).
     /// While interacting, the dock will never hide.
     Q_INVOKABLE void setInteracting(bool interacting);
@@ -140,6 +144,7 @@ private:
     // Zoom overflow height (pixels above the panel that zoomed icons occupy).
     // Used to restrict hovered input region to only the interactive area.
     int m_zoomOverflowHeight = 0;
+    int m_triggerRadius = 0;
 
     // Interaction lock: dock stays visible while context menu / settings window is open
     int m_interactingCount = 0;

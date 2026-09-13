@@ -41,11 +41,32 @@ Item {
     // Keyboard focus state (set by main.qml during keyboard navigation)
     property bool isKeyboardFocused: false
 
+    // Publish this item's on-screen (global) rect to KWin so Magic Lamp /
+    // Squash minimize animations target this icon. Mirrors Plasma's
+    // TaskManager `requestPublishDelegateGeometry` usage.
+    readonly property rect globalRect: {
+        let topLeft = mapToGlobal(0, 0)
+        return Qt.rect(topLeft.x, topLeft.y, width, height)
+    }
+
+    function publishGeometry() {
+        if (!DockSettings.publishGeometryToCompositor) return
+        // Launchers have no window to animate; let the model bridge guard it.
+        DockModel.publishDelegateGeometry(index, globalRect, dockItem)
+    }
+
+    // Keep KWin's icon geometry fresh as the icon moves/resizes (incl. zoom).
+    onXChanged: publishGeometry()
+    onYChanged: publishGeometry()
+    onWidthChanged: publishGeometry()
+    onHeightChanged: publishGeometry()
+
     Accessible.role: Accessible.Button
     Accessible.name: displayName
     Accessible.description: accessibleDescription
     Accessible.focusable: true
     Accessible.focused: isKeyboardFocused
+    // Same click semantics as the mouse: activate/minimize toggle (see DockActions.activate)
     Accessible.onPressAction: DockActions.activate(index)
 
     // SmartLauncherItem for badge count / urgent status (created in Component.onCompleted)
@@ -175,7 +196,8 @@ Item {
     // Gaussian sigma factor for the zoom curve (sigma = iconSize * factor).
     // Controls how many neighboring icons are visibly affected by zoom.
     // Recommended range: 0.8 (tight) – 1.8 (wide). Default 1.2 ≈ macOS Dock.
-    property real zoomSigmaFactor: 1.2
+    // User-configurable via Settings → Effects → Parabolic Zoom.
+    readonly property real zoomSigmaFactor: DockSettings.zoomSpread
     readonly property real zoomSigma: iconSize * zoomSigmaFactor
 
     // Computed zoom factor for this item
@@ -266,13 +288,25 @@ Item {
 
     // --- Timers ---
 
-    // 500ms: fallback for the edge case where IsStartup never fires
-    // (e.g. single-instance app silently ignores D-Bus activation)
+    // 500ms: fallback for the edge case where IsStartup never fires.
+    // With BounceAlwaysOnLaunch, apps without startup notification (Electron,
+    // GTK, etc.) never send IsStartup — instead of dropping the bounce, keep
+    // it alive via _waitingForWindow until the app's window appears.
     Timer {
         id: launchSafetyTimer
         interval: 500
         onTriggered: {
-            if (dockItem.manualLaunching) dockItem.manualLaunching = false
+            if (dockItem.manualLaunching) {
+                if (DockSettings.bounceAlwaysOnLaunch
+                        && dockItem._childCount === dockItem._childCountAtLaunch
+                        && !dockItem._isActive) {
+                    dockItem.manualLaunching = false
+                    dockItem._waitingForWindow = true
+                    dockItem.maxLaunchTimer.restart()
+                } else {
+                    dockItem.manualLaunching = false
+                }
+            }
         }
     }
 
@@ -322,7 +356,7 @@ Item {
     Behavior on currentScale {
         enabled: dockItem._zoomAnimReady
         NumberAnimation {
-            duration: Kirigami.Units.shortDuration
+            duration: Math.max(DockSettings.zoomAnimationDuration, 0)
             easing.type: Easing.OutCubic
         }
     }
@@ -354,6 +388,8 @@ Item {
             currentScale = zoomFactor  // correct value after layout
             _zoomAnimReady = true
         })
+
+        publishGeometry()  // register icon rect with KWin for Magic Lamp / Squash
 
         // Create SmartLauncherItem for badge/urgent tracking
         let comp = Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem")
@@ -661,33 +697,36 @@ Item {
     // Bounce property/value depends on edge direction
     readonly property string _bounceProp: DockView.isVertical ? "x" : "y"
     readonly property real _bounceTarget: {
+        const h = DockSettings.bounceHeight
         switch (DockView.edge) {
-        case 0: return 8    // Top: bounce down
-        case 1: return -8   // Bottom: bounce up
-        case 2: return 8    // Left: bounce right
-        case 3: return -8   // Right: bounce left
+        case 0: return h     // Top: bounce down
+        case 1: return -h    // Bottom: bounce up
+        case 2: return h     // Left: bounce right
+        case 3: return -h    // Right: bounce left
         }
-        return -8
+        return -h
     }
 
     SequentialAnimation {
         id: bounceAnim
         loops: 1
 
+        property real halfCycle: Math.max(DockSettings.bounceDuration, 80) / 2
+
         NumberAnimation {
             target: bounceTranslate; property: dockItem._bounceProp
             to: dockItem._bounceTarget
             duration: dockItem._finishingBounce
-                ? Kirigami.Units.longDuration * 0.85
-                : Kirigami.Units.longDuration
+                ? bounceAnim.halfCycle * 0.85
+                : bounceAnim.halfCycle
             easing.type: Easing.OutQuad
         }
         NumberAnimation {
             target: bounceTranslate; property: dockItem._bounceProp
             to: 0
             duration: dockItem._finishingBounce
-                ? Kirigami.Units.longDuration * 0.85
-                : Kirigami.Units.longDuration
+                ? bounceAnim.halfCycle * 0.85
+                : bounceAnim.halfCycle
             easing.type: Easing.InQuad
         }
 

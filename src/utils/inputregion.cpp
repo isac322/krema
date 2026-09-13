@@ -37,20 +37,30 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
             return {};
         }
 
-        const int regionX = std::max(0, p.panelX - p.margin);
-        const int regionW = p.panelWidth + 2 * p.margin;
+        // Sideways extension: margin + cursor activation radius (events from
+        // the sides of the dock also trigger zoom)
+        const int sideExt = p.margin + std::max(0, p.triggerRadius);
+        const int regionX = std::max(0, p.panelX - sideExt);
+        const int regionW = p.panelWidth + 2 * sideExt;
 
         int regionY;
         int regionH;
+        // Depth extension: zoom overflow + cursor activation radius, applied
+        // on BOTH depth sides of the panel (toward the screen edge AND away
+        // from it) and ALWAYS — not only when already hovered. Otherwise the
+        // cursor approaching from the far side (e.g. below a bottom dock)
+        // never receives events and the radius can't trigger on entry.
+        const int depthExt = p.zoomOverflowHeight + p.margin + std::max(0, p.triggerRadius);
         if (p.edge == 0) {
-            // Top: panel at top, zoom extends downward
-            regionY = 0;
-            int bottom = p.hovered ? (p.panelY + p.panelHeight + p.zoomOverflowHeight + p.margin) : (p.panelY + p.panelHeight + p.margin);
-            regionH = std::min(bottom, p.surfaceHeight);
+            // Top: panel at top
+            regionY = std::max(0, p.panelY - depthExt);
+            const int bottom = std::min(p.surfaceHeight, p.panelY + p.panelHeight + depthExt);
+            regionH = bottom - regionY;
         } else {
-            // Bottom: panel at bottom, zoom extends upward
-            regionY = p.hovered ? std::max(0, p.panelY - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelY - p.margin);
-            regionH = p.surfaceHeight - regionY;
+            // Bottom: panel at bottom
+            regionY = std::max(0, p.panelY - depthExt);
+            const int bottom = std::min(p.surfaceHeight, p.panelY + p.panelHeight + depthExt);
+            regionH = bottom - regionY;
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
@@ -61,20 +71,26 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
             return {};
         }
 
-        const int regionY = std::max(0, p.panelY - p.margin);
-        const int regionH = p.panelHeight + 2 * p.margin;
+        // Sideways extension: margin + cursor activation radius (events from
+        // above/below the dock also trigger zoom)
+        const int sideExt = p.margin + std::max(0, p.triggerRadius);
+        const int regionY = std::max(0, p.panelY - sideExt);
+        const int regionH = p.panelHeight + 2 * sideExt;
 
         int regionX;
         int regionW;
+        // Depth extension on BOTH sides, always (see horizontal case above).
+        const int depthExt = p.zoomOverflowHeight + p.margin + std::max(0, p.triggerRadius);
         if (p.edge == 2) {
-            // Left: panel at left, zoom extends rightward
-            regionX = 0;
-            int right = p.hovered ? (p.panelX + p.panelWidth + p.zoomOverflowHeight + p.margin) : (p.panelX + p.panelWidth + p.margin);
-            regionW = std::min(right, p.surfaceWidth);
+            // Left: panel at left
+            regionX = std::max(0, p.panelX - depthExt);
+            const int right = std::min(p.surfaceWidth, p.panelX + p.panelWidth + depthExt);
+            regionW = right - regionX;
         } else {
-            // Right: panel at right, zoom extends leftward
-            regionX = p.hovered ? std::max(0, p.panelX - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelX - p.margin);
-            regionW = p.surfaceWidth - regionX;
+            // Right: panel at right
+            regionX = std::max(0, p.panelX - depthExt);
+            const int right = std::min(p.surfaceWidth, p.panelX + p.panelWidth + depthExt);
+            regionW = right - regionX;
         }
 
         QRegion region(regionX, regionY, regionW, regionH);

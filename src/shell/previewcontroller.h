@@ -5,6 +5,7 @@
 
 #include <QModelIndex>
 #include <QObject>
+#include <QSize>
 #include <QTimer>
 
 class KremaSettings;
@@ -21,6 +22,9 @@ class DockView;
  *
  * Creates a separate layer-shell overlay surface (full-width, transparent)
  * for showing PipeWire window thumbnails when hovering dock items.
+ * The surface is mapped only while a preview is visible — an always-mapped
+ * overlay renders as a dark strip along the screen edge and breaks KWin
+ * effects that track the stacking order (e.g. Slide Back).
  * Handles position calculation, hover transition logic, and input region.
  *
  * Preview keyboard navigation is driven from the dock surface — the dock
@@ -131,6 +135,8 @@ Q_SIGNALS:
 private:
     void updateInputRegion();
     void applyEdgeLayout();
+    /// Compute the popup-wrapping surface size for the current content.
+    [[nodiscard]] QSize surfaceSizeForContent() const;
     void recalcContentPosition();
     void doShow();
     void doHide();
@@ -153,6 +159,9 @@ private:
     qreal m_contentHeight = 200;
     qreal m_itemGlobalPos = 0;
     qreal m_itemExtent = 0;
+    /// Layer-shell margin along the dock axis that centers the popup-sized
+    /// surface on the hovered icon (set by recalcContentPosition).
+    int m_surfaceMarginAlongDock = 0;
 
     // Preview keyboard navigation state
     bool m_previewKeyboardActive = false;

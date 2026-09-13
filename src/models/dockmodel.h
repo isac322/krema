@@ -76,12 +76,25 @@ public:
     /// Return the desktop entry name (AppId) for the task at @p index.
     Q_INVOKABLE QString appId(int index) const;
 
+    /// Publish the on-screen rect of the visual delegate for the task at @p index
+    /// to the compositor (KWin), used by Magic Lamp / Squash minimize animations.
+    /// In global screen coordinates; @p delegate is the QQuickItem delegate.
+    /// No-op for launchers/startup tasks or invalid rects (like Plasma's TaskManager).
+    Q_INVOKABLE void publishDelegateGeometry(int index, const QRectF &globalRect, QObject *delegate = nullptr);
+
 Q_SIGNALS:
     void pinnedLaunchersChanged();
     void virtualDesktopModeChanged();
     void currentDesktopChanged();
 
 private:
+    /// Extract a usable icon reference (theme name or absolute path) from a
+    /// .desktop file's Icon= entry. Returns empty if unusable.
+    [[nodiscard]] QString iconFromDesktopFile(const QString &desktopFile) const;
+    /// Find an icon by scanning .desktop files for a matching StartupWMClass
+    /// (browser web-app windows report app_id "crx_<extension-id>").
+    [[nodiscard]] QString iconByStartupWMClass(const QString &wmClass) const;
+
     int m_virtualDesktopMode = 0;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
     std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;

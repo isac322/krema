@@ -25,7 +25,10 @@ class DockActions : public QObject
 public:
     explicit DockActions(DockModel *model, QObject *parent = nullptr);
 
-    /// Activate the task at @p index. If it's a launcher, launch it.
+    /// Activate the task at @p index. If it's a launcher, launch it. For
+    /// windows: minimized → unminimize + focus, active single window →
+    /// minimize, grouped task with multiple windows → cycle to the next
+    /// instance, otherwise → focus.
     Q_INVOKABLE void activate(int index);
 
     /// Request a new instance of the app at @p index.

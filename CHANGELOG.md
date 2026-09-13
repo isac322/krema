@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Click an already-open window's dock icon to minimize it, click again to restore and focus it — classic dock behavior matching Plasma's Task Manager
+- Clicking a grouped app icon (multiple windows) now cycles through its instances, rotating to the next window on each click; mouse-wheel cycling now starts from the most recently used window
+- New Effects settings page with full animation controls: parabolic zoom strength, spread, cursor activation distance and animation speed; launch bounce height, duration and an always-bounce mode for apps without startup notification
+- Dock placement controls: horizontal and vertical offsets from center, plus an adjustable edge gap for floating mode
+- Reorganized settings into logical categories: Appearance (icons, background, shadow), Effects (zoom, bounce, attention, compositor), Behavior (placement, visibility, multi-monitor, desktops) and Window Preview
+- Windows now animate into their dock icon when minimized (KWin Magic Lamp / Squash) — the dock publishes each icon's on-screen geometry to the compositor, with a setting to toggle it
 - Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
 - Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
 - Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite
@@ -21,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- KWin's "Slide Back" focus effect now works when raising windows from the dock — the dock surface is correctly classified as a dock window by the compositor
+- Removed the dark translucent strip that appeared along the screen edge while the dock was running — the window preview surface is now mapped only while a preview is visible, and sized to the popup instead of stretching across the screen
+- Apps launched from the application launcher or opening new windows now show their proper icon in the dock instead of a generic fallback — window-task icons are resolved from the app's desktop file when the Wayland icon has no theme name
+- Launch bounce animation now also plays for apps without KDE startup notification (e.g. Electron and GTK apps) instead of stopping after half a second
 - Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
 - Build compatibility with strict `QT_NO_CAST_FROM_ASCII` flag on non-Arch distributions
 - Fedora Rawhide OBS resolver preferences for current ICU and systemd packages

@@ -220,7 +220,10 @@ layerWindow->setAnchors(LayerShellQt::Window::AnchorBottom
                       | LayerShellQt::Window::AnchorRight);
 layerWindow->setExclusiveZone(0);  // 0 = no reserved space (auto-hide dock)
 layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-layerWindow->setScope("krema-dock");
+layerWindow->setScope("dock");  // MUST be exactly "dock" — KWin maps only this
+                                 // exact scope to WindowType::Dock; other scopes
+                                 // fall back to WindowType::Normal, breaking
+                                 // type-filtered KWin effects (Slide Back etc.)
 layerWindow->setCloseOnDismissed(false);  // allow re-mapping on screen change
 ```
 

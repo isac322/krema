@@ -5,11 +5,15 @@
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
+#include <taskmanager/tasktools.h>
 
+#include <QDir>
+#include <QFile>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
 #include <QScreen>
+#include <QStandardPaths>
 
 Q_LOGGING_CATEGORY(lcModel, "krema.model")
 
@@ -122,8 +126,122 @@ QString DockModel::iconName(int index) const
         return {};
     }
 
+    // 1. Theme name from the model's decoration role. This works for pinned
+    //    launchers (icon resolved from the .desktop file) but is usually
+    //    EMPTY for window tasks: their icon arrives via the Wayland
+    //    window-management pipe as a serialized pixmap QIcon with no theme
+    //    name (e.g. apps launched from krunner or windows opened by the app
+    //    itself).
     const QIcon icon = idx.data(Qt::DecorationRole).value<QIcon>();
-    return icon.name();
+    if (!icon.name().isEmpty()) {
+        return icon.name();
+    }
+
+    // 2. Resolve from the task's launcher URL (.desktop file) — same approach
+    //    Plasma's taskmanager uses for window tasks without a themed icon.
+    const QUrl launcherUrl = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    if (launcherUrl.isValid()) {
+        const auto appData = TaskManager::appDataFromUrl(launcherUrl, icon);
+        if (!appData.icon.isNull() && !appData.icon.name().isEmpty()) {
+            return appData.icon.name();
+        }
+    }
+
+    // 3. Fall back to the app id from the URL (may itself be an icon name for
+    //    applications: URLs, e.g. "applications:org.kde.dolphin.desktop").
+    if (launcherUrl.isValid()) {
+        QString appId = launcherUrl.fileName();
+        if (appId.endsWith(QLatin1String(".desktop"))) {
+            appId.chop(8);
+        }
+        if (!appId.isEmpty() && QIcon::hasThemeIcon(appId)) {
+            return appId;
+        }
+    }
+
+    // 4. Icon from the .desktop file. Browser-created web apps (Vivaldi/Chrome
+    //    "Install as app") point Icon= at a PNG file — not a theme name.
+    //    TaskIconProvider handles absolute paths via QIcon(path).
+    //    LauncherUrlWithoutIcon is usually an applications: URL — resolve it
+    //    to the real file path first.
+    if (launcherUrl.isValid()) {
+        QString desktopPath;
+        if (launcherUrl.scheme() == QLatin1String("applications")) {
+            // applications:org.kde.dolphin.desktop → locate in app dirs
+            desktopPath = QStandardPaths::locate(QStandardPaths::ApplicationsLocation, launcherUrl.fileName());
+        } else if (launcherUrl.isLocalFile()) {
+            desktopPath = launcherUrl.toLocalFile();
+        }
+        if (!desktopPath.isEmpty() && desktopPath.endsWith(QLatin1String(".desktop"))) {
+            const QString iconFromDesktop = iconFromDesktopFile(desktopPath);
+            if (!iconFromDesktop.isEmpty()) {
+                return iconFromDesktop;
+            }
+        }
+    }
+
+    // 5. Match by StartupWMClass: browser web-app windows report a Wayland
+    //    app_id like "crx_<extension-id>" (from StartupWMClass in the .desktop
+    //    file) which has no theme icon. Scan user + system application dirs
+    //    for a .desktop file whose StartupWMClass matches and use its Icon=.
+    const QString appIdRole = idx.data(TaskManager::AbstractTasksModel::AppId).toString();
+    if (appIdRole.startsWith(QLatin1String("crx_"))) {
+        const QString iconByWmClass = iconByStartupWMClass(appIdRole);
+        if (!iconByWmClass.isEmpty()) {
+            return iconByWmClass;
+        }
+    }
+
+    return {};
+}
+
+QString DockModel::iconFromDesktopFile(const QString &desktopFile) const
+{
+    QFile file(desktopFile);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return {};
+    }
+    while (!file.atEnd()) {
+        const QString line = QString::fromUtf8(file.readLine()).trimmed();
+        if (line.startsWith(QLatin1String("Icon="))) {
+            const QString iconValue = line.mid(5);
+            if (iconValue.startsWith(QLatin1Char('/')) && QFile::exists(iconValue)) {
+                return iconValue; // absolute path (web-app PNG etc.)
+            }
+            if (!iconValue.isEmpty() && QIcon::hasThemeIcon(iconValue)) {
+                return iconValue; // theme name
+            }
+            break;
+        }
+    }
+    return {};
+}
+
+QString DockModel::iconByStartupWMClass(const QString &wmClass) const
+{
+    const QStringList dirs = {
+        QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation),
+        QStringLiteral("/usr/share/applications"),
+        QStringLiteral("/usr/local/share/applications"),
+    };
+    for (const QString &dir : dirs) {
+        QDir appDir(dir);
+        const auto entries = appDir.entryList(QStringList() << QStringLiteral("*.desktop"), QDir::Files);
+        for (const QString &entry : entries) {
+            QFile file(appDir.filePath(entry));
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                continue;
+            }
+            while (!file.atEnd()) {
+                const QString line = QString::fromUtf8(file.readLine()).trimmed();
+                if (line.startsWith(QLatin1String("StartupWMClass=")) && line.mid(15) == wmClass) {
+                    file.close();
+                    return iconFromDesktopFile(appDir.filePath(entry));
+                }
+            }
+        }
+    }
+    return {};
 }
 
 QUrl DockModel::launcherUrl(int index) const
@@ -178,6 +296,28 @@ int DockModel::childCount(int index) const
 QModelIndex DockModel::taskModelIndex(int index) const
 {
     return m_tasksModel->index(index, 0);
+}
+
+void DockModel::publishDelegateGeometry(int index, const QRectF &globalRect, QObject *delegate)
+{
+    if (globalRect.isEmpty()) {
+        return;
+    }
+
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return;
+    }
+
+    // Only window/group tasks have icon geometry that KWin can animate into.
+    // Launchers and startup tasks have no window to minimize.
+    const bool isLauncher = idx.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
+    const bool isStartup = idx.data(TaskManager::AbstractTasksModel::IsStartup).toBool();
+    if (isLauncher || isStartup) {
+        return;
+    }
+
+    m_tasksModel->requestPublishDelegateGeometry(idx, globalRect.toRect(), delegate);
 }
 
 QString DockModel::appId(int index) const

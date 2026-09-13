@@ -32,7 +32,7 @@ FormCard.FormCardPage {
             label: i18n("Thumbnail width (px)")
             from: 120; to: 320; stepSize: 20
             value: DockSettings.previewThumbnailSize
-            onValueChanged: DockSettings.previewThumbnailSize = value
+            onValueModified: DockSettings.previewThumbnailSize = value
             enabled: DockSettings.previewEnabled
         }
 
@@ -42,7 +42,7 @@ FormCard.FormCardPage {
             label: i18n("Hover delay (ms)")
             from: 0; to: 2000; stepSize: 50
             value: DockSettings.previewHoverDelay
-            onValueChanged: DockSettings.previewHoverDelay = value
+            onValueModified: DockSettings.previewHoverDelay = value
             enabled: DockSettings.previewEnabled
         }
 
@@ -52,7 +52,7 @@ FormCard.FormCardPage {
             label: i18n("Hide delay (ms)")
             from: 0; to: 1000; stepSize: 50
             value: DockSettings.previewHideDelay
-            onValueChanged: DockSettings.previewHideDelay = value
+            onValueModified: DockSettings.previewHideDelay = value
             enabled: DockSettings.previewEnabled
         }
     }

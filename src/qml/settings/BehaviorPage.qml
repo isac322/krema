@@ -11,8 +11,73 @@ import com.bhyoo.krema 1.0
 FormCard.FormCardPage {
     title: i18n("Behavior")
 
+    // --- Placement ---
     FormCard.FormHeader {
-        title: i18n("Behavior")
+        title: i18n("Placement")
+    }
+
+    FormCard.FormCard {
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Screen edge")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Top"),
+                i18n("Bottom"),
+                i18n("Left"),
+                i18n("Right")
+            ]
+            currentIndex: DockSettings.edge
+            onActivated: function(index) {
+                DockSettings.edge = index
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormSpinBoxDelegate {
+            label: i18n("Horizontal offset (px)")
+            description: i18n("Shift the dock left (negative) or right (positive) from center")
+            from: -2000; to: 2000; stepSize: 10
+            value: DockSettings.dockOffsetX
+            onValueModified: DockSettings.dockOffsetX = value
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormSpinBoxDelegate {
+            label: i18n("Vertical offset (px)")
+            description: i18n("Shift the dock up (negative) or down (positive) from center")
+            from: -2000; to: 2000; stepSize: 10
+            value: DockSettings.dockOffsetY
+            onValueModified: DockSettings.dockOffsetY = value
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormSwitchDelegate {
+            text: i18n("Floating")
+            description: i18n("Keep a gap between the dock and the screen edge")
+            checked: DockSettings.floating
+            onToggled: DockSettings.floating = checked
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.floating
+        }
+
+        FormCard.FormSpinBoxDelegate {
+            visible: DockSettings.floating
+            label: i18n("Edge gap (px)")
+            description: i18n("Distance between the dock and the screen edge")
+            from: 0; to: 64
+            value: DockSettings.floatingMargin
+            onValueModified: DockSettings.floatingMargin = value
+        }
+    }
+
+    // --- Visibility ---
+    FormCard.FormHeader {
+        title: i18n("Visibility")
     }
 
     FormCard.FormCard {
@@ -38,28 +103,10 @@ FormCard.FormCardPage {
             text: i18n("Only dodge active window")
             description: i18n("When off, hides for any overlapping window")
             checked: DockSettings.dodgeActiveOnly
-            onCheckedChanged: DockSettings.dodgeActiveOnly = checked
+            onToggled: DockSettings.dodgeActiveOnly = checked
             visible: DockSettings.visibilityMode === 2
         }
 
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Screen edge")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [
-                i18n("Top"),
-                i18n("Bottom"),
-                i18n("Left"),
-                i18n("Right")
-            ]
-            currentIndex: DockSettings.edge
-            onActivated: function(index) {
-                DockSettings.edge = index
-            }
-        }
-
-        // Show/hide delay controls — only visible in hide-capable modes
         FormCard.FormDelegateSeparator {
             visible: DockSettings.visibilityMode !== 0
         }
@@ -68,7 +115,7 @@ FormCard.FormCardPage {
             label: i18n("Show delay (ms)")
             from: 0; to: 2000; stepSize: 50
             value: DockSettings.showDelay
-            onValueChanged: DockSettings.showDelay = value
+            onValueModified: DockSettings.showDelay = value
             visible: DockSettings.visibilityMode !== 0
         }
 
@@ -80,11 +127,12 @@ FormCard.FormCardPage {
             label: i18n("Hide delay (ms)")
             from: 0; to: 2000; stepSize: 50
             value: DockSettings.hideDelay
-            onValueChanged: DockSettings.hideDelay = value
+            onValueModified: DockSettings.hideDelay = value
             visible: DockSettings.visibilityMode !== 0
         }
     }
 
+    // --- Multi-Monitor ---
     FormCard.FormHeader {
         title: i18n("Multi-Monitor")
     }
@@ -103,16 +151,13 @@ FormCard.FormCardPage {
                 DockSettings.monitorMode = index
             }
         }
-    }
 
-    FormCard.FormDelegateSeparator {
-        visible: DockSettings.monitorMode === 2
-    }
-
-    FormCard.FormCard {
-        visible: DockSettings.monitorMode === 2
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.monitorMode === 2
+        }
 
         FormCard.FormComboBoxDelegate {
+            visible: DockSettings.monitorMode === 2
             text: i18n("Follow trigger")
             displayMode: FormCard.FormComboBoxDelegate.Dialog
             model: [
@@ -126,9 +171,12 @@ FormCard.FormCardPage {
             }
         }
 
-        FormCard.FormDelegateSeparator {}
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.monitorMode === 2
+        }
 
         FormCard.FormComboBoxDelegate {
+            visible: DockSettings.monitorMode === 2
             text: i18n("Screen transition")
             displayMode: FormCard.FormComboBoxDelegate.Dialog
             model: [
@@ -143,6 +191,7 @@ FormCard.FormCardPage {
         }
     }
 
+    // --- Virtual Desktops ---
     FormCard.FormHeader {
         title: i18n("Virtual Desktops")
     }

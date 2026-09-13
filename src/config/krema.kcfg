@@ -27,6 +27,68 @@
       <max>2.0</max>
     </entry>
 
+    <entry name="ZoomSpread" type="Double">
+      <label>How far the parabolic zoom spreads to neighboring icons (Gaussian sigma as a factor of icon size)</label>
+      <default>1.2</default>
+      <min>0.4</min>
+      <max>3.0</max>
+    </entry>
+
+    <entry name="ZoomTriggerDistance" type="Int">
+      <label>Radius around the dock in which the cursor activates the parabolic zoom (px, 0 = only on icons)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>500</max>
+    </entry>
+
+    <entry name="ZoomAnimationDuration" type="Int">
+      <label>Duration of the zoom grow/shrink animation (ms)</label>
+      <default>150</default>
+      <min>0</min>
+      <max>600</max>
+    </entry>
+
+    <entry name="BounceHeight" type="Int">
+      <label>Launch bounce height (px)</label>
+      <default>8</default>
+      <min>2</min>
+      <max>40</max>
+    </entry>
+
+    <entry name="BounceDuration" type="Int">
+      <label>Duration of one launch bounce cycle (ms)</label>
+      <default>250</default>
+      <min>80</min>
+      <max>1000</max>
+    </entry>
+
+    <entry name="BounceAlwaysOnLaunch" type="Bool">
+      <label>Always bounce on launch, even for apps without startup notification</label>
+      <default>true</default>
+      <whatsthis>Apps that do not support KDE startup notification (e.g. some Electron or GTK apps) get no IsStartup signal, so the dock keeps the bounce alive until their window appears.</whatsthis>
+    </entry>
+
+    <entry name="DockOffsetX" type="Int">
+      <label>Horizontal offset of the dock from its default centered position (px)</label>
+      <default>0</default>
+      <min>-2000</min>
+      <max>2000</max>
+    </entry>
+
+    <entry name="DockOffsetY" type="Int">
+      <label>Vertical offset of the dock from its default centered position (px)</label>
+      <default>0</default>
+      <min>-2000</min>
+      <max>2000</max>
+    </entry>
+
+    <entry name="FloatingMargin" type="Int">
+      <label>Distance between the dock and the screen edge when floating (px)</label>
+      <default>8</default>
+      <min>0</min>
+      <max>64</max>
+    </entry>
+
     <entry name="IconNormalization" type="Bool">
       <label>Normalize icon sizes by removing internal padding</label>
       <default>true</default>
@@ -238,6 +300,12 @@
     <entry name="PinnedLaunchers" type="StringList">
       <label>Pinned launcher URLs</label>
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>
+    </entry>
+
+    <entry name="PublishGeometryToCompositor" type="Bool">
+      <label>Publish icon geometry to the compositor</label>
+      <default>true</default>
+      <whatsthis>Lets KWin animate windows into dock icons when minimizing (Magic Lamp, Squash).</whatsthis>
     </entry>
   </group>
 </kcfg>

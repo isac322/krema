@@ -178,6 +178,55 @@ KWindowEffects::enableBlurBehind(dockWindow, true);
 KWindowEffects::slideWindow(dockWindow, KWindowEffects::BottomEdge);
 ```
 
+---
+
+## KWin Minimize Animations (Magic Lamp / Squash) — icon geometry
+
+KWin's built-in Magic Lamp and Squash effects animate a window into its taskbar/dock icon
+when minimized, and out of it on restore. They only work if the dock **publishes each
+icon's on-screen rectangle** to KWin via the Task Manager protocol:
+
+```cpp
+// Screen (global) coordinates; delegate = the visual QQuickItem (optional)
+tasksModel->requestPublishDelegateGeometry(index, globalRect, delegate);
+```
+
+This maps to `org_kde_plasma_window.set_minimized_geometry` on Wayland. Rules verified
+from KWin source (`src/plugins/magiclamp`):
+
+- KWin finds the panel by scanning for a layer-shell window of type Dock (`isDock()`),
+  whose frame geometry **intersects** the published rect. Krema's layer-shell scope
+  `"dock"` maps to `WindowType::Dock`, so it qualifies. **Scope must be exactly
+  `"dock"`** — KWin's `scopeToType()` falls back to `WindowType::Normal` for unknown
+  scopes, which breaks type-filtered effects (verified: Slide Back never fired with
+  scope `"krema-dock"` because the full-width Normal surface permanently topped the
+  usable-window stacking list).
+- Rect must be **global** (use `QQuickItem::mapToGlobal`), not scene-local.
+- Launchers/startup tasks have no window — skip publishing for them (Plasma does the same).
+- Publish when the icon moves/zooms on layout settle (Plasma uses a 500 ms timer) and
+  before clicking so the lamp targets the current (zoomed) icon.
+- Empty rects are ignored by KWin.
+
+## KWin "Slide Back" effect (window rises over the covering window)
+
+KWin ships a built-in effect `slideback` (System Settings → Desktop Effects → category
+**Focus**, name **"Slide Back"**, disabled by default via `kwinrc` `[Plugins]
+slidebackEnabled`). When a window is raised (`activateWindow` → `raiseWindow` →
+`stackingOrderChanged`), covering windows are **slid aside** by a spring motion and slide
+back when another window is raised — the "window rises in front of the maximized one"
+feel. It fires on ANY raise: taskbar clicks, titlebar clicks, and **dock icon clicks**
+(the dock's `requestActivate` goes through the same raise path). No dock-side code needed;
+users enable it in KDE System Settings.
+
+**Critical dock-side requirements (verified via KWin scripting dump):**
+
+- The dock surface's layer-shell scope must be exactly `"dock"` so KWin classifies it
+  as `WindowType::Dock`. Slide Back only tracks "usable" windows (normal/dialog); a
+  Normal-typed dock surface permanently tops that list, so raises are never detected.
+- Any auxiliary overlay surfaces (preview popups) must not stay mapped full-size.
+  Map them only while visible, and use a scope KWin excludes from usable windows
+  (e.g. `"tooltip"`).
+
 ### Background Contrast
 
 ```cpp

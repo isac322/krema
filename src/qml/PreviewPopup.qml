@@ -202,17 +202,21 @@ Item {
         Accessible.name: PreviewController.appName
             ? i18n("Preview for %1", PreviewController.appName)
             : ""
+        // The surface is popup-sized (content + 40px hover margin on all
+        // sides, see PreviewController::surfaceSizeForContent). The popup sits
+        // at the hover-margin inset on the dock-facing side and is centered on
+        // the other axis by the controller's contentX/contentY.
         x: {
-            if (DockView.edge === 2) return 0                            // Left → left edge
-            if (DockView.edge === 3) return parent.width - width         // Right → right edge
-            return PreviewController.contentX                            // Top/Bottom → centered
+            if (DockView.edge === 2) return 40                                   // Left dock → popup at left inset
+            if (DockView.edge === 3) return parent.width - width - 40           // Right dock → popup at right inset
+            return PreviewController.contentX                                    // Top/Bottom → controller-centered
         }
         width: popupContent.implicitWidth + 2 * Kirigami.Units.largeSpacing
         height: popupContent.implicitHeight + 2 * Kirigami.Units.largeSpacing
         y: {
-            if (DockView.edge === 0) return 0                            // Top → top edge
-            if (DockView.edge === 1) return parent.height - height       // Bottom → bottom edge
-            return PreviewController.contentY                            // Left/Right → centered
+            if (DockView.edge === 0) return 40                                   // Top dock → popup at top inset
+            if (DockView.edge === 1) return parent.height - height - 40         // Bottom dock → popup at bottom inset
+            return PreviewController.contentY                                    // Left/Right → controller-centered
         }
         radius: Kirigami.Units.cornerRadius
         color: Kirigami.Theme.backgroundColor

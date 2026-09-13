@@ -22,7 +22,7 @@ FormCard.FormCardPage {
             label: i18n("Icon size")
             from: 24; to: 96; stepSize: 4
             value: DockSettings.iconSize
-            onValueChanged: DockSettings.iconSize = value
+            onValueModified: DockSettings.iconSize = value
         }
 
         FormCard.FormDelegateSeparator {}
@@ -31,46 +31,7 @@ FormCard.FormCardPage {
             label: i18n("Icon spacing")
             from: 0; to: 16
             value: DockSettings.iconSpacing
-            onValueChanged: DockSettings.iconSpacing = value
-        }
-
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.AbstractFormDelegate {
-            id: zoomDelegate
-            Accessible.name: i18n("Zoom factor")
-            background: null
-            contentItem: ColumnLayout {
-                spacing: Kirigami.Units.smallSpacing
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-
-                    QQC2.Label {
-                        Layout.fillWidth: true
-                        text: i18n("Zoom factor")
-                        elide: Text.ElideRight
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        color: zoomDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
-                    }
-
-                    QQC2.Label {
-                        text: zoomSlider.value.toFixed(1) + "x"
-                        color: Kirigami.Theme.disabledTextColor
-                    }
-                }
-
-                QQC2.Slider {
-                    id: zoomSlider
-                    Layout.fillWidth: true
-                    from: 1.0; to: 2.0; stepSize: 0.1
-                    value: DockSettings.maxZoomFactor
-                    onMoved: DockSettings.maxZoomFactor = value
-                    Accessible.name: i18n("Zoom factor")
-                }
-            }
+            onValueModified: DockSettings.iconSpacing = value
         }
 
         FormCard.FormDelegateSeparator {}
@@ -119,50 +80,6 @@ FormCard.FormCardPage {
                     Accessible.name: i18n("Icon scale")
                 }
             }
-        }
-
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Attention animation")
-            description: i18n("Animation when an app demands attention")
-            model: [
-                i18n("None"),
-                i18n("Bounce"),
-                i18n("Wiggle"),
-                i18n("Pulse"),
-                i18n("Glow"),
-                i18n("Dot color"),
-                i18n("Blink")
-            ]
-            currentIndex: DockSettings.attentionAnimation
-            onActivated: function(index) { DockSettings.attentionAnimation = index }
-        }
-
-        FormCard.FormDelegateSeparator {
-            visible: DockSettings.attentionAnimation > 0
-        }
-
-        FormCard.FormSpinBoxDelegate {
-            visible: DockSettings.attentionAnimation > 0
-            label: i18n("Attention duration (seconds, 0 = infinite)")
-            from: 0; to: 60
-            value: DockSettings.attentionAnimationDuration
-            onValueChanged: DockSettings.attentionAnimationDuration = value
-        }
-
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.FormComboBoxDelegate {
-            text: i18n("Badge display")
-            description: i18n("How notification badges appear on dock icons")
-            model: [
-                i18n("Number"),
-                i18n("Dot"),
-                i18n("Off")
-            ]
-            currentIndex: DockSettings.badgeDisplayMode
-            onActivated: function(index) { DockSettings.badgeDisplayMode = index }
         }
     }
 
@@ -330,15 +247,7 @@ FormCard.FormCardPage {
             label: i18n("Corner radius")
             from: 0; to: 24
             value: DockSettings.cornerRadius
-            onValueChanged: DockSettings.cornerRadius = value
-        }
-
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.FormSwitchDelegate {
-            text: i18n("Floating")
-            checked: DockSettings.floating
-            onToggled: DockSettings.floating = checked
+            onValueModified: DockSettings.cornerRadius = value
         }
     }
 
@@ -445,7 +354,7 @@ FormCard.FormCardPage {
         FormCard.AbstractFormDelegate {
             id: lightZDelegate
             visible: DockSettings.shadowEnabled
-            Accessible.name: i18n("Light Z")
+            Accessible.name: i18n("Light height")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -456,7 +365,7 @@ FormCard.FormCardPage {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: i18n("Light Z (height)")
+                        text: i18n("Light height")
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -472,10 +381,10 @@ FormCard.FormCardPage {
                 QQC2.Slider {
                     id: lightZSlider
                     Layout.fillWidth: true
-                    from: 100; to: 2000; stepSize: 20
+                    from: 100; to: 2000; stepSize: 50
                     value: DockSettings.shadowLightZ
                     onMoved: DockSettings.shadowLightZ = value
-                    Accessible.name: i18n("Light Z")
+                    Accessible.name: i18n("Light height")
                 }
             }
         }
@@ -506,7 +415,7 @@ FormCard.FormCardPage {
                     }
 
                     QQC2.Label {
-                        text: lightRadiusSlider.value.toFixed(1) + "px"
+                        text: lightRadiusSlider.value.toFixed(1)
                         color: Kirigami.Theme.disabledTextColor
                     }
                 }
@@ -527,9 +436,9 @@ FormCard.FormCardPage {
         }
 
         FormCard.AbstractFormDelegate {
-            id: shadowElevationDelegate
+            id: elevationDelegate
             visible: DockSettings.shadowEnabled
-            Accessible.name: i18n("Elevation")
+            Accessible.name: i18n("Panel elevation")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -540,26 +449,26 @@ FormCard.FormCardPage {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: i18n("Elevation")
+                        text: i18n("Panel elevation")
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
-                        color: shadowElevationDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                        color: elevationDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
                     }
 
                     QQC2.Label {
-                        text: shadowElevationSlider.value
+                        text: elevationSlider.value
                         color: Kirigami.Theme.disabledTextColor
                     }
                 }
 
                 QQC2.Slider {
-                    id: shadowElevationSlider
+                    id: elevationSlider
                     Layout.fillWidth: true
                     from: 1; to: 50; stepSize: 1
                     value: DockSettings.shadowElevation
                     onMoved: DockSettings.shadowElevation = value
-                    Accessible.name: i18n("Elevation")
+                    Accessible.name: i18n("Panel elevation")
                 }
             }
         }
@@ -569,7 +478,7 @@ FormCard.FormCardPage {
         }
 
         FormCard.AbstractFormDelegate {
-            id: shadowIntensityDelegate
+            id: intensityDelegate
             visible: DockSettings.shadowEnabled
             Accessible.name: i18n("Shadow intensity")
             background: null
@@ -586,17 +495,17 @@ FormCard.FormCardPage {
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
-                        color: shadowIntensityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                        color: intensityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
                     }
 
                     QQC2.Label {
-                        text: Math.round(shadowIntensitySlider.value * 100) + "%"
+                        text: Math.round(intensitySlider.value * 100) + "%"
                         color: Kirigami.Theme.disabledTextColor
                     }
                 }
 
                 QQC2.Slider {
-                    id: shadowIntensitySlider
+                    id: intensitySlider
                     Layout.fillWidth: true
                     from: 0.0; to: 1.0; stepSize: 0.05
                     value: DockSettings.shadowIntensity
@@ -625,7 +534,6 @@ FormCard.FormCardPage {
                 }
 
                 Rectangle {
-                    id: shadowColorPreview
                     width: Kirigami.Units.gridUnit * 2
                     height: Kirigami.Units.gridUnit * 1.5
                     radius: Kirigami.Units.smallSpacing

@@ -121,6 +121,21 @@ void DockShell::connectSettingsSignals()
         m_view->updateSize();
         Q_EMIT m_view->floatingPaddingChanged();
     });
+    // Floating margin changes the effective padding AND the surface height
+    // (surfaceHeight includes floatingPadding) — resize and re-notify.
+    connect(s, &KremaSettings::FloatingMarginChanged, m_view.get(), [this]() {
+        m_view->updateSize();
+        Q_EMIT m_view->floatingPaddingChanged();
+    });
+    // Cursor trigger distance extends the surface and input region beyond the
+    // zoom overflow — resize when it changes.
+    connect(s, &KremaSettings::ZoomTriggerDistanceChanged, m_view.get(), [this]() {
+        m_view->updateSize();
+        auto *vc = m_view->visibilityController();
+        if (vc) {
+            vc->setTriggerRadius(std::max(0, m_settings->zoomTriggerDistance()));
+        }
+    });
 
     // Shadow: no surface resize needed — shadow renders within available space
     // and naturally clips at surface boundaries (QML ShaderEffect computes its own margin)

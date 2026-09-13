@@ -370,6 +370,11 @@ Item {
         // Ref: Grossman & Balakrishnan (CHI 2005, Bubble Cursor), Amazon mega-menu.
         let bestIndex = -1
         let bestNormDist = Infinity
+        // Nearest icon along the dock axis — used when the cursor is inside the
+        // activation radius but not over any icon, so clicks / right-clicks /
+        // wheel actions still target it from the whole activation zone.
+        let nearestIndex = -1
+        let nearestDist = Infinity
         // Hysteresis factor: 0.15 (light) – 0.35 (strong). Default 0.25.
         let hysteresisFactor = 0.25
         for (let i = 0; i < dockRepeater.count; i++) {
@@ -378,6 +383,10 @@ Item {
 
             // Horizontal: normalized distance (0 = center, 1 = edge of scaled icon)
             let dist = Math.abs(dockPanel.mouseX - item.itemCenterX)
+            if (dist < nearestDist) {
+                nearestIndex = i
+                nearestDist = dist
+            }
             let scaledHalfWidth = (item.width * item.currentScale) / 2
             let normDist = dist / scaledHalfWidth
 
@@ -401,6 +410,16 @@ Item {
                 hoveredIndex = bestIndex
                 hoveredName = dockRepeater.itemAt(bestIndex).displayName
                 tooltipTimer.restart()
+            }
+        } else if (nearestIndex >= 0) {
+            // Cursor is inside the activation radius but not over any icon
+            // (e.g. above/below the row or in a gap): the nearest icon along
+            // the dock axis becomes the active target — clicks, right-clicks
+            // and wheel actions work from the whole activation zone.
+            _zoomActive = true
+            if (hoveredIndex !== nearestIndex) {
+                hoveredIndex = nearestIndex
+                hoveredName = dockRepeater.itemAt(nearestIndex).displayName
             }
         } else {
             hoveredIndex = -1

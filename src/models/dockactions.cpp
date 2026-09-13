@@ -9,6 +9,7 @@
 #include <taskmanager/tasksmodel.h>
 #include <taskmanager/tasktools.h>
 
+#include <QDateTime>
 #include <QLoggingCategory>
 
 Q_DECLARE_LOGGING_CATEGORY(lcModel)
@@ -34,7 +35,27 @@ void DockActions::activate(int index)
     const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
 
     if (isWindow) {
-        tasksModel->requestActivate(idx);
+        // Classic dock toggle behavior (mirrors Plasma's TaskTools.activateTask):
+        // - Minimized window → unminimize and focus it.
+        // - Active single window → minimize it.
+        // - Grouped task (multiple windows) → cycle to the next instance.
+        // - Otherwise → focus it.
+        const bool isMinimized = idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
+        const bool isActive = idx.data(TaskManager::AbstractTasksModel::IsActive).toBool();
+        const bool isGroupParent = idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool();
+
+        if (isGroupParent && tasksModel->rowCount(idx) > 1) {
+            // Grouped task: requestActivate on the group parent is a no-op when
+            // one of its windows is already active — cycle instances instead.
+            cycleWindows(index, true);
+        } else if (isMinimized) {
+            tasksModel->requestToggleMinimized(idx);
+            tasksModel->requestActivate(idx);
+        } else if (isActive && !isGroupParent) {
+            tasksModel->requestToggleMinimized(idx);
+        } else {
+            tasksModel->requestActivate(idx);
+        }
     } else if (isLauncher) {
         tasksModel->requestNewInstance(idx);
         Q_EMIT taskLaunching(index);
@@ -99,22 +120,30 @@ void DockActions::cycleWindows(int index, bool forward)
         return;
     }
 
-    // Find the currently active child window
+    // Find the currently active child window and the most recently used one.
     int activeChild = -1;
+    int mruChild = 0;
+    QDateTime mruTime;
     for (int i = 0; i < childCount; ++i) {
         const QModelIndex child = tasksModel->makeModelIndex(index, i);
         if (child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
             activeChild = i;
-            break;
+        }
+        const QDateTime lastActivated = child.data(TaskManager::AbstractTasksModel::LastActivated).toDateTime();
+        if (lastActivated.isValid() && (!mruTime.isValid() || lastActivated > mruTime)) {
+            mruTime = lastActivated;
+            mruChild = i;
         }
     }
 
-    // Cycle to next/previous child
+    // Cycle to next/previous child. When no child is active (e.g. all
+    // minimized or another app focused), start from the most recently
+    // used instance instead of an arbitrary first row.
     int target;
-    if (activeChild < 0) {
-        target = 0;
-    } else {
+    if (activeChild >= 0) {
         target = forward ? (activeChild + 1) % childCount : (activeChild - 1 + childCount) % childCount;
+    } else {
+        target = forward ? mruChild : (mruChild - 1 + childCount) % childCount;
     }
 
     const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);

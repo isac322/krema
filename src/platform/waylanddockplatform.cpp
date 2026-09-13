@@ -25,7 +25,12 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
     }
 
     m_layerWindow->setLayer(LayerShellQt::Window::LayerTop);
-    m_layerWindow->setScope(QStringLiteral("krema-dock"));
+    // IMPORTANT: scope must be exactly "dock" — KWin's scopeToType() maps only
+    // this exact string to WindowType::Dock; any other scope falls back to
+    // WindowType::Normal. A Normal-type dock surface breaks KWin effects that
+    // filter on window type (e.g. Slide Back never sees a "raise" because the
+    // full-width dock surface permanently tops the usable-window list).
+    m_layerWindow->setScope(QStringLiteral("dock"));
     m_layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     m_layerWindow->setCloseOnDismissed(false);
 

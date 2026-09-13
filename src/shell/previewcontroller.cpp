@@ -50,11 +50,18 @@ void PreviewController::initialize()
     m_previewView->setColor(Qt::transparent);
     m_previewView->setResizeMode(QQuickView::SizeRootObjectToView);
 
-    // Layer-shell configuration: overlay above the dock
+    // Layer-shell configuration: overlay above the dock.
+    // IMPORTANT: scope must be "tooltip" so KWin classifies this surface as
+    // WindowType::Tooltip (scopeToType() falls back to WindowType::Normal for
+    // unknown scopes). A Normal-type always-mapped surface sits at the top of
+    // Slide Back's "usable windows" list permanently — so when you raise a real
+    // window via the dock, the topmost usable window never changes and the
+    // Slide Back effect never fires. Tooltip windows are excluded from usable
+    // windows, keeping the stacking "raised" signal intact.
     auto *layerWindow = LayerShellQt::Window::get(m_previewView);
     if (layerWindow) {
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-        layerWindow->setScope(QStringLiteral("krema-preview"));
+        layerWindow->setScope(QStringLiteral("tooltip"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
         layerWindow->setExclusiveZone(0);
         layerWindow->setCloseOnDismissed(false);
@@ -73,15 +80,12 @@ void PreviewController::initialize()
         }
     }
 
-    // Block all meaningful input with a 1x1 region in the top-left corner.
-    // IMPORTANT: QRegion() / QRegion(0,0,0,0) is empty → clears mask → accepts ALL input!
-    m_previewView->setMask(QRegion(0, 0, 1, 1));
-
-    // Pre-show the surface so compositor has it mapped and ready for input routing.
-    // The 1x1 mask above prevents it from intercepting any meaningful input.
-    m_previewView->show();
-
-    qCDebug(lcPreview) << "Preview controller initialized (surface pre-shown)";
+    // NOTE: The surface is intentionally NOT pre-shown. An always-mapped
+    // full-width transparent surface appears as a dark/blurred strip along
+    // the screen edge (blur effects render behind it) and pollutes KWin's
+    // stacking order. The surface is mapped on demand in doShow() and
+    // unmapped in doHide().
+    qCDebug(lcPreview) << "Preview controller initialized (surface on-demand)";
 }
 
 bool PreviewController::isVisible() const
@@ -231,13 +235,18 @@ void PreviewController::doShow()
         return;
     }
 
-    // Reapply edge layout (margins may change with icon size / zoom)
+    // Recompute popup position (needs content size from QML) and apply the
+    // popup-sized surface layout (anchors + margins + size).
+    recalcContentPosition();
     applyEdgeLayout();
+
+    // Map the surface only while a preview is actually shown.
+    if (!m_previewView->isVisible()) {
+        m_previewView->show();
+    }
 
     if (!m_visible) {
         m_visible = true;
-        // Surface is always pre-shown — no need to call show().
-        // Just update the input region to accept events in the popup area.
 
         // Lock dock visibility while preview is open
         if (m_dockView->visibilityController()) {
@@ -268,8 +277,14 @@ void PreviewController::doHide()
         Q_EMIT focusedThumbnailIndexChanged();
     }
 
-    // Block input on the preview surface (keep it mapped for fast re-show)
-    updateInputRegion();
+    // Unmap the surface completely — no overlay remains on the screen edge.
+    // (An always-mapped transparent surface renders as a dark/blurred strip
+    // behind blur effects and pollutes KWin's stacking order.)
+    // Reset the input mask first so a stale input region cannot leak if the
+    // surface is re-mapped before doShow() updates it.
+    // IMPORTANT: QRegion() / QRegion(0,0,0,0) is empty → clears mask → accepts ALL input!
+    m_previewView->setMask(QRegion(0, 0, 1, 1));
+    m_previewView->hide();
 
     // Release dock visibility lock
     if (m_dockView->visibilityController()) {
@@ -441,61 +456,75 @@ void PreviewController::applyEdgeLayout()
     }
 
     const auto edge = m_dockView->platform()->edge();
-    const bool vertical = (edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right);
     const int dockMargin = m_dockView->panelBarHeight() + static_cast<int>(std::ceil(m_settings->iconSize() * (m_settings->maxZoomFactor() - 1.0))) + 4;
 
-    const QRect screenGeo = m_dockView->screen() ? m_dockView->screen()->geometry() : QRect(0, 0, 1920, 1080);
-
-    // Anchors: same edge as dock + stretch along that edge
+    // Anchors: only the dock edge (NOT stretched along it). A surface anchored
+    // to both ends is full-screen-wide — blur effects then render behind the
+    // whole strip, visible as a dark band whenever the preview is shown.
+    // Anchoring only the dock edge lets us size the surface to the popup and
+    // position it via margins.
     LayerShellQt::Window::Anchors anchors;
     QMargins margins;
 
     switch (edge) {
     case DockPlatform::Edge::Bottom:
         anchors.setFlag(LayerShellQt::Window::AnchorBottom);
-        anchors.setFlag(LayerShellQt::Window::AnchorLeft);
-        anchors.setFlag(LayerShellQt::Window::AnchorRight);
         margins.setBottom(dockMargin);
         break;
     case DockPlatform::Edge::Top:
         anchors.setFlag(LayerShellQt::Window::AnchorTop);
-        anchors.setFlag(LayerShellQt::Window::AnchorLeft);
-        anchors.setFlag(LayerShellQt::Window::AnchorRight);
         margins.setTop(dockMargin);
         break;
     case DockPlatform::Edge::Left:
         anchors.setFlag(LayerShellQt::Window::AnchorLeft);
-        anchors.setFlag(LayerShellQt::Window::AnchorTop);
-        anchors.setFlag(LayerShellQt::Window::AnchorBottom);
         margins.setLeft(dockMargin);
         break;
     case DockPlatform::Edge::Right:
         anchors.setFlag(LayerShellQt::Window::AnchorRight);
-        anchors.setFlag(LayerShellQt::Window::AnchorTop);
-        anchors.setFlag(LayerShellQt::Window::AnchorBottom);
         margins.setRight(dockMargin);
         break;
     }
 
     layerWindow->setAnchors(anchors);
+
+    // Position along the dock axis via the unanchored-axis margin (computed in
+    // recalcContentPosition so the popup centers on the hovered icon).
+    switch (edge) {
+    case DockPlatform::Edge::Bottom:
+    case DockPlatform::Edge::Top:
+        margins.setLeft(m_surfaceMarginAlongDock);
+        margins.setRight(0);
+        break;
+    case DockPlatform::Edge::Left:
+    case DockPlatform::Edge::Right:
+        margins.setTop(m_surfaceMarginAlongDock);
+        margins.setBottom(0);
+        break;
+    }
     layerWindow->setMargins(margins);
 
-    // Surface size: stretch along dock axis, 400px in depth axis
-    constexpr int previewDepth = 400;
-    QSize size;
-    if (vertical) {
-        size = QSize(previewDepth, screenGeo.height());
-    } else {
-        size = QSize(screenGeo.width(), previewDepth);
-    }
-
-    m_previewView->setWidth(size.width());
-    m_previewView->setHeight(size.height());
+    // Surface size: popup-sized (set in doShow once content size is known);
+    // while hidden the surface stays unmapped so no size matters here.
+    if (m_visible) {
+        const QSize size = surfaceSizeForContent();
+        m_previewView->setWidth(size.width());
+        m_previewView->setHeight(size.height());
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
-    m_previewView->resize(size);
+        m_previewView->resize(size);
 #else
-    layerWindow->setDesiredSize(size);
+        layerWindow->setDesiredSize(size);
 #endif
+    }
+}
+
+QSize PreviewController::surfaceSizeForContent() const
+{
+    // Surface wraps the popup content plus a hover margin so the mouse can
+    // travel between dock and preview without leaving the input region.
+    constexpr int hoverMargin = 40;
+    const int w = qMax(1, static_cast<int>(m_contentWidth) + hoverMargin * 2);
+    const int h = qMax(1, static_cast<int>(m_contentHeight) + hoverMargin * 2);
+    return QSize(w, h);
 }
 
 void PreviewController::recalcContentPosition()
@@ -508,33 +537,43 @@ void PreviewController::recalcContentPosition()
     const bool vertical = (edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right);
 
     constexpr qreal pad = 8;
+    constexpr int hoverMargin = 40;
+
+    const QRect screenGeo = m_dockView->screen() ? m_dockView->screen()->geometry() : QRect(0, 0, 1920, 1080);
+
+    // Popup center along the dock axis, from the icon's global position.
+    const qreal popupCenter = m_itemGlobalPos + m_itemExtent / 2.0;
+
+    // Surface size wraps the popup + hover margin (see surfaceSizeForContent).
+    const int surfW = qMax(1, static_cast<int>(m_contentWidth) + hoverMargin * 2);
+    const int surfH = qMax(1, static_cast<int>(m_contentHeight) + hoverMargin * 2);
+
+    // Position of the popup's left/top within the surface: centered, with the
+    // hover margin around it.
+    const qreal contentLead = hoverMargin;
 
     if (vertical) {
-        // Vertical dock: center popup vertically on the icon
-        const qreal popupCenter = m_itemGlobalPos + m_itemExtent / 2.0;
-        m_contentY = popupCenter - m_contentHeight / 2.0;
+        // Vertical dock: surface is positioned along screen Y via layer-shell
+        // top margin; popup is horizontally at the surface edge (QML decides
+        // left/right based on dock edge).
+        m_contentY = contentLead;
+        m_contentX = 0; // QML: left edge (Left dock) or right edge (Right dock)
 
-        const int screenH = m_previewView->height();
-        if (m_contentY < pad) {
-            m_contentY = pad;
-        }
-        if (m_contentY + m_contentHeight > screenH - pad) {
-            m_contentY = screenH - pad - m_contentHeight;
-        }
-        // contentX is determined by QML based on edge (left=0 or right=parent.width-width)
+        // Layer-shell margin: distance from screen top to the surface top so
+        // the popup centers on the icon.
+        qreal surfaceTop = popupCenter - surfH / 2.0;
+        surfaceTop = qBound<qreal>(pad, surfaceTop, screenGeo.height() - surfH - pad);
+        m_surfaceMarginAlongDock = static_cast<int>(surfaceTop);
     } else {
-        // Horizontal dock: center popup horizontally on the icon
-        const qreal popupCenter = m_itemGlobalPos + m_itemExtent / 2.0;
-        m_contentX = popupCenter - m_contentWidth / 2.0;
+        // Horizontal dock: surface positioned along screen X via layer-shell
+        // left margin; popup is vertically at the surface edge (QML decides
+        // top/bottom based on dock edge).
+        m_contentX = contentLead;
+        m_contentY = 0; // QML: top edge (Top dock) or bottom edge (Bottom dock)
 
-        const int screenW = m_previewView->width();
-        if (m_contentX < pad) {
-            m_contentX = pad;
-        }
-        if (m_contentX + m_contentWidth > screenW - pad) {
-            m_contentX = screenW - pad - m_contentWidth;
-        }
-        // contentY is determined by QML based on edge (top=0 or bottom=parent.height-height)
+        qreal surfaceLeft = popupCenter - surfW / 2.0;
+        surfaceLeft = qBound<qreal>(pad, surfaceLeft, screenGeo.width() - surfW - pad);
+        m_surfaceMarginAlongDock = static_cast<int>(surfaceLeft);
     }
 }
 
@@ -552,49 +591,10 @@ void PreviewController::updateInputRegion()
         return;
     }
 
-    constexpr int margin = 40;
-    const auto edge = m_dockView->platform()->edge();
-    const bool vertical = (edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right);
-
-    if (vertical) {
-        // Vertical: input region around contentY area
-        const int surfaceW = m_previewView->width();
-        const int w = static_cast<int>(m_contentWidth);
-
-        int regionX;
-        if (edge == DockPlatform::Edge::Left) {
-            // Preview on right side of dock: content at left edge of surface
-            regionX = 0;
-        } else {
-            // Preview on left side of dock: content at right edge of surface
-            regionX = qMax(0, surfaceW - w - 60);
-        }
-        int regionW = surfaceW - regionX;
-
-        const int y = qMax(0, static_cast<int>(m_contentY) - margin);
-        const int bottom = qMin(m_previewView->height(), static_cast<int>(m_contentY + m_contentHeight) + margin);
-        QRegion region(regionX, y, regionW, bottom - y);
-        m_previewView->setMask(region);
-    } else {
-        // Horizontal: input region around contentX area
-        const int surfaceH = m_previewView->height();
-        const int h = static_cast<int>(m_contentHeight);
-
-        int regionY;
-        if (edge == DockPlatform::Edge::Top) {
-            // Preview below dock: content at top edge of surface
-            regionY = 0;
-        } else {
-            // Preview above dock: content at bottom edge of surface
-            regionY = qMax(0, surfaceH - h - 60);
-        }
-        int regionH = surfaceH - regionY;
-
-        const int x = qMax(0, static_cast<int>(m_contentX) - margin);
-        const int right = qMin(m_previewView->width(), static_cast<int>(m_contentX + m_contentWidth) + margin);
-        QRegion region(x, regionY, right - x, regionH);
-        m_previewView->setMask(region);
-    }
+    // The surface is popup-sized (content + hover margin on all sides), so the
+    // entire surface is a valid hover/input area — the mouse can travel between
+    // dock and preview without dropping hover.
+    m_previewView->setMask(QRegion(0, 0, m_previewView->width(), m_previewView->height()));
 }
 
 } // namespace krema

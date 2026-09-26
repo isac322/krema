@@ -51,7 +51,7 @@ public:
     /// Change the monitor mode at runtime (e.g. from settings).
     void setMonitorMode(MonitorMode mode);
 
-    /// Return the "primary" shell (for global shortcuts and focus).
+    /// Return the shell on the primary screen, or any shell as fallback.
     [[nodiscard]] DockShell *primaryShell() const;
 
     /// Return the shell global shortcuts should act on: the Follow Active

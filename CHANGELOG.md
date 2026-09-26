@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Docks recreated by a monitor mode change now stay visible while the Settings window is open, and docks on different screens share one Settings window instead of opening one each
 - "All monitors" and "Follow active screen" modes now place each dock on its own screen instead of stacking every dock on the primary screen, and switching back no longer crashes Krema the next time a window (such as Settings) opens
 - Switching monitor mode no longer leaves an invisible window preview surface behind for each dock it replaced
+- "Toggle Dock", "Focus Dock" and the Meta+number shortcuts now act on the visible dock in "Follow active screen" mode instead of the hidden primary-screen dock
 - Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
 - Build compatibility with strict `QT_NO_CAST_FROM_ASCII` flag on non-Arch distributions
 - Fedora Rawhide OBS resolver preferences for current ICU and systemd packages

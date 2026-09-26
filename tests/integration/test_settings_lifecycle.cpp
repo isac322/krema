@@ -325,6 +325,64 @@ TEST_CASE(
     CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
 }
 
+TEST_CASE("Opening settings does not switch the Follow Active dock", "[settings][follow-active]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    const int trigger = app().settings->followActiveTrigger();
+    app().settings->setFollowActiveTrigger(0); // mouse
+    resetTo(MultiDockManager::FollowActive);
+
+    const auto shownDocks = [] {
+        QList<DockShell *> shown;
+        for (auto *shell : app().manager->shells()) {
+            if (shell->view()->isVisible()) {
+                shown.append(shell);
+            }
+        }
+        return shown;
+    };
+    REQUIRE(shownDocks().size() == 1);
+    auto *active = shownDocks().first();
+    const QScreen *activeScreen = active->view()->screen();
+
+    // QA-17: the dialog's lock also keeps the hidden docks' controllers shown;
+    // that is not pointer activity and must not move the dock to another
+    // screen (the Follow Active switch is debounced by 300 ms).
+    openSettingsFrom(active);
+    QTest::qWait(1200);
+    const auto shown = shownDocks();
+    REQUIRE(shown.size() == 1);
+    CHECK(shown.first()->view()->screen() == activeScreen);
+
+    closeSettings();
+
+    // Control: pointer hover over the hidden dock still switches screens.
+    DockShell *other = nullptr;
+    for (auto *shell : app().manager->shells()) {
+        if (shell != shown.first()) {
+            other = shell;
+        }
+    }
+    REQUIRE(other);
+    auto *otherController = other->view()->visibilityController();
+    REQUIRE(QTest::qWaitFor(
+        [otherController] {
+            return !otherController->isDockVisible();
+        },
+        kTimeoutMs));
+    otherController->setHovered(true);
+    CHECK(QTest::qWaitFor(
+        [&] {
+            const auto docks = shownDocks();
+            return docks.size() == 1 && docks.first() == other;
+        },
+        kTimeoutMs));
+    otherController->setHovered(false);
+
+    app().settings->setFollowActiveTrigger(trigger);
+    resetTo(MultiDockManager::PrimaryOnly);
+}
+
 TEST_CASE("Settings requested from a rebuilt dock reuses the open dialog", "[settings][single-dialog]")
 {
     resetTo(MultiDockManager::PrimaryOnly);

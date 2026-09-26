@@ -240,9 +240,12 @@ void MultiDockManager::setupFollowActive()
     if (trigger == TriggerMouse || trigger == TriggerComposite) {
         // Event-driven mouse detection: when any dock's visibility controller
         // detects hover, switch to that screen. This avoids polling QCursor::pos().
+        // Only hover counts: the settings dialog's interaction lock also shows
+        // the hidden docks' controllers, which is not pointer activity.
         for (const auto &[screen, shell] : m_shells) {
-            connect(shell->view()->visibilityController(), &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen]() {
-                if (m_mode == FollowActive && screen != m_activeScreen) {
+            auto *controller = shell->view()->visibilityController();
+            connect(controller, &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen, controller]() {
+                if (m_mode == FollowActive && screen != m_activeScreen && controller->isHovered()) {
                     m_followActiveDebounce.stop();
                     connect(&m_followActiveDebounce, &QTimer::timeout, this, [this, screen]() {
                         setActiveScreen(screen);

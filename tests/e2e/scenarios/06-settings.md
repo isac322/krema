@@ -183,6 +183,7 @@
 - All docks open the same settings dialog
 - Each output shows its own dock (not two docks stacked on the primary output)
 - Reopening Settings after switching back to "Primary monitor only" works
+- In "Follow active screen" mode with the mouse trigger, opening Settings does not move the dock to another screen
 
 **Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
 

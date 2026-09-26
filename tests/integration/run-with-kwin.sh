@@ -12,7 +12,17 @@ set -eu
 
 scratch=$(mktemp -d)
 kwin_pid=
-trap '[ -n "$kwin_pid" ] && kill "$kwin_pid" 2>/dev/null; wait 2>/dev/null; rm -rf "$scratch"' EXIT INT TERM
+# Must not fail: under set -e a failing kill/wait (KWin already gone) would
+# end the trap before the scratch directory is removed.
+cleanup() {
+    if [ -n "$kwin_pid" ]; then
+        kill "$kwin_pid" 2>/dev/null || true
+        wait "$kwin_pid" 2>/dev/null || true
+    fi
+    rm -rf "$scratch"
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM
 
 export XDG_RUNTIME_DIR="$scratch/runtime"
 export XDG_CONFIG_HOME="$scratch/config"

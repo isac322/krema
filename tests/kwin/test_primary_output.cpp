@@ -16,7 +16,7 @@
 // same test source compiles on both sides of the fix for the
 // old-fails/new-passes proof. OutputOrderMonitor access goes through the
 // friend seam; on master the file has no friend, so those cases are guarded
-// at runtime with a null check on a reflective lookup (see monitorOrSkip()).
+// at compile time by the KREMA_TEST_HAS_MONITOR macro below.
 
 #include "krema.h"
 #include "models/dockmodel.h"
@@ -114,26 +114,59 @@ QStringList screenNames()
 
 // Sets KWin output priority via kscreen-doctor, the same mechanism the
 // System Settings display page uses. Returns false when the tool is absent.
+//
+// A lone `output.<name>.priority.1` on a fresh KWin session does NOT make
+// KWin republish kde_output_order_v1: the incumbent primary keeps winning
+// rank, so the compositor emits nothing (live probe: no republish for 25s).
+// The observable reorder only happens on demote-then-promote — move the
+// incumbent down first, then promote the target — so this helper always
+// issues that two-call sequence, making every caller self-contained.
 bool makePrimary(const QString &outputName)
 {
     const QString tool = QStandardPaths::findExecutable(QStringLiteral("kscreen-doctor"));
     if (tool.isEmpty()) {
         return false;
     }
-    QProcess proc;
     // kscreen-doctor is a normal Qt client: it must not inherit the test's
     // layer-shell integration override (it is not a dock).
     auto env = QProcessEnvironment::systemEnvironment();
     env.remove(QStringLiteral("QT_WAYLAND_SHELL_INTEGRATION"));
-    proc.setProcessEnvironment(env);
-    proc.start(tool, {QStringLiteral("output.%1.priority.1").arg(outputName)});
-    proc.waitForFinished(kTimeoutMs);
-    if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
-        qWarning("kscreen-doctor %s failed (exit %d, started %d): %s", qUtf8Printable(outputName), proc.exitCode(),
-                 proc.exitStatus() == QProcess::NormalExit, qUtf8Printable(QString::fromUtf8(proc.readAllStandardError())));
-        return false;
+
+    auto run = [&](const QString &arg) -> bool {
+        QProcess proc;
+        proc.setProcessEnvironment(env);
+        proc.start(tool, {arg});
+        proc.waitForFinished(kTimeoutMs);
+        if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
+            qWarning("kscreen-doctor %s failed (exit %d, started %d): %s",
+                     qUtf8Printable(arg),
+                     proc.exitCode(),
+                     proc.exitStatus() == QProcess::NormalExit,
+                     qUtf8Printable(QString::fromUtf8(proc.readAllStandardError())));
+            return false;
+        }
+        return true;
+    };
+
+    // Demote the incumbent: give the OTHER output priority so the order
+    // actually changes, then promote the requested output. With exactly two
+    // outputs the other is the only alternative; with N the first non-target
+    // works — the point is forcing a real order transition, not which output
+    // is temporarily on top.
+    const QStringList all = screenNames();
+    QString incumbent;
+    for (const auto &n : all) {
+        if (n != outputName) {
+            incumbent = n;
+            break;
+        }
     }
-    return true;
+    if (!incumbent.isEmpty()) {
+        if (!run(QStringLiteral("output.%1.priority.1").arg(incumbent))) {
+            return false;
+        }
+    }
+    return run(QStringLiteral("output.%1.priority.1").arg(outputName));
 }
 
 // The wl_output a layer surface is actually bound to. Qt-side

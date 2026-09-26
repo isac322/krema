@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
+- Build compatibility with strict `QT_NO_CAST_FROM_ASCII` flag on non-Arch distributions
+- Fedora Rawhide OBS resolver preferences for current ICU and systemd packages
+- openSUSE Slowroll OBS support corrected to x86_64, matching upstream Slowroll architecture availability
+- openSUSE Leap 16.0 OBS compiler dependency aligned with Krema's GCC 13 minimum
+- openSUSE Docker GUI runtime images now include the `dbus-run-session` provider required by package smoke tests
+- Debian/Ubuntu and openSUSE runtime package dependency names in OBS packaging metadata so the package installs cleanly against current distribution repositories (release bumped to 0.7.0-2)
 - Launching Krema from Kickoff/KRunner/Application menu no longer fails with "The name com.bhyoo.krema was not provided by any .service files"; the desktop entry no longer declares `DBusActivatable` without a matching D-Bus service file (#18)
 - The dock and window-preview surfaces now follow the Plasma primary output (kde_output_order_v1) instead of the first-announced Wayland output, and they migrate when the primary output is changed in System Settings (#18)
 
@@ -23,16 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS build targets for Fedora 44 and openSUSE Leap 16.0
 - Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
 - Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
-
-### Fixed
-
-- Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
-- Build compatibility with strict `QT_NO_CAST_FROM_ASCII` flag on non-Arch distributions
-- Fedora Rawhide OBS resolver preferences for current ICU and systemd packages
-- openSUSE Slowroll OBS support corrected to x86_64, matching upstream Slowroll architecture availability
-- openSUSE Leap 16.0 OBS compiler dependency aligned with Krema's GCC 13 minimum
-- openSUSE Docker GUI runtime images now include the `dbus-run-session` provider required by package smoke tests
-- Debian/Ubuntu and openSUSE runtime package dependency names in OBS packaging metadata so the package installs cleanly against current distribution repositories (release bumped to 0.7.0-2)
 
 ## [0.7.0] - 2026-03-28
 

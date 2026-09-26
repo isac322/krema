@@ -30,7 +30,7 @@ export XDG_DATA_HOME="$scratch/data"
 export XDG_CACHE_HOME="$scratch/cache"
 mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 chmod 700 "$XDG_RUNTIME_DIR"
-unset WAYLAND_DISPLAY DISPLAY QT_QPA_PLATFORM
+unset WAYLAND_DISPLAY DISPLAY QT_QPA_PLATFORM QT_WAYLAND_SHELL_INTEGRATION
 # Tests find controls by their English labels.
 export LANGUAGE=C LC_ALL=C.UTF-8
 # Keep Qt warnings in the test output instead of the journal.

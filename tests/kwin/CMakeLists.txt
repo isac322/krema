@@ -17,6 +17,10 @@ target_link_libraries(krema_kwin_tests PRIVATE
     krema_lib
 )
 
+target_include_directories(krema_kwin_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
 if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
     add_test(NAME krema_kwin_tests
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_CURRENT_SOURCE_DIR}/run-with-kwin.sh $<TARGET_FILE:krema_kwin_tests>

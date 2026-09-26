@@ -6,7 +6,7 @@ Version:        0.7.0
 Release:        2%{?dist}
 Summary:        A lightweight dock for KDE Plasma 6
 
-License:        GPL-3.0-or-later
+License:        GPL-3.0-or-later AND MIT-CMU
 URL:            https://github.com/isac322/krema
 Source0:        https://github.com/isac322/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
 
@@ -93,6 +93,7 @@ previews via PipeWire, and deep integration with KDE Plasma desktop.
 
 %files
 %license LICENSES/GPL-3.0-or-later.txt
+%license LICENSES/MIT-CMU.txt
 %{_bindir}/krema
 %{_datadir}/applications/com.bhyoo.krema.desktop
 %if 0%{?suse_version}

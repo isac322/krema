@@ -71,8 +71,10 @@ int Application::run()
     // Initialize Qt resources from static library
     initResources();
 
-    // Must be called before any QWindow is created
-    LayerShellQt::Shell::useLayerShell();
+    // Opt into the layer-shell platform plugin. Equivalent to the deprecated
+    // LayerShellQt::Shell::useLayerShell() (it only sets this variable); must
+    // happen before the first QWindow is created.
+    qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
 
     // Load settings from KConfig (~/.config/kremarc)
     m_settings = std::make_unique<KremaSettings>();

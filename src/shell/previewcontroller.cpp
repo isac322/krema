@@ -45,17 +45,16 @@ PreviewController::~PreviewController() = default;
 
 void PreviewController::initialize()
 {
-    // Share the dock's QQmlEngine so QML types (Kirigami, TaskManager, etc.) are available.
-    // QObject-parent the view to this controller (NOT a QWindow parent, which
-    // would make it a child window) so the preview surface is destroyed with
-    // its DockShell instead of leaking on the old output.
-    m_previewView = new QQuickView(m_dockView->engine(), nullptr);
-    static_cast<QObject *>(m_previewView)->setParent(this);
+    // Share the dock's QQmlEngine so QML types (Kirigami, TaskManager, etc.)
+    // are available. m_previewView is a std::unique_ptr so the preview
+    // surface is destroyed with this controller (DockShell owns it) instead
+    // of leaking on the old output across a topology change.
+    m_previewView = std::make_unique<QQuickView>(m_dockView->engine(), nullptr);
     m_previewView->setColor(Qt::transparent);
     m_previewView->setResizeMode(QQuickView::SizeRootObjectToView);
 
     // Layer-shell configuration: overlay above the dock
-    auto *layerWindow = LayerShellQt::Window::get(m_previewView);
+    auto *layerWindow = LayerShellQt::Window::get(m_previewView.get());
     if (layerWindow) {
         // Pin the preview surface to the dock's output. QWindow::setScreen
         // alone does not pin a layer surface on QtWayland: the platform window
@@ -63,9 +62,13 @@ void PreviewController::initialize()
         // position must also land on the target output (layer-shell ignores
         // absolute position). The LayerShellQt-level screen is what
         // get_layer_surface() binds to.
-        layerWindow->setScreen(m_dockView->screen());
-        m_previewView->setScreen(m_dockView->screen());
-        m_previewView->setPosition(m_dockView->screen()->geometry().topLeft());
+        if (auto *screen = m_dockView->screen()) {
+            layerWindow->setScreen(screen);
+            m_previewView->setScreen(screen);
+            m_previewView->setPosition(screen->geometry().topLeft());
+        } else {
+            qCWarning(lcPreview) << "Dock view has no screen; preview surface not pinned";
+        }
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setScope(QStringLiteral("krema-preview"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
@@ -448,7 +451,7 @@ void PreviewController::applyEdgeLayout()
         return;
     }
 
-    auto *layerWindow = LayerShellQt::Window::get(m_previewView);
+    auto *layerWindow = LayerShellQt::Window::get(m_previewView.get());
     if (!layerWindow) {
         return;
     }

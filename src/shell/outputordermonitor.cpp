@@ -10,6 +10,7 @@
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QScreen>
+#include <QTimer>
 #include <QtWaylandClient/QWaylandClientExtension>
 
 Q_LOGGING_CATEGORY(lcOutputOrder, "krema.shell.outputorder")
@@ -84,8 +85,25 @@ OutputOrderMonitor::OutputOrderMonitor(QObject *parent)
         }
     }
 
-    connect(qGuiApp, &QGuiApplication::screenAdded, this, &OutputOrderMonitor::onScreenCountChanged);
-    connect(qGuiApp, &QGuiApplication::screenRemoved, this, &OutputOrderMonitor::onScreenCountChanged);
+    if (qGuiApp) {
+        connect(qGuiApp, &QGuiApplication::screenAdded, this, &OutputOrderMonitor::onScreenCountChanged);
+        connect(qGuiApp, &QGuiApplication::screenRemoved, this, &OutputOrderMonitor::onScreenCountChanged);
+    }
+
+    if (protocolActive()) {
+        // Bounded fallback: a compositor that binds kde_output_order_v1 but
+        // never sends 'done' would otherwise leave the dock unplaced forever.
+        // KWin always sends done right after binding, so this is only a
+        // robustness net for other compositors.
+        QTimer::singleShot(kOrderReadyFallbackMs, this, [this] {
+            if (!m_orderReady) {
+                qCWarning(lcOutputOrder) << "no kde_output_order_v1 'done' within" << kOrderReadyFallbackMs
+                                         << "ms; falling back to QGuiApplication::primaryScreen()";
+                m_orderReady = true;
+                Q_EMIT orderReadyChanged();
+            }
+        });
+    }
 }
 
 int OutputOrderMonitor::firstOrderedMatch(const QStringList &order, const QStringList &screenNames)
@@ -136,9 +154,6 @@ bool OutputOrderMonitor::orderReady() const
 
 void OutputOrderMonitor::onOrderReceived(const QStringList &order)
 {
-    m_orderReady = true;
-    Q_EMIT orderReadyChanged();
-
     m_pendingOrder = order;
 
     // Adopt the order only once every name maps to a QScreen; the names can
@@ -158,6 +173,16 @@ void OutputOrderMonitor::onOrderReceived(const QStringList &order)
         qCDebug(lcOutputOrder) << "adopted output order:" << m_order;
     }
     recomputePrimary();
+
+    // Emit readiness only on the false -> true edge, and only after the
+    // order has been adopted and the primary recomputed — the app defers the
+    // first dock creation until this signal, so it must observe the final
+    // state, never a pre-adoption snapshot (emitted early it caused a
+    // guaranteed destroy+recreate and a wrong-output flash on startup).
+    if (!m_orderReady) {
+        m_orderReady = true;
+        Q_EMIT orderReadyChanged();
+    }
 }
 
 void OutputOrderMonitor::onScreenCountChanged()

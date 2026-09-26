@@ -21,18 +21,26 @@ file(GLOB desktop_built "${BINARY_DIR}/*.desktop")
 file(GLOB_RECURSE service_files
     "${SOURCE_DIR}/src/*.service.in"
     "${BINARY_DIR}/*.service"
-    "${SOURCE_DIR}/dbus-1/services/*"
+    "${SOURCE_DIR}/dbus-1/services/*.service"
 )
 
 set(failures "")
 foreach(entry IN LISTS desktop_templates desktop_built)
     file(READ "${entry}" content)
-    if(content MATCHES "DBusActivatable[ \t]*=[ \t]*true")
-        get_filename_component(desktop_id "${entry}" NAME_WE)
+    # Anchor at line start: a commented "#DBusActivatable=true" is not active.
+    if(content MATCHES "(^|\n)DBusActivatable[ \t]*=[ \t]*true[ \t]*\n")
+        # NAME_WE strips at the FIRST dot (com.bhyoo.krema -> "com"); the
+        # desktop id is the filename minus its .desktop[.in] suffix.
+        get_filename_component(file_name "${entry}" NAME)
+        string(REGEX REPLACE "\\.desktop(\\.in)?$" "" desktop_id "${file_name}")
         set(have_service FALSE)
         foreach(service IN LISTS service_files)
             file(READ "${service}" service_content)
-            if(service_content MATCHES "Name[ \t]*=[ \t]*${desktop_id}")
+            # The service must both name the desktop id exactly (anchored to
+            # end-of-line so 'Name=completely.unrelated' cannot match) and be
+            # executable: a Name-only file would still fail to launch.
+            if(service_content MATCHES "(^|\n)Name=${desktop_id}[ \t\r]*\n"
+               AND service_content MATCHES "(^|\n)Exec[ \t]*=")
                 set(have_service TRUE)
             endif()
         endforeach()

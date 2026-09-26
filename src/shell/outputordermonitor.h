@@ -72,11 +72,19 @@ Q_SIGNALS:
     /// Emitted whenever the resolved primary screen name changes — on order
     /// updates and on screen add/remove while an order is pending.
     void primaryOutputChanged();
-    /// Emitted once orderReady() flips false -> true.
+    /// Emitted exactly once when orderReady() flips false -> true, after the
+    /// order that caused it has been adopted and the primary recomputed.
     void orderReadyChanged();
 
 private:
     explicit OutputOrderMonitor(QObject *parent = nullptr);
+
+    /// Stops the dock from never appearing on a compositor that binds
+    /// kde_output_order_v1 but never sends 'done' (non-KWin; KWin always
+    /// emits done immediately after binding — verified in KWin's
+    /// kde_output_order_v1 implementation which emits done() right after
+    /// output_order_v1_bind).
+    static constexpr int kOrderReadyFallbackMs = 4000;
 
     void onOrderReceived(const QStringList &order);
     void onScreenCountChanged();
@@ -87,6 +95,10 @@ private:
     QStringList m_order;
     QString m_lastPrimaryName;
     bool m_orderReady = false;
+
+    // Unit tests exercise adoption gating through this seam (the slots are
+    // private because the Wayland client emits them).
+    friend class OutputOrderMonitorTestAccess;
 };
 
 } // namespace krema

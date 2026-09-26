@@ -85,7 +85,7 @@ void setScreen(QScreen *screen);   // Assign to a specific screen — call BEFOR
 void screenChanged(QScreen *screen); // Emitted when QWindow moves to a new screen
 ```
 
-**Critical**: Call `setScreen()` BEFORE `show()`. After `show()`, a layer-shell surface is already committed to the compositor output; changing screen requires `hide()` then reconfiguration then `show()`.
+**Critical**: Call `setScreen()` BEFORE `show()`. After `show()`, a layer-shell surface is already bound to its `wl_output`; moving it to another output requires destroying the surface and recreating it on the new screen — `hide()`/`setScreen()`/`show()` does **not** re-bind (see the verified correction below).
 
 > **Verified correction (issue #18, Qt 6.10 / LayerShellQt 6.6):** `QWindow::setScreen()` alone is **not** honored for layer-shell surfaces on QtWayland. Empirically (2-output `kwin_wayland --virtual` + `WAYLAND_DEBUG`), the window reports the requested screen before show, then re-derives the *primary* `wl_output` when the layer surface maps — `get_layer_surface` binds the wrong output regardless of the earlier `setScreen`. The surface must instead be pinned via `LayerShellQt::Window::setScreen()` (see below). `QWindow::setScreen` is still worth calling so pre-show geometry reads see the right screen, but it does not pin the layer surface by itself.
 
@@ -116,12 +116,6 @@ layerWin->setScreen(screen);              // resets wantsToBeOnActiveScreen to f
 
 - `layerWin->screen()` is what `QWaylandLayerSurface` passes to `get_layer_surface` as the `wl_output`. When `screen()` is null and `wantsToBeOnActiveScreen()` is false, it falls back to `QWindow::screen()` — which, per the note above, is unreliable on QtWayland once the surface maps.
 - **Use `LayerShellQt::Window::setScreen` for all multi-monitor modes** (all-screens, primary-only, follow-active). Verify against `qwaylandlayersurface.cpp:29-46` in the LayerShellQt source: `m_interface->screen()` is read first, then `window->window()->screen()`.
-
-### ScreenFromCompositor (Single Monitor — Deprecated pattern)
-
-- App doesn't specify output
-- Compositor decides which output to place the surface on
-- Use only when you genuinely don't care which screen the dock appears on
 
 ### ScreenFromCompositor (Single Monitor — Deprecated pattern)
 
@@ -183,9 +177,10 @@ On primary change, dock + preview shells must be **recreated** — layer surface
 
 ```cpp
 void DockManager::onPrimaryScreenChanged(QScreen *newPrimary) {
-    m_view->hide();
-    m_view->setScreen(newPrimary);
-    m_view->show();
+    // Layer surfaces bind their wl_output at get_layer_surface() time;
+    // re-showing the same view keeps the old output. Recreate the shell.
+    m_shell.reset();
+    m_shell = createShellForScreen(newPrimary);
 }
 ```
 

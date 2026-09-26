@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - openSUSE Leap 16.0 OBS compiler dependency aligned with Krema's GCC 13 minimum
 - openSUSE Docker GUI runtime images now include the `dbus-run-session` provider required by package smoke tests
 - Debian/Ubuntu and openSUSE runtime package dependency names in OBS packaging metadata so the package installs cleanly against current distribution repositories (release bumped to 0.7.0-2)
+- Debian/Ubuntu package now declares all runtime QML module dependencies (Kirigami Addons settings/formcard, QtQuick.Effects) so the Settings dialog and dock UI load on minimal installs without recommended packages (packaging release bumped to 0.7.0-3)
 
 ## [0.7.0] - 2026-03-28
 

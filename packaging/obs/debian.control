@@ -38,6 +38,9 @@ Depends: ${shlibs:Depends},
          qml6-module-org-kde-kirigami,
          kirigami-addons-data,
          qml6-module-org-kde-pipewire,
+         qml6-module-org-kde-kirigamiaddons-formcard,
+         qml6-module-org-kde-kirigamiaddons-settings,
+         qml6-module-qtquick-effects,
          plasma-workspace,
          liblayershellqtinterface6
 Description: A lightweight dock for KDE Plasma 6

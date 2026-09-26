@@ -179,6 +179,20 @@ DOCKER_HOST=tcp://localhost:2375 tests/docker/run-smoke.sh debian-13 /path/to/os
 The host script starts `kwin_wayland --virtual`, waits for the private Wayland socket, runs the target image, mounts the package directory as `/packages`, installs the package, waits up to `KREMA_SMOKE_READY_TIMEOUT` seconds for the `krema` process to appear, and runs `dbus-run-session -- krema` long enough to confirm it stays alive on the virtual display.
 Set `KREMA_SMOKE_SCREENSHOT_DIR=/path/to/screenshots` to capture a KWin workspace BMP screenshot while the dock is visible after the process readiness check passes.
 
+
+## .deb QML dependency gate
+
+`verify-deb-qml.sh` is the clean-base regression gate for the Debian/Ubuntu `Depends:` list. Unlike the runtime smoke above, it intentionally uses **unmodified distro base images** — the runtime images pre-install KDE/QML packages, which would mask missing `Depends` entries.
+
+```bash
+tests/docker/verify-deb-qml.sh ubuntu-26.04 /path/to/package-dir   # single target
+tests/docker/verify-deb-qml.sh all /path/to/package-dir            # ubuntu 25.04/25.10/26.04 + debian 13
+tests/docker/verify-deb-qml.sh --list-imports                      # derived imports only
+tests/docker/verify-deb-qml.sh --check-packaging                   # debian.changelog ↔ krema.dsc version sync
+```
+
+For each target it installs the `.deb` from `<package-dir>` with `apt-get install --no-install-recommends`, then asserts that every external `import` in `src/qml/` (the app's own `com.bhyoo.krema` module excluded) is present as a `qmldir` under the Qt 6 QML search path — checked **before** any test tooling is installed — and that a synthetic file importing all of them loads under `QT_QPA_PLATFORM=offscreen` `qml`. Run it on a locally built package (`just obs-build-deb` output or `dpkg-buildpackage`) before pushing OBS/PPA updates.
+
 ## Coverage
 
 Covered:

@@ -169,7 +169,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/PreviewThumbnail.qml` | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03 |
 | `src/shell/dockshell.*` | 01, 06 |
-| `src/shell/multidockmanager.*` | 06 |
+| `src/shell/multidockmanager.*`, `src/app/application.*` | 06 |
 | `src/shell/dockvisibilitycontroller.*` | 01, 06, 07 |
 | `src/models/dockactions.*` | 02, 04, 05 |
 | `src/models/dockcontextmenu.*` | 04 |

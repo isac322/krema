@@ -86,8 +86,24 @@ DockShell *MultiDockManager::primaryShell() const
     return nullptr;
 }
 
+DockShell *MultiDockManager::activeShell() const
+{
+    // In Follow Active mode the visible dock is the one on m_activeScreen;
+    // global shortcuts (toggle, focus, Meta+N) must target it, not the
+    // hidden primary-screen shell.
+    if (m_mode == FollowActive && m_activeScreen) {
+        if (auto it = m_shells.find(m_activeScreen); it != m_shells.end()) {
+            return it->second.get();
+        }
+    }
+    return primaryShell();
+}
+
 DockShell *MultiDockManager::shellAtCursor() const
 {
+    if (m_mode == FollowActive) {
+        return activeShell();
+    }
     auto *screen = QGuiApplication::screenAt(QCursor::pos());
     if (screen) {
         auto it = m_shells.find(screen);

@@ -184,7 +184,7 @@ void Application::registerGlobalShortcuts()
     kga->setDefaultShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     connect(toggleAction, &QAction::triggered, this, [this]() {
-        if (auto *shell = m_dockManager->primaryShell()) {
+        if (auto *shell = m_dockManager->activeShell()) {
             shell->view()->visibilityController()->toggleVisibility();
         }
     });
@@ -209,7 +209,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(activateAction, {seq});
         kga->setShortcut(activateAction, {seq});
         connect(activateAction, &QAction::triggered, this, [this, i]() {
-            if (auto *shell = m_dockManager->primaryShell()) {
+            if (auto *shell = m_dockManager->activeShell()) {
                 shell->actions()->activate(i - 1);
             }
         });
@@ -223,7 +223,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(newInstanceAction, {seq});
         kga->setShortcut(newInstanceAction, {seq});
         connect(newInstanceAction, &QAction::triggered, this, [this, i]() {
-            if (auto *shell = m_dockManager->primaryShell()) {
+            if (auto *shell = m_dockManager->activeShell()) {
                 shell->actions()->newInstance(i - 1);
             }
         });

@@ -379,6 +379,19 @@ TEST_CASE("Opening settings does not switch the Follow Active dock", "[settings]
         kTimeoutMs));
     otherController->setHovered(false);
 
+    // QA-18: global shortcuts route to the visible Follow Active dock. Both
+    // paths (focus-dock, toggle-dock, Meta+N) go through shellAtCursor() /
+    // activeShell(); before the fix they returned the hidden primary-screen
+    // shell, so toggling it only changed that dock's controller.
+    CHECK(app().manager->shellAtCursor() == other);
+    app().manager->shellAtCursor()->view()->visibilityController()->toggleVisibility();
+    CHECK(QTest::qWaitFor(
+        [otherController] {
+            return !otherController->isDockVisible();
+        },
+        kTimeoutMs));
+
+
     app().settings->setFollowActiveTrigger(trigger);
     resetTo(MultiDockManager::PrimaryOnly);
 }

@@ -54,7 +54,12 @@ public:
     /// Return the "primary" shell (for global shortcuts and focus).
     [[nodiscard]] DockShell *primaryShell() const;
 
-    /// Return the shell on the screen containing the given point, or primaryShell().
+    /// Return the shell global shortcuts should act on: the Follow Active
+    /// screen's shell in that mode, primaryShell() otherwise.
+    [[nodiscard]] DockShell *activeShell() const;
+
+    /// Return the shell on the screen containing the given point, or
+    /// primaryShell(). In Follow Active mode returns activeShell().
     [[nodiscard]] DockShell *shellAtCursor() const;
 
     /// Return all active shells.

@@ -19,7 +19,6 @@
 #include <KDBusService>
 #include <KGlobalAccel>
 #include <KLocalizedString>
-#include <LayerShellQt/Shell>
 
 #include <QAction>
 #include <QLoggingCategory>

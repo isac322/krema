@@ -27,7 +27,6 @@
 #include "shell/multidockmanager.h"
 
 #include <KAboutData>
-#include <LayerShellQt/Shell>
 #include <LayerShellQt/Window>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -339,55 +338,84 @@ TEST_CASE("Each preview surface binds the same output as its dock (AllScreens)",
 TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[primary-output]")
 {
     // Regression for the premature orderReadyChanged (issue #18 P1): the
-    // signal used to fire before the order was adopted, so a caller that
-    // defers initialize() until ready (the real Application::run) still
-    // placed the first dock on the Qt fallback output and then recreated it.
-    // Proof: with the Plasma primary on the SECOND output, wait until the
-    // monitor reports readiness and assert (a) the resolved primary is
-    // already correct at readiness, and (b) exactly one shell is created.
+    // signal used to fire before the order was adopted, so a caller deferring
+    // initialize() until ready (Application::run) still placed the first dock
+    // on the Qt fallback output, then the adoption forced a destroy+recreate
+    // — a wrong-output flash on every launch.
+    //
+    // Deterministic design (fixes the nondeterminism of gating on
+    // orderReady(), which flips on the FIRST done — the bind-time order — not
+    // the post-makePrimary republish):
+    //   1. Move the Plasma primary to the second output and wait until the
+    //      compositor's republished order is visible, i.e. the singleton's
+    //      resolved primary already equals newPrimary.
+    //   2. Create a fresh monitor AFTER the republish: its bind-time 'done'
+    //      delivers the up-to-date order, so orderReadyChanged reflects the
+    //      real adopt.
+    //   3. Record primaryScreen()->name() inside the orderReadyChanged slot.
+    //      On the buggy head the signal fires BEFORE adoption, so the slot
+    //      reads back the stale Qt fallback (deterministic old-fails); on the
+    //      fixed head it records the adopted primary.
+    //   4. Wire manager->initialize() to orderReadyChanged exactly the way
+    //      Application::run does.
     REQUIRE(QGuiApplication::screens().size() == 2);
     const QStringList names = screenNames();
     REQUIRE(names.size() == 2);
     app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
 
-    // A fresh monitor gets its own kde_output_order_v1 binding, so its
-    // orderReadyChanged reflects a complete order cycle rather than the
-    // singleton's already-true state.
-    auto *monitor = krema::OutputOrderMonitorTestAccess::create();
-    REQUIRE(monitor->protocolActive());
+    // The singleton is already up (it bound at first use in this process).
+    auto *singleton = krema::OutputOrderMonitor::instance();
+    REQUIRE(singleton->protocolActive());
 
-    // Move the Plasma primary to the second output, then let the monitor
-    // observe the republished order.
-    const QString newPrimary = names.last() == QGuiApplication::primaryScreen()->name() ? names.first() : names.last();
+    // Move the Plasma primary to the other output.
+    const QString defaultPrimary = QGuiApplication::primaryScreen()->name();
+    const QString newPrimary = (names.first() == defaultPrimary) ? names.last() : names.first();
     REQUIRE(QTest::qWaitFor(
         [&] {
             return makePrimary(newPrimary);
         },
         kTimeoutMs));
 
-    // Emulate the app's deferred initialize(): do not place anything until
-    // orderReadyChanged fires.
+    // Wait until the compositor's republished order is visible — the
+    // singleton's resolved primary must be the new one. (makePrimary returning
+    // only means kscreen-doctor was accepted; KWin republishes later.)
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return monitor->orderReady();
+            return singleton->primaryScreen() && singleton->primaryScreen()->name() == newPrimary;
         },
         kTimeoutMs));
 
-    // (a) At readiness the adopted order is already applied — the resolved
-    // primary is the Plasma primary, not the stale Qt fallback. Before the
-    // fix orderReadyChanged fired BEFORE adoption, so this read back the
-    // fallback and a caller initialized on the wrong output.
-    CHECK(monitor->primaryScreen() != nullptr);
-    CHECK(monitor->primaryScreen()->name() == newPrimary);
+    // A fresh monitor binds now, so its first 'done' delivers the republished
+    // (post-makePrimary) order, not the stale bind-time one.
+    auto *monitor = krema::OutputOrderMonitorTestAccess::create();
+    REQUIRE(monitor->protocolActive());
 
-    // (b) A caller that defers initialize() until ready creates exactly one
-    // shell, on the already-correct output.
+    // Record the resolved primary inside the readiness slot — the production
+    // Application::run path reads it the same moment. This is the discriminating
+    // assertion: the buggy head emits orderReadyChanged BEFORE adoption, so the
+    // slot reads back the Qt fallback (Virtual-0), which != newPrimary.
+    QString readyPrimary;
+    bool readyFired = false;
+    QObject::connect(monitor, &krema::OutputOrderMonitor::orderReadyChanged, monitor, [&] {
+        readyFired = true;
+        readyPrimary = monitor->primaryScreen() ? monitor->primaryScreen()->name() : QString();
+    });
+
+    // Wire initialize() to orderReadyChanged the way production does.
+    auto manager = makeManager();
     g_dockCreations.store(0);
     g_prevHandler = qInstallMessageHandler(countingHandler);
+    QObject::connect(monitor, &krema::OutputOrderMonitor::orderReadyChanged, monitor, [&] {
+        manager->initialize();
+    });
 
-    auto manager = makeManager();
-    manager->initialize();
-
+    // Drive the event loop until readiness fires, then let the deferred
+    // initialize() land.
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return readyFired;
+        },
+        kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [&] {
             return dockScreenName(manager.get()) == newPrimary;
@@ -397,8 +425,12 @@ TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[prim
     qInstallMessageHandler(g_prevHandler);
     g_prevHandler = nullptr;
 
-    // Exactly one creation, and it already targets the correct output — no
-    // wrong-output flash followed by a destroy+recreate.
+    // (a) At readiness the adopted order is already the new primary — the buggy
+    // head recorded the stale Qt fallback here (deterministic old-fails).
+    CHECK(readyPrimary == newPrimary);
+
+    // (b) A caller deferring initialize() until ready creates exactly one
+    // shell, on the correct output — no wrong-output flash + destroy/recreate.
     CHECK(g_dockCreations.load() == 1);
     CHECK(layerScreenNames("krema-dock") == QSet<QString>{newPrimary});
 }

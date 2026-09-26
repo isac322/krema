@@ -168,16 +168,24 @@ void OutputOrderMonitor::onOrderReceived(const QStringList &order)
     const bool allMapped = std::all_of(m_pendingOrder.cbegin(), m_pendingOrder.cend(), [&screenNames](const QString &name) {
         return screenNames.contains(name);
     });
-    if (allMapped && m_order != m_pendingOrder) {
+
+    // Stay pending until every name maps. While pending the Qt fallback is
+    // still the only resolved primary, so neither recomputePrimary nor the
+    // readiness edge is meaningful here.
+    if (!allMapped) {
+        return;
+    }
+
+    if (m_order != m_pendingOrder) {
         m_order = m_pendingOrder;
         qCDebug(lcOutputOrder) << "adopted output order:" << m_order;
     }
     recomputePrimary();
 
-    // Emit readiness only on the false -> true edge, and only after the
-    // order has been adopted and the primary recomputed — the app defers the
-    // first dock creation until this signal, so it must observe the final
-    // state, never a pre-adoption snapshot (emitted early it caused a
+    // Emit readiness only on the false -> true edge, and only once an order
+    // has actually been adopted and the primary recomputed — the app defers
+    // the first dock creation until this signal, so it must observe the
+    // final state, never a pre-adoption snapshot (emitted early it caused a
     // guaranteed destroy+recreate and a wrong-output flash on startup).
     if (!m_orderReady) {
         m_orderReady = true;

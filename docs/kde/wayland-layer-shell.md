@@ -17,11 +17,18 @@ LayerShellQt is a Qt interface library for the `wlr-layer-shell` Wayland protoco
 Static utility class to enable layer-shell mode.
 
 ```cpp
-#include <LayerShellQt/Shell>
+// Preferred (useLayerShell() is deprecated since Qt 6.10 / LayerShellQt 6.6;
+// it only sets this variable). Must run before the first QWindow is created.
+qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
 
-// Must be called once at application startup before creating any windows
-LayerShellQt::Shell::useLayerShell();
+// Deprecated equivalent — literally calls the qputenv above (verified in
+// LayerShellQt 6.7.5 source/disassembly):
+//   LayerShellQt::Shell::useLayerShell();
 ```
+
+> **Verified (issue #18):** `useLayerShell()` is deprecated and does nothing
+> but `qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")`. Set the
+> environment variable directly and drop the `LayerShellQt/Shell` include.
 
 ---
 
@@ -229,7 +236,7 @@ QRect panelScreenRect(surfaceX + panelX, surfaceY + panelY, panelW, panelH);
 ## Typical Dock Configuration
 
 ```cpp
-LayerShellQt::Shell::useLayerShell();  // at startup
+qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");  // at startup, before first QWindow
 
 auto *layerWindow = LayerShellQt::Window::get(qwindow);
 layerWindow->setLayer(LayerShellQt::Window::LayerTop);

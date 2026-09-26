@@ -59,9 +59,9 @@ public:
     /// Whether kde_output_order_v1 is advertised and the extension bound.
     [[nodiscard]] bool protocolActive() const;
 
-    /// Whether at least one complete order ('done') was received, or the
-    /// protocol is absent so the fallback is already authoritative. Used to
-    /// delay initial shell placement until KWin's first list arrives.
+    /// Whether an order has been adopted (every name mapped to a QScreen) or
+    /// the protocol is absent so the fallback is already authoritative. Used
+    /// to delay initial shell placement until KWin's first usable order.
     [[nodiscard]] bool orderReady() const;
 
     /// Pure resolution for tests: index of the first ordered name present in
@@ -72,8 +72,10 @@ Q_SIGNALS:
     /// Emitted whenever the resolved primary screen name changes — on order
     /// updates and on screen add/remove while an order is pending.
     void primaryOutputChanged();
-    /// Emitted exactly once when orderReady() flips false -> true, after the
-    /// order that caused it has been adopted and the primary recomputed.
+    /// Emitted exactly once when orderReady() flips false -> true — on the
+    /// first order whose every name maps to a QScreen (i.e. once adopted and
+    /// the primary recomputed), or via the bounded fallback when a compositor
+    /// binds the protocol but never sends 'done'.
     void orderReadyChanged();
 
 private:

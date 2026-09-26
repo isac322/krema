@@ -80,14 +80,17 @@ TEST_CASE("OutputOrderMonitor keeps an order pending until every name maps to a 
         CHECK(monitor->outputOrder().isEmpty());
     }
 
-    SECTION("orderReadyChanged fires exactly once across several orders")
+    SECTION("orderReadyChanged does not fire while the order stays pending")
     {
+        // orderReadyChanged is an adoption edge: unmapped orders never adopt
+        // headless, so no emission occurs. (The single-firing across adopted
+        // orders is covered by the real two-output KWin case.)
         OutputOrderMonitorTestAccess::deliverOrder(monitor, {QStringLiteral("Ghost-0")});
         OutputOrderMonitorTestAccess::deliverOrder(monitor, {QStringLiteral("Ghost-0"), QStringLiteral("Ghost-1")});
-        // First complete order flips ready; later orders must not re-fire —
-        // the app defers the first placement on the false->true edge only.
-        CHECK(readyCount == 1);
-        CHECK(monitor->orderReady());
+        CHECK(readyCount == 0);
+        // orderReady() still reports true only through the no-protocol
+        // fallback, not because an order was adopted.
+        CHECK(monitor->outputOrder().isEmpty());
     }
 
     SECTION("with no protocol client the fallback is ready immediately")

@@ -43,6 +43,7 @@
 #include <QApplication>
 #include <QProcess>
 #include <QQuickStyle>
+#include <QScopeGuard>
 #include <QScreen>
 #include <QSet>
 #include <QStandardPaths>
@@ -438,6 +439,15 @@ TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[prim
     auto manager = makeManager();
     g_dockCreations.store(0);
     g_prevHandler = qInstallMessageHandler(countingHandler);
+    // Restore the prior handler on any exit path — a failing REQUIRE between
+    // install and restore would otherwise leave g_prevHandler pointing back
+    // at countingHandler, making the next install recurse.
+    const auto restoreHandler = qScopeGuard([] {
+        if (g_prevHandler) {
+            qInstallMessageHandler(g_prevHandler);
+            g_prevHandler = nullptr;
+        }
+    });
     QObject::connect(monitor, &krema::OutputOrderMonitor::orderReadyChanged, monitor, [&] {
         manager->initialize();
     });
@@ -454,9 +464,6 @@ TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[prim
             return dockScreenName(manager.get()) == newPrimary;
         },
         kTimeoutMs));
-
-    qInstallMessageHandler(g_prevHandler);
-    g_prevHandler = nullptr;
 
     // (a) At readiness the adopted order is already the new primary — the buggy
     // head recorded the stale Qt fallback here (deterministic old-fails).

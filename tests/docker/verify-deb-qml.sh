@@ -39,6 +39,12 @@ declare -A BASE_IMAGES=(
 # Derive the set of external QML module imports used under src/qml/.
 # Strips version numbers and `as` aliases, excludes the app's own module and
 # relative/directory imports.
+# Known blind spot (documented, deliberate): Qt.createComponent("<module>", ...)
+# dynamic loads are not derived. The only current dynamic load is
+# org.kde.plasma.private.taskmanager (DockItem.qml, SmartLauncherItem badge
+# tracking), a private Plasma module that is optional at runtime
+# (Component.Ready-guarded) and not shipped by every distro/Plasma version —
+# enforcing it would make the gate fail on supported targets.
 derive_imports() {
     grep -rhoE '^[[:space:]]*import[[:space:]]+[A-Za-z0-9_.]+' "${repo_root}/src/qml" \
         | awk '{print $2}' \
@@ -55,6 +61,8 @@ fi
 #  - debian.changelog parses and its head version matches krema.dsc Version
 #    (OBS debtransform consumes the .dsc; drift aborts the OBS build).
 if [[ "${1:-}" == "--check-packaging" ]]; then
+    command -v dpkg-parsechangelog > /dev/null 2>&1 \
+        || { echo "--check-packaging requires dpkg-parsechangelog (run on a Debian/Ubuntu host, or in a container: docker run --rm -v \"${repo_root}:/src\" debian:13 bash /src/tests/docker/verify-deb-qml.sh --check-packaging)" >&2; exit 64; }
     fail=0
     chlog_ver="$(dpkg-parsechangelog -l "${repo_root}/packaging/obs/debian.changelog" -S Version 2>/dev/null)" \
         || { echo "debian.changelog does not parse"; fail=1; }
@@ -118,10 +126,16 @@ export DEBIAN_FRONTEND=noninteractive
 . /etc/os-release
 echo "## target=${PRETTY_NAME} arch=$(dpkg --print-architecture)"
 
-deb="$(ls /packages/krema_*.deb | head -1)"
-echo "## deb=$(basename "${deb}")"
-
 gate_fail() { echo "$1"; echo "GATE: FAIL"; exit 1; }
+
+# Exactly one krema_*.deb is required: dpkg-buildpackage writes to the parent
+# dir, so a package dir accumulating respins can contain several builds and a
+# silent alphabetical pick would audit a stale .deb and misreport.
+debs=( /packages/krema_*.deb )
+[[ -f "${debs[0]:-}" ]] || gate_fail "no krema_*.deb in /packages"
+[[ ${#debs[@]} -eq 1 ]] || gate_fail "expected exactly one krema_*.deb in /packages, found ${#debs[@]}: ${debs[*]}"
+deb="${debs[0]}"
+echo "## deb=$(basename "${deb}")"
 
 apt-get update -qq || gate_fail "apt-get update failed"
 apt-get install -y --no-install-recommends "${deb}" || gate_fail "INSTALL: FAIL (package Depends not installable)"

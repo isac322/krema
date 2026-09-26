@@ -191,7 +191,7 @@ tests/docker/verify-deb-qml.sh --list-imports                      # derived imp
 tests/docker/verify-deb-qml.sh --check-packaging                   # debian.changelog ↔ krema.dsc version sync
 ```
 
-For each target it installs the `.deb` from `<package-dir>` with `apt-get install --no-install-recommends`, then asserts that every external `import` in `src/qml/` (the app's own `com.bhyoo.krema` module excluded) is present as a `qmldir` under the Qt 6 QML search path — checked **before** any test tooling is installed — and that a synthetic file importing all of them loads under `QT_QPA_PLATFORM=offscreen` `qml`. Run it on a locally built package (`just obs-build-deb` output or `dpkg-buildpackage`) before pushing OBS/PPA updates.
+For each target it installs the `.deb` from `<package-dir>` with `apt-get install --no-install-recommends`, then asserts that every external `import` in `src/qml/` (the app's own `com.bhyoo.krema` module excluded) is present as a `qmldir` under the Qt 6 QML search path — checked **before** any test tooling is installed — and that a synthetic file importing all of them loads under `QT_QPA_PLATFORM=offscreen` `qml`. The package dir must contain exactly one `krema_*.deb`. `Qt.createComponent("<module>", ...)` dynamic loads are a documented blind spot (the only current one, `org.kde.plasma.private.taskmanager`, is optional and not shipped by every distro — see the comment in `derive_imports`). `--check-packaging` needs `dpkg-parsechangelog`, i.e. run on a Debian/Ubuntu host or container. Run it on a locally built package (`just obs-build-deb` output or `dpkg-buildpackage`) before pushing OBS/PPA updates.
 
 ## Coverage
 

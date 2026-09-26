@@ -11,6 +11,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "shell/outputordermonitor.h"
 
 #include <KAboutData>
 #include <KActionCollection>
@@ -103,9 +104,19 @@ int Application::run()
         return tracker;
     });
 
-    // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode)
+    // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode).
+    // Placement uses the Plasma primary output (kde_output_order_v1); wait for
+    // KWin's first order list when the protocol is present so the dock does not
+    // briefly land on the wrong (first-announced) output before moving.
     m_dockManager = std::make_unique<MultiDockManager>(m_settings.get(), m_dockModel.get(), m_notificationTracker.get(), this);
-    m_dockManager->initialize();
+    auto *outputOrder = OutputOrderMonitor::instance();
+    if (outputOrder->orderReady()) {
+        m_dockManager->initialize();
+    } else {
+        connect(outputOrder, &OutputOrderMonitor::orderReadyChanged, this, [this] {
+            m_dockManager->initialize();
+        });
+    }
 
     // Apply initial virtual desktop display mode
     m_dockModel->setVirtualDesktopMode(m_settings->virtualDesktopMode());

@@ -38,6 +38,11 @@ public:
     /// Configure platform-specific properties on @p window before it is shown.
     virtual void setupWindow(QWindow *window) = 0;
 
+    /// Pin the dock surface to @p screen. Must be called after setupWindow()
+    /// and before the window is shown: layer-shell surfaces bind their output
+    /// at creation, so changing screens later requires recreating the surface.
+    virtual void setScreen(QScreen *screen) = 0;
+
     /// Anchor the dock to the given screen edge.
     virtual void setEdge(Edge edge) = 0;
 

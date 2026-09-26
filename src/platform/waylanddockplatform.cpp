@@ -32,6 +32,20 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
     applyAnchors();
 }
 
+void WaylandDockPlatform::setScreen(QScreen *screen)
+{
+    // QWindow::setScreen alone is not honored for layer surfaces (the
+    // platform window re-derives its screen when the surface maps). The
+    // LayerShellQt-level screen is what get_layer_surface() binds to; the
+    // QWindow screen is still set so geometry helpers read the right screen.
+    if (m_window) {
+        m_window->setScreen(screen);
+    }
+    if (m_layerWindow) {
+        m_layerWindow->setScreen(screen);
+    }
+}
+
 void WaylandDockPlatform::setEdge(Edge edge)
 {
     if (m_edge == edge) {

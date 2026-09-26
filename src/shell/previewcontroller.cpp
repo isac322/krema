@@ -53,6 +53,11 @@ void PreviewController::initialize()
     // Layer-shell configuration: overlay above the dock
     auto *layerWindow = LayerShellQt::Window::get(m_previewView);
     if (layerWindow) {
+        // Pin the preview surface to the dock's output. QWindow::setScreen
+        // alone is ignored for layer surfaces on QtWayland; the
+        // LayerShellQt-level screen is what get_layer_surface() binds to.
+        layerWindow->setScreen(m_dockView->screen());
+        m_previewView->setScreen(m_dockView->screen());
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setScope(QStringLiteral("krema-preview"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);

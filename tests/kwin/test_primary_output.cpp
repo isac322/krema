@@ -111,9 +111,19 @@ bool makePrimary(const QString &outputName)
         return false;
     }
     QProcess proc;
+    // kscreen-doctor is a normal Qt client: it must not inherit the test's
+    // layer-shell integration override (it is not a dock).
+    auto env = QProcessEnvironment::systemEnvironment();
+    env.remove(QStringLiteral("QT_WAYLAND_SHELL_INTEGRATION"));
+    proc.setProcessEnvironment(env);
     proc.start(tool, {QStringLiteral("output.%1.priority.1").arg(outputName)});
     proc.waitForFinished(kTimeoutMs);
-    return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
+    if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
+        qWarning("kscreen-doctor %s failed (exit %d, started %d): %s", qUtf8Printable(outputName), proc.exitCode(),
+                 proc.exitStatus() == QProcess::NormalExit, qUtf8Printable(QString::fromUtf8(proc.readAllStandardError())));
+        return false;
+    }
+    return true;
 }
 
 // Screen names of all mapped krema layer surfaces carrying the given scope.
@@ -153,13 +163,19 @@ TEST_CASE("Dock surfaces land on and follow the Plasma primary output", "[primar
     const QStringList names = screenNames();
     REQUIRE(names.size() == 2);
 
+    // Catch2 runs each SECTION as a fresh invocation, but the KWin session is
+    // shared: a priority change made by one section persists into the next
+    // invocation. Reset the Plasma primary to the Qt default so each section
+    // starts from the known baseline.
+    const QString defaultPrimary = QGuiApplication::primaryScreen()->name();
+    INFO("default Qt primary: " << defaultPrimary.toStdString());
+    REQUIRE(QTest::qWaitFor([&] { return makePrimary(defaultPrimary); }, kTimeoutMs));
+
     auto manager = makeManager();
     manager->initialize();
 
     // Control leg: by default the first wl_output (Virtual-0) is also the
     // Plasma primary, so the old code and the fix agree here.
-    const QString defaultPrimary = QGuiApplication::primaryScreen()->name();
-    INFO("default Qt primary: " << defaultPrimary.toStdString());
     REQUIRE(QTest::qWaitFor(
         [&] {
             return dockScreenName(manager.get()) == defaultPrimary;
@@ -169,7 +185,9 @@ TEST_CASE("Dock surfaces land on and follow the Plasma primary output", "[primar
     SECTION("runtime reorder migrates the dock to the new primary")
     {
         const QString newPrimary = (names.first() == defaultPrimary) ? names.last() : names.first();
-        REQUIRE(makePrimary(newPrimary));
+        // kscreen-doctor can race KWin's output enumeration at session start;
+        // retry until the priority call is accepted.
+        REQUIRE(QTest::qWaitFor([&] { return makePrimary(newPrimary); }, kTimeoutMs));
 
         REQUIRE(QTest::qWaitFor(
             [&] {
@@ -195,7 +213,7 @@ TEST_CASE("Dock surfaces land on and follow the Plasma primary output", "[primar
     SECTION("priority set before initialize puts the first dock on the primary")
     {
         const QString newPrimary = (names.first() == defaultPrimary) ? names.last() : names.first();
-        REQUIRE(makePrimary(newPrimary));
+        REQUIRE(QTest::qWaitFor([&] { return makePrimary(newPrimary); }, kTimeoutMs));
 
         auto late = makeManager();
         late->initialize();

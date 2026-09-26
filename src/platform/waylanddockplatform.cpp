@@ -34,10 +34,11 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
 
 void WaylandDockPlatform::setScreen(QScreen *screen)
 {
-    // QWindow::setScreen alone is not honored for layer surfaces (the
-    // platform window re-derives its screen when the surface maps). The
-    // LayerShellQt-level screen is what get_layer_surface() binds to; the
-    // QWindow screen is still set so geometry helpers read the right screen.
+    // The LayerShellQt-level screen is what get_layer_surface() binds to;
+    // QWindow::setScreen alone does not pin the surface on QtWayland (the
+    // platform window re-derives its screen from the window geometry when it
+    // is created). The QWindow screen is still set so Qt-side geometry reads
+    // see the right screen.
     if (m_window) {
         m_window->setScreen(screen);
     }

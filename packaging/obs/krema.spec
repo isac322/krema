@@ -27,6 +27,11 @@ BuildRequires:  cmake(Qt6DBus) >= 6.8.0
 BuildRequires:  cmake(Qt6Quick) >= 6.8.0
 BuildRequires:  cmake(Qt6QuickControls2) >= 6.8.0
 BuildRequires:  cmake(Qt6ShaderTools) >= 6.8.0
+# Wayland client + protocol codegen (kde_output_order_v1): the Qt6 wayland
+# devel package provides Qt6WaylandScannerTools/qtwaylandscanner, and
+# wayland-devel provides wayland-scanner (find_package WaylandScanner).
+BuildRequires:  cmake(Qt6WaylandClient) >= 6.8.0
+BuildRequires:  pkgconfig(wayland-scanner)
 
 # KDE Frameworks 6
 BuildRequires:  cmake(KF6WindowSystem) >= 6.0.0

@@ -78,7 +78,7 @@ enum KeyboardInteractivity {
 };
 ```
 
-#### ScreenConfiguration
+#### ScreenConfiguration (deprecated since 6.6)
 
 ```cpp
 enum ScreenConfiguration {
@@ -86,6 +86,11 @@ enum ScreenConfiguration {
     ScreenFromCompositor = 1, // Let compositor decide (pass nil)
 };
 ```
+
+Deprecated: use `setScreen(QScreen*)` / `setWantsToBeOnActiveScreen(bool)`
+instead. `ScreenFromCompositor` ≡ `setWantsToBeOnActiveScreen(true)`;
+`ScreenFromQWindow` ≡ `setWantsToBeOnActiveScreen(false)` + `setScreen(nullptr)`
+(the `QWindow::screen()` fallback).
 
 ### Properties
 
@@ -97,7 +102,9 @@ enum ScreenConfiguration {
 | `layer` | `Layer` | `layer()` | `setLayer()` | `layerChanged()` |
 | `keyboardInteractivity` | `KeyboardInteractivity` | `keyboardInteractivity()` | `setKeyboardInteractivity()` | `keyboardInteractivityChanged()` |
 | `scope` | `QString` | `scope()` | `setScope()` | — |
-| `screenConfiguration` | `ScreenConfiguration` | `screenConfiguration()` | `setScreenConfiguration()` | — |
+| `screen` | `QScreen*` | `screen()` | `setScreen()` | `screenChanged()` |
+| `wantsToBeOnActiveScreen` | `bool` | `wantsToBeOnActiveScreen()` | `setWantsToBeOnActiveScreen()` | `wantsToBeOnActiveScreenChanged()` |
+| `screenConfiguration` | `ScreenConfiguration` | `screenConfiguration()` | `setScreenConfiguration()` | — (deprecated) |
 | `activateOnShow` | `bool` | `activateOnShow()` | `setActivateOnShow()` | — |
 
 ### Methods
@@ -131,7 +138,18 @@ Layer layer() const;
 void setKeyboardInteractivity(KeyboardInteractivity interactivity);
 KeyboardInteractivity keyboardInteractivity() const;
 
-// Screen configuration
+// Screen selection — the output the layer surface binds to.
+// setScreen() resets wantsToBeOnActiveScreen to false. When screen() is null
+// and wantsToBeOnActiveScreen() is false, QWindow::screen() is used.
+// NOTE (verified, issue #18): QWindow::setScreen() alone is NOT honored for
+// layer surfaces on QtWayland — the surface re-derives the primary wl_output
+// when it maps. Pin via LayerShellQt::Window::setScreen() before show().
+void setScreen(QScreen *screen);
+QScreen *screen() const;
+void setWantsToBeOnActiveScreen(bool set);
+bool wantsToBeOnActiveScreen() const;
+
+// Screen configuration (deprecated — use setScreen/wantsToBeOnActiveScreen)
 void setScreenConfiguration(ScreenConfiguration screenConfiguration);
 ScreenConfiguration screenConfiguration() const;
 

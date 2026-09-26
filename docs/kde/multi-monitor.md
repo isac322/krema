@@ -87,6 +87,8 @@ void screenChanged(QScreen *screen); // Emitted when QWindow moves to a new scre
 
 **Critical**: Call `setScreen()` BEFORE `show()`. After `show()`, a layer-shell surface is already committed to the compositor output; changing screen requires `hide()` then reconfiguration then `show()`.
 
+> **Verified correction (issue #18, Qt 6.10 / LayerShellQt 6.6):** `QWindow::setScreen()` alone is **not** honored for layer-shell surfaces on QtWayland. Empirically (2-output `kwin_wayland --virtual` + `WAYLAND_DEBUG`), the window reports the requested screen before show, then re-derives the *primary* `wl_output` when the layer surface maps — `get_layer_surface` binds the wrong output regardless of the earlier `setScreen`. The surface must instead be pinned via `LayerShellQt::Window::setScreen()` (see below). `QWindow::setScreen` is still worth calling so pre-show geometry reads see the right screen, but it does not pin the layer surface by itself.
+
 ---
 
 ## LayerShellQt ScreenConfiguration
@@ -100,12 +102,26 @@ enum ScreenConfiguration {
 };
 ```
 
-### ScreenFromQWindow (Multi-Monitor)
+### LayerShellQt::Window::setScreen (the working output pin)
 
-- App explicitly calls `QWindow::setScreen(screen)` before showing
-- LayerShellQt sends the selected output to the compositor
-- **Use this for all multi-monitor modes** (all-screens, primary-only, follow-active)
-- This is the **default** (value 0) — Krema's WaylandDockPlatform doesn't need to set it explicitly
+The deprecated `ScreenConfiguration` enum maps to the modern pair
+`Window::setScreen(QScreen*)` + `Window::setWantsToBeOnActiveScreen(bool)`:
+
+```cpp
+auto *layerWin = LayerShellQt::Window::get(view);
+layerWin->setScreen(screen);              // resets wantsToBeOnActiveScreen to false
+// optional explicit:
+// layerWin->setWantsToBeOnActiveScreen(false);
+```
+
+- `layerWin->screen()` is what `QWaylandLayerSurface` passes to `get_layer_surface` as the `wl_output`. When `screen()` is null and `wantsToBeOnActiveScreen()` is false, it falls back to `QWindow::screen()` — which, per the note above, is unreliable on QtWayland once the surface maps.
+- **Use `LayerShellQt::Window::setScreen` for all multi-monitor modes** (all-screens, primary-only, follow-active). Verify against `qwaylandlayersurface.cpp:29-46` in the LayerShellQt source: `m_interface->screen()` is read first, then `window->window()->screen()`.
+
+### ScreenFromCompositor (Single Monitor — Deprecated pattern)
+
+- App doesn't specify output
+- Compositor decides which output to place the surface on
+- Use only when you genuinely don't care which screen the dock appears on
 
 ### ScreenFromCompositor (Single Monitor — Deprecated pattern)
 
@@ -135,9 +151,9 @@ Screen 1 (eDP-1)         Screen 2 (HDMI-A-1)
 ```cpp
 void DockManager::onScreenAdded(QScreen *screen) {
     auto *view = new DockView(createPlatform(), m_settings);
-    view->setScreen(screen);  // MUST be before show()
+    view->setScreen(screen);  // for pre-show geometry reads; does NOT pin the surface
     auto *layerWin = LayerShellQt::Window::get(view);
-    layerWin->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);  // explicit for clarity
+    layerWin->setScreen(screen);  // this is what get_layer_surface binds to
     view->initialize(...);    // calls show() internally
     m_views[screen] = view;
 }
@@ -151,8 +167,19 @@ void DockManager::onScreenRemoved(QScreen *screen) {
 
 ### Mode 2: Primary Only (Single Dock on Chosen Monitor)
 
-- One `DockView` that tracks `QGuiApplication::primaryScreen()`
-- On `primaryScreenChanged`: call `hide()`, `setScreen(newScreen)`, `show()`
+### The Plasma primary is NOT `QGuiApplication::primaryScreen()` (verified)
+
+On QtWayland, `primaryScreen()` is the **first `wl_output` the registry announces** and `primaryScreenChanged` never fires afterwards — it has nothing to do with KWin's per-user output priority. KWin publishes the user-visible order (the same priority the System Settings display page edits via `kde_output_device_v2`) through the **`kde_output_order_v1`** protocol — the one plasmashell uses for panel placement. Krema resolves it via `OutputOrderMonitor` (`src/shell/outputordermonitor.{h,cpp}`), vendored protocol XML at `src/protocols/kde-output-order-v1.xml` (upstream treats it as a DE implementation detail and does not install it; license MIT-CMU). The monitor:
+
+- emits `primaryOutputChanged` when the resolved primary changes, and `orderReadyChanged` when the first order list arrives — callers should wait for readiness before placing surfaces so they never briefly land on the first-announced output;
+- resolves to the first ordered name mapping to a live `QScreen` (unknown names skipped; mirrors LibKWorkspace `OutputOrderWatcher`);
+- falls back to `QGuiApplication::primaryScreen()` when the global is absent;
+- is intentionally leaked: destroying a Wayland client object after the Qt Wayland platform tears down the display crashes on some Qt versions.
+
+On primary change, dock + preview shells must be **recreated** — layer surfaces bind their `wl_output` at `get_layer_surface` time and cannot migrate.
+
+- One `DockView` that tracks `OutputOrderMonitor::instance()->primaryScreen()`
+- On `primaryOutputChanged`: destroy the shell and `createShellForScreen(newPrimary)` (hide/setScreen/show is insufficient — the surface is already bound)
 
 ```cpp
 void DockManager::onPrimaryScreenChanged(QScreen *newPrimary) {

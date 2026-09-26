@@ -45,8 +45,12 @@ PreviewController::~PreviewController() = default;
 
 void PreviewController::initialize()
 {
-    // Share the dock's QQmlEngine so QML types (Kirigami, TaskManager, etc.) are available
+    // Share the dock's QQmlEngine so QML types (Kirigami, TaskManager, etc.) are available.
+    // QObject-parent the view to this controller (NOT a QWindow parent, which
+    // would make it a child window) so the preview surface is destroyed with
+    // its DockShell instead of leaking on the old output.
     m_previewView = new QQuickView(m_dockView->engine(), nullptr);
+    static_cast<QObject *>(m_previewView)->setParent(this);
     m_previewView->setColor(Qt::transparent);
     m_previewView->setResizeMode(QQuickView::SizeRootObjectToView);
 
@@ -54,10 +58,14 @@ void PreviewController::initialize()
     auto *layerWindow = LayerShellQt::Window::get(m_previewView);
     if (layerWindow) {
         // Pin the preview surface to the dock's output. QWindow::setScreen
-        // alone is ignored for layer surfaces on QtWayland; the
-        // LayerShellQt-level screen is what get_layer_surface() binds to.
+        // alone does not pin a layer surface on QtWayland: the platform window
+        // re-derives its screen from the window geometry at creation, so the
+        // position must also land on the target output (layer-shell ignores
+        // absolute position). The LayerShellQt-level screen is what
+        // get_layer_surface() binds to.
         layerWindow->setScreen(m_dockView->screen());
         m_previewView->setScreen(m_dockView->screen());
+        m_previewView->setPosition(m_dockView->screen()->geometry().topLeft());
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setScope(QStringLiteral("krema-preview"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);

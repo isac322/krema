@@ -171,12 +171,16 @@ DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
     auto platform = DockPlatformFactory::create();
     auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, std::move(platform), this);
 
-    // Set the QWindow screen before initialization so pre-show geometry reads
-    // see the right screen. The layer-surface output pin happens in
-    // DockView::initialize through DockPlatform::setScreen: QWindow::setScreen
-    // alone is ignored for layer surfaces on QtWayland (verified: the window
-    // re-derives the primary wl_output when the surface maps).
+    // Set the QWindow screen AND position before initialization. On QtWayland
+    // the platform window re-derives its QScreen from the window geometry at
+    // creation (QWindowPrivate::create -> screenForGeometry): with a default
+    // geometry centered at (0,0) every window snaps to the first output and
+    // stays there because the outputs are virtual siblings (no window
+    // recreation). Placing the window on the target screen makes the derived
+    // QScreen match the pinned layer-surface output; layer-shell itself
+    // ignores absolute position (the compositor's anchors decide placement).
     shell->view()->setScreen(screen);
+    shell->view()->setPosition(screen->geometry().topLeft());
 
     auto edge = static_cast<DockPlatform::Edge>(screenSettings->edge());
     auto visibilityMode = static_cast<DockPlatform::VisibilityMode>(screenSettings->visibilityMode());

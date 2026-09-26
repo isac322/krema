@@ -12,6 +12,7 @@
 #include "models/dockmodel.h"
 #include "platform/dockplatform.h"
 #include "platform/dockplatformfactory.h"
+#include "settingswindow.h"
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
@@ -31,6 +32,7 @@ MultiDockManager::MultiDockManager(KremaSettings *settings, DockModel *model, No
     , m_settings(settings)
     , m_model(model)
     , m_tracker(tracker)
+    , m_settingsWindow(std::make_unique<SettingsWindow>(settings))
 {
     // Debounce screen topology changes (hot-plug, mirror→extended transitions)
     m_topologyDebounce.setSingleShot(true);
@@ -162,11 +164,15 @@ DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
     auto *screenSettings = new ScreenSettings(screen->name(), m_settings, this);
 
     auto platform = DockPlatformFactory::create();
-    auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, std::move(platform), this);
+    auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, m_settingsWindow.get(), std::move(platform), this);
 
-    // Set the screen on the DockView before initialization so layer-shell
-    // assigns the surface to the correct output.
+    // Put the DockView on its screen before initialization so layer-shell assigns
+    // the surface to the correct output. The position matters as much as the
+    // screen: when the platform window is created, Qt re-derives the screen from
+    // the window geometry, and a view left at (0,0) would move to the primary
+    // one.
     shell->view()->setScreen(screen);
+    shell->view()->setPosition(screen->geometry().topLeft());
 
     auto edge = static_cast<DockPlatform::Edge>(screenSettings->edge());
     auto visibilityMode = static_cast<DockPlatform::VisibilityMode>(screenSettings->visibilityMode());

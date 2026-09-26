@@ -46,12 +46,12 @@ PreviewController::~PreviewController() = default;
 void PreviewController::initialize()
 {
     // Share the dock's QQmlEngine so QML types (Kirigami, TaskManager, etc.) are available
-    m_previewView = new QQuickView(m_dockView->engine(), nullptr);
+    m_previewView = std::make_unique<QQuickView>(m_dockView->engine(), nullptr);
     m_previewView->setColor(Qt::transparent);
     m_previewView->setResizeMode(QQuickView::SizeRootObjectToView);
 
     // Layer-shell configuration: overlay above the dock
-    auto *layerWindow = LayerShellQt::Window::get(m_previewView);
+    auto *layerWindow = LayerShellQt::Window::get(m_previewView.get());
     if (layerWindow) {
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         layerWindow->setScope(QStringLiteral("krema-preview"));
@@ -435,7 +435,7 @@ void PreviewController::applyEdgeLayout()
         return;
     }
 
-    auto *layerWindow = LayerShellQt::Window::get(m_previewView);
+    auto *layerWindow = LayerShellQt::Window::get(m_previewView.get());
     if (!layerWindow) {
         return;
     }

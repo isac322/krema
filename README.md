@@ -192,6 +192,8 @@ just test         # ctest --preset dev
 just run          # run krema
 ```
 
+`just test` also runs the GUI integration tests on a private, headless `kwin_wayland --virtual` compositor when `kwin_wayland` and `dbus-run-session` are installed; your session and settings are not touched.
+
 </details>
 
 ## Roadmap

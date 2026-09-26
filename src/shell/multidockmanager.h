@@ -20,6 +20,7 @@ namespace krema
 class DockModel;
 class DockShell;
 class NotificationTracker;
+class SettingsWindow;
 
 /**
  * Manages multiple dock instances across screens.
@@ -98,6 +99,10 @@ private:
     NotificationTracker *m_tracker;
 
     MonitorMode m_mode = PrimaryOnly;
+    // One settings dialog for all docks. Declared before m_shells so it outlives
+    // them: the dialog's own handlers (e.g. Monitor mode) destroy and recreate
+    // shells.
+    std::unique_ptr<SettingsWindow> m_settingsWindow;
     std::unordered_map<QScreen *, std::unique_ptr<DockShell>> m_shells;
     QScreen *m_activeScreen = nullptr;
 

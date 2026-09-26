@@ -156,3 +156,27 @@
 - KDE 라이브러리의 "proxy model" 클래스가 반드시 올바른 소스를 사용하는지 바이너리 수준에서 검증 필요
 - `QQmlParserStatus::componentComplete()` 수동 호출 = 소스 모델 생성 트리거이지만, 어떤 소스인지는 별개 문제
 - 외부 D-Bus 서비스의 알림을 수신하려면 D-Bus 감시자(watcher) 프로토콜 직접 구현이 가장 안전
+
+---
+
+## N. A QML handler must not destroy its own engine: app-wide UI owned by a per-screen object (2026-09)
+
+**Symptom:** Choosing another "Monitor mode" in Settings aborted Krema (SIGABRT, `Object ... destroyed while one of its QML signal handlers is in progress`, BehaviorPage.qml:102). Issue #16.
+
+**Root cause:**
+- `BehaviorPage.qml` `onActivated` writes `DockSettings.monitorMode`; `MonitorModeChanged` is connected directly to `MultiDockManager::setMonitorMode()`, which destroys every `DockShell` synchronously.
+- Each `DockShell` owned a `SettingsWindow` (and its `QQmlApplicationEngine`), so the engine running the handler was deleted from inside the handler; Qt calls `qFatal()` in `QQmlData::destroyed()`.
+- Same teardown: `PreviewController` never deleted its preview `QQuickView` (one leaked `krema-preview` surface per rebuilt shell), and it outlived `DockView`, so `PreviewPopup.qml` bindings re-ran against a null `DockView` (`Cannot read property 'edge' of null`).
+- Second mechanism on the same flow: `createShellForScreen()` called `setScreen()` on a view left at (0,0). `QWindowPrivate::create()` re-derives the screen from the geometry, so every non-primary dock moved to the primary screen and emitted `screenChanged` while its platform window was being created; `DockView::handleScreenChanged()` then ran `hide()`+`show()`, re-entering `QWindow::create()`. The first `QWaylandWindow` leaked with a dangling `QWindow` pointer, and its next layer-surface configure crashed Krema (typically when Settings was opened after switching back from "All monitors").
+
+**Fix:** One `SettingsWindow` owned by `MultiDockManager` (declared before `m_shells`), shells hold a non-owning pointer and take the interaction lock when created while the dialog is open. Settings QML calls the stateless `SettingsWindow.isStyleAvailable()` instead of a per-dock `DockView`. `DockShell` owns `PreviewController` (which owns its view) and destroys it before `DockView`.
+Each view is also positioned on its target screen before creation, and `handleScreenChanged()` does nothing while no platform window exists.
+
+**Rejected:** Queued connection / `deleteLater` for the rebuild: no abort, but the open dialog still disappears with the shell that owned it.
+
+**Key lessons:**
+- Application-wide UI (dialogs, their QML engines) must be owned at application scope, never by objects that settings changes recreate.
+- Objects created while a ref-counted lock holder is already active must take the lock themselves; a transition signal will not arrive for them.
+- Windows that share another view's QML engine must be destroyed before that view.
+- `QWindow::setScreen()` alone does not pin a not-yet-created top-level window: move it into the screen's geometry too. Never recreate a surface (`hide()`/`show()`) from a `screenChanged` emitted during creation.
+- Regression: `tests/integration/test_settings_lifecycle.cpp` (runs under `kwin_wayland --virtual`, see `tests/integration/run-with-kwin.sh`).

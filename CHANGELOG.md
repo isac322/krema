@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Krema now ships its own app icon, shown in the application launcher, task switcher, Discover, and window title bars
 - Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
 - Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
 - Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite

@@ -21,6 +21,7 @@
 #include <KLocalizedString>
 
 #include <QAction>
+#include <QIcon>
 #include <QLoggingCategory>
 #include <QQuickStyle>
 #include <QtQml>
@@ -58,8 +59,11 @@ int Application::run()
     KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral(KREMA_VERSION_STRING), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
     aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
     aboutData.setOrganizationDomain(QByteArrayLiteral("bhyoo.com"));
+    aboutData.setHomepage(QStringLiteral("https://cv.bhyoo.com/krema/"));
+    aboutData.setBugAddress(QByteArrayLiteral("https://github.com/isac322/krema/issues"));
     KAboutData::setApplicationData(aboutData);
     setDesktopFileName(QStringLiteral("com.bhyoo.krema"));
+    setWindowIcon(QIcon::fromTheme(QStringLiteral("com.bhyoo.krema")));
 
     // Enforce single instance via D-Bus (exits if another instance is already running)
     KDBusService service(KDBusService::Unique);

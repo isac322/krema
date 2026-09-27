@@ -1,6 +1,6 @@
 <project name="home:isac322">
-  <title></title>
-  <description></description>
+  <title>Krema — lightweight dock for KDE Plasma 6</title>
+  <description>Krema is a lightweight, Wayland-native dock for KDE Plasma 6 built with Qt 6 and KDE Frameworks 6 — a spiritual successor to Latte Dock. This project builds packages for Fedora 42-44 and Rawhide, openSUSE Tumbleweed/Slowroll/Leap 16.0, Debian 13, and Ubuntu 25.04-26.04. Website: https://cv.bhyoo.com/krema/ — Source code: https://github.com/isac322/krema</description>
   <person userid="isac322" role="maintainer"/>
   <repository name="xUbuntu_26.04">
     <path project="Ubuntu:26.04" repository="universe"/>

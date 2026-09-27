@@ -134,3 +134,19 @@ install(
     FILES com.bhyoo.krema.metainfo.xml
     DESTINATION ${KDE_INSTALL_METAINFODIR}
 )
+
+include(ECMInstallIcons)
+ecm_install_icons(
+    ICONS
+        icons/16-apps-com.bhyoo.krema.png
+        icons/22-apps-com.bhyoo.krema.png
+        icons/24-apps-com.bhyoo.krema.png
+        icons/32-apps-com.bhyoo.krema.png
+        icons/48-apps-com.bhyoo.krema.png
+        icons/64-apps-com.bhyoo.krema.png
+        icons/128-apps-com.bhyoo.krema.png
+        icons/256-apps-com.bhyoo.krema.png
+        icons/sc-apps-com.bhyoo.krema.svg
+    DESTINATION ${KDE_INSTALL_ICONDIR}
+    THEME hicolor
+)

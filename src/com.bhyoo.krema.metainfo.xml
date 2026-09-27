@@ -23,10 +23,26 @@
       uses Kirigami for its settings UI, ensuring a fully native KDE Plasma experience.
     </p>
   </description>
+  <icon type="stock">com.bhyoo.krema</icon>
   <launchable type="desktop-id">com.bhyoo.krema.desktop</launchable>
-  <url type="homepage">https://github.com/isac322/krema</url>
+  <url type="homepage">https://cv.bhyoo.com/krema/</url>
   <url type="bugtracker">https://github.com/isac322/krema/issues</url>
   <url type="contribute">https://github.com/isac322/krema</url>
+  <url type="vcs-browser">https://github.com/isac322/krema</url>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/isac322/krema/master/branding/screenshots/dock-zoom.png</image>
+      <caption>Parabolic zoom magnifies the icon under the pointer</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/isac322/krema/master/branding/screenshots/dock-overview.png</image>
+      <caption>Pinned launchers and running apps on the Plasma desktop</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/isac322/krema/master/branding/screenshots/settings.png</image>
+      <caption>Kirigami settings for size, zoom, background and behavior</caption>
+    </screenshot>
+  </screenshots>
   <developer id="com.bhyoo">
     <name>Byeonghoon Yoo</name>
   </developer>
@@ -51,6 +67,10 @@
     <category>Utility</category>
   </categories>
   <content_rating type="oars-1.1"/>
+  <branding>
+    <color type="primary" scheme_preference="light">#BDE6F8</color>
+    <color type="primary" scheme_preference="dark">#1B2B3C</color>
+  </branding>
   <releases>
     <release version="0.7.0" date="2026-03-28">
       <description>

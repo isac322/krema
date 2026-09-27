@@ -5,10 +5,12 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QWindowList>
 
 class KremaSettings;
 class QQmlApplicationEngine;
 class QQuickWindow;
+class QVariant;
 
 namespace krema
 {
@@ -49,8 +51,10 @@ Q_SIGNALS:
     void visibleChanged(bool visible);
 
 private:
+    void open(const QVariant &defaultModule);
     void ensureEngine();
-    void trackConfigWindow(QObject *configView);
+    [[nodiscard]] QQuickWindow *windowCreatedSince(const QWindowList &windowsBefore) const;
+    void trackConfigWindow(QQuickWindow *win, bool deleteOnClose);
 
     KremaSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;

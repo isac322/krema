@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - "All monitors" and "Follow active screen" modes now place each dock on its own screen instead of stacking every dock on the primary screen, and switching back no longer crashes Krema the next time a window (such as Settings) opens
 - Switching monitor mode no longer leaves an invisible window preview surface behind for each dock it replaced
 - "Toggle Dock", "Focus Dock" and the Meta+number shortcuts now act on the visible dock in "Follow active screen" mode instead of the hidden primary-screen dock
+- On Debian 13 and Ubuntu 25.04 (kirigami-addons 1.7), choosing "Settings..." again now brings the open Settings window forward instead of opening another one, and the dock stays visible while Settings is open (#24)
 
 ### Added
 

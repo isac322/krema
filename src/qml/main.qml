@@ -340,11 +340,19 @@ Item {
             return
         }
 
-        // Rough vertical check: outside the dockRow + zoom extension → reset zoom
-        let rowTop = dockRow.y
-        let rowBottom = dockRow.y + dockRow.height
+        // Secondary axis (depth): dockPanel.mouseY is screen X on vertical docks.
+        // Icons zoom away from the screen edge: up (bottom), down (top),
+        // right (left), left (right).
+        let vertical = DockView.isVertical
+        let growsTowardFar = DockView.edge === 0 || DockView.edge === 2
+
+        // Rough depth check: outside the dockRow + zoom extension → reset zoom
+        let rowNear = vertical ? dockRow.x : dockRow.y
+        let rowFar = rowNear + (vertical ? dockRow.width : dockRow.height)
         let maxExt = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
-        if (dockPanel.mouseY < rowTop - maxExt || dockPanel.mouseY > rowBottom) {
+        let zoneNear = growsTowardFar ? rowNear : rowNear - maxExt
+        let zoneFar = growsTowardFar ? rowFar + maxExt : rowFar
+        if (dockPanel.mouseY < zoneNear || dockPanel.mouseY > zoneFar) {
             hoveredIndex = -1
             hoveredName = ""
             _zoomActive = false
@@ -365,19 +373,22 @@ Item {
             let item = dockRepeater.itemAt(i)
             if (!item) continue
 
-            // Horizontal: normalized distance (0 = center, 1 = edge of scaled icon)
+            // Primary axis: normalized distance (0 = center, 1 = edge of scaled icon)
             let dist = Math.abs(dockPanel.mouseX - item.itemCenterX)
-            let scaledHalfWidth = (item.width * item.currentScale) / 2
+            let scaledHalfWidth = ((vertical ? item.height : item.width) * item.currentScale) / 2
             let normDist = dist / scaledHalfWidth
 
             // Hysteresis: currently-hovered icon uses wider exit threshold
             let maxNorm = (i === hoveredIndex) ? (1.0 + hysteresisFactor) : 1.0
             if (normDist >= maxNorm) continue
 
-            // Vertical check: Scale origin.y = height → bottom fixed, grows upward
-            let itemBottom = dockRow.y + item.y + item.height
-            let itemTop = itemBottom - item.height * item.currentScale
-            if (dockPanel.mouseY < itemTop || dockPanel.mouseY > itemBottom) continue
+            // Depth check: the Scale origin keeps the screen-edge side fixed
+            let depth = vertical ? item.width : item.height
+            let scaledDepth = depth * item.currentScale
+            let itemBase = vertical ? dockRow.x + item.x : dockRow.y + item.y
+            let itemNear = growsTowardFar ? itemBase : itemBase + depth - scaledDepth
+            let itemFar = growsTowardFar ? itemBase + scaledDepth : itemBase + depth
+            if (dockPanel.mouseY < itemNear || dockPanel.mouseY > itemFar) continue
 
             // Comparison: currently-hovered icon gets distance bonus (sticky)
             let effectiveDist = (i === hoveredIndex) ? normDist * (1.0 - hysteresisFactor) : normDist
@@ -394,9 +405,9 @@ Item {
         } else {
             hoveredIndex = -1
             hoveredName = ""
-            // _zoomActive intentionally NOT reset here for horizontal gap hysteresis.
+            // _zoomActive intentionally NOT reset here for primary-axis gap hysteresis.
             // When mouse crosses tiny gaps between icons, zoom stays active to prevent
-            // flickering. Zoom deactivates only when mouse leaves the vertical zone
+            // flickering. Zoom deactivates only when mouse leaves the depth zone
             // (rough check above) or the panel zone entirely (mouseX becomes -1).
         }
     }

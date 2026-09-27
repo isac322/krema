@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Hovering and clicking dock icons now works for every icon on left and right docks (previously only the first icon responded), and zoomed icons on a top dock stay hovered across their whole enlarged area
+
 ## [0.8.0] - 2026-09-28
 
 ### Added

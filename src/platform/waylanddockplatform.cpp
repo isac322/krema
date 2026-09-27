@@ -25,7 +25,10 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
     }
 
     m_layerWindow->setLayer(LayerShellQt::Window::LayerTop);
-    m_layerWindow->setScope(QStringLiteral("krema-dock"));
+    // KWin derives a layer surface's window type only from its namespace, and
+    // only "dock" maps to a Dock. Any other value makes the dock a normal
+    // window, which Show Desktop hides (issue #16).
+    m_layerWindow->setScope(QStringLiteral("dock"));
     m_layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     m_layerWindow->setCloseOnDismissed(false);
 

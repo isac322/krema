@@ -40,6 +40,7 @@
 #include <QWindow>
 #include <private/qabstractanimation_p.h>
 #include <private/qgenericunixeventdispatcher_p.h>
+#include <private/qquickwindow_p.h>
 
 #include <QtWaylandClient/QWaylandClientExtension>
 
@@ -1041,9 +1042,37 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
     }
 }
 
+/// Every window's size and every item's geometry, opacity and visibility,
+/// after polish, so positioner layout is included.
+QString layoutSignature()
+{
+    QString signature;
+    for (QQuickWindow *quick : quickWindows()) {
+        QQuickWindowPrivate::get(quick)->polishItems();
+        QJsonArray items;
+        collectItems(quick->contentItem(), QStringLiteral("0"), items);
+        signature += QStringLiteral("|%1x%2:").arg(quick->width()).arg(quick->height());
+        for (const QJsonValue &value : std::as_const(items)) {
+            const QJsonObject item = value.toObject();
+            for (const char *key : {"x", "y", "w", "h", "opacity", "scale", "visible"}) {
+                signature += item.value(QLatin1String(key)).toVariant().toString();
+                signature += QLatin1Char(',');
+            }
+        }
+    }
+    return signature;
+}
+
+FixedStepDriver *g_driver = nullptr;
+
+qint64 probeStepMs()
+{
+    return qEnvironmentVariableIsSet("KREMA_PROBE_STEP_MS") ? qEnvironmentVariableIntValue("KREMA_PROBE_STEP_MS") : 16;
+}
+
 } // namespace
 
-void FrameProbe::installEventDispatcherIfEnabled()
+void FrameProbe::installBeforeApplicationIfEnabled()
 {
     if (qEnvironmentVariableIsEmpty("KREMA_PROBE_NDJSON")) {
         return;
@@ -1053,6 +1082,14 @@ void FrameProbe::installEventDispatcherIfEnabled()
     // during startup, is registered here.
     g_timers = new VirtualTimerDispatcher;
     QCoreApplication::setEventDispatcher(g_timers);
+    // QUnifiedTimer keeps the first animation driver installed and refuses
+    // later ones ("animation driver already installed"). The Qt Quick render
+    // loop installs its own when the first QQuickWindow is created; unless
+    // this one is already in place, animations advance once per rendered frame,
+    // whenever the compositor lets the window render, instead of once per
+    // captured frame.
+    g_driver = new FixedStepDriver(probeStepMs(), nullptr);
+    g_driver->install();
 }
 
 void FrameProbe::installIfEnabled()
@@ -1063,7 +1100,7 @@ void FrameProbe::installIfEnabled()
     }
 
     const QString frameDir = QString::fromLocal8Bit(qgetenv("KREMA_PROBE_DIR"));
-    const qint64 stepMs = qEnvironmentVariableIsSet("KREMA_PROBE_STEP_MS") ? qEnvironmentVariableIntValue("KREMA_PROBE_STEP_MS") : 16;
+    const qint64 stepMs = probeStepMs();
     const int maxFrames = qEnvironmentVariableIsSet("KREMA_PROBE_MAX_FRAMES") ? qEnvironmentVariableIntValue("KREMA_PROBE_MAX_FRAMES") : 600;
     const int settleFrames = qEnvironmentVariableIsSet("KREMA_PROBE_SETTLE_FRAMES") ? qEnvironmentVariableIntValue("KREMA_PROBE_SETTLE_FRAMES") : 30;
     // Frames alone are not enough to settle: with a virtual clock the loop
@@ -1077,8 +1114,12 @@ void FrameProbe::installIfEnabled()
     // dispatcher installed before QApplication puts them on the same virtual
     // clock (see VirtualTimerDispatcher).
     VirtualTimerDispatcher *timers = g_timers;
-    if (!timers) {
-        qFatal("frame probe needs FrameProbe::installEventDispatcherIfEnabled() before QApplication");
+    FixedStepDriver *driver = g_driver;
+    if (!timers || !driver) {
+        qFatal("frame probe needs FrameProbe::installBeforeApplicationIfEnabled() before QApplication");
+    }
+    if (!QUnifiedTimer::instance()->canUninstallAnimationDriver(driver)) {
+        qFatal("frame probe animation driver is not the installed QUnifiedTimer driver");
     }
 
     if (!frameDir.isEmpty()) {
@@ -1086,13 +1127,6 @@ void FrameProbe::installIfEnabled()
     }
 
     auto *app = QCoreApplication::instance();
-    auto *driver = new FixedStepDriver(stepMs, app);
-    // Installed later, from the first tick: the Qt Quick render loop installs
-    // its own QSGAnimationDriver when the window is created, and the last
-    // driver installed wins. Installing here would be silently overridden, and
-    // animations would then advance per rendered frame instead of per captured
-    // frame -- which looks correct only while something forces a render every
-    // tick (grabWindow did, until screenshots became opt-in).
 
     auto *out = new QFile(ndjsonPath, app);
     if (!out->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -1163,7 +1197,6 @@ void FrameProbe::installIfEnabled()
         // recorded scenario starts, so a frame number means the same thing on
         // every run regardless of compositor handshake timing.
         if (!*installed) {
-            driver->install();
             // QUnifiedTimer only refreshes its internal lastTick while at least
             // one animation is running. Without a permanently running animation
             // the first animation started after an idle gap is charged the
@@ -1198,28 +1231,27 @@ void FrameProbe::installIfEnabled()
         if (!*warmed) {
             // Wall clock alone is not a deterministic settle condition: async
             // Wayland/D-Bus state lands at a different point relative to it on
-            // every run, which shows up as a whole-frame phase difference in
-            // the capture. Additionally require the layout to have stopped
-            // changing before frame 1.
+            // every run. Keep the animation clock stepping meanwhile, so an
+            // animation started by state that arrives now finishes before frame
+            // 1, exactly as if it had arrived during the settle frames, and
+            // require the whole layout to have stopped changing.
             QString signature;
             int stable = 0;
+            QElapsedTimer cap;
+            cap.start();
             while (stable < 20 || pace->elapsed() < settleMs) {
+                if (cap.elapsed() >= 10000) {
+                    qCWarning(lcProbe) << "layout did not settle within 10 s";
+                    break;
+                }
                 QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
                 QThread::msleep(5);
-                QString current = QString::number(windows.size());
-                for (QQuickWindow *quick : quickWindows()) {
-                    QJsonArray items;
-                    collectItems(quick->contentItem(), QStringLiteral("0"), items);
-                    current += QStringLiteral("|%1:%2x%3").arg(items.size()).arg(quick->width()).arg(quick->height());
-                }
+                driver->advance();
+                const QString current = layoutSignature();
                 stable = (current == signature) ? stable + 1 : 0;
                 signature = current;
             }
-            // Wait out the remaining wall clock WITHOUT advancing the driver.
-            // Burning virtual time here instead would push the animation clock
-            // hundreds of thousands of frames ahead, and QUnifiedTimer then
-            // stops delivering a tick per advance -- animations end up updating
-            // once every ~10 captured frames instead of every frame.
+            window->update();
             *warmed = true;
             // From frame 1 on, every main-thread timer fires from the frame
             // loop at its virtual due time.
@@ -1304,6 +1336,15 @@ void FrameProbe::installIfEnabled()
         if (timers->advance(std::chrono::milliseconds(stepMs)) > 0) {
             syncWithCompositor();
         }
+        // Positioners and anchors lay out during polish, which otherwise runs
+        // whenever the render loop next draws: before this advance in one pass,
+        // at the next capture in another. Animations a relayout starts then got
+        // their first tick a frame apart. Polish now, and deliver the queued
+        // animation starts, so everything begun this frame gets this tick.
+        for (QQuickWindow *quick : quickWindows()) {
+            QQuickWindowPrivate::get(quick)->polishItems();
+        }
+        QCoreApplication::sendPostedEvents();
         driver->advance();
 
         if (maxFrames > 0 && *frame >= maxFrames) {

@@ -11,9 +11,9 @@ namespace krema::testing
  *
  * Compiled into krema only when the CMake option KREMA_TEST_HOOKS is ON, and
  * inert unless KREMA_PROBE_NDJSON is set at runtime. When active it:
- *
- *  - installs a fixed-step QAnimationDriver so animation time advances exactly
- *    KREMA_PROBE_STEP_MS per captured frame, decoupled from the wall clock;
+ *  - installs, before QApplication, a fixed-step QAnimationDriver so animation
+ *    time advances exactly KREMA_PROBE_STEP_MS per captured frame, decoupled
+ *    from the wall clock and from when the compositor lets the window render;
  *  - drives rendering itself, one frame per event-loop turn;
  *  - writes one NDJSON row per frame describing every QQuickItem in every
  *    Qt Quick window (geometry, scale, opacity, visibility);
@@ -37,8 +37,9 @@ class FrameProbe
 {
 public:
     /// Must run before QApplication is constructed; installs the virtual-timer
-    /// event dispatcher when KREMA_PROBE_NDJSON is set.
-    static void installEventDispatcherIfEnabled();
+    /// event dispatcher and the fixed-step animation driver when
+    /// KREMA_PROBE_NDJSON is set.
+    static void installBeforeApplicationIfEnabled();
     static void installIfEnabled();
 };
 

@@ -13,8 +13,10 @@ enable_language(C)
 # CorePrivate carries QUnifiedTimer, whose consistent-timing mode is what
 # makes an animation advance by the driver step instead of the real clock.
 # GuiPrivate carries createUnixEventDispatcher, the platform dispatcher the
-# probe wraps to move timers onto its virtual clock.
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test Widgets Qml CorePrivate GuiPrivate WaylandClient)
+# probe wraps to move timers onto its virtual clock. QuickPrivate carries
+# QQuickWindowPrivate::polishItems, which the probe runs before each clock
+# advance so relayout-started animations begin on a fixed frame.
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test Widgets Qml CorePrivate GuiPrivate QuickPrivate WaylandClient)
 # The probe derives window placement from the layer-shell anchors the client set.
 find_package(LayerShellQt REQUIRED)
 
@@ -38,6 +40,7 @@ target_link_libraries(krema_frameprobe PUBLIC
     Qt6::GuiPrivate
     Qt6::Qml
     Qt6::Quick
+    Qt6::QuickPrivate
     Qt6::Test
     Qt6::Widgets
     Qt6::WaylandClient

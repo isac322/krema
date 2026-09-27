@@ -318,9 +318,15 @@ the current strict harness still requires its first CI validation.
   is) and waits for the dock to report it. Each pass parks the pointer at the
   output centre before quitting, so the next pass never maps its surfaces under
   a stale pointer.
-- **Animation ticks advance by the driver step, not the real clock.** By default
-  `QUnifiedTimer` measures each tick against the wall clock and may hand a new
-  animation a catch-up delta. The probe calls
+- **Animation ticks advance by the driver step, not the real clock.**
+  `QUnifiedTimer` keeps the first animation driver installed and refuses later
+  ones with `QUnifiedTimer: animation driver already installed...`. The Qt
+  Quick render loop installs its own driver when the first `QQuickWindow` is
+  created, so the probe installs its fixed-step driver from `main()` before
+  `QApplication`, and aborts if it is not the installed driver. Otherwise
+  animations advance once per rendered frame, whenever the compositor lets the
+  window render. By default `QUnifiedTimer` also measures each tick against the
+  wall clock and may hand a new animation a catch-up delta. The probe calls
   `QUnifiedTimer::setConsistentTiming(true)`, which is why the test-only target
   links `Qt6::CorePrivate`; a permanently running `QVariantAnimation` keeps the
   unified timer active between user actions.

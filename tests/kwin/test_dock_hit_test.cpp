@@ -288,6 +288,31 @@ void runEdge(Edge edge)
         const int activated = launching.isEmpty() ? -1 : launching.first().first().toInt();
         qInfo("HIT edge=%s icon=%d where=click at=(%d,%d) activated=%d", edgeName(edge), i, ext.x(), ext.y(), activated);
         CHECK(activated == i);
+
+        // Along the dock an icon is claimed only up to half its scaled
+        // along-dock extent, widened by 25% hysteresis for the hovered one
+        // (updateHoveredItem). One pixel past that boundary the point is
+        // inside the next icon's rect, or past the last icon on the dock.
+        // On vertical docks that extent is item.height, not item.width.
+        const bool vertical = (edge == Edge::Left || edge == Edge::Right);
+        const qreal depthPos = vertical ? r.center().x() : r.center().y();
+        QQuickItem *next = i + 1 < items.size() ? items.at(i + 1) : nullptr;
+        const qreal extent = vertical ? icon->height() : icon->width();
+        const qreal scale = icon->property("currentScale").toReal();
+        const qreal centerPos = vertical ? r.center().y() : r.center().x();
+        const qreal alongPos = centerPos + extent * scale / 2.0 * 1.25 + 1.0;
+        const QPoint along =
+            vertical ? QPoint(static_cast<int>(depthPos), static_cast<int>(alongPos)) : QPoint(static_cast<int>(alongPos), static_cast<int>(depthPos));
+        const int neighborIndex = next ? i + 1 : -1;
+        QTest::mouseMove(view, along);
+        QTest::qWaitFor(
+            [&] {
+                return root->property("hoveredIndex").toInt() != i;
+            },
+            2000);
+        const int alongHovered = root->property("hoveredIndex").toInt();
+        qInfo("HIT edge=%s icon=%d where=along-dock at=(%d,%d) hovered=%d expect=%d", edgeName(edge), i, along.x(), along.y(), alongHovered, neighborIndex);
+        CHECK(alongHovered == neighborIndex);
     }
 }
 

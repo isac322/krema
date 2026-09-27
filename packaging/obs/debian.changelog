@@ -1,3 +1,12 @@
+krema (0.7.0-3) unstable; urgency=medium
+
+  * Add missing runtime QML module dependencies so the Settings dialog and
+    dock UI load on minimal installs:
+    qml6-module-org-kde-kirigamiaddons-settings,
+    qml6-module-org-kde-kirigamiaddons-formcard, qml6-module-qtquick-effects
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Sun, 27 Sep 2026 00:00:00 +0900
+
 krema (0.7.0-2) unstable; urgency=medium
 
   * Fix runtime dependency names for openSUSE Tumbleweed/Leap 16.0 and Debian/Ubuntu

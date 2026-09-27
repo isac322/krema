@@ -34,6 +34,26 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
 
 void WaylandDockPlatform::setScreen(QScreen *screen)
 {
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
+    // LayerShellQt < 6.6 has no Window::setScreen. With ScreenFromQWindow its
+    // get_layer_surface() binds the wl_output of QWindow::screen() when the
+    // surface is created on show(), so the Qt screen is the pin.
+    if (m_window) {
+        m_window->setScreen(screen);
+        // Before the platform window exists QtWayland re-derives the screen
+        // from the window geometry, so the position must sit on the target
+        // output (layer-shell ignores absolute position). Once it exists
+        // (LayerShellQt < 6.6 creates it in Window::get()), QtWayland pins a
+        // toplevel to its screen origin, and a setPosition() from the stale
+        // origin would re-derive the old screen instead.
+        if (screen && !m_window->handle()) {
+            m_window->setPosition(screen->geometry().topLeft());
+        }
+    }
+    if (m_layerWindow) {
+        m_layerWindow->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
+    }
+#else
     // The LayerShellQt-level screen is what get_layer_surface() binds to;
     // QWindow::setScreen alone does not pin the surface on QtWayland (the
     // platform window re-derives its screen from the window geometry when it
@@ -45,6 +65,7 @@ void WaylandDockPlatform::setScreen(QScreen *screen)
     if (m_layerWindow) {
         m_layerWindow->setScreen(screen);
     }
+#endif
 }
 
 void WaylandDockPlatform::setEdge(Edge edge)

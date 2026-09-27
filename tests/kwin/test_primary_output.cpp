@@ -187,16 +187,29 @@ QSet<QString> layerScreenNames(const char *scope)
     return result;
 }
 
-// Same as layerScreenNames but reports the LayerShellQt-requested screen,
-// i.e. the wl_output the surface actually bound at get_layer_surface().
+// Same as layerScreenNames but reports the output the surface binds at
+// get_layer_surface(). LayerShellQt >= 6.6 uses its own Window::screen().
+// Older LayerShellQt (KREMA_COMPAT_NO_LAYERSHELL_SCREEN) has no such pin: in
+// ScreenFromQWindow mode it binds QWindow::screen() at surface creation, so
+// the bound output is the Qt screen and the configuration must be
+// ScreenFromQWindow (ScreenFromCompositor would let KWin pick).
 QSet<QString> boundOutputNames(const char *scope)
 {
     QSet<QString> result;
     for (auto *window : QGuiApplication::topLevelWindows()) {
         auto *layerWindow = LayerShellQt::Window::get(window);
-        if (layerWindow && layerWindow->scope() == QLatin1String(scope) && layerWindow->screen()) {
+        if (!layerWindow || layerWindow->scope() != QLatin1String(scope)) {
+            continue;
+        }
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
+        if (layerWindow->screenConfiguration() == LayerShellQt::Window::ScreenFromQWindow && window->screen()) {
+            result.insert(window->screen()->name());
+        }
+#else
+        if (layerWindow->screen()) {
             result.insert(layerWindow->screen()->name());
         }
+#endif
     }
     return result;
 }

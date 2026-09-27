@@ -71,9 +71,19 @@ check_cxx_source_compiles("
 int main() { static_cast<LayerShellQt::Window*>(nullptr)->setDesiredSize(QSize{}); }
 " _HAVE_LAYERSHELLQT_DESIRED_SIZE)
 
+# LayerShellQt < 6.6 lacks Window::setScreen — detect and flag for fallback
+check_cxx_source_compiles("
+#include <LayerShellQt/Window>
+#include <QScreen>
+int main() { static_cast<LayerShellQt::Window*>(nullptr)->setScreen(static_cast<QScreen*>(nullptr)); }
+" _HAVE_LAYERSHELLQT_SET_SCREEN)
+
 add_compile_definitions(KREMA_VERSION_STRING="${PROJECT_VERSION}")
 if(NOT _HAVE_LAYERSHELLQT_DESIRED_SIZE)
     add_compile_definitions(KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE)
+endif()
+if(NOT _HAVE_LAYERSHELLQT_SET_SCREEN)
+    add_compile_definitions(KREMA_COMPAT_NO_LAYERSHELL_SCREEN)
 endif()
 
 add_subdirectory(src)

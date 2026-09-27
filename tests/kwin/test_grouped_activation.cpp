@@ -33,7 +33,6 @@
 #include <QWidget>
 
 #include <memory>
-#include <utility>
 
 namespace
 {
@@ -172,28 +171,30 @@ QModelIndex otherWindowIndex()
     return {};
 }
 
-// Both child modes run this same executable. Without a desktop entry for
-// their app ids, libtaskmanager falls back to the executable and would group
-// the --other window with the --child windows, so give each mode its own.
-// Installed before the DockModel exists so its KSycoca view already has them.
-void installChildDesktopEntries()
+// Path of the executable for @p mode. Without a desktop entry for their app
+// ids, libtaskmanager identifies both children by their executable, which
+// would put the --other window into the --child group. So --other runs from
+// a copy of this binary under another name, in run-with-kwin.sh's scratch
+// runtime directory.
+QString childExecutable(const QString &mode)
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/applications");
-    QDir().mkpath(dir);
-    for (const auto &[id, name] : {std::pair{"krema-grouptest", "Krema Group Test"}, std::pair{"krema-othertest", "Krema Other Test"}}) {
-        QFile file(dir + QLatin1Char('/') + QLatin1String(id) + QStringLiteral(".desktop"));
-        if (file.open(QIODevice::WriteOnly)) {
-            file.write(
-                QStringLiteral("[Desktop Entry]\nType=Application\nName=%1\nExec=true\nIcon=application-x-executable\n").arg(QLatin1String(name)).toUtf8());
-        }
+    const QString self = QCoreApplication::applicationFilePath();
+    if (mode != QLatin1String("--other")) {
+        return self;
     }
-    QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+    static const QString copy = [&self] {
+        const QString path = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QStringLiteral("/krema-other-app");
+        QFile::remove(path);
+        QFile::copy(self, path);
+        return path;
+    }();
+    return copy;
 }
 
 // Starts this binary in @p mode; the returned guard kills it.
 auto startChild(QProcess &process, const QString &mode)
 {
-    process.start(QCoreApplication::applicationFilePath(), {mode});
+    process.start(childExecutable(mode), {mode});
     return qScopeGuard([&process] {
         process.kill();
         process.waitForFinished();
@@ -405,6 +406,5 @@ int main(int argc, char *argv[])
         return otherMain(argc, argv);
     }
     QApplication application(argc, argv);
-    installChildDesktopEntries();
     return Catch::Session().run(argc, argv);
 }

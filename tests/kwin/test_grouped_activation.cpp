@@ -183,7 +183,8 @@ void installChildDesktopEntries()
     for (const auto &[id, name] : {std::pair{"krema-grouptest", "Krema Group Test"}, std::pair{"krema-othertest", "Krema Other Test"}}) {
         QFile file(dir + QLatin1Char('/') + QLatin1String(id) + QStringLiteral(".desktop"));
         if (file.open(QIODevice::WriteOnly)) {
-            file.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=%1\nExec=true\nIcon=application-x-executable\n").arg(QLatin1String(name)).toUtf8());
+            file.write(
+                QStringLiteral("[Desktop Entry]\nType=Application\nName=%1\nExec=true\nIcon=application-x-executable\n").arg(QLatin1String(name)).toUtf8());
         }
     }
     QProcess::execute(QStringLiteral("kbuildsycoca6"), {});

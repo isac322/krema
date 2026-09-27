@@ -25,6 +25,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "shell/previewcontroller.h"
 
 #include <KAboutData>
 #include <LayerShellQt/Window>
@@ -380,6 +381,79 @@ TEST_CASE("Each preview surface binds the same output as its dock (AllScreens)",
     // Restore a neutral state for whichever case runs next under Randomized
     // ordering.
     app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
+}
+
+TEST_CASE("Preview popup centers on its icon on a primary output not at x=0", "[primary-output][preview]")
+{
+    // Regression: showPreview() receives the icon position from QML
+    // mapToGlobal(), which includes the dock window's origin on the virtual
+    // desktop. recalcContentPosition() clamps in preview-surface-local
+    // coordinates, so on an output at x=1024 the popup was pushed to the
+    // right edge of the output instead of centering on the icon.
+    REQUIRE(QGuiApplication::screens().size() == 2);
+    app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
+    app().settings->setEdge(static_cast<int>(krema::DockPlatform::Edge::Bottom));
+
+    QScreen *originScreen = nullptr;
+    QScreen *offsetScreen = nullptr;
+    for (auto *screen : QGuiApplication::screens()) {
+        (screen->geometry().x() == 0 ? originScreen : offsetScreen) = screen;
+    }
+    REQUIRE(originScreen);
+    REQUIRE(offsetScreen);
+    REQUIRE(offsetScreen->geometry().x() > 0);
+
+    auto run = [](QScreen *target) {
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return makePrimary(target->name());
+            },
+            kTimeoutMs));
+
+        auto manager = makeManager();
+        manager->initialize();
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return dockScreenName(manager.get()) == target->name();
+            },
+            kTimeoutMs));
+
+        auto *shell = manager->primaryShell();
+        REQUIRE(shell);
+        auto *view = shell->view();
+        // The dock surface spans its whole output (anchored left+right), so the
+        // window origin is the output origin once the surface is placed.
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return view->x() == target->geometry().x();
+            },
+            kTimeoutMs));
+
+        auto *preview = shell->previewController();
+        REQUIRE(preview);
+
+        // Icon at dock-local x=500, 48 px wide; popup content 300 px wide.
+        constexpr qreal iconLocalX = 500;
+        constexpr qreal iconExtent = 48;
+        constexpr qreal contentWidth = 300;
+        preview->setContentSize(contentWidth, 200);
+        // What main.qml passes: item.mapToGlobal(0, 0).x
+        const qreal iconGlobalX = view->x() + iconLocalX;
+        preview->showPreview(0, iconGlobalX, iconExtent);
+
+        INFO("output " << target->name().toStdString() << " at x=" << target->geometry().x());
+        CHECK(preview->contentX() == iconLocalX + iconExtent / 2.0 - contentWidth / 2.0);
+        preview->hidePreview();
+    };
+
+    SECTION("dock on the origin output (control)")
+    {
+        run(originScreen);
+    }
+    SECTION("dock on the output at non-zero x")
+    {
+        run(offsetScreen);
+    }
 }
 #if KREMA_TEST_HAS_MONITOR
 TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[primary-output]")

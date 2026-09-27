@@ -9,6 +9,7 @@
 #include <taskmanager/tasksmodel.h>
 #include <taskmanager/tasktools.h>
 
+#include <QDateTime>
 #include <QLoggingCategory>
 
 Q_DECLARE_LOGGING_CATEGORY(lcModel)
@@ -35,8 +36,7 @@ void DockActions::activate(int index)
     // which matches Plasma's default grouped-click action ("cycle through
     // grouped tasks"): while a window of the group is active, each click
     // activates the next one in model order, wrapping around. When none is
-    // active, the first window is activated (Plasma picks the most recently
-    // used one instead).
+    // active, the most recently used window of the group is activated.
     if (idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
         cycleWindows(index, true);
         return;
@@ -91,6 +91,42 @@ void DockActions::togglePinned(int index)
     }
 }
 
+namespace
+{
+
+// Child of the group at @p index to enter when none of its windows is active,
+// following Plasma's task manager (TaskTools.js groupTopTask): the most
+// recently activated window, else the topmost in the stacking order, else the
+// first child.
+int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
+{
+    int best = -1;
+    QDateTime bestActivated;
+    for (int i = 0; i < childCount; ++i) {
+        const QDateTime activated = tasksModel->makeModelIndex(index, i).data(TaskManager::AbstractTasksModel::LastActivated).toDateTime();
+        if (activated.isValid() && (!bestActivated.isValid() || activated > bestActivated)) {
+            bestActivated = activated;
+            best = i;
+        }
+    }
+    if (best >= 0) {
+        return best;
+    }
+
+    int bestStacking = -1;
+    for (int i = 0; i < childCount; ++i) {
+        bool ok = false;
+        const int stacking = tasksModel->makeModelIndex(index, i).data(TaskManager::AbstractTasksModel::StackingOrder).toInt(&ok);
+        if (ok && stacking > bestStacking) {
+            bestStacking = stacking;
+            best = i;
+        }
+    }
+    return best >= 0 ? best : 0;
+}
+
+} // namespace
+
 void DockActions::cycleWindows(int index, bool forward)
 {
     auto *tasksModel = m_model->tasksModel();
@@ -121,10 +157,12 @@ void DockActions::cycleWindows(int index, bool forward)
         }
     }
 
-    // Cycle to next/previous child
+    // Cycle to next/previous child. Entering a group whose windows are all
+    // inactive lands on the window the user left, in either wheel direction;
+    // only moves within the group follow the direction.
     int target;
     if (activeChild < 0) {
-        target = 0;
+        target = entryChild(tasksModel, index, childCount);
     } else {
         target = forward ? (activeChild + 1) % childCount : (activeChild - 1 + childCount) % childCount;
     }

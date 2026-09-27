@@ -6,7 +6,8 @@
 // Drives the real DockModel/DockActions against a KWin virtual compositor.
 // The app windows come from a child process (this binary started with
 // --child) so they are ordinary xdg toplevels that libtaskmanager groups under
-// one task, exactly like a real app with two windows.
+// one task, exactly like a real app with two windows. A second child
+// (--other) is a one-window app used to move focus away from the group.
 //
 // Must run under run-with-kwin.sh, which provides WAYLAND_DISPLAY, a private
 // session bus and throwaway XDG directories.
@@ -32,6 +33,7 @@
 #include <QWidget>
 
 #include <memory>
+#include <utility>
 
 namespace
 {
@@ -41,6 +43,7 @@ using TaskManager::AbstractTasksModel;
 constexpr int kTimeoutMs = 15000;
 const QString kWindowA = QStringLiteral("krema-group-A");
 const QString kWindowB = QStringLiteral("krema-group-B");
+const QString kOtherWindow = QStringLiteral("krema-other");
 
 krema::DockModel &model()
 {
@@ -68,6 +71,31 @@ int groupRow()
         }
     }
     return -1;
+}
+
+// One line per task row and child, for failure messages.
+std::string describeTasks()
+{
+    auto *tasks = model().tasksModel();
+    QString out;
+    for (int row = 0; row < tasks->rowCount(); ++row) {
+        const QModelIndex idx = tasks->index(row, 0);
+        out += QStringLiteral("row %1 '%2' appId=%3 children=%4 active=%5\n")
+                   .arg(row)
+                   .arg(idx.data(Qt::DisplayRole).toString(), idx.data(AbstractTasksModel::AppId).toString())
+                   .arg(tasks->rowCount(idx))
+                   .arg(idx.data(AbstractTasksModel::IsActive).toBool());
+        for (int i = 0; i < tasks->rowCount(idx); ++i) {
+            const QModelIndex child = tasks->index(i, 0, idx);
+            out += QStringLiteral("  child %1 '%2' active=%3 lastActivated=%4 stacking=%5\n")
+                       .arg(i)
+                       .arg(childTitle(idx, i))
+                       .arg(child.data(AbstractTasksModel::IsActive).toBool())
+                       .arg(child.data(AbstractTasksModel::LastActivated).toDateTime().toString(Qt::ISODateWithMs))
+                       .arg(child.data(AbstractTasksModel::StackingOrder).toInt());
+        }
+    }
+    return out.toStdString();
 }
 
 // Title of the active window inside the group, or empty when none is active.
@@ -120,23 +148,84 @@ int childMain(int argc, char *argv[])
     return app.exec();
 }
 
+// A single window of a different app, used to take focus away from the group.
+int otherMain(int argc, char *argv[])
+{
+    QApplication::setDesktopFileName(QStringLiteral("krema-othertest"));
+    QApplication app(argc, argv);
+    QWidget other;
+    other.setWindowTitle(kOtherWindow);
+    other.resize(200, 200);
+    other.show();
+    return app.exec();
+}
+
+QModelIndex otherWindowIndex()
+{
+    auto *tasks = model().tasksModel();
+    for (int row = 0; row < tasks->rowCount(); ++row) {
+        const QModelIndex idx = tasks->index(row, 0);
+        if (tasks->rowCount(idx) == 0 && idx.data(Qt::DisplayRole).toString() == kOtherWindow) {
+            return idx;
+        }
+    }
+    return {};
+}
+
+// Both child modes run this same executable. Without a desktop entry for
+// their app ids, libtaskmanager falls back to the executable and would group
+// the --other window with the --child windows, so give each mode its own.
+// Installed before the DockModel exists so its KSycoca view already has them.
+void installChildDesktopEntries()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/applications");
+    QDir().mkpath(dir);
+    for (const auto &[id, name] : {std::pair{"krema-grouptest", "Krema Group Test"}, std::pair{"krema-othertest", "Krema Other Test"}}) {
+        QFile file(dir + QLatin1Char('/') + QLatin1String(id) + QStringLiteral(".desktop"));
+        if (file.open(QIODevice::WriteOnly)) {
+            file.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=%1\nExec=true\nIcon=application-x-executable\n").arg(QLatin1String(name)).toUtf8());
+        }
+    }
+    QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+}
+
+// Starts this binary in @p mode; the returned guard kills it.
+auto startChild(QProcess &process, const QString &mode)
+{
+    process.start(QCoreApplication::applicationFilePath(), {mode});
+    return qScopeGuard([&process] {
+        process.kill();
+        process.waitForFinished();
+    });
+}
+
+// Windows of the children killed by an earlier test or section can linger in
+// the model for a moment; wait them out so the rows a test finds are its own.
+bool noStaleTestWindows()
+{
+    return QTest::qWaitFor(
+        [] {
+            return groupRow() < 0 && !otherWindowIndex().isValid();
+        },
+        kTimeoutMs);
+}
+
 } // namespace
 
 TEST_CASE("Left-click on a grouped app cycles through its windows", "[grouped-activation]")
 {
+    REQUIRE(noStaleTestWindows());
     QProcess child;
-    child.start(QCoreApplication::applicationFilePath(), {QStringLiteral("--child")});
-    const auto stopChild = qScopeGuard([&] {
-        child.kill();
-        child.waitForFinished();
-    });
+    const auto stopChild = startChild(child, QStringLiteral("--child"));
     REQUIRE(child.waitForStarted(kTimeoutMs));
 
-    REQUIRE(QTest::qWaitFor(
+    const bool grouped = QTest::qWaitFor(
         [] {
             return groupRow() >= 0;
         },
-        kTimeoutMs));
+        kTimeoutMs);
+    INFO("tasks:\n" << describeTasks());
+    REQUIRE(grouped);
     // KWin focuses newly mapped windows; let that settle so the first click
     // starts from a stable state instead of racing the initial activation.
     (void)QTest::qWaitFor(
@@ -229,11 +318,92 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
         kTimeoutMs));
 }
 
+TEST_CASE("Clicking a group returns to its most recently used window", "[grouped-activation]")
+{
+    REQUIRE(noStaleTestWindows());
+    QProcess group;
+    const auto stopGroup = startChild(group, QStringLiteral("--child"));
+    REQUIRE(group.waitForStarted(kTimeoutMs));
+    const bool grouped = QTest::qWaitFor(
+        [] {
+            return groupRow() >= 0;
+        },
+        kTimeoutMs);
+    INFO("tasks:\n" << describeTasks());
+    REQUIRE(grouped);
+
+    auto *tasks = model().tasksModel();
+    krema::DockActions actions(&model());
+
+    // KWin focuses the group's windows as they map; let that settle so it
+    // cannot override the activation below.
+    (void)QTest::qWaitFor(
+        [] {
+            return !activeGroupWindow().isEmpty();
+        },
+        kTimeoutMs);
+    QTest::qWait(500);
+
+    // Use the group's second child (model order) as the last-used window:
+    // entering at the first child, the old behavior, cannot pass by accident.
+    const QString lastUsed = childTitle(tasks->index(groupRow(), 0), 1);
+    INFO("last used window: " << lastUsed.toStdString());
+    // Activate the first child, then the last-used one, each after the
+    // previous activation lands: KWin's initial focus changes can share a
+    // millisecond timestamp, which would leave LastActivated tied.
+    for (int child : {0, 1}) {
+        const QString title = childTitle(tasks->index(groupRow(), 0), child);
+        tasks->requestActivate(tasks->makeModelIndex(groupRow(), child));
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return activeGroupWindow() == title;
+            },
+            kTimeoutMs));
+        QTest::qWait(10);
+    }
+
+    // Leave the group by opening another app: KWin focuses its new window.
+    QProcess other;
+    const auto stopOther = startChild(other, QStringLiteral("--other"));
+    REQUIRE(other.waitForStarted(kTimeoutMs));
+    const bool left = QTest::qWaitFor(
+        [] {
+            return activeGroupWindow().isEmpty() && otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+        },
+        kTimeoutMs);
+    INFO("after opening the other app:\n" << describeTasks());
+    REQUIRE(left);
+
+    SECTION("left-click")
+    {
+        actions.activate(groupRow());
+    }
+    SECTION("wheel up (backward) enters at the same window")
+    {
+        actions.cycleWindows(groupRow(), false);
+    }
+    SECTION("wheel down (forward) enters at the same window")
+    {
+        actions.cycleWindows(groupRow(), true);
+    }
+
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            return !activeGroupWindow().isEmpty();
+        },
+        kTimeoutMs));
+    CHECK(activeGroupWindow() == lastUsed);
+}
+
 int main(int argc, char *argv[])
 {
     if (argc > 1 && qstrcmp(argv[1], "--child") == 0) {
         return childMain(argc, argv);
     }
+    if (argc > 1 && qstrcmp(argv[1], "--other") == 0) {
+        return otherMain(argc, argv);
+    }
     QApplication application(argc, argv);
+    installChildDesktopEntries();
     return Catch::Session().run(argc, argv);
 }

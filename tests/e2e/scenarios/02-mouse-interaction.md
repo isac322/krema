@@ -173,16 +173,16 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 
 **Precondition:** App with 2+ open windows (e.g., 2 kcalc instances via middle-click).
 **Steps:**
-1. Click another app's window so the grouped app is not active
+1. Click one of the grouped app's windows (call it the last-used window), then click another app's window so the grouped app is not active
 2. `mouse_click` on the grouped app's dock item (screen coordinates)
 3. Wait 300ms
-4. `screenshot` — one of the app's windows is in the foreground
+4. `screenshot` — the last-used window is in the foreground
 5. `mouse_click` on the same dock item again
 6. Wait 300ms
 7. `screenshot` — the app's other window is in the foreground
 
 **Expected:**
-- The first click activates a window of the app
+- The first click activates the app's most recently used window (scrolling onto the app does the same)
 - Each further click activates the app's next window, wrapping around (A→B→A)
 - No new instance is launched
 

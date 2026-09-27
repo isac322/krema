@@ -25,7 +25,15 @@ SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
 {
 }
 
-SettingsWindow::~SettingsWindow() = default;
+SettingsWindow::~SettingsWindow()
+{
+    // Delete the engine while the "SettingsWindow" context property still
+    // resolves to this object. m_engine is only a QObject child, so a default
+    // destructor would destroy it after this object's QML bindings are gone
+    // and teardown would log TypeError (e.g. "isStyleAvailable of null").
+    delete m_engine;
+    m_engine = nullptr;
+}
 
 bool SettingsWindow::isVisible() const
 {

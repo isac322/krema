@@ -524,10 +524,14 @@ TEST_CASE("Shutting down with the settings dialog open", "[settings][shutdown]")
     openSettingsFrom(app().manager->primaryShell());
 
     // QA-10: destroying the dock graph with the dialog open neither crashes
-    // nor leaves the dialog behind.
+    // nor leaves the dialog behind — and teardown emits no QML errors
+    // (a SettingsWindow destroyed while its engine is still alive logs
+    // TypeErrors like "Cannot read property 'isStyleAvailable' of null").
+    g_qmlErrors.clear();
     app().manager.reset();
     QCoreApplication::processEvents();
     CHECK(visibleSettingsWindows().isEmpty());
+    CHECK(g_qmlErrors.isEmpty());
 }
 
 int main(int argc, char *argv[])

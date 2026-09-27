@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
 - Deterministic unprivileged KWin/Wayland UI frame regression tests with exact endpoints, bounded transition divergence, and inline review previews
 
+## [0.7.0] - 2026-03-28
 
 ### Added
 

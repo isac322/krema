@@ -47,6 +47,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           python3 - <<'PY'
+          import html
           import os
           import pathlib
           import re
@@ -90,6 +91,10 @@ jobs:
           # autolinks GitHub renders without a scheme. Other schemes such as
           # file:/// in failure text are not links GitHub renders. Each allowed
           # link must name one of the GIFs validated above.
+          # GitHub decodes HTML entities in link targets: an href like
+          # "https&colon;//evil.example" bypasses the raw regex but renders
+          # as a real link, so scan the entity-decoded text.
+          body = html.unescape(body)
           links = re.findall(
               r'(?i)(?:\bhttps?:|(?<![:/\w]))//[^\s)>"\'\]]+|\bwww\.[^\s)>"\'\]]+',
               body)

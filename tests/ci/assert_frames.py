@@ -584,10 +584,10 @@ def main() -> int:
                 rows, load(path), f'pass{pass_index}', action_frames,
                 max_transient, envelope_tolerance))
         repro_ok = not repro_failures
-        repro = (f'exact endpoints with ≤{max_transient} transient frames/action'
+        repro = (f'endpoints within tolerance, ≤{max_transient} transient frames/action'
                  if repro_ok else repro_failures[0])
         if repro_ok:
-            print(f'  repro: exact endpoints, ≤{max_transient} transient frames/action')
+            print(f'  repro: endpoints within tolerance, ≤{max_transient} transient frames/action')
         else:
             print('  REPRO capture differs:')
             for failure in repro_failures:

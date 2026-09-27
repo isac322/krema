@@ -20,6 +20,7 @@ namespace krema
 class DockModel;
 class DockShell;
 class NotificationTracker;
+class SettingsWindow;
 
 /**
  * Manages multiple dock instances across screens.
@@ -50,10 +51,15 @@ public:
     /// Change the monitor mode at runtime (e.g. from settings).
     void setMonitorMode(MonitorMode mode);
 
-    /// Return the "primary" shell (for global shortcuts and focus).
+    /// Return the shell on the primary screen, or any shell as fallback.
     [[nodiscard]] DockShell *primaryShell() const;
 
-    /// Return the shell on the screen containing the given point, or primaryShell().
+    /// Return the shell global shortcuts should act on: the Follow Active
+    /// screen's shell in that mode, primaryShell() otherwise.
+    [[nodiscard]] DockShell *activeShell() const;
+
+    /// Return the shell on the screen containing the given point, or
+    /// primaryShell(). In Follow Active mode returns activeShell().
     [[nodiscard]] DockShell *shellAtCursor() const;
 
     /// Return all active shells.
@@ -98,6 +104,10 @@ private:
     NotificationTracker *m_tracker;
 
     MonitorMode m_mode = PrimaryOnly;
+    // One settings dialog for all docks. Declared before m_shells so it outlives
+    // them: the dialog's own handlers (e.g. Monitor mode) destroy and recreate
+    // shells.
+    std::unique_ptr<SettingsWindow> m_settingsWindow;
     std::unordered_map<QScreen *, std::unique_ptr<DockShell>> m_shells;
     QScreen *m_activeScreen = nullptr;
 

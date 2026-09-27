@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Launching Krema from Kickoff/KRunner/Application menu no longer fails with "The name com.bhyoo.krema was not provided by any .service files"; the desktop entry no longer declares `DBusActivatable` without a matching D-Bus service file (#18)
 - The dock and window-preview surfaces now follow the Plasma primary output (kde_output_order_v1) instead of the first-announced Wayland output, and they migrate when the primary output is changed in System Settings (#18)
 - Debian/Ubuntu package now declares all runtime QML module dependencies (Kirigami Addons settings/formcard, QtQuick.Effects) so the Settings dialog and dock UI load on minimal installs without recommended packages (packaging release bumped to 0.7.0-3)
+- Krema no longer crashes when you change "Monitor mode" in Settings; the new mode applies and the Settings window stays open (#16)
+- Docks recreated by a monitor mode change now stay visible while the Settings window is open, and docks on different screens share one Settings window instead of opening one each
+- "All monitors" and "Follow active screen" modes now place each dock on its own screen instead of stacking every dock on the primary screen, and switching back no longer crashes Krema the next time a window (such as Settings) opens
+- Switching monitor mode no longer leaves an invisible window preview surface behind for each dock it replaced
+- "Toggle Dock", "Focus Dock" and the Meta+number shortcuts now act on the visible dock in "Follow active screen" mode instead of the hidden primary-screen dock
 
 ### Added
 

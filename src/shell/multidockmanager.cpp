@@ -14,6 +14,7 @@
 #include "models/dockmodel.h"
 #include "platform/dockplatform.h"
 #include "platform/dockplatformfactory.h"
+#include "settingswindow.h"
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
@@ -33,6 +34,7 @@ MultiDockManager::MultiDockManager(KremaSettings *settings, DockModel *model, No
     , m_settings(settings)
     , m_model(model)
     , m_tracker(tracker)
+    , m_settingsWindow(std::make_unique<SettingsWindow>(settings))
 {
     // Debounce screen topology changes (hot-plug, mirror→extended transitions)
     m_topologyDebounce.setSingleShot(true);
@@ -91,8 +93,24 @@ DockShell *MultiDockManager::primaryShell() const
     return nullptr;
 }
 
+DockShell *MultiDockManager::activeShell() const
+{
+    // In Follow Active mode the visible dock is the one on m_activeScreen;
+    // global shortcuts (toggle, focus, Meta+N) must target it, not the
+    // hidden primary-screen shell.
+    if (m_mode == FollowActive && m_activeScreen) {
+        if (auto it = m_shells.find(m_activeScreen); it != m_shells.end()) {
+            return it->second.get();
+        }
+    }
+    return primaryShell();
+}
+
 DockShell *MultiDockManager::shellAtCursor() const
 {
+    if (m_mode == FollowActive) {
+        return activeShell();
+    }
     auto *screen = QGuiApplication::screenAt(QCursor::pos());
     if (screen) {
         auto it = m_shells.find(screen);
@@ -169,7 +187,7 @@ DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
     auto *screenSettings = new ScreenSettings(screen->name(), m_settings, this);
 
     auto platform = DockPlatformFactory::create();
-    auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, std::move(platform), this);
+    auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, m_settingsWindow.get(), std::move(platform), this);
 
     // Set the QWindow screen AND position before initialization. On QtWayland
     // the platform window re-derives its QScreen from the window geometry at
@@ -248,9 +266,12 @@ void MultiDockManager::setupFollowActive()
     if (trigger == TriggerMouse || trigger == TriggerComposite) {
         // Event-driven mouse detection: when any dock's visibility controller
         // detects hover, switch to that screen. This avoids polling QCursor::pos().
+        // Only hover counts: the settings dialog's interaction lock also shows
+        // the hidden docks' controllers, which is not pointer activity.
         for (const auto &[screen, shell] : m_shells) {
-            connect(shell->view()->visibilityController(), &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen]() {
-                if (m_mode == FollowActive && screen != m_activeScreen) {
+            auto *controller = shell->view()->visibilityController();
+            connect(controller, &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen, controller]() {
+                if (m_mode == FollowActive && screen != m_activeScreen && controller->isHovered()) {
                     m_followActiveDebounce.stop();
                     connect(&m_followActiveDebounce, &QTimer::timeout, this, [this, screen]() {
                         setActiveScreen(screen);

@@ -26,9 +26,10 @@ class SettingsWindow;
 /**
  * Encapsulates all objects for a single dock instance.
  *
- * Owns DockView, DockActions, DockContextMenu, PreviewController,
- * and SettingsWindow. Wires settings signals to subsystems.
- * Designed for future multi-monitor support (one DockShell per screen).
+ * Owns DockView, DockActions, DockContextMenu and PreviewController, and
+ * wires settings signals to them. One DockShell exists per docked screen;
+ * MultiDockManager destroys and recreates shells on mode or topology changes.
+ * The settings dialog is shared by all shells and owned by MultiDockManager.
  */
 class DockShell : public QObject
 {
@@ -39,6 +40,7 @@ public:
                        ScreenSettings *screenSettings,
                        DockModel *model,
                        NotificationTracker *tracker,
+                       SettingsWindow *settingsWindow,
                        std::unique_ptr<DockPlatform> platform,
                        QObject *parent = nullptr);
     ~DockShell() override;
@@ -61,12 +63,14 @@ private:
     KremaSettings *m_settings;
     ScreenSettings *m_screenSettings;
     DockModel *m_model;
+    SettingsWindow *m_settingsWindow; // shared, owned by MultiDockManager
 
     std::unique_ptr<DockView> m_view;
     std::unique_ptr<DockActions> m_actions;
     std::unique_ptr<DockContextMenu> m_contextMenu;
-    PreviewController *m_previewController = nullptr;
-    std::unique_ptr<SettingsWindow> m_settingsWindow;
+    // Declared after m_view so it is destroyed first: the preview surface
+    // shares the dock's QML engine and binds to its "DockView" context property.
+    std::unique_ptr<PreviewController> m_previewController;
 };
 
 } // namespace krema

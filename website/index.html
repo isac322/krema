@@ -5,16 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Krema — Lightweight Dock for KDE Plasma 6</title>
 <meta name="description" content="Krema brings parabolic zoom, live PipeWire window previews and deep Plasma integration to KDE Plasma 6 in a lightweight, Wayland-native dock.">
-<link rel="canonical" href="https://cv.bhyoo.com/krema/">
+<link rel="canonical" href="https://krema.bhyoo.com/">
 <meta name="theme-color" content="#141C26">
 <meta name="color-scheme" content="dark">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Krema">
-<meta property="og:url" content="https://cv.bhyoo.com/krema/">
+<meta property="og:url" content="https://krema.bhyoo.com/">
 <meta property="og:title" content="Krema — Lightweight Dock for KDE Plasma 6">
-<meta property="og:description" content="A Wayland-native dock for KDE Plasma 6 with parabolic zoom, live window previews and the spirit of Latte Dock.">
-<meta property="og:image" content="https://cv.bhyoo.com/krema/og-image.png">
+<meta property="og:description" content="A Wayland-native dock for KDE Plasma 6 with parabolic zoom and live window previews. The spiritual successor to Latte Dock.">
+<meta property="og:image" content="https://krema.bhyoo.com/og-image.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -23,8 +23,8 @@
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Krema — Lightweight Dock for KDE Plasma 6">
-<meta name="twitter:description" content="A Wayland-native dock for KDE Plasma 6 with parabolic zoom, live window previews and the spirit of Latte Dock.">
-<meta name="twitter:image" content="https://cv.bhyoo.com/krema/og-image.png">
+<meta name="twitter:description" content="A Wayland-native dock for KDE Plasma 6 with parabolic zoom and live window previews. The spiritual successor to Latte Dock.">
+<meta name="twitter:image" content="https://krema.bhyoo.com/og-image.png">
 <meta name="twitter:image:alt" content="The Krema logo beside a KDE Plasma 6 dock whose icons magnify under the pointer.">
 
 <link rel="icon" href="favicon.ico" sizes="48x48">
@@ -56,10 +56,10 @@
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Linux (KDE Plasma 6)",
   "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
-  "url": "https://cv.bhyoo.com/krema/",
+  "url": "https://krema.bhyoo.com/",
   "downloadUrl": "https://github.com/isac322/krema/releases",
-  "image": "https://cv.bhyoo.com/krema/icon-512.png",
-  "screenshot": "https://cv.bhyoo.com/krema/og-image.png",
+  "image": "https://krema.bhyoo.com/icon-512.png",
+  "screenshot": "https://krema.bhyoo.com/og-image.png",
   "offers": {
     "@type": "Offer",
     "price": "0",
@@ -89,6 +89,8 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M9 7h8v8"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 5v13M6.5 12.5 12 18l5.5-5.5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.2-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6Z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2.8 2.84 5.76 6.36.92-4.6 4.49 1.08 6.33L12 17.31 6.32 20.3l1.08-6.33-4.6-4.49 6.36-.92Z"/></symbol>
 </svg>
 
 <header class="wordnav" data-wordnav>
@@ -96,64 +98,118 @@
   <nav aria-label="Sections"><ol class="wn-letters">
     <li class="wn-item"><a class="wn-l" href="#top" data-section="top" aria-label="Krema">K</a><span class="wn-cap">Krema</span></li>
     <li class="wn-item"><a class="wn-l" href="#roots" data-section="roots" aria-label="Roots">R</a><span class="wn-cap">Roots</span></li>
-    <li class="wn-item"><a class="wn-l" href="#everything" data-section="everything" aria-label="Everything it does">E</a><span class="wn-cap">Everything</span></li>
-    <li class="wn-item"><a class="wn-l" href="#moments" data-section="moments" aria-label="Moments on a real desktop">M</a><span class="wn-cap">Moments</span></li>
+    <li class="wn-item"><a class="wn-l" href="#exhibit" data-section="exhibit" aria-label="Exhibit: see it in action">E</a><span class="wn-cap">Exhibit</span></li>
+    <li class="wn-item"><a class="wn-l" href="#mechanics" data-section="mechanics" aria-label="Mechanics: what it does">M</a><span class="wn-cap">Mechanics</span></li>
     <li class="wn-item"><a class="wn-l" href="#add" data-section="add" aria-label="Add Krema to your desktop">A</a><span class="wn-cap">Add it</span></li>
   </ol><span class="wn-dot" aria-hidden="true"></span></nav>
-  <a class="wn-gh" href="https://github.com/isac322/krema">GitHub</a>
+  <a class="wn-star" href="https://github.com/isac322/krema" data-star-link aria-label="Star Krema on GitHub"><svg class="wn-star-mark" aria-hidden="true"><use href="#i-github"/></svg><span class="wn-star-label">Star</span><span class="star-chip" data-stars hidden><svg aria-hidden="true"><use href="#i-star"/></svg><span data-stars-n></span></span></a>
 </header>
 
 <main id="main">
   <section id="top" class="hero" data-section-app="Krema">
-    <h1 class="lens" aria-label="Krema"><span class="lens-ch" aria-hidden="true">k</span><span class="lens-ch" aria-hidden="true">r</span><span class="lens-ch" aria-hidden="true">e</span><span class="lens-ch" aria-hidden="true">m</span><span class="lens-ch" aria-hidden="true">a</span><span class="lens-dot" aria-hidden="true"></span></h1>
-    <p class="hero-tag">The zooming dock for KDE Plasma 6, native to Wayland.</p>
-    <p class="hero-lede">Parabolic zoom, live window previews and the Plasma theme you already picked. Krema is written in C++ against KDE’s own frameworks, runs natively on Wayland, and is the spiritual successor to Latte&nbsp;Dock.</p>
+    <h1 class="lens" aria-label="Krema"><svg class="lens-icon" viewBox="0 0 256 256" aria-hidden="true"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/><rect x="44" y="32" width="32" height="192" rx="16" fill="#F3F0EA"/><rect x="86" y="98" width="60" height="60" rx="16.2" fill="#3DAEE9"/><rect x="151" y="57" width="36" height="36" rx="9.72" fill="#3DAEE9" opacity="0.66"/><rect x="151" y="163" width="36" height="36" rx="9.72" fill="#3DAEE9" opacity="0.66"/><rect x="192" y="32" width="20" height="20" rx="5.4" fill="#3DAEE9" opacity="0.38"/><rect x="192" y="204" width="20" height="20" rx="5.4" fill="#3DAEE9" opacity="0.38"/></svg><span class="lens-ch" aria-hidden="true">k</span><span class="lens-ch" aria-hidden="true">r</span><span class="lens-ch" aria-hidden="true">e</span><span class="lens-ch" aria-hidden="true">m</span><span class="lens-ch" aria-hidden="true">a</span><span class="lens-dot" aria-hidden="true"></span></h1>
+    <p class="hero-tag">The zooming dock for KDE Plasma&nbsp;6</p>
+    <p class="hero-lede">Krema has parabolic zoom and live PipeWire window previews, runs natively on Wayland, and is the spiritual successor to Latte&nbsp;Dock.</p>
     <div class="ctas">
       <a class="btn btn-primary" href="#add"><svg aria-hidden="true"><use href="#i-down"/></svg>Install</a>
-      <a class="btn btn-ghost" href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
+      <a class="btn btn-ghost" href="#exhibit"><svg aria-hidden="true"><use href="#i-play"/></svg>Watch it in action</a>
+      <a class="btn btn-ghost btn-star" href="https://github.com/isac322/krema" data-star-link aria-label="Star Krema on GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg>Star on GitHub<span class="star-chip" data-stars hidden><svg aria-hidden="true"><use href="#i-star"/></svg><span data-stars-n></span></span></a>
     </div>
     <p class="hero-hint" aria-hidden="true">Sweep the letters.</p>
   </section>
 
   <section id="roots" class="roots" aria-labelledby="roots-title">
     <div class="win">
-      <div class="win-bar"><span class="win-title">roots — Krema</span></div>
+      <div class="win-bar"><span class="win-title">roots · Krema</span></div>
       <div class="win-body">
         <h2 id="roots-title">Latte Dock stopped at Plasma&nbsp;5. Krema starts at&nbsp;6.</h2>
         <div class="prose">
-          <p>If your desktop lost its dock during the Plasma 6 upgrade, Krema is here to fill the gap. It is a spiritual successor to Latte Dock, written from scratch for Qt&nbsp;6, KDE Frameworks&nbsp;6 and the Wayland Layer Shell protocol, with no X11 code to carry along.</p>
-          <p>Rendering runs on the GPU through Qt’s QRhi, previews stream through PipeWire, and nothing is allocated until the dock actually needs it.</p>
+          <p>Krema is its spiritual successor, written from scratch for Plasma&nbsp;6 in C++23 with Qt&nbsp;6, KDE Frameworks&nbsp;6 and the Wayland Layer Shell. It has no X11 code.</p>
+          <p>The stock Plasma panel still has no parabolic zoom. Krema’s core features work today, and the rest is on the <a href="https://github.com/isac322/krema/blob/master/ROADMAP.md">roadmap</a>.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="everything" class="features" aria-labelledby="everything-title">
-    <h2 id="everything-title" class="section-title">Everything a dock should do, done the Plasma way</h2>
+  <section id="exhibit" class="exhibit" aria-labelledby="exhibit-title">
+    <h2 id="exhibit-title" class="section-title">See it in action</h2>
+    <div class="ex" data-ex>
+      <div class="ex-stage" data-dodge hidden>
+        <div class="ex-screen">
+          <figure class="ex-clip" id="ex-clip-zoom" data-clip="zoom" role="tabpanel" aria-labelledby="ex-tab-zoom">
+            <figcaption class="ex-cap"><span class="ex-name">Parabolic zoom</span> <span class="ex-line">Icons grow under the pointer and settle as it leaves.</span></figcaption>
+            <video class="ex-video" width="1280" height="640" muted loop playsinline preload="none" poster="media/zoom.webp"><source data-src="media/zoom.webm" type="video/webm"><source data-src="media/zoom.mp4" type="video/mp4"></video>
+          </figure>
+          <figure class="ex-clip" id="ex-clip-launch" data-clip="launch" role="tabpanel" aria-labelledby="ex-tab-launch">
+            <figcaption class="ex-cap"><span class="ex-name">Launch feedback</span> <span class="ex-line">Icons bounce on launch, and a dot marks running apps.</span></figcaption>
+            <video class="ex-video" width="1280" height="640" muted loop playsinline preload="none" poster="media/launch.webp"><source data-src="media/launch.webm" type="video/webm"><source data-src="media/launch.mp4" type="video/mp4"></video>
+          </figure>
+          <figure class="ex-clip" id="ex-clip-attention" data-clip="attention" role="tabpanel" aria-labelledby="ex-tab-attention">
+            <figcaption class="ex-cap"><span class="ex-name">Badges and attention</span> <span class="ex-line">Badges show counts, and icons move when an app needs you.</span></figcaption>
+            <video class="ex-video" width="1280" height="640" muted loop playsinline preload="none" poster="media/attention.webp"><source data-src="media/attention.webm" type="video/webm"><source data-src="media/attention.mp4" type="video/mp4"></video>
+          </figure>
+          <figure class="ex-clip" id="ex-clip-autohide" data-clip="autohide" role="tabpanel" aria-labelledby="ex-tab-autohide">
+            <figcaption class="ex-cap"><span class="ex-name">Auto-hide and dodge</span> <span class="ex-line">The dock slips aside for windows and returns at the edge.</span></figcaption>
+            <video class="ex-video" width="1280" height="640" muted loop playsinline preload="none" poster="media/autohide.webp"><source data-src="media/autohide.webm" type="video/webm"><source data-src="media/autohide.mp4" type="video/mp4"></video>
+          </figure>
+          <figure class="ex-clip" id="ex-clip-settings" data-clip="settings" role="tabpanel" aria-labelledby="ex-tab-settings">
+            <figcaption class="ex-cap"><span class="ex-name">Live settings</span> <span class="ex-line">Change a setting and the dock updates right away.</span></figcaption>
+            <video class="ex-video" width="1280" height="640" muted loop playsinline preload="none" poster="media/settings.webp"><source data-src="media/settings.webm" type="video/webm"><source data-src="media/settings.mp4" type="video/mp4"></video>
+          </figure>
+        </div>
+        <button type="button" class="ex-toggle" aria-pressed="false" aria-label="Play clips"><svg class="ex-i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg><svg class="ex-i-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg></button>
+      </div>
+      <div class="ex-dock" role="tablist" aria-label="Clips" data-dodge hidden>
+        <button type="button" class="ex-tile" id="ex-tab-zoom" role="tab" aria-controls="ex-clip-zoom" aria-selected="false" data-clip="zoom"><span class="ex-face"><img src="media/zoom.webp" alt="" loading="lazy" decoding="async"></span><span class="ex-ind" aria-hidden="true"></span><span class="ex-label">Zoom</span></button>
+        <button type="button" class="ex-tile" id="ex-tab-launch" role="tab" aria-controls="ex-clip-launch" aria-selected="false" data-clip="launch"><span class="ex-face"><img src="media/launch.webp" alt="" loading="lazy" decoding="async"></span><span class="ex-ind" aria-hidden="true"></span><span class="ex-label">Launch</span></button>
+        <button type="button" class="ex-tile" id="ex-tab-attention" role="tab" aria-controls="ex-clip-attention" aria-selected="false" data-clip="attention"><span class="ex-face"><img src="media/attention.webp" alt="" loading="lazy" decoding="async"></span><span class="ex-ind" aria-hidden="true"></span><span class="ex-label">Attention</span></button>
+        <button type="button" class="ex-tile" id="ex-tab-autohide" role="tab" aria-controls="ex-clip-autohide" aria-selected="false" data-clip="autohide"><span class="ex-face"><img src="media/autohide.webp" alt="" loading="lazy" decoding="async"></span><span class="ex-ind" aria-hidden="true"></span><span class="ex-label">Auto-hide</span></button>
+        <button type="button" class="ex-tile" id="ex-tab-settings" role="tab" aria-controls="ex-clip-settings" aria-selected="false" data-clip="settings"><span class="ex-face"><img src="media/settings.webp" alt="" loading="lazy" decoding="async"></span><span class="ex-ind" aria-hidden="true"></span><span class="ex-label">Settings</span></button>
+      </div>
+      <p class="ex-live" aria-live="polite"></p>
+    </div>
+    <div class="pv" data-pv>
+      <div class="pv-popup" role="list">
+        <!-- screenshots:begin -->
+        <!-- shot:dock-overview:begin -->
+        <figure class="pv-thumb" role="listitem"><button type="button" class="pv-open" aria-label="Enlarge: ten pinned launchers under Dolphin and Konsole"><img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Dolphin and Konsole open on the Plasma “Next” wallpaper, with Krema docked along the bottom edge showing ten pinned launchers and running indicators beneath the active apps."></button><figcaption class="pv-cap">Ten pinned launchers under Dolphin and Konsole. Running indicators show which apps are open.</figcaption></figure>
+        <!-- shot:dock-overview:end -->
+        <!-- shot:settings:begin -->
+        <figure class="pv-thumb" role="listitem"><button type="button" class="pv-open" aria-label="Enlarge: the Krema settings window"><img src="screenshots/settings.png" width="1920" height="1080" loading="lazy" decoding="async" alt="The Krema settings window on the Appearance page, with options for icon size, spacing, zoom factor, attention animation and badge display."></button><figcaption class="pv-cap">The Appearance page: icon size, spacing, zoom factor, attention animation and badge display.</figcaption></figure>
+        <!-- shot:settings:end -->
+        <!-- screenshots:end -->
+      </div>
+      <div class="pv-tile" aria-hidden="true"><svg viewBox="0 0 256 256" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg><span class="pv-dot"></span></div>
+    </div>
+    <dialog class="pv-dialog" aria-label="Screenshot"><button class="pv-close" type="button" aria-label="Close">×</button><img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt=""><p class="pv-dcap"></p></dialog>
+  </section>
+
+  <section id="mechanics" class="features" aria-labelledby="mechanics-title">
+    <h2 id="mechanics-title" class="section-title">Everything a dock should do, done the Plasma way</h2>
     <div class="fx" data-fx>
       <article class="fx-panel" tabindex="0" aria-labelledby="fx-core-h">
         <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20h17"/><rect x="4.5" y="10.5" width="4.25" height="6" rx="1.4"/><rect x="9.9" y="6" width="4.25" height="10.5" rx="1.4"/><rect x="15.3" y="9" width="4.25" height="7.5" rx="1.4"/></g></svg><h3 id="fx-core-h" class="fx-name">Core dock</h3></div>
         <div class="fx-body">
-          <p class="fx-lede">The behavior your hands expect, tuned from the settings window rather than a config file.</p>
+          <p class="fx-lede">Pin favorites, see what runs, jump to it.</p>
           <dl class="fx-specs">
-            <div><dt>Parabolic zoom</dt><dd>Icons swell smoothly under the pointer and settle back as it leaves, with adjustable magnification.</dd></div>
-            <div><dt>Even icon sizes</dt><dd>Krema detects built-in padding in icon themes and rescales so every app lines up.</dd></div>
-            <div><dt>Pinning and running dots</dt><dd>Keep favorites in place; a dot under each icon marks what is open.</dd></div>
-            <div><dt>Scroll to cycle</dt><dd>Turn the wheel over an app to step through its windows.</dd></div>
-            <div><dt>Backgrounds</dt><dd>Inherit your panel style, go semi-transparent or fully clear, tint it, frost it with acrylic blur, follow your accent with Mica, or let adaptive opacity turn solid when a window touches the dock.</dd></div>
-            <div><dt>Three visibility modes</dt><dd>Always visible, auto-hide, or dodge windows.</dd></div>
+            <div><dt>Parabolic zoom</dt><dd>Icons grow under the pointer and settle as it leaves. You set how far they grow.</dd></div>
+            <div><dt>Even icon sizes</dt><dd>Krema detects padding built into icon themes and rescales, so icons line up.</dd></div>
+            <div><dt>Pinning and running dots</dt><dd>Pinned apps stay in place, and a dot marks each open one.</dd></div>
+            <div><dt>Scroll to cycle</dt><dd>Scroll over an app to step through its windows.</dd></div>
+            <div><dt>Backgrounds</dt><dd>Panel-matched, transparent, tinted or frosted acrylic. Adaptive opacity turns the dock solid when a window touches it.</dd></div>
+            <div><dt>Visibility</dt><dd>Always visible, auto-hide, or dodge windows.</dd></div>
           </dl>
         </div>
       </article>
       <article class="fx-panel" tabindex="0" aria-labelledby="fx-previews-h">
         <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12.5" rx="2"/><path d="m6.5 13.5 3-3 2.5 2.5 1.75-1.75 3.75 3.75"/><circle cx="15.5" cy="8.2" r="1.2"/><path d="M9.5 20h5"/></g></svg><h3 id="fx-previews-h" class="fx-name">Previews</h3></div>
         <div class="fx-body">
-          <p class="fx-lede">See a window before you switch to it, without the dock getting in the way.</p>
+          <p class="fx-lede">See the window before you switch to it.</p>
           <dl class="fx-specs">
-            <div><dt>Live PipeWire thumbnails</dt><dd>Hover an app to watch its windows update in real time, captured on the GPU.</dd></div>
-            <div><dt>Grouped windows</dt><dd>Every window of an app appears side by side in one popup.</dd></div>
-            <div><dt>Click to switch</dt><dd>Pick a thumbnail to bring that exact window forward.</dd></div>
-            <div><dt>Close from the preview</dt><dd>Dismiss a window right from its thumbnail.</dd></div>
+            <div><dt>Live PipeWire thumbnails</dt><dd>Hover an app to watch its windows update live, captured on the GPU.</dd></div>
+            <div><dt>Grouped windows</dt><dd>All of an app’s windows sit side by side in one popup.</dd></div>
+            <div><dt>Click to switch</dt><dd>Click a thumbnail to raise that window.</dd></div>
+            <div><dt>Close from the preview</dt><dd>Close a window from its thumbnail.</dd></div>
           </dl>
         </div>
       </article>
@@ -162,21 +218,21 @@
         <div class="fx-body">
           <p class="fx-lede">A calm dock that still tells you when something needs you.</p>
           <dl class="fx-specs">
-            <div><dt>Badges</dt><dd>Unread counts arrive over D-Bus and the SmartLauncher (Unity) API, shown as a number, a dot, or not at all.</dd></div>
-            <div><dt>6 attention animations</dt><dd>Bounce, wiggle, pulse, glow, dot color or blink, stopped automatically after a delay you choose.</dd></div>
-            <div><dt>Task progress</dt><dd>Long jobs, like a Dolphin file copy, draw a progress bar on their icon.</dd></div>
-            <div><dt>Respects Do Not Disturb</dt><dd>When Plasma’s DND is on, attention animations stay quiet.</dd></div>
+            <div><dt>Badges</dt><dd>Unread counts from the SmartLauncher (Unity) D-Bus API, shown as a number, a dot, or not at all.</dd></div>
+            <div><dt>6 attention animations</dt><dd>Bounce, wiggle, pulse, glow, dot color or blink. They stop after a delay you choose.</dd></div>
+            <div><dt>Task progress</dt><dd>Long jobs, like a Dolphin file copy, draw a progress bar on the icon.</dd></div>
+            <div><dt>Do Not Disturb</dt><dd>When Plasma’s Do Not Disturb is on, attention animations stay quiet.</dd></div>
           </dl>
         </div>
       </article>
       <article class="fx-panel" tabindex="0" aria-labelledby="fx-screens-h">
         <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="9" height="7" rx="1.4"/><rect x="12.5" y="5.5" width="9" height="7" rx="1.4"/><path d="M7 15.5v1.5M5 19.5h4M17 15.5v1.5M15 19.5h4"/></g></svg><h3 id="fx-screens-h" class="fx-name">Multi-monitor</h3></div>
         <div class="fx-body">
-          <p class="fx-lede">One dock, many screens and desktops, each set up the way that screen is used.</p>
+          <p class="fx-lede">One dock, many screens, each set up its own way.</p>
           <dl class="fx-specs">
-            <div><dt>Where the dock lives</dt><dd>On the primary screen, on every screen, or following the active window.</dd></div>
-            <div><dt>Follow triggers</dt><dd>Move by mouse position, by keyboard focus, or by both.</dd></div>
-            <div><dt>Per-screen overrides</dt><dd>Give each monitor its own icon size, edge and visibility mode.</dd></div>
+            <div><dt>Where the dock lives</dt><dd>The primary screen, every screen, or the one with the active window.</dd></div>
+            <div><dt>Follow triggers</dt><dd>Mouse position, keyboard focus, or both.</dd></div>
+            <div><dt>Per-screen overrides</dt><dd>Each monitor can have its own icon size, edge and visibility mode.</dd></div>
             <div><dt>Virtual desktops</dt><dd>Show tasks from every desktop, dim the others, or list only the current one.</dd></div>
           </dl>
         </div>
@@ -184,19 +240,19 @@
       <article class="fx-panel" tabindex="0" aria-labelledby="fx-plasma-h">
         <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7h6.5M16.5 7h4M3.5 12h2.5M11 12h9.5M3.5 17h8.5M18 17h2.5"/><circle cx="13" cy="7" r="1.9"/><circle cx="8.5" cy="12" r="1.9"/><circle cx="14.5" cy="17" r="1.9"/></g></svg><h3 id="fx-plasma-h" class="fx-name">Plasma integration &amp; accessibility</h3></div>
         <div class="fx-body">
-          <p class="fx-lede">Built with Kirigami, KConfig, KColorScheme and KGlobalAccel, so it behaves like part of the desktop.</p>
+          <p class="fx-lede">Built with Kirigami, KConfig, KColorScheme and KGlobalAccel.</p>
           <dl class="fx-specs">
             <div><dt>Native look</dt><dd>Plasma theme colors, your color scheme, Breeze context menus and a Kirigami settings window.</dd></div>
             <div><dt>Drag and drop</dt><dd>Reorder icons, drop files onto apps, or drag in a <code>.desktop</code> file to add a launcher.</dd></div>
-            <div><dt>Keyboard first</dt><dd>Every item is reachable without a mouse, and AT-SPI exposes the dock to screen readers.</dd></div>
-            <div><dt>Starts with your session</dt><dd>Launches on login and keeps a single instance running.</dd></div>
+            <div><dt>Keyboard first</dt><dd>Every item works without a mouse, and AT-SPI exposes the dock to screen readers.</dd></div>
+            <div><dt>Starts with your session</dt><dd>Launches at login and keeps one instance running.</dd></div>
           </dl>
         </div>
       </article>
       <article class="fx-panel" tabindex="0" aria-labelledby="fx-keys-h">
         <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10h1.5M9.75 10h1.5M13.5 10h1.5M17.25 10H18M6 14h1.5M17 14h1M9.5 14h5"/></g></svg><h3 id="fx-keys-h" class="fx-name">Global shortcuts</h3></div>
         <div class="fx-body">
-          <p class="fx-lede">Held by KGlobalAccel, so they work wherever focus is.</p>
+          <p class="fx-lede">KGlobalAccel holds them, so they work from any window.</p>
           <table class="keys">
             <caption>Global shortcuts</caption>
             <tbody>
@@ -211,28 +267,10 @@
     </div>
   </section>
 
-  <section id="moments" class="shots" aria-labelledby="moments-title">
-    <h2 id="moments-title" class="section-title">On a real Plasma&nbsp;6 desktop</h2>
-    <div class="pv" data-pv>
-      <div class="pv-popup" role="list">
-        <!-- screenshots:begin -->
-        <!-- shot:dock-overview:begin -->
-        <figure class="pv-thumb" role="listitem" data-dodge><button type="button" class="pv-open" aria-label="Enlarge: ten pinned launchers under Dolphin and Konsole"><img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Dolphin and Konsole open on the Plasma “Next” wallpaper, with Krema docked along the bottom edge showing ten pinned launchers and running indicators beneath the active apps."></button><figcaption class="pv-cap">Ten pinned launchers under Dolphin and Konsole — running indicators show which apps are open.</figcaption></figure>
-        <!-- shot:dock-overview:end -->
-        <!-- shot:settings:begin -->
-        <figure class="pv-thumb" role="listitem" data-dodge><button type="button" class="pv-open" aria-label="Enlarge: the Krema settings window"><img src="screenshots/settings.png" width="1920" height="1080" loading="lazy" decoding="async" alt="The Krema settings window on the Appearance page, with options for icon size, spacing, zoom factor, attention animation and badge display."></button><figcaption class="pv-cap">The Appearance page: icon size, spacing, zoom factor, attention animation and badge display.</figcaption></figure>
-        <!-- shot:settings:end -->
-        <!-- screenshots:end -->
-      </div>
-      <div class="pv-tile" aria-hidden="true"><svg viewBox="0 0 256 256" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg><span class="pv-dot"></span></div>
-    </div>
-    <dialog class="pv-dialog" aria-label="Screenshot"><button class="pv-close" type="button" aria-label="Close">×</button><img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt=""><p class="pv-dcap"></p></dialog>
-  </section>
-
   <section id="add" class="install" aria-labelledby="add-title">
     <div class="install-head">
       <h2 id="add-title" class="section-title">Install Krema</h2>
-      <p>Packages are built for x86_64 and aarch64 and need Plasma 6.0 or newer. Pick your distribution, paste one command, then start Krema from the app launcher.</p>
+      <p>Pick your distribution and paste one command, then start Krema from the app launcher. Packages need Plasma 6.0 or newer and are built for x86_64 and aarch64 (Slowroll: x86_64 only).</p>
     </div>
 
     <ol class="installs">
@@ -278,6 +316,7 @@
         </div>
       </li>
     </ol>
+    <p class="star-line"><svg aria-hidden="true"><use href="#i-star"/></svg><span>If you use Krema, a <a href="https://github.com/isac322/krema">star on GitHub</a> helps other Plasma users find it.</span></p>
     <p class="status" role="status" aria-live="polite"></p>
   </section>
 </main>
@@ -286,7 +325,7 @@
   <div class="wrap foot-grid">
     <div class="foot-brand">
       <svg class="foot-mark" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#1D2733"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg>
-      <p>Krema is free software under the <a href="https://github.com/isac322/krema/blob/master/LICENSES/GPL-3.0-or-later.txt">GPL-3.0-or-later</a> license. Made for KDE Plasma&nbsp;6.</p>
+      <p>Krema is free software under the <a href="https://github.com/isac322/krema/blob/master/LICENSES/GPL-3.0-or-later.txt">GPL-3.0-or-later</a> license. Spiritual successor to Latte Dock, made for KDE Plasma&nbsp;6.</p>
     </div>
     <nav aria-label="Project links">
       <ul class="foot-links">
@@ -305,13 +344,13 @@
 
 <nav class="pagedock" aria-label="Page dock" data-pagedock>
   <ol class="pd-tiles">
-    <li><a class="pd-tile" href="#top" data-section="top" aria-label="Krema"><span class="pd-face"><svg viewBox="0 0 256 256" aria-hidden="true"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
-    <li><a class="pd-tile" href="#roots" data-section="roots" aria-label="Roots"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="5.5" r="2.25"/><circle cx="6.5" cy="18.5" r="2.25"/><circle cx="17.5" cy="8" r="2.25"/><path d="M6.5 7.75v8.5M8.4 6.2c4.5 0 7 .5 7.5 4.2"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
-    <li><a class="pd-tile" href="#everything" data-section="everything" aria-label="Everything it does"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.8"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
-    <li><a class="pd-tile" href="#moments" data-section="moments" aria-label="Moments on a real desktop"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m4.5 16.5 4.5-4.5 4 4 2.5-2.5 4.5 4.5"/><circle cx="15.5" cy="9.5" r="1.5"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
-    <li><a class="pd-tile" href="#add" data-section="add" aria-label="Add Krema to your desktop"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v9.5M8 9.5l4 4 4-4"/><path d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span><span class="pd-badge" aria-hidden="true">5</span></a></li>
+    <li><a class="pd-tile" href="#top" data-section="top" aria-label="Krema"><span class="pd-face pd-face--home"><svg viewBox="0 0 256 256" aria-hidden="true"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#roots" data-section="roots" aria-label="Roots"><span class="pd-face pd-face--roots"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="5.5" r="2.25"/><circle cx="6.5" cy="18.5" r="2.25"/><circle cx="17.5" cy="8" r="2.25"/><path d="M6.5 7.75v8.5M8.4 6.2c4.5 0 7 .5 7.5 4.2"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#exhibit" data-section="exhibit" aria-label="Exhibit: see it in action"><span class="pd-face pd-face--moments"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m4.5 16.5 4.5-4.5 4 4 2.5-2.5 4.5 4.5"/></g><circle cx="15.5" cy="9.5" r="1.5" fill="#3DAEE9"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#mechanics" data-section="mechanics" aria-label="Mechanics: what it does"><span class="pd-face pd-face--everything"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8"/></g><rect x="13" y="13" width="7" height="7" rx="1.8" fill="#3DAEE9"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#add" data-section="add" aria-label="Add Krema to your desktop"><span class="pd-face pd-face--add"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v9.5M8 9.5l4 4 4-4"/><path d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></g></svg><span class="pd-badge" aria-hidden="true">5</span></span><span class="pd-ind" aria-hidden="true"></span></a></li>
     <li class="pd-sep" aria-hidden="true"></li>
-    <li><a class="pd-tile" href="https://github.com/isac322/krema" data-external aria-label="GitHub (opens repository)"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-github"/></svg></span></a></li>
+    <li><a class="pd-tile" href="https://github.com/isac322/krema" data-external aria-label="GitHub (opens repository)"><span class="pd-face pd-face--gh"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-github"/></svg></span></a></li>
   </ol>
   <span class="pd-tip" aria-hidden="true"></span>
 </nav>

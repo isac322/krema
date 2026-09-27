@@ -12,9 +12,13 @@
   min-height: 88vh;
   min-height: 88svh;
   padding-block: calc(var(--wordnav-h, 64px) + 1rem) calc(var(--pagedock-h, 76px) + 1rem);
+  /* Backstop only: hero.js keeps every zoomed letter inside the lens content
+     box (see render()), so the lens never reaches this edge. */
   overflow-x: clip;
   /* Horizontal drags magnify the letters; vertical scrolling stays native. */
   touch-action: pan-y pinch-zoom;
+  /* cqw below = this content column, the box the zoomed lens must fit in. */
+  container-type: inline-size;
 }
 
 /* ---------- The lens (wordmark) ---------- */
@@ -40,10 +44,15 @@
   /* Headroom for the 1.35x peak, room below the baseline for the dot. */
   padding: 0.12em 0 0.06em;
   font-family: var(--font, "Noto Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
-  /* Width-driven (the resting word is ~2.4em wide: ~88% of a phone screen),
-     capped so the whole hero fits above the fold on desktop. */
-  font-size: clamp(96px, min(36vw, 26rem, calc((100vh - 25rem) * 0.78)), 26rem);
-  font-size: clamp(96px, min(36vw, 26rem, calc((100svh - 25rem) * 0.78)), 26rem);
+  /* Width-driven so the zoomed lockup always fits the column. Measured with
+     Noto Sans: icon + gap 0.68em, resting word 2.34em, worst-case zoomed word
+     (MAX 1.35, R ≤ 1.4 letters, pointer anywhere) ≤ 2.995em, ink allowance 0.05em
+     → worst case 3.73em wide, so font-size ≤ column / 3.75. The resting lockup
+     (3.02em) then fills ~80% of the column. Capped so the whole hero fits above
+     the fold on desktop. hero.js still fits/clamps each frame in case a
+     fallback font is wider, so nothing clips even then. */
+  font-size: clamp(56px, min(calc((100vw - 2 * var(--pad, 1.25rem)) / 3.75), 26rem, calc((100vh - 25rem) * 0.78)), 26rem);
+  font-size: clamp(56px, min(calc(100cqw / 3.75), 26rem, calc((100svh - 25rem) * 0.78)), 26rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.035em;
@@ -52,6 +61,10 @@
   font-kerning: none; /* letters are separate boxes; kerning pairs would not apply anyway */
   user-select: none;
   -webkit-user-select: none;
+  /* The whole wordmark row is the touch target: horizontal finger drags feed
+     the zoom (hero.js captures the pointer), vertical pans still scroll. */
+  touch-action: pan-y pinch-zoom;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .lens-ch {
@@ -65,11 +78,27 @@
   will-change: transform;
 }
 
-.lens-ch:nth-child(1) { --s: 0.72; --x: var(--x1); }
-.lens-ch:nth-child(2) { --s: 0.87; --x: var(--x2); }
-.lens-ch:nth-child(3) { --s: 1.16; --x: var(--x3); }
-.lens-ch:nth-child(4) { --s: 0.87; --x: var(--x4); }
-.lens-ch:nth-child(5) { --s: 0.72; --x: var(--x5); }
+/* nth-of-type: the lockup icon (an <svg>) precedes the letters and must not shift the indices. */
+.lens-ch:nth-of-type(1) { --s: 0.72; --x: var(--x1); }
+.lens-ch:nth-of-type(2) { --s: 0.87; --x: var(--x2); }
+.lens-ch:nth-of-type(3) { --s: 1.16; --x: var(--x3); }
+.lens-ch:nth-of-type(4) { --s: 0.87; --x: var(--x4); }
+.lens-ch:nth-of-type(5) { --s: 0.72; --x: var(--x5); }
+
+/* Zoom K app icon, locked up left of the word. Sized to the resting letters'
+   x-height..cap-height band (resting k ascender ≈ 0.72 × 0.73em ≈ 0.53em, peak e
+   x-height ≈ 1.16 × 0.54em ≈ 0.63em) and sat on the shared baseline: the letter
+   boxes end 1em below their top, the baseline sits at --base. It is a plain
+   flex item in em units, so it scales with the word on every screen; hero.js
+   measures the letters after it, so the zoom never paints over it. */
+.lens-icon {
+  flex: none;
+  width: 0.58em;
+  height: 0.58em;
+  margin: 0 0.1em calc(1em - var(--base)) 0;
+  border-radius: 22%;
+  box-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.35);
+}
 
 /* Zero-size baseline probe injected by JS. */
 .lens-probe {
@@ -81,7 +110,7 @@
 
 /* No-JS accent dot: lives inside the peak letter, just under its baseline.
    Sizes are divided by the peak's 1.16 scale so they match the JS dot. */
-.lens-ch:nth-child(3)::after {
+.lens-ch:nth-of-type(3)::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -116,7 +145,7 @@
 
 .js .lens-dot { display: block; opacity: 0; }
 .js .lens.is-ready .lens-dot { opacity: 1; }
-.js .lens.is-ready .lens-ch:nth-child(3)::after { display: none; }
+.js .lens.is-ready .lens-ch:nth-of-type(3)::after { display: none; }
 
 /* Until measured, and while the pointer drives the lens, writes land instantly:
    the rAF loop is the animation. The spring only plays on release. */
@@ -155,6 +184,18 @@
   align-items: center;
   gap: 0.75rem;
   margin-top: 0.5rem;
+}
+
+/* Up to three buttons, primary first. Phones: primary spans the row, the
+   others share the next one; all stay at least a comfortable touch height. */
+.ctas > * { min-height: 44px; }
+
+@media (max-width: 29.99rem) {
+  .ctas > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .ctas > :first-child { flex-basis: 100%; }
 }
 
 /* Only meaningful when the lens is live. */

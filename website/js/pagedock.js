@@ -1,6 +1,8 @@
 // Pagedock: the page's table of contents as a working mini Krema dock.
-// Parabolic zoom, running/active indicators from reading progress, launch
-// bounce + genie restore, dodge with bottom-edge reveal, roving keyboard focus.
+// Real app-icon tiles on one translucent panel: parabolic zoom growing up out
+// of the panel floor, running/active indicators from reading progress, launch
+// bounce + genie restore, dodge with bottom-edge reveal, roving keyboard
+// focus, and touch scrubbing (drag to magnify, lift on a tile = tap only).
 (() => {
   "use strict";
 
@@ -8,9 +10,10 @@
   const list = nav && nav.querySelector(".pd-tiles");
   if (!list) return;
 
-  const MAX = 1.6; // peak magnification
-  const REACH = 2.5; // falloff radius in tile pitches
-  const EDGE = 48; // px from the viewport bottom that reveals a dodged dock
+  const MAX = 1.7; // peak magnification
+  const REACH = 2.75; // falloff radius in tile pitches
+  const EDGE = 64; // px from the viewport bottom that reveals a dodged dock
+  const TAP_DRIFT = 10; // px of finger travel that turns a tap into a drag
   const GENIE_MS = 280;
   const BOUNCE_MS = 520;
   const READ_LINE = "-35% 0px -64% 0px"; // 1% band at 35% of the viewport
@@ -27,7 +30,6 @@
       li,
       tile,
       face: tile && tile.querySelector(".pd-face"),
-      badge: tile && tile.querySelector(":scope > .pd-badge"),
       center: 0,
       width: 0,
       s: 1,
@@ -50,23 +52,15 @@
   }
   const sections = Array.from(tileOf.keys());
 
-  // ---------- Stretchable background + edge hint ----------
+  // ---------- Panel surface + edge hint ----------
 
-  const piece = (cls) => {
-    const el = document.createElement("span");
-    el.className = cls;
-    return el;
-  };
-  const bg = piece("pd-bg");
+  const bg = document.createElement("span");
+  bg.className = "pd-bg";
   bg.setAttribute("aria-hidden", "true");
-  const bgL = piece("pd-bg-l");
-  const bgM = piece("pd-bg-m");
-  const bgR = piece("pd-bg-r");
-  bg.append(bgL, bgM, bgR);
   nav.prepend(bg);
-  nav.classList.add("pd-ready");
 
-  const edge = piece("pd-edge");
+  const edge = document.createElement("span");
+  edge.className = "pd-edge";
   edge.setAttribute("aria-hidden", "true");
   nav.after(edge);
 
@@ -88,6 +82,10 @@
   let focusInside = false;
   let lastY = -1; // last mouse clientY anywhere on the page
   let nearEdge = false;
+
+  let downX = 0; // clientX of the active touch pointerdown
+  let dragged = false; // active touch has travelled past TAP_DRIFT
+  let suppressClick = false; // swallow the click that ends a scrub
 
   const onLine = new Set(); // sections crossing the reading line
   const running = new Set();
@@ -124,12 +122,11 @@
       reach: REACH * (tile + gap),
       left: rect.left,
       right: rect.left + width,
-      border: nav.clientLeft,
       width,
       height,
       top: window.innerHeight - bottom - height,
       padBottom: parseFloat(cs.paddingBottom) || 0,
-      cap: bgL.offsetWidth,
+      radius: parseFloat(cs.getPropertyValue("--pd-radius")) || 0,
     };
     docMax = document.documentElement.scrollHeight - window.innerHeight;
   };
@@ -171,15 +168,17 @@
     for (const it of items) {
       it.li.style.translate = Math.abs(it.x) < 0.01 ? "" : `${it.x.toFixed(2)}px 0`;
       if (it.face) it.face.style.scale = it.s === 1 ? "" : it.s.toFixed(4);
-      if (it.badge) {
-        it.badge.style.translate =
-          it.s === 1 ? "" : `${(((it.s - 1) * m.tile) / 2).toFixed(2)}px ${((1 - it.s) * m.tile).toFixed(2)}px`;
-      }
     }
-    const mid = m.width - 2 * m.cap;
-    bgL.style.transform = g ? `translateX(${(-g).toFixed(2)}px)` : "";
-    bgR.style.transform = g ? `translateX(${g.toFixed(2)}px)` : "";
-    bgM.style.transform = g && mid > 0 ? `scaleX(${((mid + 2 * g) / mid).toFixed(5)})` : "";
+    // Widen the panel with one scaleX; divide the horizontal radius back out
+    // so the corners stay round instead of stretching into ellipses.
+    const sx = m.width > 0 && g ? (m.width + 2 * g) / m.width : 1;
+    if (sx > 1.0005) {
+      bg.style.transform = `scaleX(${sx.toFixed(4)})`;
+      bg.style.borderRadius = `${(m.radius / sx).toFixed(2)}px / ${m.radius.toFixed(2)}px`;
+    } else {
+      bg.style.transform = "";
+      bg.style.borderRadius = "";
+    }
 
     if (!tip) return;
     let peak = focusItem && pointerX === null ? focusItem : null;
@@ -194,7 +193,7 @@
     }
     const label = peak.tile.getAttribute("aria-label") || "";
     if (label !== tipLabel) tip.textContent = tipLabel = label;
-    const lift = m.padBottom + peak.s * m.tile + 10;
+    const lift = m.padBottom + peak.s * m.tile + 12;
     tip.style.transform = `translate(${(peak.center + peak.x).toFixed(2)}px, ${(-lift).toFixed(2)}px) translateX(-50%)`;
     if (!tipOn) tip.classList.add("is-on");
     tipOn = true;
@@ -309,7 +308,7 @@
 
   // ---------- Pointer ----------
 
-  const localX = (clientX) => clientX - m.left - m.border;
+  const localX = (clientX) => clientX - m.left;
 
   nav.addEventListener(
     "pointerenter",
@@ -324,7 +323,11 @@
   nav.addEventListener(
     "pointermove",
     (e) => {
-      if (!m || (e.pointerType === "touch" && !touchActive)) return;
+      if (!m) return;
+      if (e.pointerType === "touch") {
+        if (!touchActive) return;
+        if (!dragged && Math.abs(e.clientX - downX) > TAP_DRIFT) dragged = true;
+      }
       pointerX = localX(e.clientX);
       zoomDirty = true;
       schedule();
@@ -335,7 +338,21 @@
     "pointerdown",
     (e) => {
       if (e.pointerType !== "touch" || !m) return;
-      touchActive = tracking = true;
+      downX = e.clientX;
+      dragged = false;
+      suppressClick = false;
+      // Capture on the tile under the finger so a scrub keeps receiving moves
+      // and the ending click still lands inside it (nearest common ancestor).
+      const tile = e.target && e.target.closest ? e.target.closest(".pd-tile") : null;
+      if (tile) {
+        try {
+          tile.setPointerCapture(e.pointerId);
+        } catch {
+          /* capture is a nicety, not a requirement */
+        }
+      }
+      touchActive = tracking = pointerInside = true;
+      hideDirty = true;
       pointerX = localX(e.clientX);
       zoomDirty = true;
       schedule();
@@ -353,9 +370,25 @@
   nav.addEventListener(
     "pointerup",
     (e) => {
-      if (e.pointerType === "touch") release();
+      if (e.pointerType !== "touch") return;
+      // A scrubbed finger must not activate whatever it lands on.
+      if (dragged) suppressClick = true;
+      dragged = false;
+      release();
     },
     { passive: true },
+  );
+  // The browser still fires a compatibility click after a drag; eat it so it
+  // cannot launch the tile the finger happened to stop on.
+  nav.addEventListener(
+    "click",
+    (e) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
   );
 
   // Bottom-edge reveal, mouse only; one rAF per frame at most.
@@ -414,13 +447,14 @@
     if (!it.face || !it.face.animate) return;
     const up = "cubic-bezier(.2,.7,.3,1)";
     const down = "cubic-bezier(.6,0,.8,.4)";
+    const hop = `${Math.round((m ? m.tile : 56) * 0.27)}px`;
     it.tile.classList.add("is-launching");
     const anim = it.face.animate(
       [
         { translate: "0 0", easing: up },
-        { translate: "0 -14px", offset: 0.25, easing: down },
+        { translate: `0 -${hop}`, offset: 0.25, easing: down },
         { translate: "0 0", offset: 0.5, easing: up },
-        { translate: "0 -14px", offset: 0.75, easing: down },
+        { translate: `0 -${hop}`, offset: 0.75, easing: down },
         { translate: "0 0" },
       ],
       { duration: BOUNCE_MS },
@@ -510,9 +544,21 @@
   };
 
   list.addEventListener("click", (e) => {
-    const tile = e.target.closest && e.target.closest(".pd-tile");
-    const sec = tile && sectionOf.get(tile);
-    if (!sec) return; // external tiles are plain links
+    let tile = e.target.closest && e.target.closest(".pd-tile");
+    if (!tile) {
+      // Pointer capture can retarget a tap's click to a wrapper; resolve the
+      // tile that is actually under the point instead.
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      tile = under && under.closest ? under.closest(".pd-tile") : null;
+      if (!tile || !list.contains(tile)) return;
+    }
+    const sec = sectionOf.get(tile);
+    if (!sec) {
+      // External tile: if the click never reached the anchor itself (capture
+      // retargeting), re-fire it on the real link so navigation still works.
+      if (e.target !== tile && !tile.contains(e.target)) tile.click();
+      return;
+    }
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     const hash = `#${sec.id}`;

@@ -24,7 +24,7 @@
   --mono: "Hack", "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
   --wordnav-h: 64px;
-  --pagedock-h: 76px;
+  --pagedock-h: 90px;
 
   --wrap: 74rem;
   --pad: clamp(1.25rem, 4vw, 2.5rem);
@@ -36,6 +36,9 @@
   --z-genie: 70;
 
   color-scheme: dark;
+}
+@media (max-width: 600px) {
+  :root { --pagedock-h: 75px; }
 }
 
 /* ---------- Reset & base ---------- */
@@ -86,7 +89,7 @@ a {
   text-underline-offset: 0.2em;
   transition: color 0.15s, text-decoration-color 0.15s;
 }
-a:where(:not(.btn, .skip, .wn-home, .wn-l, .wn-gh, .pd-tile, .pv-open)):hover { color: #7cc8f0; }
+a:where(:not(.btn, .skip, .wn-home, .wn-l, .wn-star, .pd-tile, .pv-open)):hover { color: #7cc8f0; }
 
 :focus-visible {
   outline: 2px solid var(--blue);
@@ -158,6 +161,47 @@ kbd {
   background: rgb(243 240 234 / 0.02);
 }
 .btn-ghost:hover { color: var(--bone); border-color: rgb(243 240 234 / 0.4); background: rgb(243 240 234 / 0.06); }
+
+/* ---------- GitHub star count chip (filled by js/site.js) ----------
+   Hidden until a real count exists. While the count is loading the chip is
+   laid out but invisible, and the number keeps a minimum width, so the
+   arriving count does not shift the layout. */
+
+.star-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.2em 0.55em 0.2em 0.45em;
+  border-radius: 999px;
+  background: rgb(243 240 234 / 0.07);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--bone-dim);
+  font-size: 0.8125em;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: opacity 0.25s var(--ease-out);
+}
+.star-chip[hidden] { display: none; }
+.star-chip[data-state="pending"] { visibility: hidden; opacity: 0; }
+.star-chip[data-state="ready"] { opacity: 1; }
+.star-chip svg,
+.btn .star-chip svg { width: 0.95em; height: 0.95em; color: var(--blue); flex: none; }
+.star-chip [data-stars-n] { display: inline-block; min-width: 3.6ch; }
+
+.btn-star .star-chip { margin-left: 0.15rem; }
+.btn-star:hover .star-chip { color: var(--bone); }
+
+.star-line {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+  color: var(--muted);
+  font-size: 0.975rem;
+}
+.star-line svg { width: 1rem; height: 1rem; flex: none; color: var(--blue); }
 
 /* ---------- Generic layout ---------- */
 

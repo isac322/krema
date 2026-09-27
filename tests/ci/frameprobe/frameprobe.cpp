@@ -4,9 +4,14 @@
 #include "frameprobe.h"
 #include "qwayland-fake-input.h"
 
+#include <QAbstractEventDispatcher>
+#include <QAction>
 #include <QAnimationDriver>
-#include <private/qabstractanimation_p.h>
+#include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QGuiApplication>
 #include <QImage>
@@ -15,28 +20,26 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QLoggingCategory>
-#include <QCoreApplication>
-#include <QElapsedTimer>
-#include <QEventLoop>
+#include <QMargins>
+#include <QMenu>
 #include <QMetaObject>
 #include <QMetaProperty>
-#include <QThread>
+#include <QPainter>
 #include <QPoint>
 #include <QPointer>
-#include <QAction>
-#include <QApplication>
-#include <QWidget>
-#include <QMenu>
-#include <QScreen>
-#include <QMargins>
-#include <QPainter>
 #include <QQmlEngine>
-#include <QWindow>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QTest>
 #include <QTextStream>
+#include <QThread>
+#include <QTimerEvent>
 #include <QVariantAnimation>
+#include <QWidget>
+#include <QWindow>
+#include <private/qabstractanimation_p.h>
+#include <private/qgenericunixeventdispatcher_p.h>
 
 #include <QtWaylandClient/QWaylandClientExtension>
 
@@ -44,8 +47,12 @@
 #include <wayland-client-protocol.h>
 #include <LayerShellQt/Window>
 
+#include <algorithm>
+#include <chrono>
 #include <functional>
 #include <memory>
+#include <utility>
+#include <vector>
 
 Q_LOGGING_CATEGORY(lcProbe, "krema.testing.frameprobe")
 
@@ -89,6 +96,201 @@ private:
     qint64 m_step;
     qint64 m_virtual = 0;
 };
+
+/**
+ * Main-thread event dispatcher that puts timers on the probe's virtual clock.
+ *
+ * QTimer, QML Timer and QBasicTimer are delivered by the event dispatcher from
+ * the wall clock, not by the animation driver. Left alone, a tooltip delay or
+ * an auto-hide debounce fires on whichever captured frame the machine happened
+ * to reach, so two passes of one scenario disagree at action boundaries.
+ *
+ * Everything except timers goes to the dispatcher QtWayland itself would have
+ * created (createUnixEventDispatcher), so sockets, posted events and
+ * window-system events flow as in production. It is created on first use,
+ * which happens inside QApplication construction, so GLib binds to the default
+ * main context exactly as it does without the probe.
+ *
+ * Until setVirtual() the wrapper only records timers. Startup and the settle
+ * phase therefore run on real time; from frame 1 every positive-interval timer
+ * fires only from advance(), at the virtual instant it is due. Zero-interval
+ * timers mean "when idle" rather than a delay and stay with the platform.
+ */
+class VirtualTimerDispatcher final : public QAbstractEventDispatcherV2
+{
+public:
+    bool processEvents(QEventLoop::ProcessEventsFlags flags) override
+    {
+        return platform()->processEvents(flags);
+    }
+
+    void registerSocketNotifier(QSocketNotifier *notifier) override
+    {
+        platform()->registerSocketNotifier(notifier);
+    }
+
+    void unregisterSocketNotifier(QSocketNotifier *notifier) override
+    {
+        platform()->unregisterSocketNotifier(notifier);
+    }
+
+    void registerTimer(Qt::TimerId id, Duration interval, Qt::TimerType type, QObject *object) override
+    {
+        if (interval <= Duration::zero()) {
+            platform()->registerTimer(id, interval, type, object);
+        } else if (m_virtual) {
+            m_virtualTimers.push_back({id, interval, type, object, m_now + interval, m_sequence++});
+        } else {
+            m_realTimers.push_back({id, interval, type, object, {}, 0});
+            platform()->registerTimer(id, interval, type, object);
+        }
+    }
+
+    bool unregisterTimer(Qt::TimerId id) override
+    {
+        if (std::erase_if(m_virtualTimers,
+                          [id](const Timer &timer) {
+                              return timer.id == id;
+                          })
+            > 0) {
+            return true;
+        }
+        std::erase_if(m_realTimers, [id](const Timer &timer) {
+            return timer.id == id;
+        });
+        return platform()->unregisterTimer(id);
+    }
+
+    bool unregisterTimers(QObject *object) override
+    {
+        const auto owned = [object](const Timer &timer) {
+            return timer.object == object;
+        };
+        const bool removed = std::erase_if(m_virtualTimers, owned) > 0;
+        std::erase_if(m_realTimers, owned);
+        return platform()->unregisterTimers(object) || removed;
+    }
+
+    QList<TimerInfoV2> timersForObject(QObject *object) const override
+    {
+        QList<TimerInfoV2> result = platform()->timersForObject(object);
+        for (const Timer &timer : m_virtualTimers) {
+            if (timer.object == object) {
+                result.append({timer.interval, timer.id, timer.type});
+            }
+        }
+        return result;
+    }
+
+    Duration remainingTime(Qt::TimerId id) const override
+    {
+        for (const Timer &timer : m_virtualTimers) {
+            if (timer.id == id) {
+                return std::max(timer.due - m_now, Duration::zero());
+            }
+        }
+        return platform()->remainingTime(id);
+    }
+
+    void wakeUp() override
+    {
+        platform()->wakeUp();
+    }
+
+    void interrupt() override
+    {
+        platform()->interrupt();
+    }
+
+    void startingUp() override
+    {
+        platform()->startingUp();
+    }
+
+    void closingDown() override
+    {
+        platform()->closingDown();
+    }
+
+    /**
+     * Move every pending wall-clock timer onto the virtual clock.
+     *
+     * A migrated timer restarts with its full interval: its remaining real
+     * time depends on how long startup took, and keeping it would put the
+     * firing frame right back at the mercy of machine speed.
+     */
+    void setVirtual()
+    {
+        if (m_virtual) {
+            return;
+        }
+        m_virtual = true;
+        for (const Timer &timer : std::exchange(m_realTimers, {})) {
+            platform()->unregisterTimer(timer.id);
+            m_virtualTimers.push_back({timer.id, timer.interval, timer.type, timer.object, m_now + timer.interval, m_sequence++});
+        }
+    }
+
+    /**
+     * Advance the virtual clock by one step, firing every timer that falls due
+     * in order of due time, then registration order. A repeating timer due
+     * several times within one step fires each time, as it would in real time.
+     * Single-shot owners (QTimer, QSingleShotTimer) unregister themselves from
+     * their timerEvent.
+     */
+    void advance(Duration step)
+    {
+        const Duration target = m_now + step;
+        for (;;) {
+            const auto next = std::min_element(m_virtualTimers.begin(), m_virtualTimers.end(), [](const Timer &left, const Timer &right) {
+                return std::tie(left.due, left.sequence) < std::tie(right.due, right.sequence);
+            });
+            if (next == m_virtualTimers.end() || next->due > target) {
+                break;
+            }
+            m_now = std::max(m_now, next->due);
+            const Qt::TimerId id = next->id;
+            QObject *object = next->object;
+            next->due += next->interval;
+            next->sequence = m_sequence++;
+            // The handler may unregister or re-register timers; nothing from
+            // the vector is touched after this call.
+            QTimerEvent event(id);
+            QCoreApplication::sendEvent(object, &event);
+        }
+        m_now = target;
+    }
+
+private:
+    struct Timer {
+        Qt::TimerId id;
+        Duration interval;
+        Qt::TimerType type;
+        QObject *object;
+        Duration due;
+        quint64 sequence;
+    };
+
+    QAbstractEventDispatcher *platform() const
+    {
+        if (!m_platform) {
+            m_platform = QtGenericUnixDispatcher::createUnixEventDispatcher();
+            m_platform->setParent(const_cast<VirtualTimerDispatcher *>(this));
+            connect(m_platform, &QAbstractEventDispatcher::aboutToBlock, this, &QAbstractEventDispatcher::aboutToBlock);
+            connect(m_platform, &QAbstractEventDispatcher::awake, this, &QAbstractEventDispatcher::awake);
+        }
+        return m_platform;
+    }
+
+    mutable QAbstractEventDispatcher *m_platform = nullptr;
+    std::vector<Timer> m_realTimers;
+    std::vector<Timer> m_virtualTimers;
+    Duration m_now{};
+    quint64 m_sequence = 0;
+    bool m_virtual = false;
+};
+
+VirtualTimerDispatcher *g_timers = nullptr;
 
 class NativeFakeInput final
     : public QWaylandClientExtensionTemplate<NativeFakeInput>
@@ -744,6 +946,18 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
 
 } // namespace
 
+void FrameProbe::installEventDispatcherIfEnabled()
+{
+    if (qEnvironmentVariableIsEmpty("KREMA_PROBE_NDJSON")) {
+        return;
+    }
+    // QCoreApplication adopts a dispatcher set before it exists instead of
+    // creating its own, so every main-thread timer, including ones started
+    // during startup, is registered here.
+    g_timers = new VirtualTimerDispatcher;
+    QCoreApplication::setEventDispatcher(g_timers);
+}
+
 void FrameProbe::installIfEnabled()
 {
     const QString ndjsonPath = QString::fromLocal8Bit(qgetenv("KREMA_PROBE_NDJSON"));
@@ -762,11 +976,13 @@ void FrameProbe::installIfEnabled()
     // on an arbitrary frame and every early assertion becomes a race.
     const int settleMs = qEnvironmentVariableIsSet("KREMA_PROBE_SETTLE_MS") ? qEnvironmentVariableIntValue("KREMA_PROBE_SETTLE_MS") : 1500;
     const QString scriptPath = QString::fromLocal8Bit(qgetenv("KREMA_PROBE_SCRIPT"));
-    // QTimer / QML Timer are NOT driven by the animation driver. Pacing the
-    // frame loop so each tick consumes stepMs of wall clock keeps timer-gated
-    // state (tooltip delay, preview hover delay, drag hold) aligned with the
-    // virtual clock, at the cost of the run taking real time.
-    const bool paced = qEnvironmentVariableIntValue("KREMA_PROBE_PACE") != 0;
+    // QTimer / QML Timer are not driven by the animation driver; the
+    // dispatcher installed before QApplication puts them on the same virtual
+    // clock (see VirtualTimerDispatcher).
+    VirtualTimerDispatcher *timers = g_timers;
+    if (!timers) {
+        qFatal("frame probe needs FrameProbe::installEventDispatcherIfEnabled() before QApplication");
+    }
 
     if (!frameDir.isEmpty()) {
         QDir().mkpath(frameDir);
@@ -910,7 +1126,9 @@ void FrameProbe::installIfEnabled()
             // stops delivering a tick per advance -- animations end up updating
             // once every ~10 captured frames instead of every frame.
             *warmed = true;
-            pace->restart();
+            // From frame 1 on, every main-thread timer fires from the frame
+            // loop at its virtual due time.
+            timers->setVirtual();
         }
 
         ++*frame;
@@ -981,15 +1199,11 @@ void FrameProbe::installIfEnabled()
 
         }
 
+        // Timers first, so state a timer changes starts its Behavior on the
+        // same animation instant in every pass; the next captured row then
+        // shows exactly one step of that animation.
+        timers->advance(std::chrono::milliseconds(stepMs));
         driver->advance();
-
-        if (paced) {
-            const qint64 due = static_cast<qint64>(*frame) * stepMs;
-            const qint64 behind = due - pace->elapsed();
-            if (behind > 0) {
-                QThread::msleep(static_cast<unsigned long>(behind));
-            }
-        }
 
         if (maxFrames > 0 && *frame >= maxFrames) {
             stream->flush();

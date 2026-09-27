@@ -12,7 +12,9 @@ enable_language(C)
 # Qml: the probe resolves the DockSettings singleton to drive settings changes.
 # CorePrivate carries QUnifiedTimer, whose consistent-timing mode is what
 # makes an animation advance by the driver step instead of the real clock.
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test Widgets Qml CorePrivate WaylandClient)
+# GuiPrivate carries createUnixEventDispatcher, the platform dispatcher the
+# probe wraps to move timers onto its virtual clock.
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test Widgets Qml CorePrivate GuiPrivate WaylandClient)
 # The probe derives window placement from the layer-shell anchors the client set.
 find_package(LayerShellQt REQUIRED)
 
@@ -33,6 +35,7 @@ target_link_libraries(krema_frameprobe PUBLIC
     # dependency never reaches a release package.
     Qt6::CorePrivate
     Qt6::Gui
+    Qt6::GuiPrivate
     Qt6::Qml
     Qt6::Quick
     Qt6::Test

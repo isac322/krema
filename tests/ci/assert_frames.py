@@ -283,8 +283,22 @@ def canonical_payload(row: dict) -> dict:
     return {key: value for key, value in row.items() if key not in ('frame', 'vt')}
 
 
-def first_difference(left, right, path: str = 'capture') -> str | None:
-    """Describe the first structural or value difference between JSON values."""
+def is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def first_difference(left, right, path: str = 'capture',
+                     tolerance: float = 0.0) -> str | None:
+    """Describe the first structural or value difference between JSON values.
+
+    Numbers compare by value within ``tolerance``, so an integral double that
+    one pass serialized as ``48`` and the other as ``48.0`` is not a difference.
+    Every other leaf, including booleans, must match exactly.
+    """
+    if is_number(left) and is_number(right):
+        if not math.isclose(left, right, rel_tol=0.0, abs_tol=tolerance):
+            return f'{path}: {left!r} != {right!r}'
+        return None
     if type(left) is not type(right):
         return f'{path}: type {type(left).__name__} != {type(right).__name__}'
     if isinstance(left, dict):
@@ -294,7 +308,8 @@ def first_difference(left, right, path: str = 'capture') -> str | None:
             extra = sorted(right_keys - left_keys)
             return f'{path}: missing keys {missing}, extra keys {extra}'
         for key in sorted(left):
-            difference = first_difference(left[key], right[key], f'{path}.{key}')
+            difference = first_difference(
+                left[key], right[key], f'{path}.{key}', tolerance)
             if difference:
                 return difference
         return None
@@ -302,7 +317,8 @@ def first_difference(left, right, path: str = 'capture') -> str | None:
         if len(left) != len(right):
             return f'{path}: length {len(left)} != {len(right)}'
         for index, (left_item, right_item) in enumerate(zip(left, right)):
-            difference = first_difference(left_item, right_item, f'{path}[{index}]')
+            difference = first_difference(
+                left_item, right_item, f'{path}[{index}]', tolerance)
             if difference:
                 return difference
         return None
@@ -341,8 +357,7 @@ def envelope_difference(reference: list[dict], candidate: list[dict],
     for path in sorted(common):
         left_values = [values[path] for values in left]
         right_values = [values[path] for values in right]
-        numeric = (all(isinstance(value, (int, float)) and not isinstance(value, bool)
-                       for value in left_values + right_values))
+        numeric = all(is_number(value) for value in left_values + right_values)
         if numeric:
             for label, left_value, right_value in (
                     ('minimum', min(left_values), min(right_values)),
@@ -365,7 +380,8 @@ def reproducibility_failures(reference: list[dict], candidate: list[dict],
     """Gate capture stability while admitting bounded animation-onset jitter.
 
     Frame identity, each pre-action state, settled tails, and the scalar value
-    envelope are exact within ``envelope_tolerance``. At most
+    envelope must match, numbers within ``envelope_tolerance`` (an integral
+    value is equal whether serialized as int or float). At most
     ``max_transient`` same-frame payloads may differ inside an action-delimited
     segment; this covers registration/onset jitter without allowing omitted
     frames, changed endpoints, or out-of-range values.
@@ -392,7 +408,8 @@ def reproducibility_failures(reference: list[dict], candidate: list[dict],
         for index in range(start, end):
             difference = first_difference(
                 canonical_payload(reference[index]),
-                canonical_payload(candidate[index]))
+                canonical_payload(candidate[index]),
+                tolerance=envelope_tolerance)
             if difference:
                 differences.append((index, difference))
         if not differences:

@@ -145,6 +145,24 @@ class ReproducibilityTests(unittest.TestCase):
             [frame(1, x=0)], [frame(1, x=1000)])
         self.assertTrue(any('1000' in failure for failure in failures))
 
+    def test_boundary_treats_integral_int_and_float_as_equal(self):
+        # A QML real that settles on a whole number serializes as an int in one
+        # pass and a float in the other.
+        self.assertEqual([], assert_frames.reproducibility_failures(
+            [frame(1, x=48)], [frame(1, x=48.0)]))
+
+    def test_boundary_numbers_use_the_absolute_tolerance(self):
+        self.assertEqual([], assert_frames.reproducibility_failures(
+            [frame(1, x=1.0)], [frame(1, x=1.00005)], envelope_tolerance=1e-4))
+        self.assertTrue(assert_frames.reproducibility_failures(
+            [frame(1, x=1.0)], [frame(1, x=1.001)], envelope_tolerance=1e-4))
+
+    def test_boundary_booleans_stay_exact(self):
+        candidate = frame(1)
+        candidate['windows'][0]['items'][0]['visible'] = False
+        failures = assert_frames.reproducibility_failures([frame(1)], [candidate])
+        self.assertTrue(any('.visible' in failure for failure in failures))
+
     def test_cli_returns_nonzero_for_reproducibility_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

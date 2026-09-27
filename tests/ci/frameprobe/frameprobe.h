@@ -18,7 +18,10 @@ namespace krema::testing
  *  - writes one NDJSON row per frame describing every QQuickItem in every
  *    Qt Quick window (geometry, scale, opacity, visibility);
  *  - optionally saves the rendered pixels of each frame as PNG;
- *  - replays a scripted input scenario keyed to frame numbers.
+ *  - replays a scripted input scenario keyed to frame numbers;
+ *  - from frame 1, fires every main-thread timer (QTimer, QML Timer) from the
+ *    same virtual clock, so timer-gated state lands on the same frame on
+ *    every run.
  *
  * Environment:
  *   KREMA_PROBE_NDJSON         output NDJSON path (activates the probe)
@@ -31,6 +34,9 @@ namespace krema::testing
 class FrameProbe
 {
 public:
+    /// Must run before QApplication is constructed; installs the virtual-timer
+    /// event dispatcher when KREMA_PROBE_NDJSON is set.
+    static void installEventDispatcherIfEnabled();
     static void installIfEnabled();
 };
 

@@ -938,7 +938,7 @@ The 14 `MANUAL` items are verified on a real desktop. Most are global shortcuts 
 - **Failure symptom**: The dock hides immediately even though the value was raised to 2000ms, or the Show/Hide delay values are not reflected in `DockVisibilityController`.
 - **Evidence**: `src/qml/settings/BehaviorPage.qml:62-88`, `src/config/krema.kcfg:85-96`, `src/shell/dockshell.cpp:173-178`
 - **Priority**: P1
-- **Automation**: `AUTO` — however, the delay **length** is not verified. ShowDelay/HideDelay are QTimers, so they are outside the virtual clock, and which frame they fire on varies from run to run; therefore the scenario only checks up to "the setting is applied and the final state changes". It passes even if the delay regresses to 0
+- **Automation**: `AUTO` — however, the delay **length** is not verified. The scenario only checks up to "the setting is applied and the final state changes", so it passes even if the delay regresses to 0. ShowDelay/HideDelay QTimers now run on the probe's virtual clock, so a frame-exact delay assertion is possible but not written yet
 
 ---
 

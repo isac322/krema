@@ -25,7 +25,7 @@
       "kind": "equals",
       "item": "0/0/5",
       "prop": "show",
-      "comment": "After I rest the pointer on a launcher with no window, its text tooltip appears; the timer is outside the virtual clock, so I check the settled state.",
+      "comment": "After I rest the pointer on a launcher with no window, its text tooltip appears; I check the settled state rather than the delay length.",
       "frame": 130,
       "value": true
     },

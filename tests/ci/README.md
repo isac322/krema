@@ -298,13 +298,16 @@ the current strict harness still requires its first CI validation.
   up. Client-side `grabWindow()` is used instead and is strictly better for the
   app's own rendering; only genuinely compositor-side effects (KWindowEffects
   blur-behind, window stacking) remain untestable here.
-- **`QTimer`/QML `Timer` are not virtualised.** The animation driver governs
-  `QAbstractAnimation` only. `src/qml` has seven wall-clock timers (tooltip
-  delay, `autoPreviewTimer`, `dragHoldTimer`, attention and launch-tracking
-  timers). Timer-gated state therefore lands on a frame that varies between
-  runs. Set `KREMA_PROBE_PACE=1` to make each tick consume `stepMs` of real time
-  so timers and the virtual clock advance together, or keep timer-gated items
-  out of byte-exact assertions.
+- **`QTimer`/QML `Timer` run on the virtual clock from frame 1.** The animation
+  driver governs `QAbstractAnimation` only, and wall-clock timers (tooltip
+  delay, `autoPreviewTimer`, auto-hide show/hide debounce, drag hold, attention
+  and launch tracking) would otherwise fire on whichever frame the machine
+  reached. `main()` installs the probe's event dispatcher before `QApplication`
+  (hence `Qt6::GuiPrivate` for `createUnixEventDispatcher`); it forwards
+  sockets, posted and window-system events to the platform dispatcher and, once
+  frame 1 is recorded, fires every positive-interval main-thread timer from the
+  frame loop at its virtual due time. Timers still pending at frame 1 restart
+  with their full interval. Startup and the settle phase stay on real time.
 - **Animation ticks advance by the driver step, not the real clock.** By default
   `QUnifiedTimer` measures each tick against the wall clock and may hand a new
   animation a catch-up delta. The probe calls
@@ -314,10 +317,12 @@ the current strict harness still requires its first CI validation.
 
   The capture is a strict gate rather than a diagnostic. Every pass must contain
   the same number and sequence of frames. Each action-delimited segment compares
-  its pre-action state and settled tail exactly, limits transient divergence to
-  nine frames, and compares numeric value envelopes with a `1e-4` absolute
-  tolerance. Changed endpoints, persistent item-identity or popup-mapping
-  differences, omitted frames, and larger numeric/property differences fail.
+  its pre-action state and settled tail, limits transient divergence to nine
+  frames, and compares numeric value envelopes. Numbers everywhere use a `1e-4`
+  absolute tolerance, and an integral value is equal whether serialized as an
+  int or a float; booleans, strings and structure must match exactly. Changed
+  endpoints, persistent item-identity or popup-mapping differences, omitted
+  frames, and larger numeric/property differences fail.
 - **No `Animator` types.** `ScaleAnimator`, `OpacityAnimator` and friends run on
   the render thread outside `QUnifiedTimer` and would escape the fixed-step
   clock. `src/qml` currently uses none; keep it that way, or frame-stepped

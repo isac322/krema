@@ -7,7 +7,13 @@
 # image contains the compositor, so nothing on the CI host is required beyond
 # an unprivileged container runtime.
 
-ARG BASE_IMAGE=fedora:43
+# Pinned by multi-arch index digest so the base layer is identical on every
+# host and architecture. dnf below still resolves the current Fedora 43
+# updates repository (older builds are pruned from the mirrors, so package
+# versions cannot be frozen); the frame probe's virtual clock is what keeps a
+# capture independent of wall-clock speed. Bump deliberately with
+# `docker buildx imagetools inspect fedora:43` and re-run the suite.
+ARG BASE_IMAGE=fedora:43@sha256:a651ddf48ea28a06ed4e1e6519f51c9f47e7a5a138722ade87369b8fbb7e5b42
 FROM ${BASE_IMAGE}
 
 # kwrite/kfind/okular/gwenview are installed for their .desktop files and

@@ -36,13 +36,17 @@ void WaylandDockPlatform::setScreen(QScreen *screen)
 {
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
     // LayerShellQt < 6.6 has no Window::setScreen. With ScreenFromQWindow its
-    // get_layer_surface() binds the wl_output of QWindow::screen() at the
-    // time the surface is created (on show). QtWayland re-derives that screen
-    // from the window geometry, so the position must also sit on the target
-    // output (layer-shell ignores absolute position).
+    // get_layer_surface() binds the wl_output of QWindow::screen() when the
+    // surface is created on show(), so the Qt screen is the pin.
     if (m_window) {
         m_window->setScreen(screen);
-        if (screen) {
+        // Before the platform window exists QtWayland re-derives the screen
+        // from the window geometry, so the position must sit on the target
+        // output (layer-shell ignores absolute position). Once it exists
+        // (LayerShellQt < 6.6 creates it in Window::get()), QtWayland pins a
+        // toplevel to its screen origin, and a setPosition() from the stale
+        // origin would re-derive the old screen instead.
+        if (screen && !m_window->handle()) {
             m_window->setPosition(screen->geometry().topLeft());
         }
     }
@@ -130,8 +134,12 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
 void WaylandDockPlatform::setSize(const QSize &size)
 {
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+    // LayerShellQt < 6.4 derives set_size from the window size and already
+    // sends 0 on a double-anchored axis. Resizing that axis to 0 here would
+    // move the window centre off its output, and Qt would re-derive the
+    // neighbouring output as the window's screen, so keep the current extent.
     if (m_window) {
-        m_window->resize(size);
+        m_window->resize(size.width() > 0 ? size.width() : m_window->width(), size.height() > 0 ? size.height() : m_window->height());
     }
 #else
     if (m_layerWindow) {

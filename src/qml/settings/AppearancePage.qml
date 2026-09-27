@@ -187,7 +187,7 @@ FormCard.FormCardPage {
                 let items = []
                 for (let i = 0; i < styleNames.length; i++) {
                     let name = styleNames[i]
-                    if (!DockView.isStyleAvailable(i)) {
+                    if (!SettingsWindow.isStyleAvailable(i)) {
                         name += " " + i18n("(unavailable)")
                     }
                     items.push(name)
@@ -197,7 +197,7 @@ FormCard.FormCardPage {
 
             currentIndex: DockSettings.backgroundStyle
             onActivated: function(index) {
-                if (!DockView.isStyleAvailable(index)) {
+                if (!SettingsWindow.isStyleAvailable(index)) {
                     // Revert to current setting
                     currentIndex = DockSettings.backgroundStyle
                     return

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
 # GUI integration tests: real dock shells on a private KWin virtual
-# compositor with two outputs (see run-with-kwin.sh).
+# compositor with two outputs (see tests/run-with-kwin.sh).
 find_program(KWIN_WAYLAND_EXECUTABLE kwin_wayland)
 find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
 find_package(Qt6 REQUIRED COMPONENTS Test)
@@ -23,7 +23,7 @@ target_include_directories(krema_kwin_tests PRIVATE
 
 if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
     add_test(NAME krema_kwin_tests
-        COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_CURRENT_SOURCE_DIR}/run-with-kwin.sh $<TARGET_FILE:krema_kwin_tests>
+        COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_kwin_tests>
     )
     set_tests_properties(krema_kwin_tests PROPERTIES TIMEOUT 300)
 else()

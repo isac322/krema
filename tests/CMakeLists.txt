@@ -12,4 +12,5 @@ add_test(NAME krema_desktop_entries
 )
 
 add_subdirectory(unit)
+add_subdirectory(integration)
 add_subdirectory(kwin)

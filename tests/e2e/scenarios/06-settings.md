@@ -2,7 +2,7 @@
 
 ## Features
 - settings-appearance: Icon size, icon scale, zoom factor, spacing, opacity, background style
-- settings-behavior: Visibility mode, dock position
+- settings-behavior: Visibility mode, dock position, monitor mode
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
@@ -19,6 +19,8 @@
 - src/shell/settingswindow.cpp
 - src/shell/dockshell.cpp
 - src/shell/dockview.cpp
+- src/shell/multidockmanager.h
+- src/shell/multidockmanager.cpp
 - src/models/taskiconprovider.h
 - src/models/taskiconprovider.cpp
 - src/config/krema.kcfg
@@ -158,3 +160,32 @@
 - Color saved to KConfig
 
 **Verification:** screenshot (tint color changed)
+
+---
+
+## TC SET-008: Change Monitor Mode From Settings
+
+**Precondition:** Two outputs, monitor mode "Primary monitor only", settings dialog open, Behavior page. Visibility mode "Auto hide".
+**Steps:**
+1. Select "All monitors" in "Monitor mode"
+2. Wait 500ms
+3. `list_windows` — verify Krema is still running and one dock window exists per output
+4. `screenshot` — verify the settings dialog is still open and docks on both outputs are shown
+5. Right-click the dock on the second output → "Settings..."
+6. `list_windows` — verify there is still exactly one settings window
+7. Select "Primary monitor only", then close the settings dialog
+8. Move the mouse away from the dock and wait for the hide delay
+
+**Expected:**
+- Krema does not crash (issue #16); the mode is applied immediately
+- The same settings dialog stays open across the change
+- Docks created by the change stay visible while the dialog is open and auto-hide after it closes
+- All docks open the same settings dialog
+- Each output shows its own dock (not two docks stacked on the primary output)
+- Reopening Settings after switching back to "Primary monitor only" works
+- In "Follow active screen" mode with the mouse trigger, opening Settings does not move the dock to another screen
+- The Toggle Dock / Focus Dock / Meta+N shortcuts act on the currently shown dock, not the hidden primary-screen dock
+
+**Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
+
+**Verification:** list_windows (window counts), screenshot (dialog + docks)

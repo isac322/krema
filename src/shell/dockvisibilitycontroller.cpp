@@ -94,6 +94,11 @@ bool DockVisibilityController::isDockVisible() const
     return m_visible;
 }
 
+bool DockVisibilityController::isHovered() const
+{
+    return m_hovered;
+}
+
 int DockVisibilityController::mode() const
 {
     return static_cast<int>(m_mode);

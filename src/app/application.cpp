@@ -196,13 +196,14 @@ void Application::registerGlobalShortcuts()
     kga->setDefaultShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     connect(toggleAction, &QAction::triggered, this, [this]() {
-        if (auto *shell = m_dockManager->primaryShell()) {
+        if (auto *shell = m_dockManager->activeShell()) {
             shell->view()->visibilityController()->toggleVisibility();
         }
     });
 
     // Focus dock for keyboard navigation: Meta+F5
-    // In multi-monitor mode, focuses the dock on the screen containing the cursor.
+    // In multi-monitor mode, focuses the dock on the screen containing the cursor;
+    // in Follow Active mode, the dock on the active screen.
     auto *focusDockAction = m_actionCollection->addAction(QStringLiteral("focus-dock"));
     focusDockAction->setText(i18nc("@action global shortcut", "Focus Dock"));
     kga->setDefaultShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
@@ -221,7 +222,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(activateAction, {seq});
         kga->setShortcut(activateAction, {seq});
         connect(activateAction, &QAction::triggered, this, [this, i]() {
-            if (auto *shell = m_dockManager->primaryShell()) {
+            if (auto *shell = m_dockManager->activeShell()) {
                 shell->actions()->activate(i - 1);
             }
         });
@@ -235,7 +236,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(newInstanceAction, {seq});
         kga->setShortcut(newInstanceAction, {seq});
         connect(newInstanceAction, &QAction::triggered, this, [this, i]() {
-            if (auto *shell = m_dockManager->primaryShell()) {
+            if (auto *shell = m_dockManager->activeShell()) {
                 shell->actions()->newInstance(i - 1);
             }
         });

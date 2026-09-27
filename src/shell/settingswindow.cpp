@@ -3,8 +3,8 @@
 
 #include "settingswindow.h"
 
-#include "dockview.h"
 #include "krema.h"
+#include "style/backgroundstyle.h"
 
 #include <KLocalizedQmlContext>
 
@@ -19,14 +19,31 @@ Q_LOGGING_CATEGORY(lcSettingsWindow, "krema.settings.window")
 namespace krema
 {
 
-SettingsWindow::SettingsWindow(KremaSettings *settings, DockView *dockView, QObject *parent)
+SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
     : QObject(parent)
     , m_settings(settings)
-    , m_dockView(dockView)
 {
 }
 
-SettingsWindow::~SettingsWindow() = default;
+SettingsWindow::~SettingsWindow()
+{
+    // Delete the engine while the "SettingsWindow" context property still
+    // resolves to this object. m_engine is only a QObject child, so a default
+    // destructor would destroy it after this object's QML bindings are gone
+    // and teardown would log TypeError (e.g. "isStyleAvailable of null").
+    delete m_engine;
+    m_engine = nullptr;
+}
+
+bool SettingsWindow::isVisible() const
+{
+    return m_visible;
+}
+
+bool SettingsWindow::isStyleAvailable(int styleType) const
+{
+    return krema::isStyleAvailable(static_cast<BackgroundStyleType>(styleType));
+}
 
 void SettingsWindow::show()
 {
@@ -99,9 +116,10 @@ void SettingsWindow::ensureEngine()
     m_engine = new QQmlApplicationEngine(this);
     KLocalization::setupLocalizedContext(m_engine);
 
-    // Expose DockView as context property so settings QML can access
-    // DockView.isStyleAvailable() etc. without process-global singleton registration.
-    m_engine->rootContext()->setContextProperty(QStringLiteral("DockView"), m_dockView);
+    // Expose this object so settings QML can call
+    // SettingsWindow.isStyleAvailable() without process-global singleton
+    // registration or a per-dock object.
+    m_engine->rootContext()->setContextProperty(QStringLiteral("SettingsWindow"), this);
 }
 
 void SettingsWindow::trackConfigWindow(QObject *configView)
@@ -120,6 +138,7 @@ void SettingsWindow::trackConfigWindow(QObject *configView)
         // Only forward close events — open is emitted manually below (exactly once)
         // to avoid double-counting that breaks dodge interacting refcount.
         if (!visible) {
+            m_visible = false;
             Q_EMIT visibleChanged(false);
             m_configWindow = nullptr;
         }
@@ -129,6 +148,7 @@ void SettingsWindow::trackConfigWindow(QObject *configView)
     win->raise();
     win->requestActivate();
 
+    m_visible = true;
     Q_EMIT visibleChanged(true);
 
     qCDebug(lcSettingsWindow) << "Tracking config window:" << win;

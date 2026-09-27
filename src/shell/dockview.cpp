@@ -175,11 +175,6 @@ int DockView::panelBarHeight() const
     return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
 }
 
-bool DockView::isStyleAvailable(int styleType) const
-{
-    return krema::isStyleAvailable(static_cast<BackgroundStyleType>(styleType));
-}
-
 DockPlatform *DockView::platform() const
 {
     return m_platform.get();
@@ -241,6 +236,14 @@ void DockView::handleScreenChanged(QScreen *newScreen)
 
     // Skip recovery if geometry is invalid (placeholder screen during DPMS off)
     if (geo.width() <= 0 || geo.height() <= 0) {
+        return;
+    }
+
+    // Not created yet: this is the screen assignment made while the platform
+    // window is being created, and the surface will be created on newScreen.
+    // hide()+show() here would re-enter QWindow::create() and leak a second
+    // platform window whose QWindow pointer dangles after this view is destroyed.
+    if (!handle()) {
         return;
     }
 

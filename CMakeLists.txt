@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(krema VERSION 0.7.0 LANGUAGES CXX)
+project(krema VERSION 0.7.0 LANGUAGES C CXX)
 
 set(QT_MIN_VERSION "6.8.0")
 set(KF6_MIN_VERSION "6.0.0")
@@ -32,6 +32,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Quick
     QuickControls2
     ShaderTools
+    WaylandClient
 )
 find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     WindowSystem
@@ -53,6 +54,7 @@ find_package(LibTaskManager REQUIRED)
 find_package(LibNotificationManager REQUIRED)
 find_package(KPipeWire REQUIRED)
 find_package(Wayland 1.22 REQUIRED COMPONENTS Client)
+find_package(WaylandScanner REQUIRED)
 
 ecm_set_disabled_deprecation_versions(
     QT ${QT_MIN_VERSION}

@@ -25,6 +25,7 @@ public:
     WaylandDockPlatform();
 
     void setupWindow(QWindow *window) override;
+    void setScreen(QScreen *screen) override;
     void setEdge(Edge edge) override;
     void setExclusiveZone(int zone) override;
     void setMargin(int margin) override;

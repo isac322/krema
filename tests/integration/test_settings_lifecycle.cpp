@@ -21,7 +21,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <KAboutData>
-#include <LayerShellQt/Shell>
 
 #include <QApplication>
 #include <QPointer>
@@ -540,7 +539,9 @@ int main(int argc, char *argv[])
     KAboutData aboutData(QStringLiteral("krema"), QStringLiteral("Krema"), QStringLiteral("test"));
     KAboutData::setApplicationData(aboutData);
     initResources();
-    LayerShellQt::Shell::useLayerShell();
+    // As in Application::run(): opt into the layer-shell platform plugin
+    // (what the deprecated LayerShellQt::Shell::useLayerShell() did).
+    qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
     g_previousHandler = qInstallMessageHandler(messageHandler);
 
     return Catch::Session().run(argc, argv);

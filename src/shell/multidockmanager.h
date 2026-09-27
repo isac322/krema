@@ -87,7 +87,7 @@ private:
 
     void onScreenAdded(QScreen *screen);
     void onScreenRemoved(QScreen *screen);
-    void onPrimaryScreenChanged(QScreen *screen);
+    void onPrimaryScreenChanged();
 
     /// Debounced handler for screen topology changes.
     void scheduleTopologyUpdate();

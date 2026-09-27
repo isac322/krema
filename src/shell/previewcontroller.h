@@ -3,11 +3,11 @@
 
 #pragma once
 
+#include <memory>
+
 #include <QModelIndex>
 #include <QObject>
 #include <QTimer>
-
-#include <memory>
 
 class KremaSettings;
 class QQuickView;

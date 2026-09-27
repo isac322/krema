@@ -157,9 +157,24 @@
 - `QQmlParserStatus::componentComplete()` 수동 호출 = 소스 모델 생성 트리거이지만, 어떤 소스인지는 별개 문제
 - 외부 D-Bus 서비스의 알림을 수신하려면 D-Bus 감시자(watcher) 프로토콜 직접 구현이 가장 안전
 
----
+## 7. Layer-shell 출력 고정: QWindow::setScreen 불충분 + Plasma primary ≠ Qt primary (2026-09, issue #18)
 
-## N. A QML handler must not destroy its own engine: app-wide UI owned by a per-screen object (2026-09)
+**증상:** 듀얼 출력 kwin --virtual에서 (a) "All Screens" 모드의 두 번째 독/프리뷰가 Virtual-1이 아닌 Virtual-0에 붙고, (b) PrimaryOnly 독이 Plasma primary가 아닌 첫 번째 wl_output에 생성됨.
+
+**근본 원인 (2개):**
+1. `QWindow::setScreen()`은 layer-shell surface에 무시됨 — QtWayland에서 surface가 map될 때 platform window가 primary `wl_output`을 다시 유도함. WAYLAND_DEBUG로 `get_layer_surface`가 `setScreen(Virtual-1)` 후에도 `wl_output#23`(Virtual-0)을 바인딩함을 확인. 올바른 핀은 `LayerShellQt::Window::setScreen()` — `QWaylandLayerSurface` 생성자가 `m_interface->screen()`(LSQt-level)을 먼저 읽고, 그 다음 `window->screen()`을 fallback으로 읽기 때문 (qwaylandlayersurface.cpp:29-46).
+2. `QGuiApplication::primaryScreen()`은 registry가 최초로 알린 `wl_output`일 뿐이며, QtWayland에서 `primaryScreenChanged`는 발생하지 않음. KWin의 per-user 우선순위(=System Settings display page가 `kde_output_device_v2`로 편집하는 것)는 **`kde_output_order_v1`** 프로토콜로만 publish됨 — plasmashell도 panel 배치에 이것을 사용. upstream은 프로토콜을 "DE implementation detail"로 취급해 XML을 설치하지 않으므로 vendoring이 필요 (src/protocols/kde-output-order-v1.xml, MIT-CMU).
+
+**해결책:**
+- `DockPlatform::setScreen(QScreen*)` 추가 → `WaylandDockPlatform`에서 `window->setScreen()`(pre-show geometry용)과 `layerWindow->setScreen()`(surface pin)을 모두 호출. `DockView::initialize`에서 show() 전에 호출.
+- `OutputOrderMonitor` 싱글턴으로 kde_output_order_v1을 소비하고 모든 `primaryScreen()` 사용처를 대체. order 변경 시 shell 재생성 (layer surface는 생성 시에만 출력 바인딩). 프로토콜 없으면 primaryScreen() 폴백.
+- 모니터를 의도적으로 leak: Qt Wayland platform teardown 후에 wl_proxy destroy 시 크래시 방지.
+
+**핵심 교훈:**
+- 헤더/문서만으로 API 정확성을 판단하면 안 됨 — `setScreen`이 "존재"하더라도 wire-level 바인딩을 WAYLAND_DEBUG로 검증해야 함.
+- "Plasma primary"는 Qt 개념이 아니라 compositor published 상태; kde_output_order_v1을 쓰는 게 Plasma-first 원칙에도 부합.
+
+## 8. A QML handler must not destroy its own engine: app-wide UI owned by a per-screen object (2026-09, issue #16)
 
 **Symptom:** Choosing another "Monitor mode" in Settings aborted Krema (SIGABRT, `Object ... destroyed while one of its QML signal handlers is in progress`, BehaviorPage.qml:102). Issue #16.
 
@@ -179,4 +194,4 @@ Each view is also positioned on its target screen before creation, and `handleSc
 - Objects created while a ref-counted lock holder is already active must take the lock themselves; a transition signal will not arrive for them.
 - Windows that share another view's QML engine must be destroyed before that view.
 - `QWindow::setScreen()` alone does not pin a not-yet-created top-level window: move it into the screen's geometry too. Never recreate a surface (`hide()`/`show()`) from a `screenChanged` emitted during creation.
-- Regression: `tests/integration/test_settings_lifecycle.cpp` (runs under `kwin_wayland --virtual`, see `tests/integration/run-with-kwin.sh`).
+- Regression: `tests/integration/test_settings_lifecycle.cpp` (runs under `kwin_wayland --virtual`, see `tests/run-with-kwin.sh`).

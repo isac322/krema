@@ -254,8 +254,8 @@ TEST_CASE("Left-click on a grouped app cycles through its windows", "[grouped-ac
         sequence.append(activeGroupWindow());
     }
 
-    CHECK(sequence[2] != sequence[1]);
-    CHECK(sequence[3] == sequence[1]);
+    CHECK(sequence[2].toStdString() != sequence[1].toStdString());
+    CHECK(sequence[3].toStdString() == sequence[1].toStdString());
     // Clicking a running group activates windows; it never launches the app.
     CHECK(launching.isEmpty());
     CHECK(model().tasksModel()->rowCount(model().tasksModel()->index(groupRow(), 0)) == 2);
@@ -394,7 +394,10 @@ TEST_CASE("Clicking a group returns to its most recently used window", "[grouped
             return !activeGroupWindow().isEmpty();
         },
         kTimeoutMs));
-    CHECK(activeGroupWindow() == lastUsed);
+    // Compare std::string: Catch2 prints a QString as {?}, which would hide
+    // the entered window on failure.
+    INFO("after entering the group:\n" << describeTasks());
+    CHECK(activeGroupWindow().toStdString() == lastUsed.toStdString());
 }
 
 int main(int argc, char *argv[])

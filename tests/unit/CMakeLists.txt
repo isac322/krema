@@ -6,6 +6,7 @@ add_executable(krema_unit_tests
     test_zoom_calculator.cpp
     test_surface_geometry.cpp
     test_input_region.cpp
+    test_output_order.cpp
 )
 
 target_link_libraries(krema_unit_tests PRIVATE
@@ -15,6 +16,7 @@ target_link_libraries(krema_unit_tests PRIVATE
 
 target_include_directories(krema_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/tests
 )
 
 catch_discover_tests(krema_unit_tests)

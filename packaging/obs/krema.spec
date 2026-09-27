@@ -6,7 +6,7 @@ Version:        0.7.0
 Release:        2%{?dist}
 Summary:        A lightweight dock for KDE Plasma 6
 
-License:        GPL-3.0-or-later
+License:        GPL-3.0-or-later AND MIT-CMU
 URL:            https://github.com/isac322/krema
 Source0:        https://github.com/isac322/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
 
@@ -27,6 +27,11 @@ BuildRequires:  cmake(Qt6DBus) >= 6.8.0
 BuildRequires:  cmake(Qt6Quick) >= 6.8.0
 BuildRequires:  cmake(Qt6QuickControls2) >= 6.8.0
 BuildRequires:  cmake(Qt6ShaderTools) >= 6.8.0
+# Wayland client + protocol codegen (kde_output_order_v1): the Qt6 wayland
+# devel package provides Qt6WaylandScannerTools/qtwaylandscanner, and
+# wayland-devel provides wayland-scanner (find_package WaylandScanner).
+BuildRequires:  cmake(Qt6WaylandClient) >= 6.8.0
+BuildRequires:  pkgconfig(wayland-scanner)
 
 # KDE Frameworks 6
 BuildRequires:  cmake(KF6WindowSystem) >= 6.0.0
@@ -88,6 +93,7 @@ previews via PipeWire, and deep integration with KDE Plasma desktop.
 
 %files
 %license LICENSES/GPL-3.0-or-later.txt
+%license LICENSES/MIT-CMU.txt
 %{_bindir}/krema
 %{_datadir}/applications/com.bhyoo.krema.desktop
 %if 0%{?suse_version}

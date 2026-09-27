@@ -17,11 +17,18 @@ LayerShellQt is a Qt interface library for the `wlr-layer-shell` Wayland protoco
 Static utility class to enable layer-shell mode.
 
 ```cpp
-#include <LayerShellQt/Shell>
+// Preferred (useLayerShell() is deprecated since Qt 6.10 / LayerShellQt 6.6;
+// it only sets this variable). Must run before the first QWindow is created.
+qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
 
-// Must be called once at application startup before creating any windows
-LayerShellQt::Shell::useLayerShell();
+// Deprecated equivalent — literally calls the qputenv above (verified in
+// LayerShellQt 6.7.5 source/disassembly):
+//   LayerShellQt::Shell::useLayerShell();
 ```
+
+> **Verified (issue #18):** `useLayerShell()` is deprecated and does nothing
+> but `qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")`. Set the
+> environment variable directly and drop the `LayerShellQt/Shell` include.
 
 ---
 
@@ -78,7 +85,7 @@ enum KeyboardInteractivity {
 };
 ```
 
-#### ScreenConfiguration
+#### ScreenConfiguration (deprecated since 6.6)
 
 ```cpp
 enum ScreenConfiguration {
@@ -86,6 +93,11 @@ enum ScreenConfiguration {
     ScreenFromCompositor = 1, // Let compositor decide (pass nil)
 };
 ```
+
+Deprecated: use `setScreen(QScreen*)` / `setWantsToBeOnActiveScreen(bool)`
+instead. `ScreenFromCompositor` ≡ `setWantsToBeOnActiveScreen(true)`;
+`ScreenFromQWindow` ≡ `setWantsToBeOnActiveScreen(false)` + `setScreen(nullptr)`
+(the `QWindow::screen()` fallback).
 
 ### Properties
 
@@ -97,7 +109,9 @@ enum ScreenConfiguration {
 | `layer` | `Layer` | `layer()` | `setLayer()` | `layerChanged()` |
 | `keyboardInteractivity` | `KeyboardInteractivity` | `keyboardInteractivity()` | `setKeyboardInteractivity()` | `keyboardInteractivityChanged()` |
 | `scope` | `QString` | `scope()` | `setScope()` | — |
-| `screenConfiguration` | `ScreenConfiguration` | `screenConfiguration()` | `setScreenConfiguration()` | — |
+| `screen` | `QScreen*` | `screen()` | `setScreen()` | `screenChanged()` |
+| `wantsToBeOnActiveScreen` | `bool` | `wantsToBeOnActiveScreen()` | `setWantsToBeOnActiveScreen()` | `wantsToBeOnActiveScreenChanged()` |
+| `screenConfiguration` | `ScreenConfiguration` | `screenConfiguration()` | `setScreenConfiguration()` | — (deprecated) |
 | `activateOnShow` | `bool` | `activateOnShow()` | `setActivateOnShow()` | — |
 
 ### Methods
@@ -131,7 +145,18 @@ Layer layer() const;
 void setKeyboardInteractivity(KeyboardInteractivity interactivity);
 KeyboardInteractivity keyboardInteractivity() const;
 
-// Screen configuration
+// Screen selection — the output the layer surface binds to.
+// setScreen() resets wantsToBeOnActiveScreen to false. When screen() is null
+// and wantsToBeOnActiveScreen() is false, QWindow::screen() is used.
+// NOTE (verified, issue #18): QWindow::setScreen() alone is NOT honored for
+// layer surfaces on QtWayland — the surface re-derives the primary wl_output
+// when it maps. Pin via LayerShellQt::Window::setScreen() before show().
+void setScreen(QScreen *screen);
+QScreen *screen() const;
+void setWantsToBeOnActiveScreen(bool set);
+bool wantsToBeOnActiveScreen() const;
+
+// Screen configuration (deprecated — use setScreen/wantsToBeOnActiveScreen)
 void setScreenConfiguration(ScreenConfiguration screenConfiguration);
 ScreenConfiguration screenConfiguration() const;
 
@@ -211,7 +236,7 @@ QRect panelScreenRect(surfaceX + panelX, surfaceY + panelY, panelW, panelH);
 ## Typical Dock Configuration
 
 ```cpp
-LayerShellQt::Shell::useLayerShell();  // at startup
+qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");  // at startup, before first QWindow
 
 auto *layerWindow = LayerShellQt::Window::get(qwindow);
 layerWindow->setLayer(LayerShellQt::Window::LayerTop);

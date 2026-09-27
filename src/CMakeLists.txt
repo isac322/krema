@@ -29,6 +29,8 @@ add_library(krema_lib STATIC
     shell/dockwidget.cpp
     shell/settingswindow.h
     shell/settingswindow.cpp
+    shell/outputordermonitor.h
+    shell/outputordermonitor.cpp
 
     config/screensettings.h
     config/screensettings.cpp
@@ -56,6 +58,14 @@ add_library(krema_lib STATIC
     ${QML_RESOURCES}
 )
 
+# kde_output_order_v1: KWin's published primary-output order. The XML is
+# vendored because upstream treats the protocol as a DE implementation
+# detail and does not install it. qt6_generate_* emits both the C
+# marshalling layer (wayland-*-protocol.c) and the C++ wrapper.
+qt6_generate_wayland_protocol_client_sources(krema_lib
+    FILES ${CMAKE_CURRENT_SOURCE_DIR}/protocols/kde-output-order-v1.xml
+)
+
 qt6_add_shaders(krema_lib "acrylic_shaders"
     BATCHABLE PRECOMPILE OPTIMIZED
     PREFIX "/"
@@ -70,6 +80,7 @@ target_link_libraries(krema_lib PUBLIC
     Qt6::DBus
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::WaylandClient
     KF6::WindowSystem
     KF6::ConfigCore
     KF6::CoreAddons

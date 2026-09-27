@@ -45,6 +45,12 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     // Configure the platform layer (LayerShellQt on Wayland)
     m_platform->setupWindow(this);
     m_platform->setEdge(edge);
+    // Pin the layer surface to this dock's screen before anything can create
+    // the platform window: QWindow::setScreen alone does not bind the layer
+    // surface on QtWayland, so the platform sets LayerShellQt::Window::screen.
+    // Layer-shell surfaces bind their wl_output at creation, so this must
+    // happen before show().
+    m_platform->setScreen(screen());
 
     // Store edge for QML access (must be set before QML loading)
     m_edge = edge;

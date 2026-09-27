@@ -308,6 +308,16 @@ the current strict harness still requires its first CI validation.
   frame 1 is recorded, fires every positive-interval main-thread timer from the
   frame loop at its virtual due time. Timers still pending at frame 1 restart
   with their full interval. Startup and the settle phase stay on real time.
+- **Compositor responses land on the frame that caused them.** A layer-shell
+  configure after an edge change, the pointer leave when a popup grabs, and the
+  pointer re-entry after it closes all reach the client whenever KWin gets to
+  them. After a frame's actions, and after any virtual timer fires, the probe
+  does Wayland round trips until surfaces, sizes, exposure and hover state stop
+  changing, before the animation clock advances. After a menu closes it moves
+  the pointer back over the item it right-clicked (where the real pointer still
+  is) and waits for the dock to report it. Each pass parks the pointer at the
+  output centre before quitting, so the next pass never maps its surfaces under
+  a stale pointer.
 - **Animation ticks advance by the driver step, not the real clock.** By default
   `QUnifiedTimer` measures each tick against the wall clock and may hand a new
   animation a catch-up delta. The probe calls

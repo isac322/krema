@@ -43,9 +43,11 @@
 
 #include <QtWaylandClient/QWaylandClientExtension>
 
+#include <LayerShellQt/Window>
+#include <QtGui/qguiapplication_platform.h>
 #include <linux/input-event-codes.h>
 #include <wayland-client-protocol.h>
-#include <LayerShellQt/Window>
+#include <wayland-client.h>
 
 #include <algorithm>
 #include <chrono>
@@ -233,14 +235,15 @@ public:
 
     /**
      * Advance the virtual clock by one step, firing every timer that falls due
-     * in order of due time, then registration order. A repeating timer due
-     * several times within one step fires each time, as it would in real time.
-     * Single-shot owners (QTimer, QSingleShotTimer) unregister themselves from
-     * their timerEvent.
+     * in order of due time, then registration order, and return how many
+     * fired. A repeating timer due several times within one step fires each
+     * time, as it would in real time. Single-shot owners (QTimer,
+     * QSingleShotTimer) unregister themselves from their timerEvent.
      */
-    void advance(Duration step)
+    int advance(Duration step)
     {
         const Duration target = m_now + step;
+        int fired = 0;
         for (;;) {
             const auto next = std::min_element(m_virtualTimers.begin(), m_virtualTimers.end(), [](const Timer &left, const Timer &right) {
                 return std::tie(left.due, left.sequence) < std::tie(right.due, right.sequence);
@@ -253,12 +256,14 @@ public:
             QObject *object = next->object;
             next->due += next->interval;
             next->sequence = m_sequence++;
+            ++fired;
             // The handler may unregister or re-register timers; nothing from
             // the vector is touched after this call.
             QTimerEvent event(id);
             QCoreApplication::sendEvent(object, &event);
         }
         m_now = target;
+        return fired;
     }
 
 private:
@@ -780,6 +785,122 @@ void waitForPointerAt(QQuickItem *target, int frame)
     qFatal("scenario frame %d timed out waiting for the pointer target", frame);
 }
 
+void appendHoverState(const QQuickItem *item, QString &state)
+{
+    for (const char *name : {"containsMouse", "panelMouseInside"}) {
+        const QVariant value = item->property(name);
+        if (value.isValid()) {
+            state += value.toBool() ? QLatin1Char('1') : QLatin1Char('0');
+        }
+    }
+    const QList<QQuickItem *> children = item->childItems();
+    for (const QQuickItem *child : children) {
+        appendHoverState(child, state);
+    }
+}
+
+/// What compositor round trips can change: surfaces, their size and exposure, and hover.
+QString compositorState()
+{
+    QString state;
+    const QWindowList windows = QGuiApplication::topLevelWindows();
+    for (const QWindow *window : windows) {
+        state += QStringLiteral("%1:%2%3:%4x%5;")
+                     .arg(QString::fromLatin1(window->metaObject()->className()))
+                     .arg(int(window->isVisible()))
+                     .arg(int(window->isExposed()))
+                     .arg(window->width())
+                     .arg(window->height());
+        if (const auto *quick = qobject_cast<const QQuickWindow *>(window)) {
+            appendHoverState(quick->contentItem(), state);
+        }
+    }
+    return state;
+}
+
+/**
+ * Let every compositor response to what the probe just did arrive before the
+ * animation clock moves.
+ *
+ * A layer-shell configure after an edge change, the pointer leave when a popup
+ * grabs, or a new surface being mapped otherwise reach the client whenever
+ * KWin gets to them, so the resulting relayout or hover change landed a frame
+ * early or late between passes. Each round is a wl_display round trip, so KWin
+ * has processed every request sent so far, followed by event processing. Four
+ * consecutive rounds with an unchanged surface/hover state end the wait; the
+ * animation driver and virtual timers are frozen meanwhile, so only compositor
+ * events can change that state. The two-second bound guards a compositor that
+ * never settles.
+ */
+void syncWithCompositor()
+{
+    auto *wayland = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+    wl_display *display = wayland ? wayland->display() : nullptr;
+    QString previous = compositorState();
+    int stable = 0;
+    QElapsedTimer elapsed;
+    elapsed.start();
+    while (stable < 4) {
+        if (elapsed.elapsed() >= 2000) {
+            qCWarning(lcProbe) << "compositor state did not settle within 2 s";
+            return;
+        }
+        if (display) {
+            wl_display_roundtrip(display);
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents);
+        QThread::msleep(4);
+        QCoreApplication::processEvents(QEventLoop::AllEvents);
+        const QString current = compositorState();
+        stable = current == previous ? stable + 1 : 0;
+        previous = current;
+    }
+}
+
+QPointF neutralPointerPosition(const QQuickWindow *window)
+{
+    const QSize output = window->screen() ? window->screen()->geometry().size() : window->size();
+    return QPointF(output.width() / 2.0, output.height() / 2.0);
+}
+
+// Where the compositor's pointer is after the last native action, and the
+// item it is over. QTest clicks on a QMenu never move it.
+QPoint g_pointerGlobal;
+QPointer<QQuickItem> g_pointerTarget;
+
+QPoint moveNativePointer(QQuickWindow *window, const QPoint &pos, QQuickItem *target, NativeFakeInput *fakeInput, int frame)
+{
+    const QSize output = window->screen() ? window->screen()->geometry().size() : window->size();
+    const QPoint globalPosition = requestedTopLeft(window, output) + pos;
+    if (!fakeInput->moveTo(globalPosition)) {
+        qFatal("scenario frame %d requires KWin fake-input support", frame);
+    }
+    waitForPointerAt(target, frame);
+    g_pointerGlobal = globalPosition;
+    g_pointerTarget = target;
+    return globalPosition;
+}
+
+/**
+ * Put the pointer back over the item it right-clicked once a popup closes.
+ *
+ * The real pointer never left that spot, but KWin re-enters the dock under it
+ * only when it next updates pointer focus, on a schedule of its own, so the
+ * zoom-in started a frame early or late between passes. Moving there (via a
+ * one-pixel step, since a zero-length motion may not update focus) and
+ * waiting for the dock to report it makes the re-entry part of this frame.
+ */
+void returnPointerAfterPopup(NativeFakeInput *fakeInput, int frame)
+{
+    if (!g_pointerTarget) {
+        return;
+    }
+    if (!fakeInput->moveTo(g_pointerGlobal + QPoint(1, 0)) || !fakeInput->moveTo(g_pointerGlobal)) {
+        qFatal("scenario frame %d requires KWin fake-input support", frame);
+    }
+    waitForPointerAt(g_pointerTarget, frame);
+}
+
 void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fakeInput)
 {
     QPoint pos;
@@ -789,29 +910,15 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
     }
     if (action.type == QLatin1String("move")) {
         if (action.native) {
-            const QSize output = window->screen()
-                ? window->screen()->geometry().size()
-                : window->size();
-            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
-                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
-            }
-            waitForPointerAt(target, action.frame);
+            moveNativePointer(window, pos, target, fakeInput, action.frame);
         } else {
             QTest::mouseMove(window, pos);
         }
     } else if (action.type == QLatin1String("click")) {
         const Qt::MouseButton button = buttonFromName(action.button);
         if (action.native) {
-            const QSize output = window->screen()
-                ? window->screen()->geometry().size()
-                : window->size();
-            const QPoint globalPosition = requestedTopLeft(window, output) + pos;
-            if (!fakeInput->moveTo(globalPosition)) {
-                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
-            }
-            waitForPointerAt(target, action.frame);
-            if (!fakeInput->sendButton(button, true)
-                || !fakeInput->sendButton(button, false)) {
+            const QPoint globalPosition = moveNativePointer(window, pos, target, fakeInput, action.frame);
+            if (!fakeInput->sendButton(button, true) || !fakeInput->sendButton(button, false)) {
                 qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
             if (action.waitForMenu) {
@@ -822,13 +929,7 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
         }
     } else if (action.type == QLatin1String("press")) {
         if (action.native) {
-            const QSize output = window->screen()
-                ? window->screen()->geometry().size()
-                : window->size();
-            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
-                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
-            }
-            waitForPointerAt(target, action.frame);
+            moveNativePointer(window, pos, target, fakeInput, action.frame);
             if (!fakeInput->sendButton(buttonFromName(action.button), true)) {
                 qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
@@ -837,13 +938,7 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
         }
     } else if (action.type == QLatin1String("release")) {
         if (action.native) {
-            const QSize output = window->screen()
-                ? window->screen()->geometry().size()
-                : window->size();
-            if (!fakeInput->moveTo(requestedTopLeft(window, output) + pos)) {
-                qFatal("scenario frame %d requires KWin fake-input support", action.frame);
-            }
-            waitForPointerAt(target, action.frame);
+            moveNativePointer(window, pos, target, fakeInput, action.frame);
             if (!fakeInput->sendButton(buttonFromName(action.button), false)) {
                 qFatal("scenario frame %d requires KWin fake-input support", action.frame);
             }
@@ -856,8 +951,9 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             const QKeyCombination combination = sequence[0];
             if (combination.key() == Qt::Key_Escape) {
                 if (QMenu *popup = visibleMenu()) {
-                    QTest::keyClick(
-                        popup, combination.key(), combination.keyboardModifiers());
+                    QTest::keyClick(popup, combination.key(), combination.keyboardModifiers());
+                    waitForMenuClosed(action.frame);
+                    returnPointerAfterPopup(fakeInput, action.frame);
                     return;
                 }
             }
@@ -900,6 +996,7 @@ void applyAction(QQuickWindow *window, const Action &action, NativeFakeInput *fa
             popup, Qt::LeftButton, Qt::NoModifier,
             popup->actionGeometry(match).center());
         waitForMenuClosed(action.frame);
+        returnPointerAfterPopup(fakeInput, action.frame);
     } else if (action.type == QLatin1String("shortcut")) {
         // Krema's keyboard navigation is only reachable through the global
         // shortcut (focus-dock), and KGlobalAccel key delivery does not work in
@@ -1046,13 +1143,11 @@ void FrameProbe::installIfEnabled()
         // KWin preserves the pointer between compositor sessions often enough
         // for a new pass to begin hovered over a dock item. Put it at a neutral
         // output position before the settle interval so both passes start from
-        // the same hover and animation state.
+        // the same hover and animation state. Each pass also parks it there
+        // before quitting, so the next one never maps its surfaces under a
+        // stale pointer.
         if (!*pointerReset) {
-            const QSize output = window->screen()
-                ? window->screen()->geometry().size()
-                : window->size();
-            if (!fakeInput->moveTo(
-                    QPointF(output.width() / 2.0, output.height() / 2.0))) {
+            if (!fakeInput->moveTo(neutralPointerPosition(window))) {
                 if (inputWait->elapsed() >= 5000) {
                     qFatal("KWin fake-input support did not become available");
                 }
@@ -1177,6 +1272,7 @@ void FrameProbe::installIfEnabled()
         *stream << QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)) << "\n";
         stream->flush();
 
+        bool acted = false;
         for (const Action &action : script) {
             if (action.frame != *frame) {
                 continue;
@@ -1196,18 +1292,25 @@ void FrameProbe::installIfEnabled()
                 }
             }
             applyAction(destination, action, fakeInput);
-
+            acted = true;
+        }
+        if (acted) {
+            syncWithCompositor();
         }
 
         // Timers first, so state a timer changes starts its Behavior on the
         // same animation instant in every pass; the next captured row then
         // shows exactly one step of that animation.
-        timers->advance(std::chrono::milliseconds(stepMs));
+        if (timers->advance(std::chrono::milliseconds(stepMs)) > 0) {
+            syncWithCompositor();
+        }
         driver->advance();
 
         if (maxFrames > 0 && *frame >= maxFrames) {
             stream->flush();
             out->close();
+            fakeInput->moveTo(neutralPointerPosition(window));
+            syncWithCompositor();
             QCoreApplication::quit();
             return;
         }

@@ -21,7 +21,9 @@ namespace krema::testing
  *  - replays a scripted input scenario keyed to frame numbers;
  *  - from frame 1, fires every main-thread timer (QTimer, QML Timer) from the
  *    same virtual clock, so timer-gated state lands on the same frame on
- *    every run.
+ *    every run;
+ *  - after actions and timer firings, waits out compositor round trips before
+ *    the clock advances, so Wayland responses land on a fixed frame.
  *
  * Environment:
  *   KREMA_PROBE_NDJSON         output NDJSON path (activates the probe)

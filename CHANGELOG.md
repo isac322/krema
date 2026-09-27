@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Krema builds again against LayerShellQt < 6.6 (Debian 13, Ubuntu 25.04), which lacks `Window::setScreen`, and on those versions the dock and its window previews now appear on their intended output (the Plasma primary output, or each screen in "All monitors" mode) instead of all landing on the first output
 - Krema no longer crashes on Debian 13 and Ubuntu 25.04 when you quit it while the Settings window is still opening or open (#27)
 - Window previews now appear next to the hovered icon when the dock is on a monitor that does not start at the top-left corner of the desktop, instead of being pushed to that monitor's far edge
+- Left-clicking an app with two or more open windows now brings up the window you used last, and each further click switches to the app's next window; previously the click did nothing. Scrolling over such an app from another app also starts at its last-used window instead of its first one (#10)
 
 ### Added
 

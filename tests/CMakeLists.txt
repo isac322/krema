@@ -4,4 +4,13 @@
 find_package(Catch2 3 REQUIRED)
 include(Catch)
 
+add_test(NAME krema_desktop_entries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}/src
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/check_desktop_entries.cmake
+)
+
 add_subdirectory(unit)
+add_subdirectory(integration)
+add_subdirectory(kwin)

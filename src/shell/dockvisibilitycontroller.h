@@ -48,6 +48,8 @@ public:
     ~DockVisibilityController() override;
 
     [[nodiscard]] bool isDockVisible() const;
+    /// Whether the pointer is over the dock or its trigger area.
+    [[nodiscard]] bool isHovered() const;
 
     [[nodiscard]] int mode() const;
     void setMode(int mode);

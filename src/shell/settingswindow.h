@@ -4,16 +4,17 @@
 #pragma once
 
 #include <QObject>
+#include <QList>
 #include <QPointer>
+#include <QWindowList>
 
 class KremaSettings;
 class QQmlApplicationEngine;
 class QQuickWindow;
+class QVariant;
 
 namespace krema
 {
-
-class DockView;
 
 /**
  * Settings dialog window.
@@ -21,13 +22,16 @@ class DockView;
  * Opens a ConfigurationView-based settings window with sidebar navigation.
  * Uses QQmlApplicationEngine to load a host ApplicationWindow, which then
  * opens a ConfigurationView (creates its own ConfigWindow on desktop).
+ *
+ * One instance serves every dock and must outlive dock shells: settings
+ * handlers (e.g. Monitor mode) rebuild the shells while they are running.
  */
 class SettingsWindow : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit SettingsWindow(KremaSettings *settings, DockView *dockView, QObject *parent = nullptr);
+    explicit SettingsWindow(KremaSettings *settings, QObject *parent = nullptr);
     ~SettingsWindow() override;
 
     /// Show the settings dialog, or raise it if already visible.
@@ -36,17 +40,30 @@ public:
     /// Show the settings dialog with a specific module pre-selected.
     void show(const QString &defaultModule);
 
+    /// Whether the dialog is open (between visibleChanged(true) and
+    /// visibleChanged(false)).
+    [[nodiscard]] bool isVisible() const;
+
+    /// Check if a background style is available on this system (for settings
+    /// QML).
+    Q_INVOKABLE bool isStyleAvailable(int styleType) const;
+
 Q_SIGNALS:
     void visibleChanged(bool visible);
 
 private:
+    void open(const QVariant &defaultModule);
     void ensureEngine();
-    void trackConfigWindow(QObject *configView);
+    [[nodiscard]] QQuickWindow *windowCreatedSince(const QWindowList &windowsBefore) const;
+    void trackConfigWindow(QQuickWindow *win, bool deleteOnClose);
 
     KremaSettings *m_settings;
-    DockView *m_dockView;
     QQmlApplicationEngine *m_engine = nullptr;
     QPointer<QQuickWindow> m_configWindow;
+    // Every settings window open() created that still exists, including
+    // closed ones whose deletion is pending; destroyed before the engine.
+    QList<QPointer<QQuickWindow>> m_openedWindows;
+    bool m_visible = false;
 };
 
 } // namespace krema

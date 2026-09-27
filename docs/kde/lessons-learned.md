@@ -156,3 +156,69 @@
 - KDE 라이브러리의 "proxy model" 클래스가 반드시 올바른 소스를 사용하는지 바이너리 수준에서 검증 필요
 - `QQmlParserStatus::componentComplete()` 수동 호출 = 소스 모델 생성 트리거이지만, 어떤 소스인지는 별개 문제
 - 외부 D-Bus 서비스의 알림을 수신하려면 D-Bus 감시자(watcher) 프로토콜 직접 구현이 가장 안전
+
+## 7. Layer-shell 출력 고정: QWindow::setScreen 불충분 + Plasma primary ≠ Qt primary (2026-09, issue #18)
+
+**증상:** 듀얼 출력 kwin --virtual에서 (a) "All Screens" 모드의 두 번째 독/프리뷰가 Virtual-1이 아닌 Virtual-0에 붙고, (b) PrimaryOnly 독이 Plasma primary가 아닌 첫 번째 wl_output에 생성됨.
+
+**근본 원인 (2개):**
+1. `QWindow::setScreen()`은 layer-shell surface에 무시됨 — QtWayland에서 surface가 map될 때 platform window가 primary `wl_output`을 다시 유도함. WAYLAND_DEBUG로 `get_layer_surface`가 `setScreen(Virtual-1)` 후에도 `wl_output#23`(Virtual-0)을 바인딩함을 확인. 올바른 핀은 `LayerShellQt::Window::setScreen()` — `QWaylandLayerSurface` 생성자가 `m_interface->screen()`(LSQt-level)을 먼저 읽고, 그 다음 `window->screen()`을 fallback으로 읽기 때문 (qwaylandlayersurface.cpp:29-46).
+2. `QGuiApplication::primaryScreen()`은 registry가 최초로 알린 `wl_output`일 뿐이며, QtWayland에서 `primaryScreenChanged`는 발생하지 않음. KWin의 per-user 우선순위(=System Settings display page가 `kde_output_device_v2`로 편집하는 것)는 **`kde_output_order_v1`** 프로토콜로만 publish됨 — plasmashell도 panel 배치에 이것을 사용. upstream은 프로토콜을 "DE implementation detail"로 취급해 XML을 설치하지 않으므로 vendoring이 필요 (src/protocols/kde-output-order-v1.xml, MIT-CMU).
+
+**해결책:**
+- `DockPlatform::setScreen(QScreen*)` 추가 → `WaylandDockPlatform`에서 `window->setScreen()`(pre-show geometry용)과 `layerWindow->setScreen()`(surface pin)을 모두 호출. `DockView::initialize`에서 show() 전에 호출.
+- `OutputOrderMonitor` 싱글턴으로 kde_output_order_v1을 소비하고 모든 `primaryScreen()` 사용처를 대체. order 변경 시 shell 재생성 (layer surface는 생성 시에만 출력 바인딩). 프로토콜 없으면 primaryScreen() 폴백.
+- 모니터를 의도적으로 leak: Qt Wayland platform teardown 후에 wl_proxy destroy 시 크래시 방지.
+
+**핵심 교훈:**
+- 헤더/문서만으로 API 정확성을 판단하면 안 됨 — `setScreen`이 "존재"하더라도 wire-level 바인딩을 WAYLAND_DEBUG로 검증해야 함.
+- "Plasma primary"는 Qt 개념이 아니라 compositor published 상태; kde_output_order_v1을 쓰는 게 Plasma-first 원칙에도 부합.
+
+## 8. A QML handler must not destroy its own engine: app-wide UI owned by a per-screen object (2026-09, issue #16)
+
+**Symptom:** Choosing another "Monitor mode" in Settings aborted Krema (SIGABRT, `Object ... destroyed while one of its QML signal handlers is in progress`, BehaviorPage.qml:102). Issue #16.
+
+**Root cause:**
+- `BehaviorPage.qml` `onActivated` writes `DockSettings.monitorMode`; `MonitorModeChanged` is connected directly to `MultiDockManager::setMonitorMode()`, which destroys every `DockShell` synchronously.
+- Each `DockShell` owned a `SettingsWindow` (and its `QQmlApplicationEngine`), so the engine running the handler was deleted from inside the handler; Qt calls `qFatal()` in `QQmlData::destroyed()`.
+- Same teardown: `PreviewController` never deleted its preview `QQuickView` (one leaked `krema-preview` surface per rebuilt shell), and it outlived `DockView`, so `PreviewPopup.qml` bindings re-ran against a null `DockView` (`Cannot read property 'edge' of null`).
+- Second mechanism on the same flow: `createShellForScreen()` called `setScreen()` on a view left at (0,0). `QWindowPrivate::create()` re-derives the screen from the geometry, so every non-primary dock moved to the primary screen and emitted `screenChanged` while its platform window was being created; `DockView::handleScreenChanged()` then ran `hide()`+`show()`, re-entering `QWindow::create()`. The first `QWaylandWindow` leaked with a dangling `QWindow` pointer, and its next layer-surface configure crashed Krema (typically when Settings was opened after switching back from "All monitors").
+
+**Fix:** One `SettingsWindow` owned by `MultiDockManager` (declared before `m_shells`), shells hold a non-owning pointer and take the interaction lock when created while the dialog is open. Settings QML calls the stateless `SettingsWindow.isStyleAvailable()` instead of a per-dock `DockView`. `DockShell` owns `PreviewController` (which owns its view) and destroys it before `DockView`.
+Each view is also positioned on its target screen before creation, and `handleScreenChanged()` does nothing while no platform window exists.
+
+**Rejected:** Queued connection / `deleteLater` for the rebuild: no abort, but the open dialog still disappears with the shell that owned it.
+
+**Key lessons:**
+- Application-wide UI (dialogs, their QML engines) must be owned at application scope, never by objects that settings changes recreate.
+- Objects created while a ref-counted lock holder is already active must take the lock themselves; a transition signal will not arrive for them.
+- Windows that share another view's QML engine must be destroyed before that view.
+- `QWindow::setScreen()` alone does not pin a not-yet-created top-level window: move it into the screen's geometry too. Never recreate a surface (`hide()`/`show()`) from a `screenChanged` emitted during creation.
+- Regression: `tests/integration/test_settings_lifecycle.cpp` (runs under `kwin_wayland --virtual`, see `tests/run-with-kwin.sh`).
+
+## 9. LayerShellQt < 6.6: no `Window::setScreen`, and `Window::get()` already creates the platform window (2026-09)
+
+**Symptom:** After #23, master no longer compiled on Debian 13 / Ubuntu 25.04 (LayerShellQt 6.3.4: `'class LayerShellQt::Window' has no member named 'setScreen'`). A compile-only fix still put every dock and preview on the first output (WAYLAND_DEBUG: `get_layer_surface(..., wl_output#20, 2, "krema-dock")`, where `wl_output#20` is Virtual-0, while Virtual-1 was the Plasma primary; "All monitors" stacked both docks on Virtual-0).
+
+**Verified API history (layer-shell-qt tags):** `Window::setScreen`/`screen` since v6.6.0 (commit 430ad36); `setDesiredSize` since 6.4; `ScreenConfiguration` deprecated in 6.6. In 6.3–6.5 `QWaylandLayerSurface` binds `QWindow::screen()` (ScreenFromQWindow, the default) when the surface is created on show, and `Window::Window()` calls `window->create()`.
+
+**Root causes (compat path, `KREMA_COMPAT_NO_LAYERSHELL_SCREEN`):**
+1. `Window::get()` creates the platform window, and QtWayland re-derives `QWindow::screen()` from the still-empty geometry, so `DockView` read back the primary screen before pinning it.
+2. On a created QtWayland toplevel, `QWindow::setPosition()` runs `screenForGeometry()` from the stale origin and moved the preview back to the old screen (QtWayland pins a created toplevel to its screen origin anyway, `fixedToplevelPositions`).
+
+**Fix:** capture the assigned screen before `setupWindow()`, set `QWindow::screen` plus `ScreenFromQWindow`, and position only windows without a platform window.
+
+**Key lessons:**
+- A compile-only compat branch is not a fix: check the wire-level `get_layer_surface` output against the old library too.
+- `-D_HAVE_LAYERSHELLQT_SET_SCREEN=OFF` exercises the compat code on a new distro, but only a real old LayerShellQt (Debian 13) reproduces the `create()` in `Window::get()`.
+
+## 10. Destroy JavaScript-owned windows before their QML engine (2026-09, issue #27)
+
+**Symptom:** On Debian 13 (Qt 6.8.2, KF 6.13), Krema segfaulted in `QQmlComponent::~QQmlComponent()` when it quit while the Settings window was still being built or was open. With the real binary, quitting 0 ms after opening Settings crashed 3 out of 3 times, 50 ms 2/3, 300 ms 1/3, and 3 s 0/3. Fedora 44 (Qt 6.11) never crashed, including with kirigami-addons 1.7.0 built from source.
+
+**Cause:** `ConfigurationView.open()` creates `ConfigWindow` with `component.createObject(...)`. On every kirigami-addons version (1.7–1.13) the window has no QObject parent and has `QQmlEngine::JavaScriptOwnership`. Passing `root.window` in 1.12+ only sets `transientParent`. `~SettingsWindow` deleted the engine with the window alive, so the engine's teardown sweep (`QV4::QObjectWrapper::destroyObject`) destroyed the window tree, which crashes on the Debian 13 stack.
+
+**Rule:** An owner of a `QQmlEngine` destroys every top-level window created in that engine, including JS-owned windows it did not construct, before deleting the engine. Keep `QPointer`s to them (closed windows with a pending `deleteLater()`/`destroy()` included), `disconnect()` them from the owner first so no close handling runs from the destructor, then `delete`. Deleting cancels pending deferred deletions, and `QtObject` properties such as `configViewItem` become null.
+
+**Not fixed here:** Kirigami's `ScrollablePage` (`src/controls/ScrollablePage.qml:276-277` on master) logs `TypeError: Cannot read property 'flickable' of null` whenever a page is destroyed. This already happens on every normal Settings close. It is upstream.
+

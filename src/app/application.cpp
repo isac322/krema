@@ -11,6 +11,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "shell/outputordermonitor.h"
 
 #include <KAboutData>
 #include <KActionCollection>
@@ -18,7 +19,6 @@
 #include <KDBusService>
 #include <KGlobalAccel>
 #include <KLocalizedString>
-#include <LayerShellQt/Shell>
 
 #include <QAction>
 #include <QLoggingCategory>
@@ -74,8 +74,10 @@ int Application::run()
     // Initialize Qt resources from static library
     initResources();
 
-    // Must be called before any QWindow is created
-    LayerShellQt::Shell::useLayerShell();
+    // Opt into the layer-shell platform plugin. Equivalent to the deprecated
+    // LayerShellQt::Shell::useLayerShell() (it only sets this variable); must
+    // happen before the first QWindow is created.
+    qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
 
     // Load settings from KConfig (~/.config/kremarc)
     m_settings = std::make_unique<KremaSettings>();
@@ -107,9 +109,19 @@ int Application::run()
         return tracker;
     });
 
-    // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode)
+    // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode).
+    // Placement uses the Plasma primary output (kde_output_order_v1); wait for
+    // KWin's first order list when the protocol is present so the dock does not
+    // briefly land on the wrong (first-announced) output before moving.
     m_dockManager = std::make_unique<MultiDockManager>(m_settings.get(), m_dockModel.get(), m_notificationTracker.get(), this);
-    m_dockManager->initialize();
+    auto *outputOrder = OutputOrderMonitor::instance();
+    if (outputOrder->orderReady()) {
+        m_dockManager->initialize();
+    } else {
+        connect(outputOrder, &OutputOrderMonitor::orderReadyChanged, this, [this] {
+            m_dockManager->initialize();
+        });
+    }
 
     // Apply initial virtual desktop display mode
     m_dockModel->setVirtualDesktopMode(m_settings->virtualDesktopMode());
@@ -193,13 +205,14 @@ void Application::registerGlobalShortcuts()
     kga->setDefaultShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     kga->setShortcut(toggleAction, {QKeySequence(Qt::META | Qt::Key_QuoteLeft)});
     connect(toggleAction, &QAction::triggered, this, [this]() {
-        if (auto *shell = m_dockManager->primaryShell()) {
+        if (auto *shell = m_dockManager->activeShell()) {
             shell->view()->visibilityController()->toggleVisibility();
         }
     });
 
     // Focus dock for keyboard navigation: Meta+F5
-    // In multi-monitor mode, focuses the dock on the screen containing the cursor.
+    // In multi-monitor mode, focuses the dock on the screen containing the cursor;
+    // in Follow Active mode, the dock on the active screen.
     auto *focusDockAction = m_actionCollection->addAction(QStringLiteral("focus-dock"));
     focusDockAction->setText(i18nc("@action global shortcut", "Focus Dock"));
     kga->setDefaultShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
@@ -218,7 +231,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(activateAction, {seq});
         kga->setShortcut(activateAction, {seq});
         connect(activateAction, &QAction::triggered, this, [this, i]() {
-            if (auto *shell = m_dockManager->primaryShell()) {
+            if (auto *shell = m_dockManager->activeShell()) {
                 shell->actions()->activate(i - 1);
             }
         });
@@ -232,7 +245,7 @@ void Application::registerGlobalShortcuts()
         kga->setDefaultShortcut(newInstanceAction, {seq});
         kga->setShortcut(newInstanceAction, {seq});
         connect(newInstanceAction, &QAction::triggered, this, [this, i]() {
-            if (auto *shell = m_dockManager->primaryShell()) {
+            if (auto *shell = m_dockManager->activeShell()) {
                 shell->actions()->newInstance(i - 1);
             }
         });

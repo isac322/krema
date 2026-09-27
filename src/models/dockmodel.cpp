@@ -3,6 +3,8 @@
 
 #include "dockmodel.h"
 
+#include "shell/outputordermonitor.h"
+
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
@@ -53,10 +55,17 @@ DockModel::DockModel(QObject *parent)
     m_tasksModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
     m_tasksModel->setActivity(m_activityInfo->currentActivity());
 
-    // Screen geometry — Plasma Task Manager always sets this.
-    if (auto *screen = QGuiApplication::primaryScreen()) {
+    // Screen geometry — Plasma Task Manager always sets this. Use the Plasma
+    // primary (kde_output_order_v1), not the Qt primary which is just the
+    // first wl_output and never tracks KWin's priority changes.
+    if (auto *screen = krema::OutputOrderMonitor::instance()->primaryScreen()) {
         m_tasksModel->setScreenGeometry(screen->geometry());
     }
+    connect(krema::OutputOrderMonitor::instance(), &krema::OutputOrderMonitor::primaryOutputChanged, this, [this] {
+        if (auto *screen = krema::OutputOrderMonitor::instance()->primaryScreen()) {
+            m_tasksModel->setScreenGeometry(screen->geometry());
+        }
+    });
 
     // Show all windows regardless of desktop/screen/activity.
     // Filtering can be enabled later (M8: multi-monitor + virtual desktop).

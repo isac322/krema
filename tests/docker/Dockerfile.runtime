@@ -57,7 +57,8 @@ RUN case "${FAMILY}" in \
                 dbus-daemon dbus-bin \
                 qt6-base-dev qt6-wayland qml6-module-qtquick qml6-module-qtquick-controls \
                 libkirigami6 qml6-module-org-kde-kirigami \
-                kirigami-addons-data qml6-module-org-kde-kirigamiaddons-components \
+                kirigami-addons-data qml6-module-org-kde-kirigamiaddons-formcard qml6-module-org-kde-kirigamiaddons-settings \
+                qml6-module-qtquick-effects \
                 liblayershellqtinterface6 qml6-module-org-kde-layershell \
                 plasma-workspace libkpipewire6 libkpipewiredmabuf6 libkpipewirerecord6 qml6-module-org-kde-pipewire pipewire wireplumber \
                 libgl1-mesa-dri fontconfig hicolor-icon-theme breeze-icon-theme wayland-utils; \

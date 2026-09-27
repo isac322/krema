@@ -3,6 +3,8 @@
 
 #include "multidockmanager.h"
 
+#include "outputordermonitor.h"
+
 #include "config/screensettings.h"
 #include "dockshell.h"
 #include "dockview.h"
@@ -12,6 +14,7 @@
 #include "models/dockmodel.h"
 #include "platform/dockplatform.h"
 #include "platform/dockplatformfactory.h"
+#include "settingswindow.h"
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
@@ -31,6 +34,7 @@ MultiDockManager::MultiDockManager(KremaSettings *settings, DockModel *model, No
     , m_settings(settings)
     , m_model(model)
     , m_tracker(tracker)
+    , m_settingsWindow(std::make_unique<SettingsWindow>(settings))
 {
     // Debounce screen topology changes (hot-plug, mirror→extended transitions)
     m_topologyDebounce.setSingleShot(true);
@@ -44,16 +48,21 @@ MultiDockManager::MultiDockManager(KremaSettings *settings, DockModel *model, No
     // Monitor screen lifecycle
     connect(qApp, &QGuiApplication::screenAdded, this, &MultiDockManager::onScreenAdded);
     connect(qApp, &QGuiApplication::screenRemoved, this, &MultiDockManager::onScreenRemoved);
-    connect(qApp, &QGuiApplication::primaryScreenChanged, this, &MultiDockManager::onPrimaryScreenChanged);
+    // The Plasma primary is published via kde_output_order_v1, not Qt's
+    // primaryScreenChanged (which never fires on QtWayland).
+    connect(OutputOrderMonitor::instance(), &OutputOrderMonitor::primaryOutputChanged, this, &MultiDockManager::onPrimaryScreenChanged);
 }
 
 MultiDockManager::~MultiDockManager() = default;
 
 void MultiDockManager::initialize()
 {
+    if (m_initialized) {
+        return;
+    }
+    m_initialized = true;
     m_mode = static_cast<MonitorMode>(m_settings->monitorMode());
     applyMode();
-    m_initialized = true;
 }
 
 void MultiDockManager::setMonitorMode(MonitorMode mode)
@@ -70,7 +79,7 @@ void MultiDockManager::setMonitorMode(MonitorMode mode)
 
 DockShell *MultiDockManager::primaryShell() const
 {
-    auto *primary = QGuiApplication::primaryScreen();
+    auto *primary = OutputOrderMonitor::instance()->primaryScreen();
     if (primary) {
         auto it = m_shells.find(primary);
         if (it != m_shells.end()) {
@@ -84,8 +93,24 @@ DockShell *MultiDockManager::primaryShell() const
     return nullptr;
 }
 
+DockShell *MultiDockManager::activeShell() const
+{
+    // In Follow Active mode the visible dock is the one on m_activeScreen;
+    // global shortcuts (toggle, focus, Meta+N) must target it, not the
+    // hidden primary-screen shell.
+    if (m_mode == FollowActive && m_activeScreen) {
+        if (auto it = m_shells.find(m_activeScreen); it != m_shells.end()) {
+            return it->second.get();
+        }
+    }
+    return primaryShell();
+}
+
 DockShell *MultiDockManager::shellAtCursor() const
 {
+    if (m_mode == FollowActive) {
+        return activeShell();
+    }
     auto *screen = QGuiApplication::screenAt(QCursor::pos());
     if (screen) {
         auto it = m_shells.find(screen);
@@ -129,7 +154,7 @@ void MultiDockManager::applyMode()
 
 void MultiDockManager::setupPrimaryOnly()
 {
-    auto *screen = QGuiApplication::primaryScreen();
+    auto *screen = OutputOrderMonitor::instance()->primaryScreen();
     if (!screen) {
         qCWarning(lcMultiDock) << "No primary screen available";
         return;
@@ -162,11 +187,18 @@ DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
     auto *screenSettings = new ScreenSettings(screen->name(), m_settings, this);
 
     auto platform = DockPlatformFactory::create();
-    auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, std::move(platform), this);
+    auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, m_settingsWindow.get(), std::move(platform), this);
 
-    // Set the screen on the DockView before initialization so layer-shell
-    // assigns the surface to the correct output.
+    // Set the QWindow screen AND position before initialization. On QtWayland
+    // the platform window re-derives its QScreen from the window geometry at
+    // creation (QWindowPrivate::create -> screenForGeometry): with a default
+    // geometry centered at (0,0) every window snaps to the first output and
+    // stays there because the outputs are virtual siblings (no window
+    // recreation). Placing the window on the target screen makes the derived
+    // QScreen match the pinned layer-surface output; layer-shell itself
+    // ignores absolute position (the compositor's anchors decide placement).
     shell->view()->setScreen(screen);
+    shell->view()->setPosition(screen->geometry().topLeft());
 
     auto edge = static_cast<DockPlatform::Edge>(screenSettings->edge());
     auto visibilityMode = static_cast<DockPlatform::VisibilityMode>(screenSettings->visibilityMode());
@@ -207,8 +239,8 @@ void MultiDockManager::setupFollowActive()
         createShellForScreen(screen);
     }
 
-    // Determine initial active screen (primary screen)
-    auto *initial = QGuiApplication::primaryScreen();
+    // Determine initial active screen (Plasma primary output)
+    auto *initial = OutputOrderMonitor::instance()->primaryScreen();
     m_activeScreen = initial;
 
     // Hide all shells except the active one
@@ -234,9 +266,12 @@ void MultiDockManager::setupFollowActive()
     if (trigger == TriggerMouse || trigger == TriggerComposite) {
         // Event-driven mouse detection: when any dock's visibility controller
         // detects hover, switch to that screen. This avoids polling QCursor::pos().
+        // Only hover counts: the settings dialog's interaction lock also shows
+        // the hidden docks' controllers, which is not pointer activity.
         for (const auto &[screen, shell] : m_shells) {
-            connect(shell->view()->visibilityController(), &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen]() {
-                if (m_mode == FollowActive && screen != m_activeScreen) {
+            auto *controller = shell->view()->visibilityController();
+            connect(controller, &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen, controller]() {
+                if (m_mode == FollowActive && screen != m_activeScreen && controller->isHovered()) {
                     m_followActiveDebounce.stop();
                     connect(&m_followActiveDebounce, &QTimer::timeout, this, [this, screen]() {
                         setActiveScreen(screen);
@@ -352,10 +387,11 @@ void MultiDockManager::onScreenRemoved(QScreen *screen)
     }
 }
 
-void MultiDockManager::onPrimaryScreenChanged(QScreen *screen)
+void MultiDockManager::onPrimaryScreenChanged()
 {
-    qCDebug(lcMultiDock) << "Primary screen changed to:" << (screen ? screen->name() : QStringLiteral("null"));
-    if (m_mode == PrimaryOnly || m_mode == FollowActive) {
+    auto *screen = OutputOrderMonitor::instance()->primaryScreen();
+    qCDebug(lcMultiDock) << "Primary output changed to:" << (screen ? screen->name() : QStringLiteral("null"));
+    if (m_initialized && (m_mode == PrimaryOnly || m_mode == FollowActive)) {
         scheduleTopologyUpdate();
     }
 }

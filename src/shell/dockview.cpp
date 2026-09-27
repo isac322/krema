@@ -42,9 +42,20 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
                           DockPlatform::Edge edge,
                           DockPlatform::VisibilityMode visibilityMode)
 {
+    // Capture the screen MultiDockManager assigned before setupWindow():
+    // LayerShellQt < 6.6 creates the platform window in Window::get(), and
+    // QtWayland then re-derives screen() from the still-empty geometry.
+    QScreen *targetScreen = screen();
+
     // Configure the platform layer (LayerShellQt on Wayland)
     m_platform->setupWindow(this);
     m_platform->setEdge(edge);
+    // Pin the layer surface to this dock's screen before show():
+    // QWindow::setScreen alone does not bind the layer surface on QtWayland,
+    // so the platform pins it (LayerShellQt::Window screen, or the Qt screen
+    // and position on LayerShellQt < 6.6). Layer-shell surfaces bind their
+    // wl_output when the surface is created on show().
+    m_platform->setScreen(targetScreen);
 
     // Store edge for QML access (must be set before QML loading)
     m_edge = edge;
@@ -169,11 +180,6 @@ int DockView::panelBarHeight() const
     return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
 }
 
-bool DockView::isStyleAvailable(int styleType) const
-{
-    return krema::isStyleAvailable(static_cast<BackgroundStyleType>(styleType));
-}
-
 DockPlatform *DockView::platform() const
 {
     return m_platform.get();
@@ -235,6 +241,14 @@ void DockView::handleScreenChanged(QScreen *newScreen)
 
     // Skip recovery if geometry is invalid (placeholder screen during DPMS off)
     if (geo.width() <= 0 || geo.height() <= 0) {
+        return;
+    }
+
+    // Not created yet: this is the screen assignment made while the platform
+    // window is being created, and the surface will be created on newScreen.
+    // hide()+show() here would re-enter QWindow::create() and leak a second
+    // platform window whose QWindow pointer dangles after this view is destroyed.
+    if (!handle()) {
         return;
     }
 

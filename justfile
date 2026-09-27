@@ -45,6 +45,11 @@ docker-runtime-publish target="all":
 docker-runtime-smoke target package_dir:
     tests/docker/run-smoke.sh {{target}} {{package_dir}}
 
+
+# Clean-base regression gate: .deb Depends must cover every QML import in src/qml
+docker-deb-qml-gate target package_dir:
+    tests/docker/verify-deb-qml.sh {{target}} {{package_dir}}
+
 # Install .desktop file for development (KWin Wayland protocol access)
 dev-desktop:
     @mkdir -p ~/.local/share/applications

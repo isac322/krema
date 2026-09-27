@@ -2,7 +2,7 @@
 
 ## Features
 - settings-appearance: Icon size, icon scale, zoom factor, spacing, opacity, background style
-- settings-behavior: Visibility mode, dock position
+- settings-behavior: Visibility mode, dock position, monitor mode
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
@@ -19,6 +19,8 @@
 - src/shell/settingswindow.cpp
 - src/shell/dockshell.cpp
 - src/shell/dockview.cpp
+- src/shell/multidockmanager.h
+- src/shell/multidockmanager.cpp
 - src/models/taskiconprovider.h
 - src/models/taskiconprovider.cpp
 - src/config/krema.kcfg
@@ -36,6 +38,8 @@
 4. `list_windows` — verify krema window count increased
 5. `find_ui_elements query="Icon size" app_name="krema"` — verify AT-SPI access
 6. `screenshot` — verify settings dialog
+7. Right-click the dock again → "Settings..." while the dialog is open
+8. `list_windows` — verify there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
 
 **Expected:**
 - Settings dialog opens as separate window ("설정 — Krema" title)
@@ -43,6 +47,7 @@
 - Appearance page shown by default
 - FormCard layout with spinboxes, sliders, comboboxes
 - All controls accessible via AT-SPI (labels, sliders with Increase/Decrease)
+- Choosing "Settings..." again raises the same window; the dock stays shown while it is open
 
 **Verified in PoC:** Settings opened. Found "Icon size" label and
 "Zoom factor" slider with Increase/Decrease actions in AT-SPI.
@@ -158,3 +163,48 @@
 - Color saved to KConfig
 
 **Verification:** screenshot (tint color changed)
+
+---
+
+## TC SET-008: Change Monitor Mode From Settings
+
+**Precondition:** Two outputs, monitor mode "Primary monitor only", settings dialog open, Behavior page. Visibility mode "Auto hide".
+**Steps:**
+1. Select "All monitors" in "Monitor mode"
+2. Wait 500ms
+3. `list_windows` — verify Krema is still running and one dock window exists per output
+4. `screenshot` — verify the settings dialog is still open and docks on both outputs are shown
+5. Right-click the dock on the second output → "Settings..."
+6. `list_windows` — verify there is still exactly one settings window
+7. Select "Primary monitor only", then close the settings dialog
+8. Move the mouse away from the dock and wait for the hide delay
+
+**Expected:**
+- Krema does not crash (issue #16); the mode is applied immediately
+- The same settings dialog stays open across the change
+- Docks created by the change stay visible while the dialog is open and auto-hide after it closes
+- All docks open the same settings dialog
+- Each output shows its own dock (not two docks stacked on the primary output)
+- Reopening Settings after switching back to "Primary monitor only" works
+- In "Follow active screen" mode with the mouse trigger, opening Settings does not move the dock to another screen
+- The Toggle Dock / Focus Dock / Meta+N shortcuts act on the currently shown dock, not the hidden primary-screen dock
+
+**Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
+
+**Verification:** list_windows (window counts), screenshot (dialog + docks)
+
+---
+
+## TC SET-009: Quit While Settings Is Open
+
+**Precondition:** Dock visible. Run on Debian 13 or Ubuntu 25.04 as well (Qt 6.8, KF 6.13).
+**Steps:**
+1. Right-click the dock → "Settings...", then immediately right-click the dock → "Quit"
+2. Start Krema again, open "Settings...", wait until the window is drawn, then right-click the dock → "Quit"
+
+**Expected:**
+- Krema exits normally both times (exit status 0, no crash report)
+- No Settings window remains after exit
+
+**Verification:** process exit status, `list_windows`
+

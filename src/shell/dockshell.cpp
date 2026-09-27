@@ -24,16 +24,18 @@ DockShell::DockShell(KremaSettings *globalSettings,
                      ScreenSettings *screenSettings,
                      DockModel *model,
                      NotificationTracker *tracker,
+                     SettingsWindow *settingsWindow,
                      std::unique_ptr<DockPlatform> platform,
                      QObject *parent)
     : QObject(parent)
     , m_settings(globalSettings)
     , m_screenSettings(screenSettings)
     , m_model(model)
+    , m_settingsWindow(settingsWindow)
     , m_view(std::make_unique<DockView>(std::move(platform), globalSettings))
     , m_actions(std::make_unique<DockActions>(model, this))
     , m_contextMenu(std::make_unique<DockContextMenu>(model, m_actions.get(), tracker, this))
-    , m_previewController(new PreviewController(model, m_view.get(), globalSettings, m_view.get()))
+    , m_previewController(std::make_unique<PreviewController>(model, m_view.get(), globalSettings))
 {
 }
 
@@ -51,7 +53,7 @@ void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode
     ctx->setContextProperty(QStringLiteral("DockView"), m_view.get());
     ctx->setContextProperty(QStringLiteral("DockActions"), m_actions.get());
     ctx->setContextProperty(QStringLiteral("DockContextMenu"), m_contextMenu.get());
-    ctx->setContextProperty(QStringLiteral("PreviewController"), m_previewController);
+    ctx->setContextProperty(QStringLiteral("PreviewController"), m_previewController.get());
 
     // Initialize dock view (creates DockVisibility, registers it, loads QML, shows window)
     m_view->initialize(m_model->tasksModel(), m_model->virtualDesktopInfo(), m_model->activityInfo(), edge, visibilityMode);
@@ -68,9 +70,6 @@ void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode
     m_view->visibilityController()->setShowDelay(m_settings->showDelay());
     m_view->visibilityController()->setHideDelay(m_settings->hideDelay());
     m_view->visibilityController()->setDodgeActiveOnly(m_settings->dodgeActiveOnly());
-
-    // Settings window (pass DockView for QML context property access, e.g. isStyleAvailable)
-    m_settingsWindow = std::make_unique<SettingsWindow>(m_settings, m_view.get(), this);
 
     // Connect all signals
     connectSettingsSignals();
@@ -94,7 +93,7 @@ DockContextMenu *DockShell::contextMenu() const
 
 PreviewController *DockShell::previewController() const
 {
-    return m_previewController;
+    return m_previewController.get();
 }
 
 void DockShell::focusDock()
@@ -193,8 +192,14 @@ void DockShell::connectMenuSignals()
         m_settingsWindow->show(QStringLiteral("about"));
     });
 
-    // Settings window interaction lock: dock stays visible while settings is open
-    connect(m_settingsWindow.get(), &SettingsWindow::visibleChanged, m_view->visibilityController(), &DockVisibilityController::setInteracting);
+    // Settings window interaction lock: dock stays visible while settings is
+    // open. A shell created while the dialog is already open (e.g. rebuilt by a
+    // Monitor mode change made in that dialog) must take the lock now; the
+    // matching release arrives with visibleChanged(false).
+    connect(m_settingsWindow, &SettingsWindow::visibleChanged, m_view->visibilityController(), &DockVisibilityController::setInteracting);
+    if (m_settingsWindow->isVisible()) {
+        m_view->visibilityController()->setInteracting(true);
+    }
 }
 
 } // namespace krema

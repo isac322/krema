@@ -76,9 +76,6 @@ public:
     /// Set per-screen settings overlay for size calculations.
     void setScreenSettings(ScreenSettings *screenSettings);
 
-    /// Check if a style is available on this system (for settings UI).
-    Q_INVOKABLE bool isStyleAvailable(int styleType) const;
-
     // --- Platform access ---
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;

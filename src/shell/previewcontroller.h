@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include <QModelIndex>
 #include <QObject>
 #include <QTimer>
@@ -141,7 +143,7 @@ private:
     DockModel *m_model;
     DockView *m_dockView;
     KremaSettings *m_settings;
-    QQuickView *m_previewView = nullptr;
+    std::unique_ptr<QQuickView> m_previewView;
 
     bool m_visible = false;
     bool m_previewHovered = false;

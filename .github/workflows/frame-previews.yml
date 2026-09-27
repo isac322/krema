@@ -86,8 +86,15 @@ jobs:
           expected = (f"https://raw.githubusercontent.com/"
                       f"{os.environ['REPOSITORY']}/ci-media/"
                       f"pr-{os.environ['PR']}/{os.environ['SOURCE_RUN_ID']}/")
-          urls = re.findall(r'https?://[^\s)>]+', body)
-          foreign = [url for url in urls if not url.startswith(expected)]
+          # http(s) in any case, scheme-relative //host links, and the www.
+          # autolinks GitHub renders without a scheme. Other schemes such as
+          # file:/// in failure text are not links GitHub renders. Each allowed
+          # link must name one of the GIFs validated above.
+          links = re.findall(
+              r'(?i)(?:\bhttps?:|(?<![:/\w]))//[^\s)>"\'\]]+|\bwww\.[^\s)>"\'\]]+',
+              body)
+          allowed = {expected + gif.name for gif in gifs}
+          foreign = [link for link in links if link not in allowed]
           if foreign:
               raise SystemExit(f'preview comment has unexpected URLs: {foreign}')
           with output.open('a') as handle:
@@ -107,16 +114,28 @@ jobs:
           shopt -s nullglob
           previews=("$RUNNER_TEMP/frames/previews"/*.gif)
 
+          remote="https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git"
+
+          # Returns 0 on success, 1 when ci-media moved underneath us (retry),
+          # and 2 when the branch state cannot be determined (do not retry, and
+          # never fall back to creating the branch: that would replace every
+          # other pull request's previews with a single parentless commit).
           publish_previews() {
             local work="$RUNNER_TEMP/ci-media"
             rm -rf "$work"
-            local base
-            if git clone --depth 1 --branch ci-media \
-                 "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
-                 "$work" 2>/dev/null; then
-              base=$(git -C "$work" rev-parse HEAD)
+            local status=0 lease
+            git ls-remote --exit-code --heads "$remote" ci-media >/dev/null || status=$?
+            if ((status == 0)); then
+              git clone -q --depth 1 --branch ci-media "$remote" "$work" || return 1
+              lease="--force-with-lease=ci-media:$(git -C "$work" rev-parse HEAD)"
+            elif ((status == 2)); then
+              # The branch does not exist. The empty expected value makes the
+              # push fail if another run created it in the meantime.
+              mkdir -p "$work"
+              lease="--force-with-lease=ci-media:"
             else
-              rm -rf "$work"; mkdir -p "$work"; base=""
+              echo "git ls-remote failed with exit $status; not publishing" >&2
+              return 2
             fi
             rm -rf "${work:?}/.git"
             git init -q "$work"
@@ -127,24 +146,24 @@ jobs:
             git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git -C "$work" add -A
             git -C "$work" commit -q -m "ci: preview animations for pr-$PR run $SOURCE_RUN_ID"
-            local lease=("--force")
-            if [[ -n "$base" ]]; then
-              lease=("--force-with-lease=ci-media:$base")
-            fi
-            git -C "$work" push -q "${lease[@]}" \
-              "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git" \
-              HEAD:ci-media
+            git -C "$work" push -q "$lease" "$remote" HEAD:ci-media || return 1
           }
 
           for attempt in 1 2 3 4 5; do
-            if publish_previews; then
+            status=0
+            publish_previews || status=$?
+            if ((status == 0)); then
               echo "published=true" >> "$GITHUB_OUTPUT"
               exit 0
+            fi
+            if ((status == 2)); then
+              exit 1
             fi
             echo "ci-media moved under us; retry $attempt"
             sleep $((attempt * 5))
           done
           echo "could not publish previews"
+          exit 1
 
       - name: Comment on the pull request
         if: steps.previews.outputs.published == 'true'

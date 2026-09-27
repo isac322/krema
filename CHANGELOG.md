@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - "All monitors" and "Follow active screen" modes now place each dock on its own screen instead of stacking every dock on the primary screen, and switching back no longer crashes Krema the next time a window (such as Settings) opens
 - Switching monitor mode no longer leaves an invisible window preview surface behind for each dock it replaced
 - "Toggle Dock", "Focus Dock" and the Meta+number shortcuts now act on the visible dock in "Follow active screen" mode instead of the hidden primary-screen dock
-- Build compatibility with LayerShellQt < 6.6 (Debian 13, Ubuntu 25.04), which lacks `Window::setScreen`; on those versions the dock and preview surfaces are still pinned to the Plasma primary output through the Qt window screen
+- Krema builds again against LayerShellQt < 6.6 (Debian 13, Ubuntu 25.04), which lacks `Window::setScreen`, and on those versions the dock and its window previews now appear on their intended output (the Plasma primary output, or each screen in "All monitors" mode) instead of all landing on the first output
 
 ### Added
 

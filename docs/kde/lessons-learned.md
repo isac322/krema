@@ -195,3 +195,20 @@ Each view is also positioned on its target screen before creation, and `handleSc
 - Windows that share another view's QML engine must be destroyed before that view.
 - `QWindow::setScreen()` alone does not pin a not-yet-created top-level window: move it into the screen's geometry too. Never recreate a surface (`hide()`/`show()`) from a `screenChanged` emitted during creation.
 - Regression: `tests/integration/test_settings_lifecycle.cpp` (runs under `kwin_wayland --virtual`, see `tests/run-with-kwin.sh`).
+
+## 9. LayerShellQt < 6.6: no `Window::setScreen`, and `Window::get()` already creates the platform window (2026-09)
+
+**Symptom:** After #23, master no longer compiled on Debian 13 / Ubuntu 25.04 (LayerShellQt 6.3.4: `'class LayerShellQt::Window' has no member named 'setScreen'`). A compile-only fix still put every dock and preview on the first output (WAYLAND_DEBUG: `get_layer_surface(..., wl_output#20, 2, "krema-dock")`, where `wl_output#20` is Virtual-0, while Virtual-1 was the Plasma primary; "All monitors" stacked both docks on Virtual-0).
+
+**Verified API history (layer-shell-qt tags):** `Window::setScreen`/`screen` since v6.6.0 (commit 430ad36); `setDesiredSize` since 6.4; `ScreenConfiguration` deprecated in 6.6. In 6.3–6.5 `QWaylandLayerSurface` binds `QWindow::screen()` (ScreenFromQWindow, the default) when the surface is created on show, and `Window::Window()` calls `window->create()`.
+
+**Root causes (compat path, `KREMA_COMPAT_NO_LAYERSHELL_SCREEN`):**
+1. `Window::get()` creates the platform window, and QtWayland re-derives `QWindow::screen()` from the still-empty geometry, so `DockView` read back the primary screen before pinning it.
+2. On a created QtWayland toplevel, `QWindow::setPosition()` runs `screenForGeometry()` from the stale origin and moved the preview back to the old screen (QtWayland pins a created toplevel to its screen origin anyway, `fixedToplevelPositions`).
+3. The `setDesiredSize` fallback `resize(QSize(0, h))` moved the window centre to x-1, onto the left neighbour. LayerShellQt 6.3 already sends 0 for a double-anchored axis.
+
+**Fix:** capture the assigned screen before `setupWindow()`, set `QWindow::screen` plus `ScreenFromQWindow`, position only windows without a platform window, and keep the current extent on zero axes in the resize fallback.
+
+**Key lessons:**
+- A compile-only compat branch is not a fix: check the wire-level `get_layer_surface` output against the old library too.
+- `-D_HAVE_LAYERSHELLQT_SET_SCREEN=OFF -D_HAVE_LAYERSHELLQT_DESIRED_SIZE=OFF` exercises the compat code on a new distro, but only a real old LayerShellQt (Debian 13) reproduces the `create()` in `Window::get()`.

@@ -987,14 +987,27 @@ Item {
         }
     }
 
+    // Vertical docks open the tooltip beside the panel, inside a fixed surface
+    // reserve. Publish that reserve (gap + max tooltip width) so DockView sizes
+    // the surface to fit; the input region stays on the panel.
+    Binding {
+        target: DockView
+        property: "sideTooltipReserve"
+        value: Math.ceil(Kirigami.Units.largeSpacing + tooltipItem.maxSideWidth)
+    }
+
     Rectangle {
         id: tooltipItem
+        objectName: "dockTooltip"
         Accessible.ignored: true
         property bool show: false
         visible: show && root.hoveredName.length > 0
 
         // Reset when hover changes
         onVisibleChanged: if (!visible) show = false
+
+        // Longer names elide on vertical docks instead of clipping at the surface edge
+        readonly property real maxSideWidth: Kirigami.Units.gridUnit * 15
 
         // Position on the opposite side of the dock edge
         x: {
@@ -1021,7 +1034,7 @@ Item {
         Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip
         Kirigami.Theme.inherit: false
 
-        width: tooltipLabel.implicitWidth + Kirigami.Units.largeSpacing * 2
+        width: tooltipLabel.width + Kirigami.Units.largeSpacing * 2
         height: tooltipLabel.implicitHeight + Kirigami.Units.largeSpacing
         radius: Kirigami.Units.smallSpacing
         color: Kirigami.Theme.backgroundColor
@@ -1030,6 +1043,10 @@ Item {
         QQC2.Label {
             id: tooltipLabel
             anchors.centerIn: parent
+            width: DockView.isVertical
+                ? Math.min(implicitWidth, tooltipItem.maxSideWidth - Kirigami.Units.largeSpacing * 2)
+                : implicitWidth
+            elide: Text.ElideRight
             text: root.hoveredName
             Accessible.ignored: true
         }

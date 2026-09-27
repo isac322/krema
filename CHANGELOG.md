@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed tooltips on left and right docks being cut off after a few characters; they now show the full app name, and very long names end with an ellipsis
+
 ## [0.8.0] - 2026-09-28
 
 ### Added

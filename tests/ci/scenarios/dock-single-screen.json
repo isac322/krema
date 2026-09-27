@@ -1,0 +1,26 @@
+{
+  "description": "On the single virtual output, one visible dock surface contains the four pinned launchers.",
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-018",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "This is an invariant in the single-output container: I see one dock window on its only primary output. A second virtual output would be required to make primary-only placement causal.",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 108,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-018",
+      "kind": "count",
+      "type": "DockItem",
+      "comment": "This is an invariant in the single-output container: I see only the four launchers from its one dock. A second virtual output would be required to test whether another dock is incorrectly created.",
+      "frame": 10,
+      "value": 4,
+      "invariant": true
+    }
+  ]
+}

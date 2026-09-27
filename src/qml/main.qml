@@ -222,7 +222,11 @@ Item {
             break
         case Qt.Key_Menu:
             if (hoveredIndex >= 0) {
-                DockContextMenu.showForTask(hoveredIndex)
+                let item = dockRepeater.itemAt(hoveredIndex)
+                if (item) {
+                    let globalPos = item.mapToGlobal(item.width / 2, item.height / 2)
+                    DockContextMenu.showForTask(hoveredIndex, globalPos)
+                }
             }
             event.accepted = true
             break
@@ -493,7 +497,8 @@ Item {
             } else if (mouse.button === Qt.MiddleButton) {
                 DockActions.newInstance(root.hoveredIndex)
             } else if (mouse.button === Qt.RightButton) {
-                DockContextMenu.showForTask(root.hoveredIndex)
+                let globalPos = dockMouseArea.mapToGlobal(mouse.x, mouse.y)
+                DockContextMenu.showForTask(root.hoveredIndex, globalPos)
             }
         }
 
@@ -780,6 +785,9 @@ Item {
                 DockItem {
                     // index and model are injected by Repeater into
                     // DockItem's own required properties
+                    // Stable handle for CI frame scenarios (tests/ci/).
+                    objectName: "dockItem" + index
+
 
                     z: (root.hoveredIndex === index) ? 1 : 0
                     isKeyboardFocused: root.keyboardNavigating && root.hoveredIndex === index

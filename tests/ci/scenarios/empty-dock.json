@@ -1,0 +1,55 @@
+{
+  "description": "An empty PinnedLaunchers precondition leaves the dock visibly empty while the panel remains present and stable.",
+  "config": {
+    "General/PinnedLaunchers": ""
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-025",
+      "kind": "count",
+      "type": "DockItem",
+      "comment": "The empty PinnedLaunchers config is the precondition; I see no launcher items in the dock.",
+      "frame": 1,
+      "value": 0,
+      "invariant": true
+    },
+    {
+      "qa": "QA-ITEM-025",
+      "kind": "stable",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "The empty PinnedLaunchers config is the precondition; I see the empty panel keep a stable usable width.",
+      "invariant": true
+    },
+    {
+      "qa": "QA-ITEM-025",
+      "kind": "stable",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "The empty PinnedLaunchers config is the precondition; I see the empty panel keep a stable height.",
+      "invariant": true
+    },
+    {
+      "qa": "QA-ITEM-025",
+      "kind": "equals",
+      "item": "0/0/2",
+      "prop": "visible",
+      "comment": "The empty PinnedLaunchers config is the precondition; I still see the panel body instead of a crash or broken surface.",
+      "frame": 30,
+      "value": true,
+      "invariant": true
+    },
+    {
+      "qa": "QA-ITEM-025",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "The empty PinnedLaunchers config is the precondition; I see the dock window remain visible and correctly sized with no items.",
+      "frame": 30,
+      "visible": true,
+      "w": 1024,
+      "h": 108,
+      "invariant": true
+    }
+  ]
+}

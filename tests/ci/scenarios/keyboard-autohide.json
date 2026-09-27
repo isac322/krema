@@ -1,0 +1,57 @@
+{
+  "description": "The AutoHide dock appears when focus-dock enters keyboard navigation and remains visible through the end of the capture.",
+  "config": {
+    "General/VisibilityMode": 1
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-014",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "The panel hidden by AutoHide appears smoothly from 0 to 1 when entering keyboard navigation.",
+      "from": 0.0,
+      "to": 1.0,
+      "start_after": 5,
+      "settled_by": 45,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-014",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "Keyboard navigation becomes active after entering focus-dock even in AutoHide mode.",
+      "frame": 35,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-014",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "The exact QTimer delay frame is not fixed; verify only that the panel remains fully visible at the end of the ample capture.",
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-014",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "The first item keyboard focus also remains through the end instead of disappearing with AutoHide.",
+      "frame": 130,
+      "value": true
+    }
+  ]
+}

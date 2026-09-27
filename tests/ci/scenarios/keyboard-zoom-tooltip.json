@@ -1,0 +1,72 @@
+{
+  "description": "Keyboard focus applies the same parabolic zoom as the mouse, but the text tooltip does not appear even after a long wait.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    },
+    {
+      "frame": 35,
+      "type": "key",
+      "key": "Right"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-012",
+      "kind": "animates",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "On keyboard entry, the first icon zooms smoothly from 1.0 to the default MaxZoomFactor of 1.6.",
+      "from": 1.0,
+      "to": 1.6,
+      "start_after": 5,
+      "settled_by": 25,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-012",
+      "kind": "ordered",
+      "comment": "Parabolic falloff reduces neighbor icon scales with distance from the keyboard focus center.",
+      "frame": 25,
+      "items": [
+        "dockItem0",
+        "dockItem1",
+        "dockItem2"
+      ],
+      "prop": "currentScale",
+      "order": "descending"
+    },
+    {
+      "qa": "QA-KEY-012",
+      "kind": "settles",
+      "item": "dockItem1",
+      "prop": "currentScale",
+      "comment": "After moving with Right, the zoom center also moves to the second icon at scale 1.6.",
+      "frame": 55,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-012",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "show",
+      "comment": "The unnamed tooltip Rectangle QML child-index path depends on the structure, but show remains false in keyboard mode.",
+      "frame": 130,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-012",
+      "kind": "equals",
+      "item": "0/0/5",
+      "prop": "visible",
+      "comment": "The text tooltip background does not appear even when keyboard focus is held for a long time.",
+      "frame": 130,
+      "value": false
+    }
+  ]
+}

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - On Debian 13 and Ubuntu 25.04 (kirigami-addons 1.7), choosing "Settings..." again now brings the open Settings window forward instead of opening another one, and the dock stays visible while Settings is open (#24)
 - Krema builds again against LayerShellQt < 6.6 (Debian 13, Ubuntu 25.04), which lacks `Window::setScreen`, and on those versions the dock and its window previews now appear on their intended output (the Plasma primary output, or each screen in "All monitors" mode) instead of all landing on the first output
 - Krema no longer crashes on Debian 13 and Ubuntu 25.04 when you quit it while the Settings window is still opening or open (#27)
+- Wayland dock context menus now map as transient popups of the layer-shell dock surface and open at the actual pointer or keyboard-focused item position
 
 ### Added
 
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS build targets for Fedora 44 and openSUSE Leap 16.0
 - Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
 - Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
+- Deterministic unprivileged KWin/Wayland UI frame regression tests with toleranced endpoint checks, bounded transition divergence, and inline review previews
 
 ## [0.7.0] - 2026-03-28
 

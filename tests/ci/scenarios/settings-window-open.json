@@ -1,0 +1,56 @@
+{
+  "description": "The visibly mapped dock context menu opens the real settings window through its Settings action.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 10,
+      "type": "click",
+      "item": "dockItem0",
+      "button": "right",
+      "native": true,
+      "wait_for_menu": true
+    },
+    {
+      "frame": 20,
+      "type": "menuitem",
+      "name": "Settings..."
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-001",
+      "kind": "menu",
+      "comment": "The mapped right-click menu shows enabled entries for the settings window and information page in the actual order.",
+      "frame": 15,
+      "entries": [
+        "KWrite",
+        "---",
+        "Unpin from Dock",
+        "New Instance",
+        "---",
+        "Settings...",
+        "---",
+        "About Krema",
+        "Quit"
+      ],
+      "enabled": {
+        "KWrite": false,
+        "Settings...": true,
+        "About Krema": true
+      },
+      "mapped": true
+    },
+    {
+      "qa": "QA-SET-001",
+      "kind": "window",
+      "comment": "Clicking Settings through the mapped QMenu opens the real configuration window.",
+      "frame": 40,
+      "key": "kremaSettingsWindow",
+      "visible": true
+    }
+  ]
+}

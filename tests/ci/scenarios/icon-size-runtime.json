@@ -1,0 +1,88 @@
+{
+  "description": "Changing IconSize from 48px to 96px at runtime immediately enlarges the icon cells, while the panel and item layout readjust smoothly.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "Immediately before the setting action, the default IconSize of 48px is used.",
+      "frame": 4,
+      "value": 48
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "The runtime setting change takes effect in the next frame, with IconSize 96px.",
+      "frame": 6,
+      "value": 96
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "w",
+      "comment": "The first item width also grows to 96px in the frame after the setting change.",
+      "frame": 6,
+      "value": 96
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "h",
+      "comment": "The first item height also grows to 104px: the 96px icon plus 8px for the indicator dot.",
+      "frame": 6,
+      "value": 104
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "The unnamed panel capture path width grows smoothly from the default 220px to the new content width of 412px.",
+      "from": 220,
+      "to": 412,
+      "start_after": 5,
+      "settled_by": 30,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.1
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "animates",
+      "item": "dockItem1",
+      "prop": "x",
+      "comment": "The second item also moves smoothly from x=52 to x=100 to match the new first-item width.",
+      "from": 52,
+      "to": 100,
+      "start_after": 5,
+      "settled_by": 30,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "monotonic": "up",
+      "tolerance": 0.1
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "The horizontal dock panel height immediately becomes 112px: IconSize 96px plus 16px of top and bottom padding.",
+      "frame": 6,
+      "value": 112
+    }
+  ]
+}

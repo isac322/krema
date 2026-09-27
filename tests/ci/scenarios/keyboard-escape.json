@@ -1,0 +1,64 @@
+{
+  "description": "Pressing Esc during keyboard navigation immediately clears navigation mode and the item focus ring, and restores the original scale.",
+  "actions": [
+    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
+    {"frame": 30, "type": "key", "key": "Esc"}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "After I invoke focus-dock, keyboard navigation is active before I press Escape.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "After I invoke focus-dock, the first launcher has keyboard focus before I press Escape.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "After Esc, the root keyboard navigation state turns off immediately.",
+      "frame": 35,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "After Esc, the first item keyboard focus is cleared.",
+      "frame": 35,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "equals",
+      "item": "0/0/2/1/0/0",
+      "prop": "visible",
+      "comment": "After Esc, the first DockItem focus-ring child path is not visible.",
+      "frame": 35,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-007",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "After keyboard mode ends, the scale returns to the default 1.0.",
+      "frame": 50,
+      "value": 1.0,
+      "tolerance": 0.01
+    }
+  ]
+}

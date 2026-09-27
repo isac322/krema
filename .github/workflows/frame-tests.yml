@@ -1,0 +1,87 @@
+name: UI frame tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/ci/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/frame-tests.yml"
+      - ".github/workflows/frame-previews.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: frame-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frame-tests:
+    name: Deterministic UI frame capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare artifact directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/frames"
+          touch "$RUNNER_TEMP/frames/.keep"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The image carries kwin_wayland plus krema's build dependencies, so the
+      # runner needs nothing beyond an unprivileged container. No /dev/dri, no
+      # --privileged, no --cap-add: the Dockerfile strips kwin_wayland's
+      # cap_sys_nice file capability, which is what would otherwise make
+      # execve() fail with EPERM inside a container.
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: tests/ci
+          file: tests/ci/Dockerfile
+          tags: krema-ui-ci:local
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run frame scenarios
+        run: |
+          docker run --rm \
+            -e KREMA_VIDEO=1 \
+            -e KREMA_PREVIEW_BASE_URL="https://raw.githubusercontent.com/${{ github.repository }}/ci-media/pr-${{ github.event.pull_request.number || 0 }}/${{ github.run_id }}" \
+            -v "$PWD:/src:ro" \
+            -v "$RUNNER_TEMP/frames:/out" \
+            krema-ui-ci:local \
+            bash /src/tests/ci/run-frame-tests.sh
+
+      - name: Validate CI tools and QA coverage
+        if: always()
+        run: |
+          python3 -m unittest tests/ci/test_ci_tools.py
+          python3 tests/ci/qa_coverage.py --check
+
+      # Artifacts download as a zip and cannot be played in the browser, so the
+      # numbers a reviewer needs go on the job page itself. The videos are for
+      # when the numbers are not enough.
+      - name: Job summary
+        if: always()
+        run: python3 tests/ci/summarize.py --src . --run-dir "$RUNNER_TEMP/frames" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload frame artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frame-captures
+          path: ${{ runner.temp }}/frames
+          include-hidden-files: true
+          retention-days: 14

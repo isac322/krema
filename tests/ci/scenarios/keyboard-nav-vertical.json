@@ -1,0 +1,41 @@
+{
+  "description": "On a vertical Left Edge dock, Down moves keyboard focus and the zoom center to the next item, and Up moves them to the previous item.",
+  "config": {
+    "General/Edge": 2
+  },
+  "actions": [
+    {"frame": 5, "type": "shortcut", "name": "focus-dock"},
+    {"frame": 25, "type": "key", "key": "Down"},
+    {"frame": 50, "type": "key", "key": "Up"}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-003",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "On a vertical Left Edge dock, Down moves focus to the second item.",
+      "frame": 35,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-003",
+      "kind": "settles",
+      "item": "dockItem1",
+      "prop": "currentScale",
+      "comment": "The second item selected with Down zooms to the default MaxZoomFactor of 1.6.",
+      "frame": 45,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-003",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Up moves focus back from the second item to the first.",
+      "frame": 60,
+      "value": true
+    }
+  ]
+}

@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QCursor>
 #include <QMenu>
+#include <QWindow>
 
 namespace krema
 {
@@ -27,7 +28,12 @@ DockContextMenu::DockContextMenu(DockModel *model, DockActions *actions, Notific
 {
 }
 
-void DockContextMenu::showForTask(int index)
+void DockContextMenu::setParentWindow(QWindow *window)
+{
+    m_parentWindow = window;
+}
+
+void DockContextMenu::showForTask(int index, const QPointF &globalPosition)
 {
     auto *tasksModel = m_model->tasksModel();
     const QModelIndex idx = tasksModel->index(index, 0);
@@ -105,7 +111,19 @@ void DockContextMenu::showForTask(int index)
         Q_EMIT visibleChanged(false);
     });
 
-    menu->popup(QCursor::pos());
+    if (m_parentWindow) {
+        // LayerShellQt attaches an xdg-popup to the layer surface when the
+        // native popup handle already has the DockView as transient parent.
+        // The relationship must exist before QMenu asks Wayland to map it.
+        menu->setScreen(m_parentWindow->screen());
+        menu->setAttribute(Qt::WA_NativeWindow);
+        menu->winId();
+        if (QWindow *handle = menu->windowHandle()) {
+            handle->setTransientParent(m_parentWindow);
+        }
+    }
+
+    menu->popup(globalPosition.toPoint());
 }
 
 } // namespace krema

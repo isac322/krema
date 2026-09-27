@@ -157,6 +157,7 @@ void SettingsWindow::ensureEngine()
 void SettingsWindow::trackConfigWindow(QQuickWindow *win, bool deleteOnClose)
 {
     m_configWindow = win;
+    win->setObjectName(QStringLiteral("kremaSettingsWindow"));
     m_openedWindows.removeAll(nullptr);
     m_openedWindows.append(win);
     win->setIcon(QGuiApplication::windowIcon());

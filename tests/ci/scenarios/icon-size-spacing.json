@@ -1,0 +1,82 @@
+{
+  "description": "Increasing IconSize from 48px to 96px and IconSpacing from 4px to 16px during capture enlarges the icons, gaps, and panel.",
+  "actions": [
+    {
+      "frame": 20,
+      "type": "setting",
+      "name": "iconSize",
+      "value": 96
+    },
+    {
+      "frame": 20,
+      "type": "setting",
+      "name": "iconSpacing",
+      "value": 16
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "Before I change the setting, the first icon uses the default 48px size.",
+      "frame": 15,
+      "value": 48
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "0/0/2/1",
+      "prop": "spacing",
+      "comment": "Before I change the setting, the gaps between icons use the default 4px spacing.",
+      "frame": 15,
+      "value": 4
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "Before I change the settings, the four default-size icons fit in a 220px-wide panel.",
+      "frame": 15,
+      "value": 220
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "iconSize",
+      "comment": "After I raise IconSize, the first icon grows to 96px without restarting the dock.",
+      "frame": 80,
+      "value": 96
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "0/0/2/1",
+      "prop": "spacing",
+      "comment": "After I raise IconSpacing, the gaps between icons grow to 16px.",
+      "frame": 80,
+      "value": 16
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "dockItem1",
+      "prop": "x",
+      "comment": "The second icon moves to x=112px, visibly combining the 96px icon width with the new 16px gap.",
+      "frame": 80,
+      "value": 112
+    },
+    {
+      "qa": "QA-ITEM-019",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "After the layout settles, the panel visibly widens from 220px to 448px for four 96px icons, three 16px gaps, and 16px padding.",
+      "frame": 80,
+      "value": 448
+    }
+  ]
+}

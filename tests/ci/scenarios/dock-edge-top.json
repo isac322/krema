@@ -1,0 +1,126 @@
+{
+  "description": "The dock starts on the default bottom edge and moves to the top during capture while keeping a horizontal, left-to-right item flow.",
+  "actions": [
+    {"frame": 20, "type": "setting", "name": "edge", "value": 0}
+  ],
+  "assertions": [
+    {
+      "qa": "QA-VIS-002",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "Before I move the dock, the default bottom dock uses a 1024x108 horizontal window.",
+      "frame": 15,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "Before I move the dock, I see the 220px bottom panel centered at x=402 in its window.",
+      "frame": 15,
+      "value": 402,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "Before I move the dock, I see the default bottom panel at y=36.",
+      "frame": 15,
+      "value": 36,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "Before I move the dock, I see a 220px-wide horizontal panel.",
+      "frame": 15,
+      "value": 220,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "Before I move the dock, I see a 64px-high horizontal panel.",
+      "frame": 15,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "ordered",
+      "comment": "Before I move the dock, I see its items flow from left to right along the bottom.",
+      "frame": 15,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "x",
+      "order": "ascending"
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "After I move the dock to the top, it still uses the 1024x108 horizontal window.",
+      "frame": 80,
+      "visible": true,
+      "w": 1024,
+      "h": 108
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "After I move the dock to the top, I see the 220px panel remain centered at x=402 in its window.",
+      "frame": 80,
+      "value": 402,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "After I move the dock to the top, I see the floating panel at y=8.",
+      "frame": 80,
+      "value": 8,
+      "tolerance": 0.6
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "After I move the dock to the top, I see a 220px-wide horizontal panel.",
+      "frame": 80,
+      "value": 220,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "h",
+      "comment": "After I move the dock to the top, I see a 64px-high horizontal panel.",
+      "frame": 80,
+      "value": 64,
+      "tolerance": 1
+    },
+    {
+      "qa": "QA-VIS-002",
+      "kind": "ordered",
+      "comment": "After I move the dock to the top, I see its items still flow from left to right.",
+      "frame": 80,
+      "items": ["dockItem0", "dockItem1", "dockItem2", "dockItem3"],
+      "prop": "x",
+      "order": "ascending"
+    }
+  ]
+}

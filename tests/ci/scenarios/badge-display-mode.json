@@ -1,0 +1,11 @@
+{
+  "description": "Badge display mode cannot be verified visually until the CI session can supply an unread notification.",
+  "not_verified": [
+    {
+      "qa": "QA-NOTI-016",
+      "reason": "Needs an org.freedesktop.Notifications D-Bus stub that can raise an unread count; with no notification daemon there is no badge to show or hide, so changing badgeDisplayMode paints nothing."
+    }
+  ],
+  "actions": [],
+  "assertions": []
+}

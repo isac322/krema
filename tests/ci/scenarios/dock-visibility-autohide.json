@@ -1,0 +1,125 @@
+{
+  "description": "The AutoHide dock appears with a slide and fade after entering the edge trigger, then hides in the opposite direction after the cursor leaves.",
+  "config": {
+    "General/Edge": 1,
+    "General/Floating": true,
+    "General/VisibilityMode": 1,
+    "General/ShowDelay": 0,
+    "General/HideDelay": 0
+  },
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "x": 512,
+      "y": 106
+    },
+    {
+      "frame": 70,
+      "type": "move",
+      "x": 20,
+      "y": 10
+    },
+    {
+      "frame": 72,
+      "type": "leave"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-VIS-008",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "While the cursor stays on the edge trigger, the dock becomes fully visible after the configured ShowDelay. The real-time delay itself is not measured.",
+      "frame": 65,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-VIS-008",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "The unnamed panel path (0/0/2) reaches the bottom display position y=36 when showing finishes.",
+      "frame": 65,
+      "value": 36,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-009",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "When the cursor moves outside the dock, the dock becomes fully transparent after the configured HideDelay. Hiding is controlled by a real-time timer, so verify the final capture state rather than an intermediate frame.",
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-VIS-009",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "When hiding finishes, the panel moves to y=116 outside the bottom surface. Hiding is controlled by a real-time timer, so verify the final capture state rather than an intermediate frame.",
+      "value": 116,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-024",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "The panel appears smoothly from y=116 to y=36 with a 250ms InOutQuad slide.",
+      "from": 116,
+      "to": 36,
+      "start_after": 5,
+      "settled_by": 65,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-024",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "As the dock appears, the panel opacity also increases smoothly from 0 to 1 over 250ms.",
+      "from": 0.0,
+      "to": 1.0,
+      "start_after": 5,
+      "settled_by": 65,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-VIS-024",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "y",
+      "comment": "After the cursor leaves, the panel slides off-screen from y=36 to y=116 with the same 250ms curve.",
+      "from": 36,
+      "to": 116,
+      "start_after": 70,
+      "settled_by": 180,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-VIS-024",
+      "kind": "animates",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "As the dock hides, the panel opacity also decreases smoothly from 1 to 0.",
+      "from": 1.0,
+      "to": 0.0,
+      "start_after": 70,
+      "settled_by": 180,
+      "min_intermediate_frames": 2,
+      "max_step_ratio": 0.75,
+      "tolerance": 0.001
+    }
+  ],
+  "max_frames": 180
+}

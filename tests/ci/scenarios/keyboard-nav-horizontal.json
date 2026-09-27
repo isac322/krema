@@ -1,0 +1,161 @@
+{
+  "description": "After entering keyboard navigation on a horizontal dock, Left and Right move focus and clamp at both ends; unsupported Home/End safely keep the current focus.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "shortcut",
+      "name": "focus-dock"
+    },
+    {
+      "frame": 30,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 50,
+      "type": "key",
+      "key": "Home"
+    },
+    {
+      "frame": 60,
+      "type": "key",
+      "key": "End"
+    },
+    {
+      "frame": 70,
+      "type": "key",
+      "key": "Left"
+    },
+    {
+      "frame": 85,
+      "type": "key",
+      "key": "Left"
+    },
+    {
+      "frame": 95,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 105,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 115,
+      "type": "key",
+      "key": "Right"
+    },
+    {
+      "frame": 125,
+      "type": "key",
+      "key": "Right"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-KEY-001",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "keyboardNavigating",
+      "comment": "Entering through the actual focus-dock QAction slot enables keyboard navigation; the Meta+F5 key binding itself is not verified outside a KGlobalAccel environment.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-001",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Entering keyboard navigation focuses the first launcher.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-001",
+      "kind": "equals",
+      "item": "0/0/2/1/0/0",
+      "prop": "visible",
+      "comment": "The first DockItem focus-ring child path is visible.",
+      "frame": 15,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-001",
+      "kind": "settles",
+      "item": "dockItem0",
+      "prop": "currentScale",
+      "comment": "The first keyboard-focused icon zooms to the default MaxZoomFactor of 1.6.",
+      "frame": 25,
+      "value": 1.6,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-KEY-002",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Pressing Right moves focus to the second item.",
+      "frame": 40,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-002",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "After moving with Right, the first item focus ring is cleared.",
+      "frame": 40,
+      "value": false
+    },
+    {
+      "qa": "QA-KEY-005",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "Home is unsupported in the current implementation and keeps focus on the second item without an exception. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
+      "frame": 55,
+      "value": true,
+      "invariant": true
+    },
+    {
+      "qa": "QA-KEY-005",
+      "kind": "equals",
+      "item": "dockItem1",
+      "prop": "isKeyboardFocused",
+      "comment": "End is also unsupported in the current implementation and keeps focus on the second item without an exception. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
+      "frame": 65,
+      "value": true,
+      "invariant": true
+    },
+    {
+      "qa": "QA-KEY-002",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Pressing Left returns focus from the second item to the first.",
+      "frame": 80,
+      "value": true
+    },
+    {
+      "qa": "QA-KEY-004",
+      "kind": "equals",
+      "item": "dockItem0",
+      "prop": "isKeyboardFocused",
+      "comment": "Further Left presses on the first item stay on the first item without wrap-around. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
+      "frame": 90,
+      "value": true,
+      "invariant": true
+    },
+    {
+      "qa": "QA-KEY-004",
+      "kind": "equals",
+      "item": "dockItem3",
+      "prop": "isKeyboardFocused",
+      "comment": "Further Right presses on the last item stay on the last item. Marked invariant: the assertion is that focus does not move past the end. The discriminator is QA-KEY-002 in this same run, where the same key does move focus one item.",
+      "frame": 130,
+      "value": true,
+      "invariant": true
+    }
+  ]
+}

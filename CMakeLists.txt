@@ -86,6 +86,13 @@ if(NOT _HAVE_LAYERSHELLQT_SET_SCREEN)
     add_compile_definitions(KREMA_COMPAT_NO_LAYERSHELL_SCREEN)
 endif()
 
+# CI-only instrumentation. OFF for every release/package build; CI configures
+# with -DKREMA_TEST_HOOKS=ON to link the frame-stepped capture hook into krema.
+option(KREMA_TEST_HOOKS "Build the CI frame-capture test hook into krema" OFF)
+if(KREMA_TEST_HOOKS)
+    add_subdirectory(tests/ci/frameprobe)
+endif()
+
 add_subdirectory(src)
 
 if(BUILD_TESTING)

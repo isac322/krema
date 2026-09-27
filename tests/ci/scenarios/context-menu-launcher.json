@@ -1,0 +1,103 @@
+{
+  "description": "The context menu for an unlaunched pinned launcher shows only the fixed default entries in the exact order, and right-clicking the dock background selects no item.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 10,
+      "type": "click",
+      "item": "dockItem0",
+      "button": "right",
+      "native": true,
+      "wait_for_menu": true
+    },
+    {
+      "frame": 25,
+      "type": "key",
+      "key": "Esc"
+    },
+    {
+      "frame": 35,
+      "type": "move",
+      "item": "dockItem0"
+    },
+    {
+      "frame": 40,
+      "type": "click",
+      "x": 20,
+      "y": 68,
+      "button": "right",
+      "native": true
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-CMD-001",
+      "kind": "menu",
+      "comment": "The Dolphin pinned launcher menu follows the source-defined order exactly, from the disabled header through Quit",
+      "frame": 15,
+      "entries": [
+        "KWrite",
+        "---",
+        "Unpin from Dock",
+        "New Instance",
+        "---",
+        "Settings...",
+        "---",
+        "About Krema",
+        "Quit"
+      ],
+      "enabled": {
+        "KWrite": false,
+        "Unpin from Dock": true,
+        "New Instance": true,
+        "Settings...": true,
+        "About Krema": true,
+        "Quit": true
+      },
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-004",
+      "kind": "menu",
+      "comment": "Because desktop Actions are not parsed, representative jump-list entries do not appear in the default dock menu",
+      "frame": 15,
+      "excludes": [
+        "Open in New Window",
+        "Open a New Window",
+        "New Incognito Window"
+      ],
+      "mapped": true
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "settles",
+      "item": "0/0",
+      "prop": "hoveredIndex",
+      "comment": "When I hover the first launcher before using the empty background, that launcher is selected.",
+      "frame": 37,
+      "value": 0,
+      "invariant": true
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "equals",
+      "item": "0/0",
+      "prop": "hoveredIndex",
+      "comment": "After I right-click the empty dock background, the previously hovered launcher is cleared and no item is selected.",
+      "frame": 45,
+      "value": -1
+    },
+    {
+      "qa": "QA-CMD-012",
+      "kind": "menu",
+      "comment": "Right-clicking empty dock background opens no context menu.",
+      "frame": 45,
+      "exists": false,
+      "invariant": true
+    }
+  ]
+}

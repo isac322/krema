@@ -1,0 +1,224 @@
+{
+  "description": "Enabling the shadow and changing its color, strength, and light projection parameters immediately updates shader inputs and the safety margin.",
+  "actions": [
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "shadowEnabled",
+      "value": true
+    },
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "shadowIntensity",
+      "value": 1.0
+    },
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "shadowColor",
+      "value": "#ffff0000"
+    },
+    {
+      "frame": 30,
+      "type": "setting",
+      "name": "shadowLightX",
+      "value": 300
+    },
+    {
+      "frame": 30,
+      "type": "setting",
+      "name": "shadowLightY",
+      "value": -300
+    },
+    {
+      "frame": 30,
+      "type": "setting",
+      "name": "shadowLightZ",
+      "value": 100
+    },
+    {
+      "frame": 30,
+      "type": "setting",
+      "name": "shadowLightRadius",
+      "value": 20.0
+    },
+    {
+      "frame": 30,
+      "type": "setting",
+      "name": "shadowElevation",
+      "value": 50
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "shadowLightX",
+      "value": 0
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "shadowLightY",
+      "value": 0
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "shadowLightZ",
+      "value": 2000
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "shadowLightRadius",
+      "value": 0.5
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "shadowElevation",
+      "value": 1
+    },
+    {
+      "frame": 70,
+      "type": "setting",
+      "name": "shadowEnabled",
+      "value": false
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-012",
+      "kind": "equals",
+      "item": "0/0/1",
+      "prop": "visible",
+      "comment": "The actual capture path of the unnamed shadow ShaderEffect is hidden with the default settings",
+      "frame": 5,
+      "value": false
+    },
+    {
+      "qa": "QA-SET-012",
+      "kind": "equals",
+      "item": "0/0/1",
+      "prop": "visible",
+      "comment": "Enabling the shadow immediately shows the ShaderEffect behind the dock panel",
+      "frame": 12,
+      "value": true
+    },
+    {
+      "qa": "QA-SET-012",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "shadowA",
+      "comment": "Raising shadow strength to 100% makes the shader alpha input 1",
+      "frame": 12,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-012",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "shadowR",
+      "comment": "Changing the shadow color to red makes the shader R channel 1",
+      "frame": 12,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-012",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "shadowG",
+      "comment": "The G channel of the red shadow color is passed as 0",
+      "frame": 12,
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-012",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "shadowB",
+      "comment": "The B channel of the red shadow color is passed as 0",
+      "frame": 12,
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "lightX",
+      "comment": "Changing the virtual light X position to the maximum 300 updates the shader input directly",
+      "frame": 32,
+      "value": 300
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "lightY",
+      "comment": "Changing the virtual light Y position to the minimum -300 updates the shader input directly",
+      "frame": 32,
+      "value": -300
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "lightZ",
+      "comment": "Changing light height to the minimum 100 makes the projection Z input 100",
+      "frame": 32,
+      "value": 100
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "lightRadius",
+      "comment": "Raising light radius to the maximum 20 makes the Gaussian smoothing input 20",
+      "frame": 32,
+      "value": 20.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "elevation",
+      "comment": "Raising panel elevation to the maximum 50 makes the shader projection input 50",
+      "frame": 32,
+      "value": 50
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "margin",
+      "comment": "A large projection offset is limited to the shader area safety cap of a 200px margin",
+      "frame": 32,
+      "value": 200,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-013",
+      "kind": "settles",
+      "item": "0/0/1",
+      "prop": "margin",
+      "comment": "With high light and minimum radius and elevation, the calculated shader margin remains finite at 11.5px",
+      "frame": 52,
+      "value": 11.5,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-012",
+      "kind": "equals",
+      "item": "0/0/1",
+      "prop": "visible",
+      "comment": "Disabling the shadow hides the ShaderEffect behind the dock panel again",
+      "frame": 72,
+      "value": false
+    }
+  ]
+}

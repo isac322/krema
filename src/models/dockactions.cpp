@@ -70,7 +70,8 @@ void DockActions::togglePinned(int index)
 
     const QUrl launcherUrl = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
     if (launcherUrl.isValid()) {
-        if (tasksModel->launcherList().contains(launcherUrl.toString())) {
+        const bool pinned = tasksModel->launcherPosition(launcherUrl) != -1;
+        if (pinned) {
             tasksModel->requestRemoveLauncher(launcherUrl);
         } else {
             tasksModel->requestAddLauncher(launcherUrl);

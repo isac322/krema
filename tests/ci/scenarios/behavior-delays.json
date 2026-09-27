@@ -1,0 +1,63 @@
+{
+  "description": "After changing show and hide delays to their endpoints, the final dock states for Auto hide and Always visible settle correctly.",
+  "actions": [
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "showDelay",
+      "value": 2000
+    },
+    {
+      "frame": 5,
+      "type": "setting",
+      "name": "hideDelay",
+      "value": 2000
+    },
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "visibilityMode",
+      "value": 1
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "showDelay",
+      "value": 0
+    },
+    {
+      "frame": 50,
+      "type": "setting",
+      "name": "hideDelay",
+      "value": 0
+    },
+    {
+      "frame": 55,
+      "type": "setting",
+      "name": "visibilityMode",
+      "value": 0
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-016",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "opacity",
+      "comment": "After changing delays to 0ms and returning to Always visible, the dock’s final opacity settles at 1",
+      "frame": 112,
+      "value": 1.0,
+      "tolerance": 0.01
+    },
+    {
+      "qa": "QA-SET-016",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "_panelEdgePos",
+      "comment": "In Always visible’s final state, the bottom panel returns to floating position y=36",
+      "frame": 112,
+      "value": 36,
+      "tolerance": 0.01
+    }
+  ]
+}

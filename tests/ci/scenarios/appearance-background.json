@@ -1,0 +1,126 @@
+{
+  "description": "Changing the Acrylic background opacity to 0% and 100%, then switching the Tinted background to custom red, immediately updates the rendering inputs.",
+  "config": {
+    "General/BackgroundStyle": 3,
+    "General/BackgroundOpacity": 0.6,
+    "General/UseAccentColor": false
+  },
+  "actions": [
+    {
+      "frame": 10,
+      "type": "setting",
+      "name": "backgroundOpacity",
+      "value": 0.0
+    },
+    {
+      "frame": 25,
+      "type": "setting",
+      "name": "backgroundOpacity",
+      "value": 1.0
+    },
+    {
+      "frame": 40,
+      "type": "setting",
+      "name": "backgroundStyle",
+      "value": 2
+    },
+    {
+      "frame": 40,
+      "type": "setting",
+      "name": "useSystemColor",
+      "value": true
+    },
+    {
+      "frame": 55,
+      "type": "setting",
+      "name": "useSystemColor",
+      "value": false
+    },
+    {
+      "frame": 55,
+      "type": "setting",
+      "name": "tintColor",
+      "value": "#ff0000"
+    }
+  ],
+  "assertions": [
+    {
+      "qa": "QA-SET-008",
+      "kind": "equals",
+      "item": "0/0/2/0",
+      "prop": "visible",
+      "comment": "The actual capture path of the unnamed Acrylic overlay is visible for the Acrylic style",
+      "frame": 5,
+      "value": true
+    },
+    {
+      "qa": "QA-SET-008",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintOpacity",
+      "comment": "Lowering opacity to 0 still stops at 0.1 — krema.kcfg:82 sets the minimum to 0.1, so full transparency cannot be reached",
+      "frame": 12,
+      "value": 0.1,
+      "tolerance": 0.005
+    },
+    {
+      "qa": "QA-SET-008",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintOpacity",
+      "comment": "Raising background opacity to 100% makes the alpha value passed to Acrylic compositing equal 1",
+      "frame": 27,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "equals",
+      "item": "0/0/2/0",
+      "prop": "visible",
+      "comment": "Switching to Tinted style hides the unnamed Acrylic-only overlay and makes the panel body draw the tint color",
+      "frame": 42,
+      "value": false
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintR",
+      "comment": "The hidden overlay’s bound color channels reflect the DockView background color, so custom red has an R value of 1",
+      "frame": 57,
+      "value": 1.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintG",
+      "comment": "Selecting custom red tint makes the panel background G channel 0",
+      "frame": 57,
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintB",
+      "comment": "Selecting custom red tint makes the panel background B channel 0",
+      "frame": 57,
+      "value": 0.0,
+      "tolerance": 0.001
+    },
+    {
+      "qa": "QA-SET-009",
+      "kind": "settles",
+      "item": "0/0/2/0",
+      "prop": "tintOpacity",
+      "comment": "The previously set 100% background opacity is retained for the custom tint color",
+      "frame": 57,
+      "value": 1.0,
+      "tolerance": 0.001
+    }
+  ]
+}

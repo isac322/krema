@@ -1,0 +1,47 @@
+{
+  "description": "On the fixed single virtual output, the horizontal dock panel is centered within the output-width dock surface.",
+  "actions": [],
+  "assertions": [
+    {
+      "qa": "QA-VIS-022",
+      "kind": "window",
+      "key": "krema::DockView",
+      "comment": "This is an invariant on the fixed single output: I see the dock surface use the full 1024px output width. A second virtual output with different geometry would be required to make recentering causal.",
+      "frame": 10,
+      "visible": true,
+      "w": 1024,
+      "h": 108,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "w",
+      "comment": "This is an invariant on the fixed single output: I see the panel remain 220px wide. A second virtual output with different geometry would be required to cause and verify a new centered position.",
+      "frame": 10,
+      "value": 220,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-022",
+      "kind": "settles",
+      "item": "0/0/2",
+      "prop": "x",
+      "comment": "This is an invariant on the fixed single output: I see the panel centered at (1024-220)/2=402. A second virtual output with different geometry would be required to make this recentering causal.",
+      "frame": 10,
+      "value": 402,
+      "invariant": true
+    },
+    {
+      "qa": "QA-VIS-022",
+      "kind": "settles",
+      "item": "0/0/2/1",
+      "prop": "x",
+      "comment": "This is an invariant on the fixed single output: I see the 204px icon row centered at x=8 in the 220px panel. A second virtual output with different geometry would be required to cause a new centering calculation.",
+      "frame": 10,
+      "value": 8,
+      "invariant": true
+    }
+  ]
+}

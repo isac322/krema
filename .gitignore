@@ -59,6 +59,10 @@ Makefile*
 *.qm
 *.prl
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # Qt unit tests
 target_wrapper.*
 

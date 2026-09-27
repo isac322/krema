@@ -196,6 +196,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | MOUSE-005 | `test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows` | KWin | pass |
 | MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance` | KWin, screenshot | pass |
 | MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state` | screenshot | pass |
+| MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`, added on master) | KWin | pass (C++ KWin test, not this suite) |
 | PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails` | AT-SPI, screenshot | pass |
 | PREV-002 | `test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row` | AT-SPI | pass |
 | PREV-003 | `test_03_preview.py::test_prev003_clicking_a_thumbnail_activates_that_window` | KWin, AT-SPI | pass |
@@ -228,6 +229,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | VIS-004 | `test_07_visibility.py::test_vis004_dodge_windows_hides_while_a_window_overlaps_the_dock`, `test_vis004_dodge_windows_hides_for_an_inactive_overlapping_window` | AT-SPI, KWin | pass |
 | VIS-005 | `test_07_visibility.py::test_vis005_smart_hide_hides_only_for_the_active_overlapping_window` | AT-SPI, KWin | pass |
 | VIS-006 | `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible` | AT-SPI, KWin | pass |
+| VIS-007 | `tests/kwin` ctest `krema_showdesktop_tests` (added on master) | KWin | pass (C++ KWin test, not this suite) |
 
 ## Known krema bugs found by the suite (strict xfail)
 
@@ -271,13 +273,6 @@ Product finding (not an xfail, worked around in
 shortcut Meta+F5 collides with KWin's default `MoveMouseToFocus` binding,
 so a real Meta+F5 never reaches krema on stock KWin — see
 "Investigations" §2.
-
-Found, not covered by a test: some settings are not auto-saved on their own
-change — `src/app/application.cpp` ~136-166 connects a fixed list of
-`*Changed` signals to `save()`, and `UseSystemColor`, `UseAccentColor`,
-`IconScale`, `BadgeDisplayMode`, `DodgeActiveOnly` and
-`AttentionAnimationDuration` are missing, so changes to them persist only
-when another save happens to write the file.
 
 ## Writing tests
 

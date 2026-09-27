@@ -1,8 +1,8 @@
 # E2E Test Scenarios
 
 Accessibility-first end-to-end test scenarios for Krema dock.
-All 48 TCs below are automated in `tests/appium/` (AT-SPI harness running a
-real `kwin_wayland --virtual` session); see the coverage matrix in
+The 48 original TCs below are automated in `tests/appium/` (AT-SPI harness running a
+real KWin session); MOUSE-008 and VIS-007 are covered by `tests/kwin` ctests. See the coverage matrix in
 `tests/appium/README.md`. The kwin-mcp workflow in this document remains
 useful for exploratory QA and for one-off manual checks.
 

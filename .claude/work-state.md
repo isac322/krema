@@ -69,7 +69,6 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - Follow active + Mouse trigger가 포인터의 화면으로 독을 이동하지 않음 (SET-008)
   - AlwaysVisible이 exclusive zone을 예약하지 않아 최대화 윈도우가 독 아래로 확장됨 (VIS-001)
 - 제품 발견사항: 기본 Focus Dock 단축키 Meta+F5가 KWin 기본값 MoveMouseToFocus와 충돌 → stock KWin에서 실제 Meta+F5가 krema에 도달하지 않음
-- 테스트 미커버 버그 (found, no test): 일부 설정이 자체 변경 시 자동 저장되지 않음 — `src/app/application.cpp` ~136-166이 고정된 *Changed 시그널 목록만 save에 연결; UseSystemColor, UseAccentColor, IconScale, BadgeDisplayMode, DodgeActiveOnly, AttentionAnimationDuration 누락
 
 ## 다음 작업
 

@@ -344,7 +344,7 @@ def envelope_difference(reference: list[dict], candidate: list[dict],
     """Reject transient values or states absent from the other pass.
 
     Only paths present throughout both segments are compared. Dynamic objects
-    may appear on different transient frames, but exact segment boundaries and
+    may appear on different transient frames, but strict segment boundaries and
     the divergent-frame budget still constrain those structural differences.
     """
     left = [dict(scalar_values(canonical_payload(row)))
@@ -428,7 +428,7 @@ def reproducibility_failures(reference: list[dict], candidate: list[dict],
             index, difference = boundary_difference
             failures.append(
                 f'{label}: frame {reference[index]["frame"]} differs in the '
-                f'exact pre-action/settled boundary for segment '
+                f'pre-action/settled boundary (numbers within tolerance) for segment '
                 f'{first_frame}-{last_frame}: {difference}')
         elif len(differences) > max_transient:
             index, difference = differences[0]

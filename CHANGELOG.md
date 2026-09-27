@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS build targets for Fedora 44 and openSUSE Leap 16.0
 - Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
 - Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
-- Deterministic unprivileged KWin/Wayland UI frame regression tests with exact endpoints, bounded transition divergence, and inline review previews
+- Deterministic unprivileged KWin/Wayland UI frame regression tests with toleranced endpoint checks, bounded transition divergence, and inline review previews
 
 ## [0.7.0] - 2026-03-28
 

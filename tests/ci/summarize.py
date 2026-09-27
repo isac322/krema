@@ -96,7 +96,7 @@ def main() -> int:
     if compared:
         reproducible = sum(1 for result in compared if result.get('repro_ok'))
         out.append(f'Reproducibility: {reproducible}/{len(compared)} scenarios have '
-                   f'exact pre-action and settled states, matching transition '
+                   f'matching pre-action and settled states (numbers within 1e-4), matching transition '
                    f'envelopes, and no more than the allowed transient-frame budget. '
                    f'Frame-count, identity, endpoint, menu-state, or out-of-range '
                    f'property differences fail the scenario.')

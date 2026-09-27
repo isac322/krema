@@ -3,7 +3,7 @@
 # All documentation and SEO files derive from this manifest.
 # Increment manifest_version when making deliberate positioning changes.
 
-manifest_version: "1.0.0"
+manifest_version: "1.1.0"
 
 product:
   name: Krema
@@ -100,6 +100,28 @@ search_intents:
   - name: lightweight-dock
     description: "Users seeking performant, lightweight dock"
     keywords: [lightweight dock kde plasma, best dock for kde plasma]
+
+brand:
+  website: "https://cv.bhyoo.com/krema/"
+  guide: branding/README.md
+  icon_concept: "Zoom K — bone stem is the dock panel; Breeze-blue tiles along the K arms shrink with parabolic zoom falloff"
+  wordmark_concept: "Monoline lowercase 'krema' scaled like a zooming dock (0.72, 0.87, 1.16, 0.87, 0.72); accent indicator dot under the hovered 'e'"
+  palette:
+    night: "#141C26"      # icon tile, ink on light backgrounds
+    bone: "#F3F0EA"       # icon stem (dock panel), ink on dark backgrounds
+    breeze_blue: "#3DAEE9"  # accent: tiles, indicator dot
+    neutrals: ["#0E141B", "#1D2733", "#EFF0F1"]
+  assets:
+    icon: branding/krema-icon.svg
+    icon_small: branding/krema-icon-small.svg  # 16/22/24 px
+    wordmark_light: branding/krema-wordmark.svg
+    wordmark_dark: branding/krema-wordmark-dark.svg
+    lockup_light: branding/krema-lockup.svg
+    lockup_dark: branding/krema-lockup-dark.svg
+    lockup_stacked_light: branding/krema-lockup-stacked.svg
+    lockup_stacked_dark: branding/krema-lockup-stacked-dark.svg
+    generator: branding/generate.ts
+  social_preview: branding/social/github-social-preview.png
 
 target_audience:
   primary: "Former Latte Dock users who lost their dock when upgrading to KDE Plasma 6"

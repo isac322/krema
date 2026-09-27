@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the whole dock surface being blurred at startup; blur now covers only the visible panel from launch
+
 ## [0.8.0] - 2026-09-28
 
 ### Added

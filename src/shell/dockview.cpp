@@ -334,7 +334,14 @@ void DockView::applyBackgroundStyle()
         }
     }
 
-    applyBackgroundToWindow(this, type, region);
+    // An empty region means "whole surface" to KWin, which would blur the entire
+    // (mostly transparent) layer-shell surface. Until QML reports the panel rect,
+    // keep compositor effects off; panelRectChanged re-applies them.
+    if (region.isEmpty() && styleUsesBlur(type)) {
+        removeBackgroundFromWindow(this);
+    } else {
+        applyBackgroundToWindow(this, type, region);
+    }
     Q_EMIT backgroundColorChanged();
     Q_EMIT backgroundStyleTypeChanged();
 }

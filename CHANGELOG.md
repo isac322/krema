@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Show Desktop (Meta+D) no longer hides the dock; KWin now treats Krema as a dock, like Plasma panels (#16)
 - Krema no longer crashes on Debian 13 and Ubuntu 25.04 when you quit it while the Settings window is still opening or open (#27)
 - Window previews now appear next to the hovered icon when the dock is on a monitor that does not start at the top-left corner of the desktop, instead of being pushed to that monitor's far edge
+- Left-clicking an app with two or more open windows now brings up the window you used last, and each further click switches to the app's next window; previously the click did nothing. Scrolling over such an app from another app also starts at its last-used window instead of its first one (#10)
 
 ### Added
 

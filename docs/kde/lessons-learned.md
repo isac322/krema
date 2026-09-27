@@ -257,3 +257,14 @@ Each view is also positioned on its target screen before creation, and `handleSc
 **Key lessons:**
 - A private module is not a dependency Krema can keep: when the protocol underneath is public (here a D-Bus signal), implement the protocol.
 - A silent fallback (`if (comp.status === Component.Ready)`) hides a missing feature. Cover each feature with a test that observes the visible result.
+
+## 14. Running KWin + AT-SPI E2E in an unprivileged container (2026-09, tests/appium)
+
+Verified while building the `tests/appium` harness (KWin 6.7.5, Qt 6.10, KF 6.30, Fedora 43 image):
+
+- **`setcap -r kwin_wayland`**: Fedora's `kwin_wayland` ships `cap_sys_nice=ep`. An unprivileged container's bounding set lacks CAP_SYS_NICE, so `execve()` fails with EPERM before `main()` — drop the file capability in the image instead of running with `--cap-add`/`--privileged`.
+- **KWin 6.7 needs a DRM device for OpenGL**: the virtual backend opens a DRM device via libdrm (vgem through its primary node is the exception); without `/dev/dri` it falls back to QPainter, and then ScreenShot2 answers every request with `Error.Cancelled` and `zkde_screencast` (KPipeWire thumbnails) is disabled — `ScreencastManager` requires `OpenGLCompositing`. Host fix: `modprobe vgem` (render node → `--virtual`) or `modprobe vkms` (KMS card → DRM backend). Docker-on-VM setups (OrbStack, Docker Desktop) have neither module; use a generic-kernel VM (Lima).
+- **ScreenShot2 PNGs have alpha**: the dock surface's empty areas are alpha-0, so luminance/pixel comparisons must alpha-composite over a known background (the harness uses white) before diffing.
+- **inputsynth press/release must be one W3C action chain**: selenium-webdriver-at-spi spawns a fresh `inputsynth` per `/actions` call and interpolates pointer moves from (0,0), so a press in one call and the release in the next loses the held button and teleports the pointer. `drag()` issues press→hold→move→release in a single chain; the chain must start by moving to the last known pointer position.
+- **`Qt::Popup` windows (QMenu) are never in AT-SPI**: `QAccessibleApplication` builds children from `topLevelWindows()` and skips popups. Drive the menu via its KWin window (screen geometry) plus keyboard navigation over the known enabled-entry order (`krema_e2e.context_menu_entries`).
+- **Meta+F5 collides with a KWin default**: KWin's `MoveMouseToFocus` ("Move Mouse to Focus") owns Meta+F5 in stock KWin, so krema's `focus-dock` never receives the real key press. To test real Meta+F5, unbind the KWin action first (`set_shortcut_keys("MoveMouseToFocus", [], component="kwin")`); `invokeShortcut("focus-dock")` over D-Bus always works. Product decision pending: pick a free default.

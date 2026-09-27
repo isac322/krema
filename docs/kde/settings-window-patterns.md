@@ -125,6 +125,27 @@ QQuickWindow *win = qvariant_cast<QQuickWindow *>(item);
 // win is valid immediately — no polling needed
 ```
 
+#### Version note: `configViewItem` needs kirigami-addons ≥ 1.8.0
+
+`configViewItem`, the single-instance guard in `open()` and the `closing` → `destroy()`
+cleanup were all added in kirigami-addons 1.8.0 (upstream commit f6e5257). In 1.7.0
+(Debian 13, Ubuntu 25.04), `open()` runs `component.createObject(null, {...})`, keeps no
+reference, creates a new window on every call and never destroys a closed one.
+
+Detect the API by property presence, not by a null value (on 1.8+ null means `open()`
+failed or took the mobile path):
+
+```cpp
+const bool hasConfigViewItem = configView->metaObject()->indexOfProperty("configViewItem") >= 0;
+```
+
+Without it, `SettingsWindow` snapshots `QGuiApplication::allWindows()` just before `open()`
+and takes the single new `QQuickWindow` with `qmlEngine(window) == m_engine`.
+`createObject()` runs synchronously and gives the object the component's engine context,
+so this identifies the window `open()` created without timers. It deletes that window
+on close, which matches the 1.8 cleanup. Verified on Debian 13 (kirigami-addons 1.7.0)
+and Fedora 44 (1.13.1) by `tests/integration/test_settings_lifecycle.cpp`.
+
 ---
 
 ### 4. StatefulWindow + AbstractKirigamiApplication (full app pattern)

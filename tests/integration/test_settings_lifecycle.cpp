@@ -16,6 +16,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "shell/outputordermonitor.h"
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -116,6 +117,16 @@ void startDocks()
         return;
     }
     a.manager = std::make_unique<MultiDockManager>(a.settings.get(), a.model.get(), a.tracker.get());
+
+    // As in Application::run(): the first docks are created only once the
+    // Plasma output order is known. Created earlier, they would be rebuilt
+    // when the primary output resolves, which production never does.
+    auto *outputOrder = krema::OutputOrderMonitor::instance();
+    REQUIRE(QTest::qWaitFor(
+        [outputOrder] {
+            return outputOrder->orderReady();
+        },
+        kTimeoutMs));
     a.manager->initialize();
 
     // Same connection as Application::run(): the settings dialog writes
@@ -162,6 +173,16 @@ QQuickWindow *settingsWindow()
 {
     const auto windows = visibleSettingsWindows();
     return windows.size() == 1 ? windows.first() : nullptr;
+}
+
+// Every Settings window object, shown or hidden: a closed window that was
+// never destroyed still counts.
+int settingsWindowObjectCount()
+{
+    const auto windows = QGuiApplication::topLevelWindows();
+    return static_cast<int>(std::count_if(windows.begin(), windows.end(), [](QWindow *window) {
+        return qobject_cast<QQuickWindow *>(window) && window->title() == QLatin1String("Settings");
+    }));
 }
 
 // Item in the open settings dialog whose text is @p text and that exposes
@@ -422,6 +443,86 @@ TEST_CASE("Settings requested from a rebuilt dock reuses the open dialog", "[set
     // re-requested the already open dialog.
     closeSettings();
     CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
+}
+
+// Issue #24: on kirigami-addons < 1.8 ConfigurationView has no configViewItem,
+// so the window open() creates has to be found another way. The same contract
+// holds on every kirigami-addons version.
+TEST_CASE("Opening settings twice keeps one tracked window", "[settings][single-window]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    const auto shell = [] {
+        return app().manager->primaryShell();
+    };
+    REQUIRE(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
+
+    openSettingsFrom(shell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
+
+    // QA-01, QA-02: asking again, from either menu entry, raises the same
+    // window instead of opening another one
+    Q_EMIT shell()->contextMenu()->settingsRequested();
+    QCoreApplication::processEvents();
+    CHECK(visibleSettingsWindows().size() == 1);
+    CHECK(dialog == settingsWindow());
+    Q_EMIT shell()->contextMenu()->aboutRequested();
+    QCoreApplication::processEvents();
+    CHECK(visibleSettingsWindows().size() == 1);
+    CHECK(dialog == settingsWindow());
+
+    // QA-03: the auto-hide dock is shown and stays shown past its hide delay
+    // while the dialog is open
+    REQUIRE(QTest::qWaitFor(allDocksVisible, kTimeoutMs));
+    QTest::qWait(kHideDelayMs * 10);
+    CHECK(allDocksVisible());
+
+    // QA-04: closing that window releases the lock, so the tracked window is
+    // the Settings window and not another Krema surface
+    closeSettings();
+    CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
+    CHECK(g_qmlErrors.isEmpty());
+}
+
+TEST_CASE("Settings reopen cleanly after being closed", "[settings][reopen-after-close]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    const auto shell = [] {
+        return app().manager->primaryShell();
+    };
+
+    openSettingsFrom(shell());
+    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
+
+    // QA-06: Escape closes the dialog, releases the lock and destroys the
+    // window instead of leaving a hidden one behind
+    QTest::keyClick(settingsWindow(), Qt::Key_Escape);
+    CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
+    CHECK(QTest::qWaitFor(
+        [] {
+            return settingsWindowObjectCount() == 0;
+        },
+        kTimeoutMs));
+
+    // QA-05: reopening tracks the new window: one Settings window exists, the
+    // lock is taken again, and a second request still reuses it
+    openSettingsFrom(shell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
+    CHECK(settingsWindowObjectCount() == 1);
+    REQUIRE(QTest::qWaitFor(allDocksVisible, kTimeoutMs));
+    QTest::qWait(kHideDelayMs * 10);
+    CHECK(allDocksVisible());
+    Q_EMIT shell()->contextMenu()->settingsRequested();
+    QCoreApplication::processEvents();
+    CHECK(dialog == settingsWindow());
+
+    closeSettings();
+    CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
+    CHECK(QTest::qWaitFor(
+        [] {
+            return settingsWindowObjectCount() == 0;
+        },
+        kTimeoutMs));
+    CHECK(g_qmlErrors.isEmpty());
 }
 
 TEST_CASE("Background style list reports style availability", "[settings][appearance]")

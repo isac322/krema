@@ -12,6 +12,7 @@
 #include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlEngine>
 #include <QQuickWindow>
 
 Q_LOGGING_CATEGORY(lcSettingsWindow, "krema.settings.window")
@@ -47,6 +48,16 @@ bool SettingsWindow::isStyleAvailable(int styleType) const
 
 void SettingsWindow::show()
 {
+    open(QVariant());
+}
+
+void SettingsWindow::show(const QString &defaultModule)
+{
+    open(defaultModule);
+}
+
+void SettingsWindow::open(const QVariant &defaultModule)
+{
     ensureEngine();
 
     // If the ConfigurationView's window is already open, just raise it
@@ -67,44 +78,52 @@ void SettingsWindow::show()
         }
     }
 
-    // Find the ConfigurationView and call open()
     auto *root = m_engine->rootObjects().first();
     auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
-    if (configView) {
-        QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, QVariant()));
-        trackConfigWindow(configView);
-    } else {
+    if (!configView) {
         qCWarning(lcSettingsWindow) << "ConfigurationView not found in SettingsDialog.qml";
-    }
-}
-
-void SettingsWindow::show(const QString &defaultModule)
-{
-    ensureEngine();
-
-    // If the ConfigurationView's window is already open, just raise it
-    if (m_configWindow) {
-        m_configWindow->show();
-        m_configWindow->raise();
-        m_configWindow->requestActivate();
         return;
     }
 
-    if (m_engine->rootObjects().isEmpty()) {
-        m_engine->load(QUrl(QStringLiteral("qrc:/qml/SettingsDialog.qml")));
+    // ConfigurationView.configViewItem exists since kirigami-addons 1.8.0.
+    // Older versions (Debian 13, Ubuntu 25.04 ship 1.7.0) create the
+    // ConfigWindow in open() without keeping a reference to it.
+    const bool hasConfigViewItem = configView->metaObject()->indexOfProperty("configViewItem") >= 0;
+    const QWindowList windowsBefore = hasConfigViewItem ? QWindowList() : QGuiApplication::allWindows();
 
-        if (m_engine->rootObjects().isEmpty()) {
-            qCWarning(lcSettingsWindow) << "Failed to load SettingsDialog.qml";
-            return;
+    QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, defaultModule));
+
+    // Both paths are synchronous: open() creates the window before returning.
+    auto *win = hasConfigViewItem ? qvariant_cast<QQuickWindow *>(configView->property("configViewItem")) : windowCreatedSince(windowsBefore);
+    if (!win) {
+        qCWarning(lcSettingsWindow) << "No settings window to track after ConfigurationView.open()";
+        return;
+    }
+
+    // kirigami-addons >= 1.8 destroys its window when it closes; older
+    // versions never do, so the window found here is deleted on close.
+    trackConfigWindow(win, !hasConfigViewItem);
+}
+
+QQuickWindow *SettingsWindow::windowCreatedSince(const QWindowList &windowsBefore) const
+{
+    // The ConfigWindow is the one window of the settings engine that did not
+    // exist before open(). Windows of other engines (dock, preview) and the
+    // already loaded host window never qualify.
+    QQuickWindow *created = nullptr;
+    const auto windows = QGuiApplication::allWindows();
+    for (auto *window : windows) {
+        auto *quickWindow = qobject_cast<QQuickWindow *>(window);
+        if (!quickWindow || windowsBefore.contains(window) || qmlEngine(quickWindow) != m_engine) {
+            continue;
         }
+        if (created) {
+            qCWarning(lcSettingsWindow) << "ConfigurationView.open() created more than one window";
+            return nullptr;
+        }
+        created = quickWindow;
     }
-
-    auto *root = m_engine->rootObjects().first();
-    auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
-    if (configView) {
-        QMetaObject::invokeMethod(configView, "open", Q_ARG(QVariant, defaultModule));
-        trackConfigWindow(configView);
-    }
+    return created;
 }
 
 void SettingsWindow::ensureEngine()
@@ -122,25 +141,23 @@ void SettingsWindow::ensureEngine()
     m_engine->rootContext()->setContextProperty(QStringLiteral("SettingsWindow"), this);
 }
 
-void SettingsWindow::trackConfigWindow(QObject *configView)
+void SettingsWindow::trackConfigWindow(QQuickWindow *win, bool deleteOnClose)
 {
-    // configViewItem is set synchronously by ConfigurationView.open() — no polling needed.
-    auto *win = qvariant_cast<QQuickWindow *>(configView->property("configViewItem"));
-    if (!win) {
-        qCWarning(lcSettingsWindow) << "configViewItem is null after open()";
-        return;
-    }
-
     m_configWindow = win;
     win->setIcon(QGuiApplication::windowIcon());
 
-    connect(win, &QWindow::visibleChanged, this, [this](bool visible) {
+    connect(win, &QWindow::visibleChanged, this, [this, window = QPointer<QQuickWindow>(win), deleteOnClose](bool visible) {
         // Only forward close events — open is emitted manually below (exactly once)
         // to avoid double-counting that breaks dodge interacting refcount.
-        if (!visible) {
-            m_visible = false;
-            Q_EMIT visibleChanged(false);
-            m_configWindow = nullptr;
+        // Only the tracked window releases the lock.
+        if (visible || window != m_configWindow) {
+            return;
+        }
+        m_visible = false;
+        Q_EMIT visibleChanged(false);
+        m_configWindow = nullptr;
+        if (deleteOnClose) {
+            window->deleteLater();
         }
     });
 

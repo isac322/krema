@@ -38,6 +38,8 @@
 4. `list_windows` — verify krema window count increased
 5. `find_ui_elements query="Icon size" app_name="krema"` — verify AT-SPI access
 6. `screenshot` — verify settings dialog
+7. Right-click the dock again → "Settings..." while the dialog is open
+8. `list_windows` — verify there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
 
 **Expected:**
 - Settings dialog opens as separate window ("설정 — Krema" title)
@@ -45,6 +47,7 @@
 - Appearance page shown by default
 - FormCard layout with spinboxes, sliders, comboboxes
 - All controls accessible via AT-SPI (labels, sliders with Increase/Decrease)
+- Choosing "Settings..." again raises the same window; the dock stays shown while it is open
 
 **Verified in PoC:** Settings opened. Found "Icon size" label and
 "Zoom factor" slider with Increase/Decrease actions in AT-SPI.

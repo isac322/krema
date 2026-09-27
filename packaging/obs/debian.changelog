@@ -1,3 +1,18 @@
+krema (0.8.0-1) unstable; urgency=medium
+
+  * New upstream release v0.8.0
+  * Multi-monitor support: Primary Only, All Screens and Follow Active Screen
+  * Per-screen overrides for icon size, edge, visibility, background and
+    pinned launchers
+  * Virtual desktop filtering with dimmed icons for other desktops
+  * Dock and window previews follow the Plasma primary output
+  * Show Desktop (Meta+D) no longer hides the dock
+  * Clicking a grouped app now cycles through its windows
+  * Fixed crashes when changing monitor mode or quitting with Settings open
+  * Fixed launching from the application menu (DBusActivatable removed)
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Mon, 28 Sep 2026 00:00:00 +0900
+
 krema (0.7.0-3) unstable; urgency=medium
 
   * Add missing runtime QML module dependencies so the Settings dialog and

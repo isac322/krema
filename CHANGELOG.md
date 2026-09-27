@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-28
+
+### Added
+
+- Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
+- Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
+- Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite
+- Virtual desktop filtering: show windows from current desktop only, or all desktops with dimmed icons for other desktops
+- Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
+- Compile-time LayerShellQt API detection for cross-distribution compatibility
+- OBS build targets for Fedora 44 and openSUSE Leap 16.0
+- Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
+- Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
+
 ### Fixed
 
 - Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
@@ -30,18 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Krema no longer crashes on Debian 13 and Ubuntu 25.04 when you quit it while the Settings window is still opening or open (#27)
 - Window previews now appear next to the hovered icon when the dock is on a monitor that does not start at the top-left corner of the desktop, instead of being pushed to that monitor's far edge
 - Left-clicking an app with two or more open windows now brings up the window you used last, and each further click switches to the app's next window; previously the click did nothing. Scrolling over such an app from another app also starts at its last-used window instead of its first one (#10)
-
-### Added
-
-- Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
-- Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
-- Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite
-- Virtual desktop filtering: show windows from current desktop only, or all desktops with dimmed icons for other desktops
-- Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
-- Compile-time LayerShellQt API detection for cross-distribution compatibility
-- OBS build targets for Fedora 44 and openSUSE Leap 16.0
-- Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
-- Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
 
 ## [0.7.0] - 2026-03-28
 

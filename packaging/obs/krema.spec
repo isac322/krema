@@ -2,8 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
 Name:           krema
-Version:        0.7.0
-Release:        2%{?dist}
+Version:        0.8.0
+Release:        1%{?dist}
 Summary:        A lightweight dock for KDE Plasma 6
 
 License:        GPL-3.0-or-later AND MIT-CMU

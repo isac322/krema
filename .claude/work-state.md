@@ -5,7 +5,7 @@
 
 ## 현재 마일스톤
 
-M8 완료 → M9 준비 (Widget System + System Tray)
+M9 진행 예정 (Widget System + System Tray) — v0.8.0 릴리즈 완료
 
 ## 완료된 항목
 
@@ -13,6 +13,7 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - [x] 접근성 5단계 구현 + 키보드 내비게이션
 - [x] E2E 테스트 인프라 (10개 메커니즘 PoC)
 - [x] v0.7.0 릴리즈
+- [x] v0.8.0 릴리즈 (2026-09-28): M8 멀티 모니터/Per-Screen/Follow Active/가상 데스크톱 + 크로스 배포판 패키징 수정 포함
 - [x] M8a-M8d: 가상 데스크톱, 멀티 모니터, Per-Screen 설정, Follow Active
 - [x] 멀티 배포판 패키징 인프라 구축
   - COPR (Fedora 42/43/Rawhide): 6/6 빌드 성공
@@ -49,7 +50,7 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 
 ## 다음 작업
 
-- M8 전체 릴리즈 검토 (v0.8.0)
 - M9: Widget System + System Tray
+- M8b 잔여: PipeWire 글로벌 스트림 캡, 앱 목록 필터 정책 토글(all apps vs per-screen)
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증

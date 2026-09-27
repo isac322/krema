@@ -139,14 +139,14 @@ Visual refinement and polish.
 
 ## Milestone 8b: Multi-Monitor Core ✅
 
-- [ ] MultiDockManager (replaces single DockShell in Application)
-- [ ] All Screens mode (one dock per screen)
-- [ ] Primary Only mode
-- [ ] Screen hot-plug handling (with debounce)
-- [ ] Global shortcut policy (primary dock target)
+- [x] MultiDockManager (replaces single DockShell in Application)
+- [x] All Screens mode (one dock per screen)
+- [x] Primary Only mode
+- [x] Screen hot-plug handling (with debounce)
+- [x] Global shortcut policy (primary dock target)
 - [ ] PipeWire global stream cap (shared across PreviewControllers)
 - [ ] App list filter policy toggle (all apps vs per-screen)
-- [ ] Settings UI: Monitor Mode selector
+- [x] Settings UI: Monitor Mode selector
 
 ---
 
@@ -169,7 +169,7 @@ Visual refinement and polish.
 
 ---
 
-## Milestone 9: Widget System + System Tray
+## Milestone 9: Widget System + System Tray ⬅️ 현재
 
 Extensible widget architecture.
 

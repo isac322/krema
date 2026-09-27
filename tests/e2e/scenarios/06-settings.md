@@ -53,6 +53,7 @@
 "Zoom factor" slider with Increase/Decrease actions in AT-SPI.
 
 **Verification:** list_windows (window count +1), find_ui_elements (FormCard widgets), screenshot
+**Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown (English session: title "Settings — Krema"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
 
 ---
 
@@ -72,6 +73,7 @@
 - Zoom proportions adjust accordingly (the Parabolic zoom style keeps icons separated while scaling)
 
 **Verification:** screenshot comparison (icon size changed)
+**Automated:** tests/appium/test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion (the Icon size control is a spin box: real keyboard Up, dock item width checked after every step)
 
 ---
 
@@ -92,6 +94,7 @@
 - Setting persists in KConfig
 
 **Verification:** screenshot (dock hidden)
+**Automated:** tests/appium/test_06_settings.py::test_set003_auto_hide_applies_immediately_and_persists (the open Settings dialog holds the dock shown by design, see SET-008, so hiding is checked after the dialog is closed with Alt+F4, in the same krema process)
 
 ---
 
@@ -109,6 +112,7 @@
 - Change applies in real-time
 
 **Verification:** screenshot comparison (background style changed)
+**Automated:** tests/appium/test_06_settings.py::test_set004_acrylic_background_applies_live (pixel oracle: the Panel Inherit panel is flat, the Acrylic panel shows the acrylic shader's per-pixel noise grain over the same black background)
 
 ---
 
@@ -128,6 +132,7 @@
 - Dock appearance matches the saved settings
 
 **Verification:** accessibility_tree (slider values), screenshot (visual match)
+**Automated:** tests/appium/test_06_settings.py::test_set005_changed_settings_persist_across_restart
 
 ---
 
@@ -145,6 +150,7 @@
 - All items render correctly in new position
 
 **Verification:** screenshot (dock at top)
+**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top ("Screen edge" row on the Behavior page)
 
 ---
 
@@ -163,6 +169,7 @@
 - Color saved to KConfig
 
 **Verification:** screenshot (tint color changed)
+**Automated:** tests/appium/test_06_settings.py::test_set007_custom_tint_color_is_applied_and_saved ("Use system color" must be switched off first for the Tint color button to appear; the colour is entered in the dialog's Hex field)
 
 ---
 
@@ -192,6 +199,7 @@
 **Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
 
 **Verification:** list_windows (window counts), screenshot (dialog + docks)
+**Automated (E2E, run with `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py`):** tests/appium/test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings, ::test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen, ::test_set008_follow_active_shortcuts_act_on_the_shown_dock (Toggle Dock and Focus Dock; the dock is moved with the Focus trigger), strict xfail ::test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen (krema bug: with the Mouse trigger the dock never follows the pointer to another screen). Meta+N is not checked end to end: activating entry N has no per-dock observable result and remains covered by the integration test.
 
 ---
 
@@ -207,6 +215,7 @@
 - No Settings window remains after exit
 
 **Verification:** process exit status, `list_windows`
+**Automated:** tests/appium/test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly (Fedora 43 image only; the Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
 
 ---
 

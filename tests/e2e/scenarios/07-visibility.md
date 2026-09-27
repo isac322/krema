@@ -39,6 +39,9 @@
 
 **Verification:** screenshot (dock visible in all states)
 
+**Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window
+**Automated (strict xfail, krema bug — no exclusive zone reserved):** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
+
 ---
 
 ## TC VIS-002: Auto-Hide Mode — Hide on Timeout
@@ -57,6 +60,8 @@
 - Dock area is reclaimed (windows can use full screen)
 
 **Verification:** screenshot (dock hidden)
+
+**Automated:** tests/appium/test_07_visibility.py::test_vis002_auto_hide_hides_after_timeout_and_frees_the_screen
 
 ---
 
@@ -80,6 +85,8 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Verification:** screenshot (dock visible after D-Bus show)
 
+**Automated:** tests/appium/test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach (real fake-input pointer to the bottom-edge trigger strip; the D-08 limitation above does not apply to this harness)
+
 ---
 
 ## TC VIS-004: Dodge Windows Mode
@@ -100,6 +107,8 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Verification:** screenshot (hide/show based on window overlap)
 
+**Automated:** tests/appium/test_07_visibility.py::test_vis004_dodge_windows_hides_while_a_window_overlaps_the_dock, tests/appium/test_07_visibility.py::test_vis004_dodge_windows_hides_for_an_inactive_overlapping_window
+
 ---
 
 ## TC VIS-005: Smart Hide Mode
@@ -118,6 +127,8 @@ cannot be verified in kwin-mcp due to D-08.
 - Inactive windows overlapping dock do not trigger hide
 
 **Verification:** screenshot (hide only for active overlap)
+
+**Automated:** tests/appium/test_07_visibility.py::test_vis005_smart_hide_hides_only_for_the_active_overlapping_window (SmartHide = VisibilityMode=2 + DodgeActiveOnly=true)
 
 ---
 
@@ -140,6 +151,8 @@ cannot be verified in kwin-mcp due to D-08.
 - After keyboard nav ends, normal auto-hide behavior resumes
 
 **Verification:** screenshot (visible during keyboard, hidden after escape + timeout)
+
+**Automated:** tests/appium/test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible
 
 ---
 

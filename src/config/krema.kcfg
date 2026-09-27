@@ -79,7 +79,7 @@
     <entry name="BackgroundOpacity" type="Double">
       <label>Background opacity</label>
       <default>0.6</default>
-      <min>0.1</min>
+      <min>0.0</min>
       <max>1.0</max>
     </entry>
 

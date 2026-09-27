@@ -205,10 +205,9 @@ Each view is also positioned on its target screen before creation, and `handleSc
 **Root causes (compat path, `KREMA_COMPAT_NO_LAYERSHELL_SCREEN`):**
 1. `Window::get()` creates the platform window, and QtWayland re-derives `QWindow::screen()` from the still-empty geometry, so `DockView` read back the primary screen before pinning it.
 2. On a created QtWayland toplevel, `QWindow::setPosition()` runs `screenForGeometry()` from the stale origin and moved the preview back to the old screen (QtWayland pins a created toplevel to its screen origin anyway, `fixedToplevelPositions`).
-3. The `setDesiredSize` fallback `resize(QSize(0, h))` moved the window centre to x-1, onto the left neighbour. LayerShellQt 6.3 already sends 0 for a double-anchored axis.
 
-**Fix:** capture the assigned screen before `setupWindow()`, set `QWindow::screen` plus `ScreenFromQWindow`, position only windows without a platform window, and keep the current extent on zero axes in the resize fallback.
+**Fix:** capture the assigned screen before `setupWindow()`, set `QWindow::screen` plus `ScreenFromQWindow`, and position only windows without a platform window.
 
 **Key lessons:**
 - A compile-only compat branch is not a fix: check the wire-level `get_layer_surface` output against the old library too.
-- `-D_HAVE_LAYERSHELLQT_SET_SCREEN=OFF -D_HAVE_LAYERSHELLQT_DESIRED_SIZE=OFF` exercises the compat code on a new distro, but only a real old LayerShellQt (Debian 13) reproduces the `create()` in `Window::get()`.
+- `-D_HAVE_LAYERSHELLQT_SET_SCREEN=OFF` exercises the compat code on a new distro, but only a real old LayerShellQt (Debian 13) reproduces the `create()` in `Window::get()`.

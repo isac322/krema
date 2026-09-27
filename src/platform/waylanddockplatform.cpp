@@ -134,12 +134,8 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
 void WaylandDockPlatform::setSize(const QSize &size)
 {
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
-    // LayerShellQt < 6.4 derives set_size from the window size and already
-    // sends 0 on a double-anchored axis. Resizing that axis to 0 here would
-    // move the window centre off its output, and Qt would re-derive the
-    // neighbouring output as the window's screen, so keep the current extent.
     if (m_window) {
-        m_window->resize(size.width() > 0 ? size.width() : m_window->width(), size.height() > 0 ? size.height() : m_window->height());
+        m_window->resize(size);
     }
 #else
     if (m_layerWindow) {

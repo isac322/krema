@@ -12,10 +12,8 @@ DOCKER_HOST=tcp://localhost:2375 docker run --rm \
     krema-ui-ci bash /src/tests/ci/run-frame-tests.sh
 ```
 
-GitHub x86_64 run `31959216735` passed on August 16, 2026. The frame job took
-14m18s including the image build, uploaded a 21.0 MiB compressed artifact
-(32.7 MiB extracted), and produced 42 preview GIFs totalling 2.7 MiB. The runner
-needs no `--privileged`, `--cap-add`, or `/dev/dri`.
+The runner needs no `--privileged`, `--cap-add`, or `/dev/dri`; the
+`frame-tests.yml` job runs this on a stock GitHub x86_64 runner.
 
 ## How it differs from `tests/docker/`
 
@@ -145,9 +143,11 @@ two-second hard timeout, before it advances the deterministic frame counter.
 
 `menuitem` activates an entry of the open context menu by its label
 (`{"type": "menuitem", "name": "Settings..."}`). The probe resolves the
-`QAction` geometry and clicks it through the same KWin fake-input path. Menu
-assertions require `"mapped": true`, and frame capture composites the exposed
-popup window, so a constructed menu with a blank screenshot fails.
+`QAction` geometry and clicks it with `QTest` on the already-mapped `QMenu`, so
+QMenu's own hit-testing and the real action slot run; that click does not
+travel through KWin. Menu assertions require `"mapped": true`, and frame
+capture composites the exposed popup window, so a constructed menu with a blank
+screenshot fails.
 
 `shortcut` triggers a registered global action by name
 (`{"type": "shortcut", "name": "focus-dock"}`). Krema's keyboard navigation is
@@ -205,17 +205,17 @@ docker run --rm -e KREMA_VIDEO=1 \
 
 Both are off by default because PNG encoding dominates runtime. After encoding,
 `prune_frames.py` keeps only the keyframes `review.md` links and gzips the first
-pass's capture stream. GitHub x86_64 run `31959216735` measured a 14m18s frame
-job and a 21.0 MiB uploaded artifact with video and review frames enabled.
+pass's capture stream.
 
 Numeric assertions and strict capture reproducibility decide pass/fail. Every
 pass must have the same frame numbers. Each action-delimited segment requires
-an exact pre-action frame, exact settled tail, and numeric value envelopes
-matching within an explicit `1e-4` absolute tolerance (categorical envelopes
-remain exact). Up to nine same-frame payloads may differ inside that bounded
-transition; this admits observed Qt animation-registration jitter without
-allowing changed endpoints, omitted states, or out-of-range values. The video
-remains for the part that is genuinely visual — whether the glow reads as a glow.
+a matching pre-action frame, settled tail, and value envelope; numbers match
+within an explicit `1e-4` absolute tolerance, and booleans, strings and
+structure match exactly. Up to nine same-frame payloads may differ inside that
+bounded transition; this admits observed Qt animation-registration jitter
+without allowing changed endpoints, omitted states, or out-of-range values. The
+video remains for the part that is genuinely visual — whether the glow reads as
+a glow.
 
 ## Reading results in CI
 
@@ -327,9 +327,6 @@ the current strict harness still requires its first CI validation.
   the render thread outside `QUnifiedTimer` and would escape the fixed-step
   clock. `src/qml` currently uses none; keep it that way, or frame-stepped
   determinism breaks silently.
-- **GitHub x86_64 validation passed.** Run `31959216735` exercised all 42
-  scenarios, the mapped native-menu path, strict multi-pass gate with numeric
-  envelope tolerance, evidence budget, and release-build guard on August 16, 2026.
 - **Window rows need a window fixture — but they do work.** Measured: krema
   alone shows 4 `DockItem`s (the pinned launchers); mapping one plain
   `xdg_toplevel` Qt client in the same container makes it 5. The virtual backend

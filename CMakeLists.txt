@@ -88,6 +88,8 @@ endif()
 
 add_subdirectory(src)
 
+option(KREMA_E2E_TESTS "Register the Docker-based AT-SPI E2E suite (tests/appium/run-e2e.sh) with CTest" OFF)
+
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

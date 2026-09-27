@@ -1,0 +1,55 @@
+inputsynth: absolute pointer moves and W3C Meta = Super
+
+1. Upstream adds every mouse move to the previous *target* and stores the raw
+   move value, so the 2nd+ move of one action chain lands in the wrong place.
+   Krema E2E needs multi-step hover paths and press-move-release drags inside
+   one chain, so apply W3C semantics: "viewport" = absolute, "pointer" =
+   relative to the previous position.
+2. W3C "Meta" (U+E03D) is the Windows/Command key. Upstream maps it to the
+   Meta_L keysym, which in the evdev keymap lives on <META> (keycode 205) at
+   shift level, so "Meta+F5" is sent as Shift+<META>+F5 and never matches a
+   Meta+F5 KGlobalAccel shortcut. Map it to Super_L (<LWIN>, KEY_LEFTMETA),
+   which is what KDE calls Meta.
+
+--- a/inputsynth/interaction.cpp	2026-09-27 20:58:26.523181210 +0900
++++ b/inputsynth/interaction.cpp	2026-09-27 20:58:26.564933738 +0900
+@@ -335,7 +335,7 @@
+         {QChar(u'\ue037'), XKB_KEY_F7},        {QChar(u'\ue038'), XKB_KEY_F8},
+         {QChar(u'\ue039'), XKB_KEY_F9},        {QChar(u'\ue002'), XKB_KEY_Help},
+         {QChar(u'\ue011'), XKB_KEY_Home},      {QChar(u'\ue016'), XKB_KEY_Insert},
+-        {QChar(u'\ue008'), XKB_KEY_Shift_L},   {QChar(u'\ue03d'), XKB_KEY_Meta_L},
++        {QChar(u'\ue008'), XKB_KEY_Shift_L},   {QChar(u'\ue03d'), XKB_KEY_Super_L},
+         {QChar(u'\ue024'), XKB_KEY_multiply},  {QChar(u'\ue000'), XKB_KEY_NoSymbol},
+         {QChar(u'\ue01a'), XKB_KEY_KP_0},      {QChar(u'\ue01b'), XKB_KEY_KP_1},
+         {QChar(u'\ue01c'), XKB_KEY_KP_2},      {QChar(u'\ue01d'), XKB_KEY_KP_3},
+@@ -474,16 +474,11 @@
+                 QThread::msleep(stepDurationMs);
+             }
+         }
+-        // Final round of move
+-        wl_fixed_t lastX;
+-        wl_fixed_t lastY;
+-        if (m_pointerType == PointerKind::Mouse) {
+-            lastX = wl_fixed_from_int(lastPosIt->x() + m_pos.x());
+-            lastY = wl_fixed_from_int(lastPosIt->y() + m_pos.y());
+-        } else {
+-            lastX = wl_fixed_from_int(m_pos.x());
+-            lastY = wl_fixed_from_int(m_pos.y());
+-        }
++        // Final round of move. "viewport" origin is absolute, "pointer" origin
++        // is relative to the previous position of this pointer.
++        const QPoint target = m_origin == Origin::Pointer ? *lastPosIt + m_pos : m_pos;
++        const wl_fixed_t lastX = wl_fixed_from_int(target.x());
++        const wl_fixed_t lastY = wl_fixed_from_int(target.y());
+         if (m_pointerType == PointerKind::Touch) {
+             s_interface->touch_motion(m_uniqueId, lastX, lastY);
+         } else {
+@@ -493,7 +488,7 @@
+         // Sleep to the total duration
+         QThread::msleep(m_duration - (steps - 1) * stepDurationMs);
+         // Update the last position
+-        *lastPosIt = m_pos;
++        *lastPosIt = target;
+ 
+         return;
+     }

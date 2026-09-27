@@ -70,7 +70,9 @@ public:
     [[nodiscard]] int focusedThumbnailIndex() const;
 
     /// Show preview for the task at @p index, positioned near the icon.
-    /// @p itemGlobalPos is the icon's global X (horizontal) or Y (vertical).
+    /// @p itemGlobalPos is the icon's global X (horizontal) or Y (vertical),
+    /// as returned by QML mapToGlobal(); it is converted to dock-surface-local
+    /// coordinates by subtracting the dock window's position.
     /// @p itemExtent is the icon's width (horizontal) or height (vertical).
     Q_INVOKABLE void showPreview(int index, qreal itemGlobalPos, qreal itemExtent);
 
@@ -153,7 +155,7 @@ private:
     qreal m_contentY = 0;
     qreal m_contentWidth = 280;
     qreal m_contentHeight = 200;
-    qreal m_itemGlobalPos = 0;
+    qreal m_itemPos = 0; // icon position in dock-surface-local coordinates
     qreal m_itemExtent = 0;
 
     // Preview keyboard navigation state

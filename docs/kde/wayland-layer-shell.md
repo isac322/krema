@@ -245,7 +245,7 @@ layerWindow->setAnchors(LayerShellQt::Window::AnchorBottom
                       | LayerShellQt::Window::AnchorRight);
 layerWindow->setExclusiveZone(0);  // 0 = no reserved space (auto-hide dock)
 layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-layerWindow->setScope("krema-dock");
+layerWindow->setScope("dock");  // KWin types only "dock" as a Dock (see below)
 layerWindow->setCloseOnDismissed(false);  // allow re-mapping on screen change
 ```
 
@@ -254,5 +254,5 @@ layerWindow->setCloseOnDismissed(false);  // allow re-mapping on screen change
 - **Wrapping pattern**: `Window` wraps `QWindow`, does not subclass it
 - **Anchor flags**: Combine with `|` — e.g., top+left+right for a top panel
 - **Exclusive zone**: Positive = reserve space; 0 = no reservation; -1 = special (depends on compositor)
-- **Scope**: Compositor may use it for stacking order within the same layer
+- **Scope**: The layer-shell namespace. KWin derives the window type from it (`layershellv1window.cpp` `scopeToType`, case-insensitive): only `"dock"` becomes `WindowType::Dock` (others: `desktop`, `notification`, `tooltip`, `on-screen-display`, `dialog`, `splash`, `utility`); any other namespace becomes `WindowType::Normal`. A normal-typed dock is hidden by Show Desktop (`Workspace::setShowingDesktop` hides every window for which `breaksShowingDesktop()` is true, which excludes docks). Never use a branded namespace such as `"krema-dock"` for the dock surface (issue #16).
 - **Screen management**: `ScreenFromCompositor` is useful for single-dock setups; `ScreenFromQWindow` for multi-monitor

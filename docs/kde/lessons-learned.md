@@ -222,3 +222,14 @@ Each view is also positioned on its target screen before creation, and `handleSc
 
 **Not fixed here:** Kirigami's `ScrollablePage` (`src/controls/ScrollablePage.qml:276-277` on master) logs `TypeError: Cannot read property 'flickable' of null` whenever a page is destroyed. This already happens on every normal Settings close. It is upstream.
 
+## 11. The layer-shell namespace is the window type in KWin (2026-09, issue #16)
+
+**Symptom:** Show Desktop (Meta+D) hid the Krema dock, while Plasma panels stayed.
+
+**Cause:** The dock used the namespace `"krema-dock"`. KWin derives a layer surface's window type only from its namespace (`layershellv1window.cpp` `scopeToType`); anything outside its short list (`dock`, `desktop`, `notification`, `tooltip`, ...) becomes `WindowType::Normal`. `Workspace::setShowingDesktop()` hides every window whose `breaksShowingDesktop()` is true, which includes every normal window. Observed in KWin `--virtual`: `dock=false hiddenByShowDesktop=true` with `"krema-dock"`, `dock=true hiddenByShowDesktop=false` with `"dock"`.
+
+**Fix:** The dock surface uses the namespace `"dock"`. `krema_showdesktop_tests` (tests/kwin) toggles Show Desktop over D-Bus and reads KWin's verdict through a test-only scripted effect.
+
+**Key lessons:**
+- The namespace is not a free-form label on KWin: pick it from KWin's type table for the surface's role.
+- Scripted KWin effects only load when `animationsSupported()`; the software-rendered virtual backend needs `KWIN_EFFECTS_FORCE_ANIMATIONS=1`.

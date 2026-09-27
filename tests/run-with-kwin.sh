@@ -40,7 +40,18 @@ export QT_FORCE_STDERR_LOGGING=1
 export KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
 
 socket=krema-test
-kwin_wayland --virtual --no-lockscreen --socket "$socket" --width 1024 --height 768 --output-count 2 >"$scratch/kwin.log" 2>&1 &
+# Optional test-only KWin effects (a directory of effect packages), installed
+# into the private data directory before KWin starts. KWin only loads scripted
+# effects when animations are supported, which the virtual backend's software
+# compositing does not report unless forced.
+if [ -n "${KREMA_TEST_KWIN_EFFECTS:-}" ]; then
+    mkdir -p "$XDG_DATA_HOME/kwin/effects"
+    cp -R "$KREMA_TEST_KWIN_EFFECTS"/. "$XDG_DATA_HOME/kwin/effects/"
+    export KWIN_EFFECTS_FORCE_ANIMATIONS=1
+fi
+# Tests may read what KWin scripts and effects log (console.* -> "js").
+export KREMA_TEST_KWIN_LOG="$scratch/kwin.log"
+QT_LOGGING_RULES="js.info=true" kwin_wayland --virtual --no-lockscreen --socket "$socket" --width 1024 --height 768 --output-count 2 >"$KREMA_TEST_KWIN_LOG" 2>&1 &
 kwin_pid=$!
 
 tries=0

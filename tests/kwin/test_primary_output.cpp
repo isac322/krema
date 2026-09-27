@@ -300,11 +300,11 @@ TEST_CASE("Dock surfaces land on and follow the Plasma primary output", "[primar
             },
             kTimeoutMs));
 
-        // Exactly one krema-dock surface exists in PrimaryOnly mode, and both
+        // Exactly one dock surface exists in PrimaryOnly mode, and both
         // the derived Qt screen and the bound wl_output are the new primary.
         CHECK(QTest::qWaitFor(
             [&] {
-                return dockAndBoundMatch("krema-dock", newPrimary);
+                return dockAndBoundMatch("dock", newPrimary);
             },
             kTimeoutMs));
 
@@ -485,7 +485,7 @@ TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[prim
     // (b) A caller deferring initialize() until ready creates exactly one
     // shell, on the correct output — no wrong-output flash + destroy/recreate.
     CHECK(g_dockCreations.load() == 1);
-    CHECK(layerScreenNames("krema-dock") == QSet<QString>{newPrimary});
+    CHECK(layerScreenNames("dock") == QSet<QString>{newPrimary});
 }
 #endif // KREMA_TEST_HAS_MONITOR
 

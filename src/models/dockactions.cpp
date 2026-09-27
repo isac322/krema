@@ -30,6 +30,18 @@ void DockActions::activate(int index)
         return;
     }
 
+    // TaskGroupingProxyModel::requestActivate() ignores group parents, so a
+    // click on a grouped app would do nothing. Cycle like the wheel does,
+    // which matches Plasma's default grouped-click action ("cycle through
+    // grouped tasks"): while a window of the group is active, each click
+    // activates the next one in model order, wrapping around. When none is
+    // active, the first window is activated (Plasma picks the most recently
+    // used one instead).
+    if (idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+        cycleWindows(index, true);
+        return;
+    }
+
     const bool isLauncher = idx.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
     const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
 

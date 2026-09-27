@@ -1,11 +1,11 @@
 # Mouse Interaction
 
 ## Features
-- mouse-click-activate: Left-click on dock item activates/launches app
+- mouse-click-activate: Left-click on dock item activates/launches app; on a grouped app it cycles through the app's windows
 - mouse-new-instance: Middle-click launches new instance
 - mouse-hover-zoom: Parabolic zoom on mouse hover
 - mouse-hover-tooltip: Tooltip shows app name on hover
-- mouse-wheel-cycle: Scroll wheel cycles windows of grouped app
+- mouse-wheel-cycle: Scroll wheel cycles windows of grouped app; it never launches a pinned app that isn't running
 - mouse-drag-reorder: Drag to reorder dock items
 - mouse-indicator-dots: Running app indicator dots
 
@@ -117,11 +117,14 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 **Expected:**
 - Each scroll switches to the next window of the same app
 - Cycling wraps around
+- Scrolling over a pinned app that is NOT running does nothing (it does not launch the app)
 
 **Limitation:** `list_windows` does not show active/focused window (kwin-mcp D-01).
 Cannot programmatically verify which window is active. Use screenshot comparison.
 
 **Verification:** screenshot comparison (different window in foreground after scroll)
+
+**Automated:** `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`) covers the no-launch case
 
 ---
 
@@ -163,3 +166,26 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 - State updates within 1s of app launch/close
 
 **Verification:** screenshot comparison (dots appear/disappear)
+
+---
+
+## TC MOUSE-008: Left-Click Cycles Windows of a Grouped App
+
+**Precondition:** App with 2+ open windows (e.g., 2 kcalc instances via middle-click).
+**Steps:**
+1. Click another app's window so the grouped app is not active
+2. `mouse_click` on the grouped app's dock item (screen coordinates)
+3. Wait 300ms
+4. `screenshot` — one of the app's windows is in the foreground
+5. `mouse_click` on the same dock item again
+6. Wait 300ms
+7. `screenshot` — the app's other window is in the foreground
+
+**Expected:**
+- The first click activates a window of the app
+- Each further click activates the app's next window, wrapping around (A→B→A)
+- No new instance is launched
+
+**Automated:** `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`)
+
+**Verification:** screenshot comparison (different window in foreground after each click)

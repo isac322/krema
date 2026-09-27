@@ -27,6 +27,10 @@ public:
 
     int run();
 
+    /// Saves @p settings to disk whenever one of its user-facing entries
+    /// changes. PinnedLaunchers is saved by its own handler in run().
+    static void connectSettingsAutoSave(KremaSettings *settings, QObject *context);
+
 private:
     void registerGlobalShortcuts();
 

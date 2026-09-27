@@ -8,6 +8,7 @@ add_executable(krema_unit_tests
     test_input_region.cpp
     test_output_order.cpp
     test_background_opacity.cpp
+    test_settings_autosave.cpp
 )
 
 target_link_libraries(krema_unit_tests PRIVATE

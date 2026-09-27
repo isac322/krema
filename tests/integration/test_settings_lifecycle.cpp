@@ -619,20 +619,109 @@ TEST_CASE("Control: non-topology settings change from the dialog", "[settings][c
     closeSettings();
 }
 
+namespace
+{
+
+// Issue #27: SettingsWindow must destroy the window it opened itself. Left to
+// the QML engine's teardown, the still-open (or still loading) window crashed
+// Krema on Debian 13. A fresh dock graph means a fresh settings engine, so the
+// window's QML is loaded from scratch, as when Krema starts.
+void restartDocks()
+{
+    if (!visibleSettingsWindows().isEmpty()) {
+        closeSettings();
+    }
+    app().manager.reset();
+    QCoreApplication::processEvents();
+    startDocks();
+    g_qmlErrors.clear();
+}
+
+// The Settings window object, shown or hidden.
+QQuickWindow *settingsWindowObject()
+{
+    const auto windows = QGuiApplication::topLevelWindows();
+    for (auto *window : windows) {
+        auto *quickWindow = qobject_cast<QQuickWindow *>(window);
+        if (quickWindow && quickWindow->title() == QLatin1String("Settings")) {
+            return quickWindow;
+        }
+    }
+    return nullptr;
+}
+
+// The dock graph is gone: no Settings window object is left, and Krema's own
+// QML raised no errors while it was torn down.
+void checkSettingsTornDown(const QPointer<QQuickWindow> &window)
+{
+    QCoreApplication::processEvents();
+    CHECK_FALSE(window);
+    CHECK(settingsWindowObjectCount() == 0);
+    CHECK(g_qmlErrors.isEmpty());
+}
+
+} // namespace
+
 TEST_CASE("Shutting down with the settings dialog open", "[settings][shutdown]")
 {
     resetTo(MultiDockManager::PrimaryOnly);
+    restartDocks();
     openSettingsFrom(app().manager->primaryShell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
 
     // QA-10: destroying the dock graph with the dialog open neither crashes
     // nor leaves the dialog behind — and teardown emits no QML errors
     // (a SettingsWindow destroyed while its engine is still alive logs
     // TypeErrors like "Cannot read property 'isStyleAvailable' of null").
-    g_qmlErrors.clear();
     app().manager.reset();
-    QCoreApplication::processEvents();
-    CHECK(visibleSettingsWindows().isEmpty());
-    CHECK(g_qmlErrors.isEmpty());
+    checkSettingsTornDown(dialog);
+}
+
+TEST_CASE("Shutting down in the same turn as opening settings", "[settings][shutdown-while-opening]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    restartDocks();
+
+    // #27 QA-01: Quit right after "Settings...": the window exists but its
+    // pages are still being created when the dock graph goes away
+    Q_EMIT app().manager->primaryShell()->contextMenu()->settingsRequested();
+    QPointer<QQuickWindow> dialog = settingsWindowObject();
+    REQUIRE(dialog);
+    app().manager.reset();
+    checkSettingsTornDown(dialog);
+}
+
+TEST_CASE("Shutting down right after closing settings", "[settings][shutdown-after-close]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    restartDocks();
+    openSettingsFrom(app().manager->primaryShell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
+
+    // #27 QA-03: the closed window's deferred deletion has not run yet when
+    // the dock graph goes away
+    dialog->close();
+    app().manager.reset();
+    checkSettingsTornDown(dialog);
+}
+
+TEST_CASE("Shutting down right after reopening settings", "[settings][shutdown-after-reopen]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    restartDocks();
+    openSettingsFrom(app().manager->primaryShell());
+    QPointer<QQuickWindow> closed = settingsWindow();
+
+    // #27 QA-09: close and reopen with no event loop turn in between, so the
+    // closed window still exists next to the new one when the dock graph goes
+    // away (on kirigami-addons < 1.8 every open() creates a new window)
+    closed->close();
+    Q_EMIT app().manager->primaryShell()->contextMenu()->settingsRequested();
+    QPointer<QQuickWindow> reopened = settingsWindow();
+    REQUIRE(reopened);
+    app().manager.reset();
+    CHECK_FALSE(closed);
+    checkSettingsTornDown(reopened);
 }
 
 int main(int argc, char *argv[])

@@ -28,6 +28,19 @@ SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
 
 SettingsWindow::~SettingsWindow()
 {
+    // Destroy the settings windows while the engine is intact. ConfigWindow is
+    // parentless and JavaScript-owned, so otherwise the engine's teardown sweep
+    // destroys it, which crashes on Qt 6.8 / KF 6.13 (Debian 13) when its pages
+    // are still being created (#27). Disconnect first so no close handling
+    // (lock release, deleteLater) runs from here; deleting also cancels any
+    // pending deleteLater() or QML destroy().
+    for (const auto &window : std::as_const(m_openedWindows)) {
+        if (window) {
+            disconnect(window, nullptr, this, nullptr);
+            delete window.data();
+        }
+    }
+
     // Delete the engine while the "SettingsWindow" context property still
     // resolves to this object. m_engine is only a QObject child, so a default
     // destructor would destroy it after this object's QML bindings are gone
@@ -144,6 +157,8 @@ void SettingsWindow::ensureEngine()
 void SettingsWindow::trackConfigWindow(QQuickWindow *win, bool deleteOnClose)
 {
     m_configWindow = win;
+    m_openedWindows.removeAll(nullptr);
+    m_openedWindows.append(win);
     win->setIcon(QGuiApplication::windowIcon());
 
     connect(win, &QWindow::visibleChanged, this, [this, window = QPointer<QQuickWindow>(win), deleteOnClose](bool visible) {

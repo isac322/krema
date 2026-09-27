@@ -211,3 +211,14 @@ Each view is also positioned on its target screen before creation, and `handleSc
 **Key lessons:**
 - A compile-only compat branch is not a fix: check the wire-level `get_layer_surface` output against the old library too.
 - `-D_HAVE_LAYERSHELLQT_SET_SCREEN=OFF` exercises the compat code on a new distro, but only a real old LayerShellQt (Debian 13) reproduces the `create()` in `Window::get()`.
+
+## 10. Destroy JavaScript-owned windows before their QML engine (2026-09, issue #27)
+
+**Symptom:** On Debian 13 (Qt 6.8.2, KF 6.13), Krema segfaulted in `QQmlComponent::~QQmlComponent()` when it quit or rebuilt its docks while the Settings window was still being built or was open. With the real binary, quitting 0 ms after opening Settings crashed 3 out of 3 times, 50 ms 2/3, 300 ms 1/3, and 3 s 0/3. Fedora 44 (Qt 6.11) never crashed, including with kirigami-addons 1.7.0 built from source.
+
+**Cause:** `ConfigurationView.open()` creates `ConfigWindow` with `component.createObject(...)`. On every kirigami-addons version (1.7–1.13) the window has no QObject parent and has `QQmlEngine::JavaScriptOwnership`. Passing `root.window` in 1.12+ only sets `transientParent`. `~SettingsWindow` deleted the engine with the window alive, so the engine's teardown sweep (`QV4::QObjectWrapper::destroyObject`) destroyed the window tree, which crashes on the Debian 13 stack.
+
+**Rule:** An owner of a `QQmlEngine` destroys every top-level window created in that engine, including JS-owned windows it did not construct, before deleting the engine. Keep `QPointer`s to them (closed windows with a pending `deleteLater()`/`destroy()` included), `disconnect()` them from the owner first so no close handling runs from the destructor, then `delete`. Deleting cancels pending deferred deletions, and `QtObject` properties such as `configViewItem` become null.
+
+**Not fixed here:** Kirigami's `ScrollablePage` (`src/controls/ScrollablePage.qml:276-277` on master) logs `TypeError: Cannot read property 'flickable' of null` whenever a page is destroyed. This already happens on every normal Settings close. It is upstream.
+

@@ -70,6 +70,10 @@ void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode
     // Connect all signals
     connectSettingsSignals();
     connectMenuSignals();
+
+    // The panel rect was reported by QML while the view loaded, before
+    // panelRectChanged was connected above, so apply the blur region now.
+    m_view->applyBackgroundStyle();
 }
 
 DockView *DockShell::view() const

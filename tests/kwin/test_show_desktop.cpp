@@ -101,7 +101,9 @@ struct ProbeWindow {
 };
 
 // The windows KWin reported for the most recent toggle that turned Show
-// Desktop on.
+// Desktop on. Deleted surfaces that are still in the stacking order for the
+// closing animation are skipped, so the same-size shell teardown does not
+// shadow the dock.
 QList<ProbeWindow> latestShowingWindows()
 {
     QFile log(qEnvironmentVariable("KREMA_TEST_KWIN_LOG"));
@@ -119,6 +121,7 @@ QList<ProbeWindow> latestShowingWindows()
         }
         int toggle = -1;
         bool showing = false;
+        bool deleted = false;
         ProbeWindow window;
         const auto fields = QStringView(line).mid(at + marker.size()).split(QLatin1Char(' '));
         for (const auto &field : fields) {
@@ -136,6 +139,8 @@ QList<ProbeWindow> latestShowingWindows()
                 window.windowClass = value.toString();
             } else if (key == QLatin1String("dock")) {
                 window.dock = value == QLatin1String("true");
+            } else if (key == QLatin1String("deleted")) {
+                deleted = value == QLatin1String("true");
             } else if (key == QLatin1String("hiddenByShowDesktop")) {
                 window.hiddenByShowDesktop = value == QLatin1String("true");
             } else if (key == QLatin1String("size")) {
@@ -145,7 +150,7 @@ QList<ProbeWindow> latestShowingWindows()
                 }
             }
         }
-        if (!showing || toggle < latestToggle) {
+        if (!showing || deleted || toggle < latestToggle) {
             continue;
         }
         if (toggle > latestToggle) {

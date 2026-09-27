@@ -15,6 +15,7 @@ effects.showingDesktopChanged.connect(function (showing) {
                      + " showing=" + showing
                      + " class=" + w.windowClass.replace(/ /g, "/")
                      + " dock=" + w.dock
+                     + " deleted=" + w.deleted
                      + " hiddenByShowDesktop=" + w.hiddenByShowDesktop
                      + " size=" + Math.round(w.width) + "x" + Math.round(w.height));
     }

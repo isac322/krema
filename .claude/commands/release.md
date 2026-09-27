@@ -335,7 +335,7 @@ curl -sL "https://github.com/isac322/krema/archive/v<version>.tar.gz" \
   -o "$PPA_DIR/krema_<version>.orig.tar.gz"
 ```
 
-For each active series, build a source package with version `<version>-1~ppa1~<series>1`.
+For each active series, build a source package with version `<version>-<debrev>~ppa1~<series>1`. `<debrev>` is the Debian revision of the top entry of `packaging/obs/debian.changelog`: `1` for a new upstream release, or the bumped revision (`0.7.0-3` → `3`) for a packaging-only respin. Launchpad rejects uploads whose version is not newer than the published one, so packaging respins MUST reuse the bumped revision.
 
 Use Docker to run `dpkg-buildpackage` (Arch doesn't have it natively):
 ```bash
@@ -351,9 +351,9 @@ cp /src/packaging/obs/debian.rules debian/rules
 cp /src/packaging/obs/debian.copyright debian/copyright
 chmod +x debian/rules
 cat > debian/changelog << "CHLOG"
-krema (<version>-1~ppa1~<series>1) <series>; urgency=medium
+krema (<version>-<debrev>~ppa1~<series>1) <series>; urgency=medium
 
-  * New upstream release v<version>
+  * <top entry bullets from packaging/obs/debian.changelog>
 
  -- Byeonghoon Yoo <bhyoo@bhyoo.com>  <RFC 2822 date>
 CHLOG
@@ -383,10 +383,10 @@ Otherwise, sign manually and update checksums with a script.
 
 Upload ALL 5 files (missing any one causes rejection):
 - `krema_<version>.orig.tar.gz`
-- `krema_<version>-1~ppa1~<series>1.debian.tar.xz`
-- `krema_<version>-1~ppa1~<series>1.dsc`
-- `krema_<version>-1~ppa1~<series>1_source.buildinfo`
-- `krema_<version>-1~ppa1~<series>1_source.changes`
+- `krema_<version>-<debrev>~ppa1~<series>1.debian.tar.xz`
+- `krema_<version>-<debrev>~ppa1~<series>1.dsc`
+- `krema_<version>-<debrev>~ppa1~<series>1_source.buildinfo`
+- `krema_<version>-<debrev>~ppa1~<series>1_source.changes`
 
 ```bash
 dput "ppa:isac322/krema" <changes_file>

@@ -1260,12 +1260,10 @@ void FrameProbe::installIfEnabled()
 
         ++*frame;
 
-        // grabWindow() renders the scene synchronously, so the pixels and the
-        // JSON row below always describe the same animation instant -- and,
-        // critically, it is what guarantees exactly one render per captured
-        // frame. Skipping it when screenshots are off would let the compositor
-        // pace rendering instead, and animation state would then advance once
-        // every few captured frames. Always capture; only PNG encoding is
+        // grabWindow() polishes and renders the scene synchronously, so
+        // positioner layout is current and the pixels and the JSON row below
+        // describe the same animation instant. Animation time itself only
+        // moves in driver->advance(). Always capture; only PNG encoding is
         // gated, which is the expensive part.
         const QImage image = captureScreen(window);
 

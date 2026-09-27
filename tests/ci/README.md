@@ -212,10 +212,11 @@ pass must have the same frame numbers. Each action-delimited segment requires
 a matching pre-action frame, settled tail, and value envelope; numbers match
 within an explicit `1e-4` absolute tolerance, and booleans, strings and
 structure match exactly. Up to nine same-frame payloads may differ inside that
-bounded transition; this admits observed Qt animation-registration jitter
-without allowing changed endpoints, omitted states, or out-of-range values. The
-video remains for the part that is genuinely visual — whether the glow reads as
-a glow.
+bounded transition. With the fixed-step driver, virtual timers and compositor
+sync, passes are normally frame-identical; the budget is an upper bound for a
+residual onset difference, and never admits changed endpoints, omitted states,
+or out-of-range values. The video remains for the part that is genuinely
+visual — whether the glow reads as a glow.
 
 ## Reading results in CI
 

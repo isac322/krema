@@ -64,7 +64,7 @@ fi
 #    (OBS debtransform consumes the .dsc; drift aborts the OBS build).
 if [[ "${1:-}" == "--check-packaging" ]]; then
     command -v dpkg-parsechangelog > /dev/null 2>&1 \
-        || { echo "--check-packaging requires dpkg-parsechangelog (run on a Debian/Ubuntu host, or in a container: docker run --rm -v \"${repo_root}:/src\" debian:13 bash /src/tests/docker/verify-deb-qml.sh --check-packaging)" >&2; exit 64; }
+        || { echo "--check-packaging requires dpkg-parsechangelog (run on a Debian/Ubuntu host, or in a container — bare debian:13 has no dpkg-dev, so install it first: docker run --rm -v \"${repo_root}:/src\" debian:13 bash -c 'apt-get update -qq && apt-get install -y -qq dpkg-dev && bash /src/tests/docker/verify-deb-qml.sh --check-packaging')" >&2; exit 64; }
     fail=0
     chlog_ver="$(dpkg-parsechangelog -l "${repo_root}/packaging/obs/debian.changelog" -S Version 2>/dev/null)" \
         || { echo "debian.changelog does not parse"; fail=1; }

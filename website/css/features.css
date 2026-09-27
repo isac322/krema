@@ -1,0 +1,301 @@
+/* Features: parabolic accordion (#everything .fx)
+ *
+ * Base rules = plain readable stack (no JS, narrow screens).
+ * `.fx[data-fx-live]` is set by js/features.js once it has taken over; the
+ * wide accordion only activates then, so a failed script never hides text. */
+
+.fx {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+}
+
+.fx-panel {
+  position: relative;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-win);
+  color: var(--bone);
+  transform-origin: 50% 50%;
+}
+
+.fx-panel:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.fx-spine {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 24px 0;
+}
+
+.fx-glyph {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  color: var(--blue);
+}
+
+.fx-name {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--bone);
+}
+
+.fx-body {
+  container: fxbody / inline-size;
+  padding: 12px 24px 26px;
+}
+
+.fx-lede {
+  margin: 0 0 18px;
+  max-width: 60ch;
+  font-size: 1.04rem;
+  line-height: 1.55;
+  color: var(--bone-dim);
+}
+
+.fx-specs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px 28px;
+  margin: 0;
+}
+
+.fx-specs > div {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.fx-specs dt {
+  margin: 0 0 3px;
+  font-weight: 600;
+  color: var(--bone);
+}
+
+.fx-specs dd {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  color: var(--bone-dim);
+}
+
+.fx-body code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  color: var(--bone);
+}
+
+@container fxbody (min-width: 34rem) {
+  .fx-specs { grid-template-columns: 1fr 1fr; }
+}
+
+/* Keyboard shortcuts table */
+.fx .keys {
+  width: 100%;
+  margin: 4px 0 0;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+
+.fx .keys caption {
+  margin-bottom: 10px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fx .keys th,
+.fx .keys td {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fx .keys th {
+  padding-right: 20px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--bone-dim);
+}
+
+.fx .keys td { color: var(--bone-dim); }
+
+.fx kbd {
+  display: inline-block;
+  min-width: 1.9em;
+  padding: 0.14em 0.5em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.8em;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--bone);
+}
+
+/* Dock indicator: running dot on hover, stretched pill on the open/active panel */
+.fx[data-fx-live] .fx-panel::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bone-dim);
+  opacity: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: opacity 180ms linear, width 260ms var(--ease-out), background-color 200ms linear, box-shadow 200ms linear;
+}
+
+/* ---------- Wide: parabolic accordion ---------- */
+@media (min-width: 900px) {
+  .fx[data-fx-live] {
+    display: flex;
+    gap: 10px;
+    /* JS sets --fx-row-h to the tallest open body (+ title bar) so no
+     * panel ever clips its text; the viewport-based height is the floor. */
+    height: max(var(--fx-row-h, 0px), min(640px, 72vh));
+    min-height: 460px;
+  }
+
+  .fx[data-fx-live] .fx-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    cursor: pointer;
+    transition: flex-grow 260ms var(--ease-out), border-color 200ms linear;
+  }
+
+  .fx[data-fx-live] .fx-panel.is-open {
+    cursor: auto;
+    border-color: rgba(61, 174, 233, 0.28);
+  }
+
+  .fx[data-fx-live] .fx-panel:not(.is-open):hover {
+    border-color: rgba(243, 240, 234, 0.2);
+  }
+
+  .fx[data-fx-live] .fx-panel:not(.is-open):hover::after {
+    opacity: 0.9;
+  }
+
+  .fx[data-fx-live] .fx-panel.is-open::after {
+    width: 28px;
+    opacity: 1;
+    background: var(--blue);
+    box-shadow: 0 0 12px var(--glow);
+  }
+
+  /* Collapsed: a spine with the glyph on top and the name running up the side */
+  .fx[data-fx-live] .fx-spine {
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 22px 0 40px;
+  }
+
+  .fx[data-fx-live] .fx-name {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--bone-dim);
+    transition: color 200ms linear;
+  }
+
+  .fx[data-fx-live] .fx-panel:not(.is-open):hover .fx-name,
+  .fx[data-fx-live] .fx-panel:not(.is-open):focus-visible .fx-name {
+    color: var(--bone);
+  }
+
+  /* Open (the peak): the spine becomes a title bar */
+  .fx[data-fx-live] .fx-panel.is-open .fx-spine {
+    inset: 0 0 auto 0;
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 26px 28px 0;
+    animation: fx-title-in 320ms var(--ease-out) both;
+  }
+
+  .fx[data-fx-live] .fx-panel.is-open .fx-name {
+    writing-mode: horizontal-tb;
+    transform: none;
+    font-size: 1.4rem;
+    color: var(--bone);
+  }
+
+  /* Body keeps a fixed width (set by JS for the peak) so text never reflows
+   * while the panel grows; the row is sized by JS to fit the tallest body at
+   * that width, so nothing is clipped vertically. Collapsed bodies stay in
+   * the DOM and the accessibility tree (clip technique, never display:none
+   * or visibility:hidden), only visually hidden. */
+  .fx[data-fx-live] .fx-body {
+    position: absolute;
+    top: 82px;
+    left: 0;
+    width: var(--fx-open-w, 34rem);
+    /* bottom padding clears the active pill (bottom 14px + 6px tall) */
+    padding: 6px 28px 52px;
+    opacity: 0;
+    clip-path: inset(50%);
+    pointer-events: none;
+  }
+
+  .fx[data-fx-live] .fx-panel.is-open .fx-body {
+    opacity: 1;
+    clip-path: none;
+    pointer-events: auto;
+    transition: opacity 240ms var(--ease-out) 80ms;
+  }
+}
+
+@keyframes fx-title-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Narrow: stack magnified by the viewport centre ---------- */
+@media (max-width: 899.98px) {
+  .fx[data-fx-live] .fx-panel {
+    transform: scale(var(--fx-s, 1));
+    opacity: var(--fx-o, 1);
+  }
+
+  .fx[data-fx-live] .fx-panel.is-active::after {
+    width: 28px;
+    opacity: 1;
+    background: var(--blue);
+    box-shadow: 0 0 12px var(--glow);
+  }
+
+  .fx[data-fx-live] .fx-body { padding-bottom: 38px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx[data-fx-live] .fx-panel,
+  .fx[data-fx-live] .fx-panel::after,
+  .fx[data-fx-live] .fx-name,
+  .fx[data-fx-live] .fx-body,
+  .fx[data-fx-live] .fx-panel.is-open .fx-body {
+    transition: none;
+  }
+
+  .fx[data-fx-live] .fx-panel.is-open .fx-spine { animation: none; }
+}

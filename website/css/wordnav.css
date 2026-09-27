@@ -1,0 +1,195 @@
+/* Wordnav: the zoom wordmark K-R-E-M-A is the section navigation.
+   Letter scale/offset and dot position are written per frame by js/wordnav.js. */
+
+html { scroll-padding-top: calc(var(--wordnav-h) + 8px); }
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.wordnav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  height: var(--wordnav-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding-inline: clamp(0.75rem, 3vw, 1.75rem);
+  font-family: var(--font);
+}
+
+/* Bar surface lives on a pseudo-element so it can fade without touching children. */
+.wordnav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(14 20 27 / 0.82);
+  background: color-mix(in srgb, var(--night) 82%, transparent);
+  border-bottom: 1px solid var(--line);
+  transition: opacity 0.3s var(--ease-out);
+}
+
+/* ---------- Home icon ---------- */
+
+.wn-home {
+  justify-self: start;
+  display: inline-flex;
+  border-radius: 9px;
+  transition: opacity 0.3s var(--ease-out), visibility 0s;
+}
+.wn-icon { width: 30px; height: 30px; }
+
+/* ---------- Letters ---------- */
+
+.wordnav nav {
+  position: relative;
+  height: var(--wordnav-h);
+  display: flex;
+  align-items: flex-end;
+  transition: opacity 0.3s var(--ease-out), visibility 0s;
+}
+
+.wn-letters {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px; /* keep in sync with GAP in js/wordnav.js */
+  margin: 0;
+  padding: 0 0 20px;
+  list-style: none;
+}
+
+.wn-item {
+  position: relative;
+  list-style: none;
+  will-change: transform;
+}
+
+.wn-l {
+  display: block;
+  padding: 4px 5px;
+  border-radius: 6px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--bone-dim);
+  text-decoration: none;
+  transform-origin: 50% 100%;
+  will-change: transform;
+  transition: color 0.2s var(--ease-out);
+}
+.wn-l:hover,
+.wn-l.is-active { color: var(--bone); }
+.wn-l:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.wn-cap {
+  position: absolute;
+  left: 50%;
+  bottom: -19px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  line-height: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+/* Caption shows for the active letter, unless another letter is hovered or focused. */
+.wn-l.is-active + .wn-cap { opacity: 1; }
+.wn-letters:hover .wn-l.is-active + .wn-cap,
+.wn-letters:has(.wn-l:focus-visible) .wn-l.is-active + .wn-cap { opacity: 0; }
+.wn-letters .wn-item:hover .wn-cap,
+.wn-letters .wn-l:focus-visible + .wn-cap { opacity: 1; }
+
+.wn-dot {
+  position: absolute;
+  left: 0;
+  bottom: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 8px 1px var(--glow);
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.35s var(--ease-spring);
+}
+
+/* ---------- GitHub link ---------- */
+
+.wn-gh {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--bone-dim);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s var(--ease-out), border-color 0.2s var(--ease-out), background-color 0.2s var(--ease-out);
+}
+.wn-gh::before {
+  --wn-gh-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z'/%3E%3C/svg%3E");
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: var(--wn-gh-icon) center / contain no-repeat;
+  mask: var(--wn-gh-icon) center / contain no-repeat;
+}
+.wn-gh:hover { color: var(--bone); border-color: rgb(243 240 234 / 0.3); background: rgb(243 240 234 / 0.05); }
+.wn-gh:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- Pre-scroll state (JS only): the hero wordmark is the only wordmark ---------- */
+
+.js .wordnav:not(.is-shown)::before { opacity: 0; }
+.js .wordnav:not(.is-shown) nav,
+.js .wordnav:not(.is-shown) .wn-home {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s var(--ease-out), visibility 0s linear 0.3s;
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 639px) {
+  .wn-home { display: none; }
+  .wordnav { grid-template-columns: 1fr auto 1fr; }
+  .wordnav nav { grid-column: 2; }
+  /* Icon only; the text stays in the accessibility tree as the link name. */
+  .wn-gh {
+    grid-column: 3;
+    gap: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+  .wn-gh::before { width: 18px; height: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordnav::before,
+  .wordnav nav,
+  .wn-home,
+  .wn-l,
+  .wn-cap,
+  .wn-dot,
+  .js .wordnav:not(.is-shown) nav,
+  .js .wordnav:not(.is-shown) .wn-home { transition: none; }
+}

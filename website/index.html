@@ -33,8 +33,19 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
+<script>document.documentElement.classList.add("js")</script>
 <link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/wordnav.css">
+<link rel="stylesheet" href="css/hero.css">
+<link rel="stylesheet" href="css/features.css">
+<link rel="stylesheet" href="css/shots.css">
+<link rel="stylesheet" href="css/pagedock.css">
 <script src="js/site.js" defer></script>
+<script src="js/wordnav.js" defer></script>
+<script src="js/hero.js" defer></script>
+<script src="js/features.js" defer></script>
+<script src="js/shots.js" defer></script>
+<script src="js/pagedock.js" defer></script>
 
 <script type="application/ld+json">
 {
@@ -80,214 +91,194 @@
   <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 5v13M6.5 12.5 12 18l5.5-5.5"/></symbol>
 </svg>
 
-<header class="hero">
-  <div class="bar wrap">
-    <a class="brand" href="./" aria-label="Krema home">
-      <svg class="lockup" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 753.87 256" aria-hidden="true" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/><rect x="44" y="32" width="32" height="192" rx="16" fill="#F3F0EA"/><rect x="86" y="98" width="60" height="60" rx="16.2" fill="#3DAEE9"/><rect x="151" y="57" width="36" height="36" rx="9.72" fill="#3DAEE9" opacity="0.66"/><rect x="151" y="163" width="36" height="36" rx="9.72" fill="#3DAEE9" opacity="0.66"/><rect x="192" y="32" width="20" height="20" rx="5.4" fill="#3DAEE9" opacity="0.38"/><rect x="192" y="204" width="20" height="20" rx="5.4" fill="#3DAEE9" opacity="0.38"/><svg x="308" y="22.83" width="445.87" height="189.02" viewBox="0 -10.9 342.98 145.4"><g fill="none" stroke="#F3F0EA" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(6.5,28) scale(0.72)" d="M0,10 V100 M44,40 L4,74 M20,61 L46,100" stroke-width="18.06"/><path transform="translate(65.62,13) scale(0.87)" d="M0,40 V100 M0,64 C0,48 12,40 30,40" stroke-width="14.94"/><path transform="translate(117.72,-16) scale(1.16)" d="M2,70 H58 A28,28 0 1 0 51.4,88" stroke-width="11.21"/><path transform="translate(211,13) scale(0.87)" d="M0,40 V100 M0,60 C0,47 8,40 18,40 C29,40 34,47 34,60 V100 M34,60 C34,47 42,40 52,40 C63,40 68,47 68,60 V100" stroke-width="14.94"/><path transform="translate(296.16,28) scale(0.72)" d="M56,40 V100 M56,70 A28,28 0 1 1 0,70 A28,28 0 1 1 56,70" stroke-width="18.06"/></g><circle cx="151.36" cy="126" r="8.5" fill="#3DAEE9"/></svg></svg>
-    </a>
-    <nav aria-label="Primary">
-      <ul class="nav">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#install">Install</a></li>
-        <li><a class="nav-gh" href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span></a></li>
-      </ul>
-    </nav>
-  </div>
-
-  <div class="hero-copy wrap">
-    <h1>A lightweight dock for KDE&nbsp;Plasma&nbsp;6</h1>
-    <p class="lede">Parabolic zoom, live window previews and the Plasma theme you already picked. Krema is written in C++ against KDE’s own frameworks, runs natively on Wayland, and is the spiritual successor to Latte&nbsp;Dock.</p>
-    <div class="ctas">
-      <a class="btn btn-primary" href="#install"><svg aria-hidden="true"><use href="#i-down"/></svg>Install</a>
-      <a class="btn btn-ghost" href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
-    </div>
-  </div>
-
-  <figure class="stage" aria-labelledby="stage-caption">
-    <div class="desk">
-      <div class="dock-tip" aria-hidden="true"></div>
-      <div class="dock" role="toolbar" aria-label="Interactive dock demo" aria-orientation="horizontal">
-        <button type="button" class="tile t-blue is-running" data-name="Files" aria-label="Files, running"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.7l2 2h7.3a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-night is-running" data-name="Terminal" aria-label="Terminal, running"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m7.5 10 3 2.5-3 2.5M13 15h3.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-bone is-running" data-name="Web Browser" aria-label="Web Browser, running"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="3.6" ry="8.5"/><path d="M3.5 12h17"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-night" data-name="Mail" aria-label="Mail"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-blue is-running" data-name="Chat" aria-label="Chat, running, 3 unread"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14A1.5 1.5 0 0 1 20.5 7v8.5A1.5 1.5 0 0 1 19 17h-8.5l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5Z"/></svg><span class="badge" aria-hidden="true">3</span></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-night" data-name="Music" aria-label="Music"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V7l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-bone" data-name="Photos" aria-label="Photos"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m4 16.5 4.5-4.5 4 4 2.5-2.5 5 5"/><circle cx="15.5" cy="9.5" r="1.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-        <button type="button" class="tile t-night" data-name="System Settings" aria-label="System Settings"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h9.5M18 7h1.5M4.5 12h2.5M11 12h8.5M4.5 17h7.5M16 17h3.5"/><circle cx="16" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="14" cy="17" r="2"/></svg></span><span class="dot" aria-hidden="true"></span></button>
-      </div>
-    </div>
-    <figcaption id="stage-caption">Glide across the dock, drag a finger over it, or <kbd>Tab</kbd> in and use the arrow keys. Press a tile to launch it.</figcaption>
-  </figure>
+<header class="wordnav" data-wordnav>
+  <a class="wn-home" href="#top" aria-label="Krema home"><svg class="wn-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg></a>
+  <nav aria-label="Sections"><ol class="wn-letters">
+    <li class="wn-item"><a class="wn-l" href="#top" data-section="top" aria-label="Krema">K</a><span class="wn-cap">Krema</span></li>
+    <li class="wn-item"><a class="wn-l" href="#roots" data-section="roots" aria-label="Roots">R</a><span class="wn-cap">Roots</span></li>
+    <li class="wn-item"><a class="wn-l" href="#everything" data-section="everything" aria-label="Everything it does">E</a><span class="wn-cap">Everything</span></li>
+    <li class="wn-item"><a class="wn-l" href="#moments" data-section="moments" aria-label="Moments on a real desktop">M</a><span class="wn-cap">Moments</span></li>
+    <li class="wn-item"><a class="wn-l" href="#add" data-section="add" aria-label="Add Krema to your desktop">A</a><span class="wn-cap">Add it</span></li>
+  </ol><span class="wn-dot" aria-hidden="true"></span></nav>
+  <a class="wn-gh" href="https://github.com/isac322/krema">GitHub</a>
 </header>
 
 <main id="main">
-  <section class="band successor" aria-labelledby="successor-title">
-    <div class="wrap split">
-      <h2 id="successor-title">Latte Dock stopped at Plasma&nbsp;5. Krema starts at&nbsp;6.</h2>
-      <div class="prose">
-        <p>If your desktop lost its dock during the Plasma 6 upgrade, Krema is here to fill the gap. It is a spiritual successor to Latte Dock, written from scratch for Qt&nbsp;6, KDE Frameworks&nbsp;6 and the Wayland Layer Shell protocol, with no X11 code to carry along.</p>
-        <p>Rendering runs on the GPU through Qt’s QRhi, previews stream through PipeWire, and nothing is allocated until the dock actually needs it.</p>
+  <section id="top" class="hero" data-section-app="Krema">
+    <h1 class="lens" aria-label="Krema"><span class="lens-ch" aria-hidden="true">k</span><span class="lens-ch" aria-hidden="true">r</span><span class="lens-ch" aria-hidden="true">e</span><span class="lens-ch" aria-hidden="true">m</span><span class="lens-ch" aria-hidden="true">a</span><span class="lens-dot" aria-hidden="true"></span></h1>
+    <p class="hero-tag">The zooming dock for KDE Plasma 6, native to Wayland.</p>
+    <p class="hero-lede">Parabolic zoom, live window previews and the Plasma theme you already picked. Krema is written in C++ against KDE’s own frameworks, runs natively on Wayland, and is the spiritual successor to Latte&nbsp;Dock.</p>
+    <div class="ctas">
+      <a class="btn btn-primary" href="#add"><svg aria-hidden="true"><use href="#i-down"/></svg>Install</a>
+      <a class="btn btn-ghost" href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
+    </div>
+    <p class="hero-hint" aria-hidden="true">Sweep the letters.</p>
+  </section>
+
+  <section id="roots" class="roots" aria-labelledby="roots-title">
+    <div class="win">
+      <div class="win-bar"><span class="win-title">roots — Krema</span></div>
+      <div class="win-body">
+        <h2 id="roots-title">Latte Dock stopped at Plasma&nbsp;5. Krema starts at&nbsp;6.</h2>
+        <div class="prose">
+          <p>If your desktop lost its dock during the Plasma 6 upgrade, Krema is here to fill the gap. It is a spiritual successor to Latte Dock, written from scratch for Qt&nbsp;6, KDE Frameworks&nbsp;6 and the Wayland Layer Shell protocol, with no X11 code to carry along.</p>
+          <p>Rendering runs on the GPU through Qt’s QRhi, previews stream through PipeWire, and nothing is allocated until the dock actually needs it.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section id="features" class="band" aria-labelledby="features-title">
-    <div class="wrap">
-      <h2 id="features-title" class="section-title">Everything a dock should do, done the Plasma way</h2>
-
-      <div class="group">
-        <div class="group-head">
-          <h3 id="g-core">Core dock</h3>
-          <p>The behavior your hands expect, tuned from the settings window rather than a config file.</p>
+  <section id="everything" class="features" aria-labelledby="everything-title">
+    <h2 id="everything-title" class="section-title">Everything a dock should do, done the Plasma way</h2>
+    <div class="fx" data-fx>
+      <article class="fx-panel" tabindex="0" aria-labelledby="fx-core-h">
+        <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20h17"/><rect x="4.5" y="10.5" width="4.25" height="6" rx="1.4"/><rect x="9.9" y="6" width="4.25" height="10.5" rx="1.4"/><rect x="15.3" y="9" width="4.25" height="7.5" rx="1.4"/></g></svg><h3 id="fx-core-h" class="fx-name">Core dock</h3></div>
+        <div class="fx-body">
+          <p class="fx-lede">The behavior your hands expect, tuned from the settings window rather than a config file.</p>
+          <dl class="fx-specs">
+            <div><dt>Parabolic zoom</dt><dd>Icons swell smoothly under the pointer and settle back as it leaves, with adjustable magnification.</dd></div>
+            <div><dt>Even icon sizes</dt><dd>Krema detects built-in padding in icon themes and rescales so every app lines up.</dd></div>
+            <div><dt>Pinning and running dots</dt><dd>Keep favorites in place; a dot under each icon marks what is open.</dd></div>
+            <div><dt>Scroll to cycle</dt><dd>Turn the wheel over an app to step through its windows.</dd></div>
+            <div><dt>Backgrounds</dt><dd>Inherit your panel style, go semi-transparent or fully clear, tint it, frost it with acrylic blur, follow your accent with Mica, or let adaptive opacity turn solid when a window touches the dock.</dd></div>
+            <div><dt>Three visibility modes</dt><dd>Always visible, auto-hide, or dodge windows.</dd></div>
+          </dl>
         </div>
-        <dl class="specs">
-          <div><dt>Parabolic zoom</dt><dd>Icons swell smoothly under the pointer and settle back as it leaves, with adjustable magnification.</dd></div>
-          <div><dt>Even icon sizes</dt><dd>Krema detects built-in padding in icon themes and rescales so every app lines up.</dd></div>
-          <div><dt>Pinning and running dots</dt><dd>Keep favorites in place; a dot under each icon marks what is open.</dd></div>
-          <div><dt>Scroll to cycle</dt><dd>Turn the wheel over an app to step through its windows.</dd></div>
-          <div><dt>Backgrounds</dt><dd>Inherit your panel style, go semi-transparent or fully clear, tint it, frost it with acrylic blur, follow your accent with Mica, or let adaptive opacity turn solid when a window touches the dock.</dd></div>
-          <div><dt>Three visibility modes</dt><dd>Always visible, auto-hide, or dodge windows.</dd></div>
-        </dl>
-      </div>
-
-      <div class="group">
-        <div class="group-head">
-          <h3 id="g-previews">Previews</h3>
-          <p>See a window before you switch to it, without the dock getting in the way.</p>
+      </article>
+      <article class="fx-panel" tabindex="0" aria-labelledby="fx-previews-h">
+        <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12.5" rx="2"/><path d="m6.5 13.5 3-3 2.5 2.5 1.75-1.75 3.75 3.75"/><circle cx="15.5" cy="8.2" r="1.2"/><path d="M9.5 20h5"/></g></svg><h3 id="fx-previews-h" class="fx-name">Previews</h3></div>
+        <div class="fx-body">
+          <p class="fx-lede">See a window before you switch to it, without the dock getting in the way.</p>
+          <dl class="fx-specs">
+            <div><dt>Live PipeWire thumbnails</dt><dd>Hover an app to watch its windows update in real time, captured on the GPU.</dd></div>
+            <div><dt>Grouped windows</dt><dd>Every window of an app appears side by side in one popup.</dd></div>
+            <div><dt>Click to switch</dt><dd>Pick a thumbnail to bring that exact window forward.</dd></div>
+            <div><dt>Close from the preview</dt><dd>Dismiss a window right from its thumbnail.</dd></div>
+          </dl>
         </div>
-        <dl class="specs">
-          <div><dt>Live PipeWire thumbnails</dt><dd>Hover an app to watch its windows update in real time, captured on the GPU.</dd></div>
-          <div><dt>Grouped windows</dt><dd>Every window of an app appears side by side in one popup.</dd></div>
-          <div><dt>Click to switch</dt><dd>Pick a thumbnail to bring that exact window forward.</dd></div>
-          <div><dt>Close from the preview</dt><dd>Dismiss a window right from its thumbnail.</dd></div>
-        </dl>
-      </div>
-
-      <div class="group">
-        <div class="group-head">
-          <h3 id="g-attention">Notifications &amp; attention</h3>
-          <p>A calm dock that still tells you when something needs you.</p>
+      </article>
+      <article class="fx-panel" tabindex="0" aria-labelledby="fx-attention-h">
+        <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10.5a6 6 0 1 1 12 0c0 3.2 1 4.3 1.9 5.5H4.1C5 14.8 6 13.7 6 10.5Z"/><path d="M9.8 19.5a2.2 2.2 0 0 0 4.4 0"/></g></svg><h3 id="fx-attention-h" class="fx-name">Notifications &amp; attention</h3></div>
+        <div class="fx-body">
+          <p class="fx-lede">A calm dock that still tells you when something needs you.</p>
+          <dl class="fx-specs">
+            <div><dt>Badges</dt><dd>Unread counts arrive over D-Bus and the SmartLauncher (Unity) API, shown as a number, a dot, or not at all.</dd></div>
+            <div><dt>6 attention animations</dt><dd>Bounce, wiggle, pulse, glow, dot color or blink, stopped automatically after a delay you choose.</dd></div>
+            <div><dt>Task progress</dt><dd>Long jobs, like a Dolphin file copy, draw a progress bar on their icon.</dd></div>
+            <div><dt>Respects Do Not Disturb</dt><dd>When Plasma’s DND is on, attention animations stay quiet.</dd></div>
+          </dl>
         </div>
-        <dl class="specs">
-          <div><dt>Badges</dt><dd>Unread counts arrive over D-Bus and the SmartLauncher (Unity) API, shown as a number, a dot, or not at all.</dd></div>
-          <div><dt>6 attention animations</dt><dd>Bounce, wiggle, pulse, glow, dot color or blink, stopped automatically after a delay you choose.</dd></div>
-          <div><dt>Task progress</dt><dd>Long jobs, like a Dolphin file copy, draw a progress bar on their icon.</dd></div>
-          <div><dt>Respects Do Not Disturb</dt><dd>When Plasma’s DND is on, attention animations stay quiet.</dd></div>
-        </dl>
-      </div>
-
-      <div class="group">
-        <div class="group-head">
-          <h3 id="g-screens">Multi-monitor</h3>
-          <p>One dock, many screens and desktops, each set up the way that screen is used.</p>
+      </article>
+      <article class="fx-panel" tabindex="0" aria-labelledby="fx-screens-h">
+        <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="9" height="7" rx="1.4"/><rect x="12.5" y="5.5" width="9" height="7" rx="1.4"/><path d="M7 15.5v1.5M5 19.5h4M17 15.5v1.5M15 19.5h4"/></g></svg><h3 id="fx-screens-h" class="fx-name">Multi-monitor</h3></div>
+        <div class="fx-body">
+          <p class="fx-lede">One dock, many screens and desktops, each set up the way that screen is used.</p>
+          <dl class="fx-specs">
+            <div><dt>Where the dock lives</dt><dd>On the primary screen, on every screen, or following the active window.</dd></div>
+            <div><dt>Follow triggers</dt><dd>Move by mouse position, by keyboard focus, or by both.</dd></div>
+            <div><dt>Per-screen overrides</dt><dd>Give each monitor its own icon size, edge and visibility mode.</dd></div>
+            <div><dt>Virtual desktops</dt><dd>Show tasks from every desktop, dim the others, or list only the current one.</dd></div>
+          </dl>
         </div>
-        <dl class="specs">
-          <div><dt>Where the dock lives</dt><dd>On the primary screen, on every screen, or following the active window.</dd></div>
-          <div><dt>Follow triggers</dt><dd>Move by mouse position, by keyboard focus, or by both.</dd></div>
-          <div><dt>Per-screen overrides</dt><dd>Give each monitor its own icon size, edge and visibility mode.</dd></div>
-          <div><dt>Virtual desktops</dt><dd>Show tasks from every desktop, dim the others, or list only the current one.</dd></div>
-        </dl>
-      </div>
-
-      <div class="group">
-        <div class="group-head">
-          <h3 id="g-plasma">Plasma integration &amp; accessibility</h3>
-          <p>Built with Kirigami, KConfig, KColorScheme and KGlobalAccel, so it behaves like part of the desktop.</p>
+      </article>
+      <article class="fx-panel" tabindex="0" aria-labelledby="fx-plasma-h">
+        <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7h6.5M16.5 7h4M3.5 12h2.5M11 12h9.5M3.5 17h8.5M18 17h2.5"/><circle cx="13" cy="7" r="1.9"/><circle cx="8.5" cy="12" r="1.9"/><circle cx="14.5" cy="17" r="1.9"/></g></svg><h3 id="fx-plasma-h" class="fx-name">Plasma integration &amp; accessibility</h3></div>
+        <div class="fx-body">
+          <p class="fx-lede">Built with Kirigami, KConfig, KColorScheme and KGlobalAccel, so it behaves like part of the desktop.</p>
+          <dl class="fx-specs">
+            <div><dt>Native look</dt><dd>Plasma theme colors, your color scheme, Breeze context menus and a Kirigami settings window.</dd></div>
+            <div><dt>Drag and drop</dt><dd>Reorder icons, drop files onto apps, or drag in a <code>.desktop</code> file to add a launcher.</dd></div>
+            <div><dt>Keyboard first</dt><dd>Every item is reachable without a mouse, and AT-SPI exposes the dock to screen readers.</dd></div>
+            <div><dt>Starts with your session</dt><dd>Launches on login and keeps a single instance running.</dd></div>
+          </dl>
         </div>
-        <dl class="specs">
-          <div><dt>Native look</dt><dd>Plasma theme colors, your color scheme, Breeze context menus and a Kirigami settings window.</dd></div>
-          <div><dt>Drag and drop</dt><dd>Reorder icons, drop files onto apps, or drag in a <code>.desktop</code> file to add a launcher.</dd></div>
-          <div><dt>Keyboard first</dt><dd>Every item is reachable without a mouse, and AT-SPI exposes the dock to screen readers.</dd></div>
-          <div><dt>Starts with your session</dt><dd>Launches on login and keeps a single instance running.</dd></div>
-        </dl>
-        <table class="keys">
-          <caption>Global shortcuts</caption>
-          <tbody>
-            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>`</kbd></th><td>Show or hide the dock</td></tr>
-            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>1</kbd>–<kbd>9</kbd></th><td>Activate the app in that slot</td></tr>
-            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd></th><td>Open a new instance of it</td></tr>
-            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>F5</kbd></th><td>Move keyboard focus into the dock</td></tr>
-          </tbody>
-        </table>
-      </div>
+      </article>
+      <article class="fx-panel" tabindex="0" aria-labelledby="fx-keys-h">
+        <div class="fx-spine"><svg class="fx-glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10h1.5M9.75 10h1.5M13.5 10h1.5M17.25 10H18M6 14h1.5M17 14h1M9.5 14h5"/></g></svg><h3 id="fx-keys-h" class="fx-name">Global shortcuts</h3></div>
+        <div class="fx-body">
+          <p class="fx-lede">Held by KGlobalAccel, so they work wherever focus is.</p>
+          <table class="keys">
+            <caption>Global shortcuts</caption>
+            <tbody>
+              <tr><th scope="row"><kbd>Meta</kbd> + <kbd>`</kbd></th><td>Show or hide the dock</td></tr>
+              <tr><th scope="row"><kbd>Meta</kbd> + <kbd>1</kbd>–<kbd>9</kbd></th><td>Activate the app in that slot</td></tr>
+              <tr><th scope="row"><kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd></th><td>Open a new instance of it</td></tr>
+              <tr><th scope="row"><kbd>Meta</kbd> + <kbd>F5</kbd></th><td>Move keyboard focus into the dock</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
     </div>
   </section>
 
-<!-- screenshots:begin -->
-  <section id="screenshots" class="band shots" aria-labelledby="screenshots-title">
-    <div class="wrap">
-      <h2 id="screenshots-title" class="section-title">On a real Plasma&nbsp;6 desktop</h2>
-      <div class="shot-list">
-<!-- shot:dock-overview:begin -->
-        <figure class="shot">
-          <img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Dolphin and Konsole open on the Plasma “Next” wallpaper, with Krema docked along the bottom edge showing ten pinned launchers and running indicators beneath the active apps.">
-          <figcaption>Ten pinned launchers under Dolphin and Konsole — running indicators show which apps are open.</figcaption>
-        </figure>
-<!-- shot:dock-overview:end -->
-<!-- shot:settings:begin -->
-        <figure class="shot">
-          <img src="screenshots/settings.png" width="1920" height="1080" loading="lazy" decoding="async" alt="The Krema settings window on the Appearance page, with options for icon size, spacing, zoom factor, attention animation and badge display.">
-          <figcaption>The Appearance page: icon size, spacing, zoom factor, attention animation and badge display.</figcaption>
-        </figure>
-<!-- shot:settings:end -->
+  <section id="moments" class="shots" aria-labelledby="moments-title">
+    <h2 id="moments-title" class="section-title">On a real Plasma&nbsp;6 desktop</h2>
+    <div class="pv" data-pv>
+      <div class="pv-popup" role="list">
+        <!-- screenshots:begin -->
+        <!-- shot:dock-overview:begin -->
+        <figure class="pv-thumb" role="listitem" data-dodge><button type="button" class="pv-open" aria-label="Enlarge: ten pinned launchers under Dolphin and Konsole"><img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Dolphin and Konsole open on the Plasma “Next” wallpaper, with Krema docked along the bottom edge showing ten pinned launchers and running indicators beneath the active apps."></button><figcaption class="pv-cap">Ten pinned launchers under Dolphin and Konsole — running indicators show which apps are open.</figcaption></figure>
+        <!-- shot:dock-overview:end -->
+        <!-- shot:settings:begin -->
+        <figure class="pv-thumb" role="listitem" data-dodge><button type="button" class="pv-open" aria-label="Enlarge: the Krema settings window"><img src="screenshots/settings.png" width="1920" height="1080" loading="lazy" decoding="async" alt="The Krema settings window on the Appearance page, with options for icon size, spacing, zoom factor, attention animation and badge display."></button><figcaption class="pv-cap">The Appearance page: icon size, spacing, zoom factor, attention animation and badge display.</figcaption></figure>
+        <!-- shot:settings:end -->
+        <!-- screenshots:end -->
       </div>
+      <div class="pv-tile" aria-hidden="true"><svg viewBox="0 0 256 256" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg><span class="pv-dot"></span></div>
     </div>
+    <dialog class="pv-dialog" aria-label="Screenshot"><button class="pv-close" type="button" aria-label="Close">×</button><img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt=""><p class="pv-dcap"></p></dialog>
   </section>
-<!-- screenshots:end -->
 
-  <section id="install" class="band install" aria-labelledby="install-title">
-    <div class="wrap">
-      <div class="install-head">
-        <h2 id="install-title" class="section-title">Install Krema</h2>
-        <p>Packages are built for x86_64 and aarch64 and need Plasma 6.0 or newer. Pick your distribution, paste one command, then start Krema from the app launcher.</p>
-      </div>
-
-      <ol class="installs">
-        <li class="inst">
-          <div class="inst-meta">
-            <h3>Arch Linux &amp; Manjaro</h3>
-            <p>From the <a href="https://aur.archlinux.org/packages/krema">AUR</a>, with any helper</p>
-          </div>
-          <div class="cmd"><pre><code>yay -S krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
-        </li>
-        <li class="inst">
-          <div class="inst-meta">
-            <h3>Fedora</h3>
-            <p>42, 43, 44 and Rawhide via <a href="https://copr.fedorainfracloud.org/coprs/isac322/krema/">COPR</a></p>
-          </div>
-          <div class="cmd"><pre><code>sudo dnf copr enable isac322/krema &amp;&amp; sudo dnf install krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
-        </li>
-        <li class="inst">
-          <div class="inst-meta">
-            <h3>Ubuntu</h3>
-            <p>25.10 and 26.04 via the <a href="https://launchpad.net/~isac322/+archive/ubuntu/krema">Launchpad PPA</a></p>
-          </div>
-          <div class="cmd"><pre><code>sudo add-apt-repository ppa:isac322/krema &amp;&amp; sudo apt install krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
-        </li>
-        <li class="inst">
-          <div class="inst-meta">
-            <h3>openSUSE &amp; Debian</h3>
-            <p>Tumbleweed, Slowroll, Leap 16.0, Debian 13 and Ubuntu 25.04 on the Open Build Service</p>
-          </div>
-          <div class="cmd cmd-link">
-            <p>Add the repository that matches your release, then install the <code>krema</code> package.</p>
-            <a class="btn btn-ghost" href="https://build.opensuse.org/package/show/home:isac322/krema">Open the OBS package<svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
-          </div>
-        </li>
-        <li class="inst">
-          <div class="inst-meta">
-            <h3>From source</h3>
-            <p>C++23, Qt 6.8+, KDE Frameworks 6 and CMake 3.22+</p>
-          </div>
-          <div class="cmd cmd-link">
-            <p>Dependencies and build steps live in the repository README.</p>
-            <a class="btn btn-ghost" href="https://github.com/isac322/krema#build--run">Build instructions on GitHub<svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
-          </div>
-        </li>
-      </ol>
-      <p class="status" role="status" aria-live="polite"></p>
+  <section id="add" class="install" aria-labelledby="add-title">
+    <div class="install-head">
+      <h2 id="add-title" class="section-title">Install Krema</h2>
+      <p>Packages are built for x86_64 and aarch64 and need Plasma 6.0 or newer. Pick your distribution, paste one command, then start Krema from the app launcher.</p>
     </div>
+
+    <ol class="installs">
+      <li class="inst">
+        <div class="inst-meta">
+          <h3>Arch Linux &amp; Manjaro</h3>
+          <p>From the <a href="https://aur.archlinux.org/packages/krema">AUR</a>, with any helper</p>
+        </div>
+        <div class="cmd" data-dodge><pre><code>yay -S krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+      </li>
+      <li class="inst">
+        <div class="inst-meta">
+          <h3>Fedora</h3>
+          <p>42, 43, 44 and Rawhide via <a href="https://copr.fedorainfracloud.org/coprs/isac322/krema/">COPR</a></p>
+        </div>
+        <div class="cmd" data-dodge><pre><code>sudo dnf copr enable isac322/krema &amp;&amp; sudo dnf install krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+      </li>
+      <li class="inst">
+        <div class="inst-meta">
+          <h3>Ubuntu</h3>
+          <p>25.10 and 26.04 via the <a href="https://launchpad.net/~isac322/+archive/ubuntu/krema">Launchpad PPA</a></p>
+        </div>
+        <div class="cmd" data-dodge><pre><code>sudo add-apt-repository ppa:isac322/krema &amp;&amp; sudo apt install krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+      </li>
+      <li class="inst">
+        <div class="inst-meta">
+          <h3>openSUSE &amp; Debian</h3>
+          <p>Tumbleweed, Slowroll, Leap 16.0, Debian 13 and Ubuntu 25.04 on the Open Build Service</p>
+        </div>
+        <div class="cmd cmd-link" data-dodge>
+          <p>Add the repository that matches your release, then install the <code>krema</code> package.</p>
+          <a class="btn btn-ghost" href="https://build.opensuse.org/package/show/home:isac322/krema">Open the OBS package<svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+      </li>
+      <li class="inst">
+        <div class="inst-meta">
+          <h3>From source</h3>
+          <p>C++23, Qt 6.8+, KDE Frameworks 6 and CMake 3.22+</p>
+        </div>
+        <div class="cmd cmd-link" data-dodge>
+          <p>Dependencies and build steps live in the repository README.</p>
+          <a class="btn btn-ghost" href="https://github.com/isac322/krema#build--run">Build instructions on GitHub<svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+      </li>
+    </ol>
+    <p class="status" role="status" aria-live="polite"></p>
   </section>
 </main>
 
@@ -311,5 +302,18 @@
     </nav>
   </div>
 </footer>
+
+<nav class="pagedock" aria-label="Page dock" data-pagedock>
+  <ol class="pd-tiles">
+    <li><a class="pd-tile" href="#top" data-section="top" aria-label="Krema"><span class="pd-face"><svg viewBox="0 0 256 256" aria-hidden="true"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#roots" data-section="roots" aria-label="Roots"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="5.5" r="2.25"/><circle cx="6.5" cy="18.5" r="2.25"/><circle cx="17.5" cy="8" r="2.25"/><path d="M6.5 7.75v8.5M8.4 6.2c4.5 0 7 .5 7.5 4.2"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#everything" data-section="everything" aria-label="Everything it does"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.8"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#moments" data-section="moments" aria-label="Moments on a real desktop"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m4.5 16.5 4.5-4.5 4 4 2.5-2.5 4.5 4.5"/><circle cx="15.5" cy="9.5" r="1.5"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
+    <li><a class="pd-tile" href="#add" data-section="add" aria-label="Add Krema to your desktop"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v9.5M8 9.5l4 4 4-4"/><path d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></g></svg></span><span class="pd-ind" aria-hidden="true"></span><span class="pd-badge" aria-hidden="true">5</span></a></li>
+    <li class="pd-sep" aria-hidden="true"></li>
+    <li><a class="pd-tile" href="https://github.com/isac322/krema" data-external aria-label="GitHub (opens repository)"><span class="pd-face"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-github"/></svg></span></a></li>
+  </ol>
+  <span class="pd-tip" aria-hidden="true"></span>
+</nav>
 </body>
 </html>

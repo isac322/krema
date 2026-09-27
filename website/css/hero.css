@@ -1,0 +1,208 @@
+/* Hero lens: the headline wordmark behaves like a Krema dock.
+   Resting state = zoom wordmark ratios 0.72 / 0.87 / 1.16 / 0.87 / 0.72 with the
+   accent dot under the peak letter. js/hero.js drives the live parabolic zoom.
+   Horizontal box (max-width, --pad) comes from `main > section` in site.css. */
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  row-gap: 1rem;
+  min-height: 88vh;
+  min-height: 88svh;
+  padding-block: calc(var(--wordnav-h, 64px) + 1rem) calc(var(--pagedock-h, 76px) + 1rem);
+  overflow-x: clip;
+  /* Horizontal drags magnify the letters; vertical scrolling stays native. */
+  touch-action: pan-y pinch-zoom;
+}
+
+/* ---------- The lens (wordmark) ---------- */
+
+.lens {
+  /* Resting translateX offsets (em) close the gaps left by the resting scales,
+     keeping the k's left edge on the content column. JS replaces them with
+     measured values. */
+  --x1: -0.081em;
+  --x2: -0.189em;
+  --x3: -0.171em;
+  --x4: -0.186em;
+  --x5: -0.325em;
+  /* Baseline inside a letter box (line-height: 1). JS measures the real value. */
+  --base: 0.89em;
+  --dot: 0.075em;
+  --dot-gap: 0.06em;
+
+  position: relative; /* offsetParent for letters and the dot */
+  display: flex;
+  align-items: flex-end;
+  margin: 0 0 0.5rem;
+  /* Headroom for the 1.35x peak, room below the baseline for the dot. */
+  padding: 0.12em 0 0.06em;
+  font-family: var(--font, "Noto Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
+  /* Width-driven (the resting word is ~2.4em wide: ~88% of a phone screen),
+     capped so the whole hero fits above the fold on desktop. */
+  font-size: clamp(96px, min(36vw, 26rem, calc((100vh - 25rem) * 0.78)), 26rem);
+  font-size: clamp(96px, min(36vw, 26rem, calc((100svh - 25rem) * 0.78)), 26rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: lowercase;
+  color: var(--bone, #f3f0ea);
+  font-kerning: none; /* letters are separate boxes; kerning pairs would not apply anyway */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lens-ch {
+  position: relative;
+  display: inline-block;
+  /* Anchored on the baseline so letters grow upward from a shared floor,
+     like dock icons from the panel. */
+  transform-origin: 50% var(--base);
+  transform: translate3d(var(--x, 0), 0, 0) scale(var(--s, 1));
+  transition: transform 420ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+  will-change: transform;
+}
+
+.lens-ch:nth-child(1) { --s: 0.72; --x: var(--x1); }
+.lens-ch:nth-child(2) { --s: 0.87; --x: var(--x2); }
+.lens-ch:nth-child(3) { --s: 1.16; --x: var(--x3); }
+.lens-ch:nth-child(4) { --s: 0.87; --x: var(--x4); }
+.lens-ch:nth-child(5) { --s: 0.72; --x: var(--x5); }
+
+/* Zero-size baseline probe injected by JS. */
+.lens-probe {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: baseline;
+}
+
+/* No-JS accent dot: lives inside the peak letter, just under its baseline.
+   Sizes are divided by the peak's 1.16 scale so they match the JS dot. */
+.lens-ch:nth-child(3)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(var(--base) + var(--dot-gap) / 1.16);
+  width: calc(var(--dot) / 1.16);
+  height: calc(var(--dot) / 1.16);
+  border-radius: 50%;
+  background: var(--blue, #3daee9);
+  box-shadow: 0 0 0.12em 0.015em var(--glow, rgba(61, 174, 233, 0.35));
+  transform: translateX(-50%);
+}
+
+/* JS-driven dot: slides under the letter nearest the pointer.
+   --dot-top (lens coords) = letter top + baseline, set by JS. */
+.lens-dot {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(var(--dot-top, 1em) + var(--dot-gap));
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--blue, #3daee9);
+  box-shadow: 0 0 0.14em 0.02em var(--glow, rgba(61, 174, 233, 0.35));
+  transform: translate3d(0, 0, 0) translateX(-50%);
+  transition:
+    transform 420ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    opacity 200ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  will-change: transform;
+  pointer-events: none;
+}
+
+.js .lens-dot { display: block; opacity: 0; }
+.js .lens.is-ready .lens-dot { opacity: 1; }
+.js .lens.is-ready .lens-ch:nth-child(3)::after { display: none; }
+
+/* Until measured, and while the pointer drives the lens, writes land instantly:
+   the rAF loop is the animation. The spring only plays on release. */
+.js .lens:not(.is-ready) .lens-ch,
+.js .lens:not(.is-ready) .lens-dot,
+.lens.is-live .lens-ch,
+.lens.is-live .lens-dot {
+  transition: none;
+}
+
+/* ---------- Copy ---------- */
+
+.hero-tag {
+  margin: 0;
+  font-family: var(--font, "Noto Sans", system-ui, sans-serif);
+  font-size: clamp(0.95rem, 1.3vw, 1.1rem);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  color: var(--blue, #3daee9);
+}
+
+.hero-lede {
+  margin: 0;
+  max-width: 46ch;
+  font-size: clamp(1.05rem, 1.2vw, 1.2rem);
+  line-height: 1.55;
+  color: var(--bone-dim, #b9c0ca);
+  text-wrap: pretty;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* Only meaningful when the lens is live. */
+.hero-hint {
+  display: none;
+  margin: 0;
+  font-family: var(--mono, "Hack", "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: var(--muted, #93a0b0);
+  transition: opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.js .hero-hint { display: block; }
+.hero.is-touched .hero-hint { opacity: 0; }
+
+/* ---------- Wide screens: wordmark on top; tag + lede left, CTAs bottom-right ---------- */
+
+@media (min-width: 60rem) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 2.5rem;
+  }
+  .lens { grid-column: 1 / -1; grid-row: 1; }
+  .hero-tag { grid-column: 1 / -1; grid-row: 2; white-space: nowrap; }
+  .hero-lede { grid-column: 1; grid-row: 3; }
+  .ctas {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: end;
+    justify-self: end;
+    margin-top: 0;
+  }
+  /* Top-right of the wordmark row, where the x-height letters leave room. */
+  .hero-hint {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+  }
+}
+
+/* ---------- Reduced motion: state changes are instant ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .lens-ch,
+  .lens-dot,
+  .hero-hint {
+    transition: none !important;
+  }
+}

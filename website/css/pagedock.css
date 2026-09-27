@@ -1,0 +1,293 @@
+/* Pagedock: a working mini Krema dock pinned to the bottom of the page.
+   Tokens come from css/site.css. Without JS it is a plain floating link bar;
+   pagedock.js adds .pd-ready and moves the panel surface onto .pd-bg so the
+   background can widen with the zoom using transforms only. */
+
+.pagedock {
+  --pd-tile: 48px;
+  --pd-gap: 6px;
+  --pd-pad-x: 10px;
+  --pd-pad-top: 8px;
+  --pd-pad-bottom: 12px;
+  --pd-radius: 18px;
+  --pd-bottom: 6px;
+  --pd-surface: rgb(20 28 38 / 0.88);
+  --pd-shadow: 0 14px 32px -14px rgb(0 0 0 / 0.7);
+  --pd-speed: 160ms;
+
+  position: fixed;
+  left: 50%;
+  bottom: var(--pd-bottom);
+  z-index: 60;
+  translate: -50% 0;
+  padding: var(--pd-pad-top) var(--pd-pad-x) var(--pd-pad-bottom);
+  border: 1px solid var(--line);
+  border-radius: var(--pd-radius);
+  background: var(--pd-surface);
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  box-shadow: var(--pd-shadow);
+  transition: transform 220ms var(--ease-out);
+}
+
+/* Once JS has built the stretchable background, the nav itself is only a frame. */
+.pagedock.pd-ready {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.pagedock.is-tracking { --pd-speed: 70ms; }
+
+/* Dodge: slide fully below the viewport edge. */
+.pagedock.is-hidden { transform: translateY(calc(100% + 24px)); }
+
+/* ---------- Stretchable panel surface (left cap, scaled middle, right cap) ---------- */
+
+.pd-bg {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  pointer-events: none;
+}
+.pd-bg > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--pd-surface);
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  border: 1px solid var(--line);
+  transition: transform var(--pd-speed) var(--ease-out);
+}
+.pd-bg-l {
+  left: 0;
+  width: var(--pd-radius);
+  border-right: 0 !important;
+  border-radius: var(--pd-radius) 0 0 var(--pd-radius);
+}
+.pd-bg-r {
+  right: 0;
+  width: var(--pd-radius);
+  border-left: 0 !important;
+  border-radius: 0 var(--pd-radius) var(--pd-radius) 0;
+}
+.pd-bg-m {
+  left: var(--pd-radius);
+  right: var(--pd-radius);
+  border-left: 0 !important;
+  border-right: 0 !important;
+  box-shadow: var(--pd-shadow);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .pagedock:not(.pd-ready),
+  .pd-bg > span {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+}
+
+/* ---------- Tiles ---------- */
+
+.pd-tiles {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--pd-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Horizontal drags zoom the dock; vertical swipes still scroll the page. */
+  touch-action: pan-y;
+}
+.pd-tiles > li {
+  flex: none;
+  list-style: none;
+  transition: translate var(--pd-speed) var(--ease-out);
+}
+
+.pd-tile {
+  position: relative;
+  display: block;
+  width: var(--pd-tile);
+  height: var(--pd-tile);
+  border-radius: var(--r-tile);
+  color: var(--bone);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.pd-tile:hover { color: var(--bone); }
+.pd-tile:focus-visible { outline: none; }
+
+.pd-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-tile);
+  background: linear-gradient(160deg, #26333f, var(--ink-2));
+  box-shadow: inset 0 0 0 1px var(--line), 0 2px 8px rgb(0 0 0 / 0.35);
+  color: var(--bone);
+  transform-origin: 50% 100%;
+  transition: scale var(--pd-speed) var(--ease-out), background-color 160ms;
+}
+.pd-face svg {
+  display: block;
+  width: 50%;
+  height: 50%;
+  pointer-events: none;
+}
+.pd-tile:hover .pd-face { background: linear-gradient(160deg, #2e3c4a, #1f2a37); }
+.pd-tile:focus-visible .pd-face {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.pd-sep {
+  align-self: center;
+  width: 1px;
+  height: calc(var(--pd-tile) * 0.6);
+  margin-inline: 4px;
+  background: rgb(243 240 234 / 0.16);
+}
+
+/* ---------- Indicator: hidden → running dot → active pill ---------- */
+
+.pd-ind {
+  position: absolute;
+  left: 50%;
+  bottom: calc(3px - var(--pd-pad-bottom));
+  width: 5px;
+  height: 5px;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: var(--bone-dim);
+  opacity: 0;
+  scale: 0.4;
+  pointer-events: none;
+  transition: opacity 220ms var(--ease-out), scale 220ms var(--ease-out),
+    width 220ms var(--ease-out), height 220ms var(--ease-out),
+    background-color 220ms, box-shadow 220ms;
+}
+.pd-tile.is-running .pd-ind {
+  opacity: 1;
+  scale: 1;
+}
+.pd-tile.is-active .pd-ind {
+  width: 18px;
+  height: 4px;
+  opacity: 1;
+  scale: 1;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--glow), 0 0 2px var(--blue);
+}
+
+/* ---------- Badge ---------- */
+
+.pd-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--ink);
+  font: 700 11px/18px var(--font);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--ink);
+  pointer-events: none;
+  transition: translate var(--pd-speed) var(--ease-out);
+}
+
+/* ---------- Tooltip (in-scene, positioned by JS above the peak tile) ---------- */
+
+.pd-tip {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ink-2);
+  color: var(--bone);
+  font: 500 13px/1.35 var(--font);
+  white-space: nowrap;
+  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease-out);
+}
+.pd-tip.is-on { opacity: 1; }
+.pd-tip:empty { display: none; }
+
+/* ---------- Edge trigger hint shown while the dock is dodged away ---------- */
+
+.pd-edge {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 60;
+  width: 320px;
+  height: 3px;
+  translate: -50% 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--blue);
+  box-shadow: 0 0 12px var(--glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms var(--ease-out);
+}
+.pagedock.is-hidden + .pd-edge {
+  opacity: 1;
+  transition-delay: 120ms;
+}
+
+/* ---------- Genie ghost (animated by pagedock.js) ---------- */
+
+.pd-genie {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  transform-origin: 0 0;
+  background: rgb(243 240 234 / 0.1);
+  opacity: 0;
+  pointer-events: none;
+  contain: strict;
+  will-change: transform, opacity;
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 600px) {
+  .pagedock {
+    --pd-tile: 40px;
+    --pd-gap: 5px;
+    --pd-pad-x: 8px;
+    --pd-pad-top: 7px;
+    --pd-pad-bottom: 11px;
+    --pd-radius: 16px;
+  }
+  .pd-sep { margin-inline: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pagedock,
+  .pd-tiles > li,
+  .pd-face,
+  .pd-ind,
+  .pd-badge,
+  .pd-bg > span,
+  .pd-tip,
+  .pd-edge {
+    transition: none !important;
+  }
+  .pd-genie { display: none; }
+}
+
+@media print {
+  .pagedock,
+  .pd-edge,
+  .pd-genie { display: none; }
+}

@@ -54,11 +54,11 @@ jobs:
               kept=$((kept + 1))
             else
               echo "::warning::${src} not found; omitting it from the page"
-              SHOT="$shot" perl -0pi -e 's/^<!-- shot:\Q$ENV{SHOT}\E:begin -->.*?<!-- shot:\Q$ENV{SHOT}\E:end -->\n//ms' _site/index.html
+              SHOT="$shot" perl -0pi -e 's/^[ \t]*<!-- shot:\Q$ENV{SHOT}\E:begin -->.*?<!-- shot:\Q$ENV{SHOT}\E:end -->\n//ms' _site/index.html
             fi
           done
           if [[ "$kept" -eq 0 ]]; then
-            perl -0pi -e 's/^<!-- screenshots:begin -->.*?<!-- screenshots:end -->\n//ms' _site/index.html
+            perl -0pi -e 's/^[ \t]*<!-- screenshots:begin -->.*?<!-- screenshots:end -->\n//ms' _site/index.html
             rmdir _site/screenshots
           fi
 

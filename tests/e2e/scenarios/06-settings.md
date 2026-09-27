@@ -192,3 +192,19 @@
 **Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
 
 **Verification:** list_windows (window counts), screenshot (dialog + docks)
+
+---
+
+## TC SET-009: Quit While Settings Is Open
+
+**Precondition:** Dock visible. Run on Debian 13 or Ubuntu 25.04 as well (Qt 6.8, KF 6.13).
+**Steps:**
+1. Right-click the dock → "Settings...", then immediately right-click the dock → "Quit"
+2. Start Krema again, open "Settings...", wait until the window is drawn, then right-click the dock → "Quit"
+
+**Expected:**
+- Krema exits normally both times (exit status 0, no crash report)
+- No Settings window remains after exit
+
+**Verification:** process exit status, `list_windows`
+

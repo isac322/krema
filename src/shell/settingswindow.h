@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QObject>
+#include <QList>
 #include <QPointer>
 #include <QWindowList>
 
@@ -59,6 +60,9 @@ private:
     KremaSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;
     QPointer<QQuickWindow> m_configWindow;
+    // Every settings window open() created that still exists, including
+    // closed ones whose deletion is pending; destroyed before the engine.
+    QList<QPointer<QQuickWindow>> m_openedWindows;
     bool m_visible = false;
 };
 

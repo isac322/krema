@@ -7,7 +7,7 @@ Release:        2%{?dist}
 Summary:        A lightweight dock for KDE Plasma 6
 
 License:        GPL-3.0-or-later AND MIT-CMU
-URL:            https://cv.bhyoo.com/krema/
+URL:            https://krema.bhyoo.com/
 Source0:        https://github.com/isac322/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  cmake >= 3.22

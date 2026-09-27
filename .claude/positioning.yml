@@ -102,7 +102,7 @@ search_intents:
     keywords: [lightweight dock kde plasma, best dock for kde plasma]
 
 brand:
-  website: "https://cv.bhyoo.com/krema/"
+  website: "https://krema.bhyoo.com/"
   guide: branding/README.md
   icon_concept: "Zoom K — bone stem is the dock panel; Breeze-blue tiles along the K arms shrink with parabolic zoom falloff"
   wordmark_concept: "Monoline lowercase 'krema' scaled like a zooming dock (0.72, 0.87, 1.16, 0.87, 0.72); accent indicator dot under the hovered 'e'"

@@ -13,12 +13,12 @@
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6-1d99f3.svg)](https://kde.org/plasma-desktop/)
 [![Qt 6](https://img.shields.io/badge/Qt-6.8+-41cd52.svg)](https://www.qt.io/)
-[![Website](https://img.shields.io/badge/Website-cv.bhyoo.com%2Fkrema-3daee9.svg)](https://cv.bhyoo.com/krema/)
+[![Website](https://img.shields.io/badge/Website-krema.bhyoo.com-3daee9.svg)](https://krema.bhyoo.com/)
 
 </p>
 
 <p align="center">
-  <a href="https://cv.bhyoo.com/krema/">Website</a> ·
+  <a href="https://krema.bhyoo.com/">Website</a> ·
   <a href="#installation">Install</a> ·
   <a href="ROADMAP.md">Roadmap</a> ·
   <a href="CHANGELOG.md">Changelog</a>

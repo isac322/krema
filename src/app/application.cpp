@@ -59,7 +59,7 @@ int Application::run()
     KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral(KREMA_VERSION_STRING), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
     aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
     aboutData.setOrganizationDomain(QByteArrayLiteral("bhyoo.com"));
-    aboutData.setHomepage(QStringLiteral("https://cv.bhyoo.com/krema/"));
+    aboutData.setHomepage(QStringLiteral("https://krema.bhyoo.com/"));
     aboutData.setBugAddress(QByteArrayLiteral("https://github.com/isac322/krema/issues"));
     KAboutData::setApplicationData(aboutData);
     setDesktopFileName(QStringLiteral("com.bhyoo.krema"));

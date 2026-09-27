@@ -41,7 +41,8 @@ M8 완료 → M9 준비 (Widget System + System Tray)
   - 줌 K 아이콘 + 줌 워드마크 원본: `branding/` (`generate.ts`로 재생성, 가이드 `branding/README.md`)
   - hicolor 아이콘 설치 + `Icon=com.bhyoo.krema`, AppStream icon/branding/screenshots, 창 아이콘
   - 소셜·스토어 이미지 `branding/social/`, 실제 스크린샷 `branding/screenshots/` (재생성: `regen/`)
-  - GitHub Pages 랜딩 `website/` → https://cv.bhyoo.com/krema/ (Pages build_type=workflow 활성화됨, master 머지 시 배포)
+  - GitHub Pages 랜딩 `website/` → https://krema.bhyoo.com/ (Pages custom domain 설정됨, DNS·repo 설정은 isac322/homelab Terraform PR #355)
+  - 랜딩 기능 영상 `website/media/` (실제 Krema 녹화, 재생성: `branding/clips/NOTES.md`)
   - 외부 적용 완료: GitHub social preview, COPR 설명/설치 안내/AppStream, AUR keywords
 
 ## 알려진 이슈
@@ -60,5 +61,6 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - M9: Widget System + System Tray
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
-- 브랜드 PR 머지 후: GitHub repo homepage를 https://cv.bhyoo.com/krema/ 로 변경, Pages 배포 확인
+- homelab PR #355 머지(Terraform PAT에 krema Administration/Pages 권한 추가 후) → krema.bhyoo.com CNAME·homepage 적용, 이후 Pages HTTPS 강제
+- Krema 버그: `src/qml/main.qml` onRowsInserted가 PreviewEnabled=false여도 hover 중인 런처의 창이 뜨면 미리보기 팝업을 엶 (branding/clips 촬영 중 발견)
 - 로그인 필요 채널 등록: OBS 프로젝트 title/description(`packaging/obs/project.meta.xml`), Launchpad PPA 설명/프로젝트 로고, KDE Store, AlternativeTo(Latte Dock 대안), Flathub 제출

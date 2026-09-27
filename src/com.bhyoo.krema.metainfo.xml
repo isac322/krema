@@ -25,7 +25,7 @@
   </description>
   <icon type="stock">com.bhyoo.krema</icon>
   <launchable type="desktop-id">com.bhyoo.krema.desktop</launchable>
-  <url type="homepage">https://cv.bhyoo.com/krema/</url>
+  <url type="homepage">https://krema.bhyoo.com/</url>
   <url type="bugtracker">https://github.com/isac322/krema/issues</url>
   <url type="contribute">https://github.com/isac322/krema</url>
   <url type="vcs-browser">https://github.com/isac322/krema</url>

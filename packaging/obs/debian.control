@@ -31,7 +31,7 @@ Build-Depends: debhelper-compat (= 13),
                libkpipewire-dev,
                libwayland-dev (>= 1.22)
 Standards-Version: 4.7.0
-Homepage: https://cv.bhyoo.com/krema/
+Homepage: https://krema.bhyoo.com/
 
 Package: krema
 Architecture: any

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Fixed the whole dock surface being blurred at startup; blur now covers only the visible panel from launch
 - Setting the background opacity to 0% made the dock background fully transparent and removed the blur, instead of silently saving 10%
 - Icon scale, attention animation duration, badge display mode, "Use system color", "Use accent color" and "Only dodge active window" now persist across restarts instead of reverting to their defaults
 

@@ -37,6 +37,7 @@
 #include <QTest>
 #include <QtQml>
 
+#include <cmath>
 #include <memory>
 
 static void initResources()
@@ -126,7 +127,7 @@ TEST_CASE("Launcher tooltip lies inside the dock surface on every edge", "[toolt
     // the tooltip timer; a launcher-only task then shows the text tooltip.
     // The manager may still replace the shell while it adopts the output
     // order, so every poll looks the dock up again and re-hovers a new one.
-    QQuickView *view = nullptr;
+    krema::DockView *view = nullptr;
     QQuickItem *tooltip = nullptr;
     REQUIRE(QTest::qWaitFor(
         [&] {
@@ -149,6 +150,22 @@ TEST_CASE("Launcher tooltip lies inside the dock surface on every edge", "[toolt
     const QRectF tip(tooltip->x(), tooltip->y(), tooltip->width(), tooltip->height());
     INFO("surface " << surface.width() << "x" << surface.height() << ", tooltip " << tip.x() << "," << tip.y() << " " << tip.width() << "x" << tip.height());
     CHECK(surface.contains(tip));
+
+    // The wider surface must never widen the input region: the mask is built
+    // from the panel rect, so perpendicular to the dock edge it stays within
+    // the panel inset + panel bar + zoom overflow + region margin. A mask
+    // derived from the surface size (e.g. the whole 350px reserve) fails this.
+    const bool vertical = (edge == Edge::Left || edge == Edge::Right);
+    const QRegion mask = view->mask();
+    const QRect maskRect = mask.boundingRect();
+    const int zoomExt = static_cast<int>(std::ceil(app().settings->iconSize() * (app().settings->maxZoomFactor() - 1.0)));
+    // Panel inset (8) + panel bar + zoom overflow + region margin (4) + slack
+    const int panelSpan = 8 + view->panelBarHeight() + zoomExt + 8;
+    const int maskExtent = vertical ? maskRect.width() : maskRect.height();
+    const int surfaceExtent = static_cast<int>(vertical ? surface.width() : surface.height());
+    INFO("mask " << maskRect.x() << "," << maskRect.y() << " " << maskRect.width() << "x" << maskRect.height() << ", panelSpan bound " << panelSpan);
+    CHECK(maskExtent <= panelSpan);
+    CHECK(maskExtent < surfaceExtent);
 
     // An ordinary app name is shown in full, not elided to fit.
     bool truncated = true;

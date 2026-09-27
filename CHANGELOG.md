@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Setting the background opacity to 0% made the dock background fully transparent and removed the blur, instead of silently saving 10%
 - Icon scale, attention animation duration, badge display mode, "Use system color", "Use accent color" and "Only dodge active window" now persist across restarts instead of reverting to their defaults
 
 ## [0.8.0] - 2026-09-28

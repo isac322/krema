@@ -63,9 +63,21 @@ void PreviewController::initialize()
         // absolute position). The LayerShellQt-level screen is what
         // get_layer_surface() binds to.
         if (auto *screen = m_dockView->screen()) {
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
+            // LayerShellQt < 6.6: get_layer_surface() binds QWindow::screen()
+            // (ScreenFromQWindow), so the Qt-side screen below is the pin.
+            layerWindow->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
+#else
             layerWindow->setScreen(screen);
+#endif
             m_previewView->setScreen(screen);
-            m_previewView->setPosition(screen->geometry().topLeft());
+            // Only before the platform window exists: LayerShellQt < 6.6
+            // already created it in Window::get(), and QtWayland then pins a
+            // toplevel to its screen origin, so a setPosition() from the stale
+            // origin would re-derive the old screen.
+            if (!m_previewView->handle()) {
+                m_previewView->setPosition(screen->geometry().topLeft());
+            }
         } else {
             qCWarning(lcPreview) << "Dock view has no screen; preview surface not pinned";
         }

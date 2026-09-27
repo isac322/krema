@@ -94,7 +94,9 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 3. `screenshot` — verify tooltip visible
 
 **Expected:**
-- Tooltip appears above/below the dock item with app name
+- Tooltip appears above/below the dock item with app name (horizontal docks)
+- Left/right docks: tooltip appears beside the panel and is fully visible, not cut
+  off at the dock surface edge; very long names end with an ellipsis
 - Tooltip is NOT in AT-SPI (Accessible.ignored: true by design)
 - Only screenshot verification possible
 

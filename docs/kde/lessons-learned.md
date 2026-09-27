@@ -233,3 +233,15 @@ Each view is also positioned on its target screen before creation, and `handleSc
 **Key lessons:**
 - The namespace is not a free-form label on KWin: pick it from KWin's type table for the surface's role.
 - Scripted KWin effects only load when `animationsSupported()`; the software-rendered virtual backend needs `KWIN_EFFECTS_FORCE_ANIMATIONS=1`.
+
+## 12. The overflow reserve must fit what opens on that side, per orientation (2026-09, found auditing PR #15)
+
+**Symptom:** On left/right docks the launcher tooltip was cut off after ~28px. KWin `--virtual`, left dock: surface 108x768, tooltip at x=80 with width 171 ("System Settings Launcher a"), so 80..251 lay mostly outside the surface.
+
+**Cause:** `surfaceHeight()` reserves `max(zoomOverflow, tooltipReserve)` in the axis perpendicular to the dock edge. `tooltipReserve` was 36px, enough for the tooltip's height above/below a horizontal panel, but vertical docks open the tooltip beside the panel, where its width (not height) must fit. The compositor clips everything outside the layer surface.
+
+**Fix:** QML publishes `DockView.sideTooltipReserve` (gap + a font-derived max tooltip width of 15 gridUnits; longer names elide). Vertical docks use it as the tooltip reserve; horizontal docks keep 36px. The input region still follows the panel rect, so the wider transparent surface does not take clicks from windows beside the dock. `krema_tooltip_tests` (tests/kwin) checks the tooltip lies inside the surface on all four edges.
+
+**Key lessons:**
+- A perpendicular reserve sized for one orientation is wrong for the other: size it from what actually opens on that side.
+- Growing the surface is safe only because the input region is set from the panel rect, never from the surface size.

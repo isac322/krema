@@ -148,6 +148,23 @@ bool DockView::isVertical() const
     return m_edge == DockPlatform::Edge::Left || m_edge == DockPlatform::Edge::Right;
 }
 
+int DockView::sideTooltipReserve() const
+{
+    return m_sideTooltipReserve;
+}
+
+void DockView::setSideTooltipReserve(int reserve)
+{
+    if (m_sideTooltipReserve == reserve) {
+        return;
+    }
+    m_sideTooltipReserve = reserve;
+    if (isVertical()) {
+        updateSize();
+    }
+    Q_EMIT sideTooltipReserveChanged();
+}
+
 void DockView::setEdge(DockPlatform::Edge edge)
 {
     if (m_edge == edge) {
@@ -194,7 +211,10 @@ void DockView::updateSize()
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
     const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
-    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, s_tooltipReserve, floatingPadding());
+    // Horizontal docks open the tooltip above/below the panel (fits s_tooltipReserve);
+    // vertical docks open it beside the panel, so the reserve must fit its full width.
+    const int tooltipReserve = isVertical() ? std::max(s_tooltipReserve, m_sideTooltipReserve) : s_tooltipReserve;
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding());
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {

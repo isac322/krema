@@ -22,11 +22,22 @@ namespace
 // Isolates kremarc in a throwaway XDG_CONFIG_HOME for the test's lifetime.
 struct ScratchConfig {
     QTemporaryDir dir;
+    QByteArray previous;
 
     ScratchConfig()
     {
         REQUIRE(dir.isValid());
+        previous = qgetenv("XDG_CONFIG_HOME");
         qputenv("XDG_CONFIG_HOME", dir.path().toLocal8Bit());
+    }
+
+    ~ScratchConfig()
+    {
+        if (previous.isNull()) {
+            qunsetenv("XDG_CONFIG_HOME");
+        } else {
+            qputenv("XDG_CONFIG_HOME", previous);
+        }
     }
 
     [[nodiscard]] QString kremarc() const

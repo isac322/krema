@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krema — Lightweight Dock for KDE Plasma 6</title>
+<meta name="description" content="Krema brings parabolic zoom, live PipeWire window previews and deep Plasma integration to KDE Plasma 6 in a lightweight, Wayland-native dock.">
+<link rel="canonical" href="https://cv.bhyoo.com/krema/">
+<meta name="theme-color" content="#141C26">
+<meta name="color-scheme" content="dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Krema">
+<meta property="og:url" content="https://cv.bhyoo.com/krema/">
+<meta property="og:title" content="Krema — Lightweight Dock for KDE Plasma 6">
+<meta property="og:description" content="A Wayland-native dock for KDE Plasma 6 with parabolic zoom, live window previews and the spirit of Latte Dock.">
+<meta property="og:image" content="https://cv.bhyoo.com/krema/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Krema logo beside a KDE Plasma 6 dock whose icons magnify under the pointer.">
+<meta property="og:locale" content="en_US">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Krema — Lightweight Dock for KDE Plasma 6">
+<meta name="twitter:description" content="A Wayland-native dock for KDE Plasma 6 with parabolic zoom, live window previews and the spirit of Latte Dock.">
+<meta name="twitter:image" content="https://cv.bhyoo.com/krema/og-image.png">
+<meta name="twitter:image:alt" content="The Krema logo beside a KDE Plasma 6 dock whose icons magnify under the pointer.">
+
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+
+<link rel="stylesheet" href="css/site.css">
+<script src="js/site.js" defer></script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Krema",
+  "description": "A lightweight, Wayland-native dock for KDE Plasma 6 with parabolic zoom, PipeWire window previews and native Plasma integration.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Linux (KDE Plasma 6)",
+  "license": "https://spdx.org/licenses/GPL-3.0-or-later.html",
+  "url": "https://cv.bhyoo.com/krema/",
+  "downloadUrl": "https://github.com/isac322/krema/releases",
+  "image": "https://cv.bhyoo.com/krema/icon-512.png",
+  "screenshot": "https://cv.bhyoo.com/krema/og-image.png",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "isac322",
+    "url": "https://github.com/isac322"
+  },
+  "sameAs": [
+    "https://github.com/isac322/krema",
+    "https://aur.archlinux.org/packages/krema",
+    "https://copr.fedorainfracloud.org/coprs/isac322/krema/",
+    "https://build.opensuse.org/package/show/home:isac322/krema",
+    "https://launchpad.net/~isac322/+archive/ubuntu/krema"
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1.8a10.2 10.2 0 0 0-3.2 19.9c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.3-.3-4.7-1.1-4.7-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .9-.3 2.8 1a9.6 9.6 0 0 1 5.1 0c1.9-1.3 2.8-1 2.8-1 .6 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.7 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10.2 10.2 0 0 0 12 1.8Z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></g></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M9 7h8v8"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 5v13M6.5 12.5 12 18l5.5-5.5"/></symbol>
+</svg>
+
+<header class="hero">
+  <div class="bar wrap">
+    <a class="brand" href="./" aria-label="Krema home">
+      <svg class="lockup" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 753.87 256" aria-hidden="true" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#141C26"/><rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/><rect x="44" y="32" width="32" height="192" rx="16" fill="#F3F0EA"/><rect x="86" y="98" width="60" height="60" rx="16.2" fill="#3DAEE9"/><rect x="151" y="57" width="36" height="36" rx="9.72" fill="#3DAEE9" opacity="0.66"/><rect x="151" y="163" width="36" height="36" rx="9.72" fill="#3DAEE9" opacity="0.66"/><rect x="192" y="32" width="20" height="20" rx="5.4" fill="#3DAEE9" opacity="0.38"/><rect x="192" y="204" width="20" height="20" rx="5.4" fill="#3DAEE9" opacity="0.38"/><svg x="308" y="22.83" width="445.87" height="189.02" viewBox="0 -10.9 342.98 145.4"><g fill="none" stroke="#F3F0EA" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(6.5,28) scale(0.72)" d="M0,10 V100 M44,40 L4,74 M20,61 L46,100" stroke-width="18.06"/><path transform="translate(65.62,13) scale(0.87)" d="M0,40 V100 M0,64 C0,48 12,40 30,40" stroke-width="14.94"/><path transform="translate(117.72,-16) scale(1.16)" d="M2,70 H58 A28,28 0 1 0 51.4,88" stroke-width="11.21"/><path transform="translate(211,13) scale(0.87)" d="M0,40 V100 M0,60 C0,47 8,40 18,40 C29,40 34,47 34,60 V100 M34,60 C34,47 42,40 52,40 C63,40 68,47 68,60 V100" stroke-width="14.94"/><path transform="translate(296.16,28) scale(0.72)" d="M56,40 V100 M56,70 A28,28 0 1 1 0,70 A28,28 0 1 1 56,70" stroke-width="18.06"/></g><circle cx="151.36" cy="126" r="8.5" fill="#3DAEE9"/></svg></svg>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a class="nav-gh" href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span></a></li>
+      </ul>
+    </nav>
+  </div>
+
+  <div class="hero-copy wrap">
+    <h1>A lightweight dock for KDE&nbsp;Plasma&nbsp;6</h1>
+    <p class="lede">Parabolic zoom, live window previews and the Plasma theme you already picked. Krema is written in C++ against KDE’s own frameworks, runs natively on Wayland, and is the spiritual successor to Latte&nbsp;Dock.</p>
+    <div class="ctas">
+      <a class="btn btn-primary" href="#install"><svg aria-hidden="true"><use href="#i-down"/></svg>Install</a>
+      <a class="btn btn-ghost" href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
+    </div>
+  </div>
+
+  <figure class="stage" aria-labelledby="stage-caption">
+    <div class="desk">
+      <div class="dock-tip" aria-hidden="true"></div>
+      <div class="dock" role="toolbar" aria-label="Interactive dock demo" aria-orientation="horizontal">
+        <button type="button" class="tile t-blue is-running" data-name="Files" aria-label="Files, running"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.7l2 2h7.3a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-night is-running" data-name="Terminal" aria-label="Terminal, running"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m7.5 10 3 2.5-3 2.5M13 15h3.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-bone is-running" data-name="Web Browser" aria-label="Web Browser, running"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="3.6" ry="8.5"/><path d="M3.5 12h17"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-night" data-name="Mail" aria-label="Mail"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-blue is-running" data-name="Chat" aria-label="Chat, running, 3 unread"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14A1.5 1.5 0 0 1 20.5 7v8.5A1.5 1.5 0 0 1 19 17h-8.5l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5Z"/></svg><span class="badge" aria-hidden="true">3</span></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-night" data-name="Music" aria-label="Music"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V7l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-bone" data-name="Photos" aria-label="Photos"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m4 16.5 4.5-4.5 4 4 2.5-2.5 5 5"/><circle cx="15.5" cy="9.5" r="1.5"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+        <button type="button" class="tile t-night" data-name="System Settings" aria-label="System Settings"><span class="face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h9.5M18 7h1.5M4.5 12h2.5M11 12h8.5M4.5 17h7.5M16 17h3.5"/><circle cx="16" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="14" cy="17" r="2"/></svg></span><span class="dot" aria-hidden="true"></span></button>
+      </div>
+    </div>
+    <figcaption id="stage-caption">Glide across the dock, drag a finger over it, or <kbd>Tab</kbd> in and use the arrow keys. Press a tile to launch it.</figcaption>
+  </figure>
+</header>
+
+<main id="main">
+  <section class="band successor" aria-labelledby="successor-title">
+    <div class="wrap split">
+      <h2 id="successor-title">Latte Dock stopped at Plasma&nbsp;5. Krema starts at&nbsp;6.</h2>
+      <div class="prose">
+        <p>If your desktop lost its dock during the Plasma 6 upgrade, Krema is here to fill the gap. It is a spiritual successor to Latte Dock, written from scratch for Qt&nbsp;6, KDE Frameworks&nbsp;6 and the Wayland Layer Shell protocol, with no X11 code to carry along.</p>
+        <p>Rendering runs on the GPU through Qt’s QRhi, previews stream through PipeWire, and nothing is allocated until the dock actually needs it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="band" aria-labelledby="features-title">
+    <div class="wrap">
+      <h2 id="features-title" class="section-title">Everything a dock should do, done the Plasma way</h2>
+
+      <div class="group">
+        <div class="group-head">
+          <h3 id="g-core">Core dock</h3>
+          <p>The behavior your hands expect, tuned from the settings window rather than a config file.</p>
+        </div>
+        <dl class="specs">
+          <div><dt>Parabolic zoom</dt><dd>Icons swell smoothly under the pointer and settle back as it leaves, with adjustable magnification.</dd></div>
+          <div><dt>Even icon sizes</dt><dd>Krema detects built-in padding in icon themes and rescales so every app lines up.</dd></div>
+          <div><dt>Pinning and running dots</dt><dd>Keep favorites in place; a dot under each icon marks what is open.</dd></div>
+          <div><dt>Scroll to cycle</dt><dd>Turn the wheel over an app to step through its windows.</dd></div>
+          <div><dt>Backgrounds</dt><dd>Inherit your panel style, go semi-transparent or fully clear, tint it, frost it with acrylic blur, follow your accent with Mica, or let adaptive opacity turn solid when a window touches the dock.</dd></div>
+          <div><dt>Three visibility modes</dt><dd>Always visible, auto-hide, or dodge windows.</dd></div>
+        </dl>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <h3 id="g-previews">Previews</h3>
+          <p>See a window before you switch to it, without the dock getting in the way.</p>
+        </div>
+        <dl class="specs">
+          <div><dt>Live PipeWire thumbnails</dt><dd>Hover an app to watch its windows update in real time, captured on the GPU.</dd></div>
+          <div><dt>Grouped windows</dt><dd>Every window of an app appears side by side in one popup.</dd></div>
+          <div><dt>Click to switch</dt><dd>Pick a thumbnail to bring that exact window forward.</dd></div>
+          <div><dt>Close from the preview</dt><dd>Dismiss a window right from its thumbnail.</dd></div>
+        </dl>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <h3 id="g-attention">Notifications &amp; attention</h3>
+          <p>A calm dock that still tells you when something needs you.</p>
+        </div>
+        <dl class="specs">
+          <div><dt>Badges</dt><dd>Unread counts arrive over D-Bus and the SmartLauncher (Unity) API, shown as a number, a dot, or not at all.</dd></div>
+          <div><dt>6 attention animations</dt><dd>Bounce, wiggle, pulse, glow, dot color or blink, stopped automatically after a delay you choose.</dd></div>
+          <div><dt>Task progress</dt><dd>Long jobs, like a Dolphin file copy, draw a progress bar on their icon.</dd></div>
+          <div><dt>Respects Do Not Disturb</dt><dd>When Plasma’s DND is on, attention animations stay quiet.</dd></div>
+        </dl>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <h3 id="g-screens">Multi-monitor</h3>
+          <p>One dock, many screens and desktops, each set up the way that screen is used.</p>
+        </div>
+        <dl class="specs">
+          <div><dt>Where the dock lives</dt><dd>On the primary screen, on every screen, or following the active window.</dd></div>
+          <div><dt>Follow triggers</dt><dd>Move by mouse position, by keyboard focus, or by both.</dd></div>
+          <div><dt>Per-screen overrides</dt><dd>Give each monitor its own icon size, edge and visibility mode.</dd></div>
+          <div><dt>Virtual desktops</dt><dd>Show tasks from every desktop, dim the others, or list only the current one.</dd></div>
+        </dl>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <h3 id="g-plasma">Plasma integration &amp; accessibility</h3>
+          <p>Built with Kirigami, KConfig, KColorScheme and KGlobalAccel, so it behaves like part of the desktop.</p>
+        </div>
+        <dl class="specs">
+          <div><dt>Native look</dt><dd>Plasma theme colors, your color scheme, Breeze context menus and a Kirigami settings window.</dd></div>
+          <div><dt>Drag and drop</dt><dd>Reorder icons, drop files onto apps, or drag in a <code>.desktop</code> file to add a launcher.</dd></div>
+          <div><dt>Keyboard first</dt><dd>Every item is reachable without a mouse, and AT-SPI exposes the dock to screen readers.</dd></div>
+          <div><dt>Starts with your session</dt><dd>Launches on login and keeps a single instance running.</dd></div>
+        </dl>
+        <table class="keys">
+          <caption>Global shortcuts</caption>
+          <tbody>
+            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>`</kbd></th><td>Show or hide the dock</td></tr>
+            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>1</kbd>–<kbd>9</kbd></th><td>Activate the app in that slot</td></tr>
+            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>9</kbd></th><td>Open a new instance of it</td></tr>
+            <tr><th scope="row"><kbd>Meta</kbd> + <kbd>F5</kbd></th><td>Move keyboard focus into the dock</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+<!-- screenshots:begin -->
+  <section id="screenshots" class="band shots" aria-labelledby="screenshots-title">
+    <div class="wrap">
+      <h2 id="screenshots-title" class="section-title">On a real Plasma&nbsp;6 desktop</h2>
+      <div class="shot-list">
+<!-- shot:dock-overview:begin -->
+        <figure class="shot">
+          <img src="screenshots/dock-overview.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Dolphin and Konsole open on the Plasma “Next” wallpaper, with Krema docked along the bottom edge showing ten pinned launchers and running indicators beneath the active apps.">
+          <figcaption>Ten pinned launchers under Dolphin and Konsole — running indicators show which apps are open.</figcaption>
+        </figure>
+<!-- shot:dock-overview:end -->
+<!-- shot:settings:begin -->
+        <figure class="shot">
+          <img src="screenshots/settings.png" width="1920" height="1080" loading="lazy" decoding="async" alt="The Krema settings window on the Appearance page, with options for icon size, spacing, zoom factor, attention animation and badge display.">
+          <figcaption>The Appearance page: icon size, spacing, zoom factor, attention animation and badge display.</figcaption>
+        </figure>
+<!-- shot:settings:end -->
+      </div>
+    </div>
+  </section>
+<!-- screenshots:end -->
+
+  <section id="install" class="band install" aria-labelledby="install-title">
+    <div class="wrap">
+      <div class="install-head">
+        <h2 id="install-title" class="section-title">Install Krema</h2>
+        <p>Packages are built for x86_64 and aarch64 and need Plasma 6.0 or newer. Pick your distribution, paste one command, then start Krema from the app launcher.</p>
+      </div>
+
+      <ol class="installs">
+        <li class="inst">
+          <div class="inst-meta">
+            <h3>Arch Linux &amp; Manjaro</h3>
+            <p>From the <a href="https://aur.archlinux.org/packages/krema">AUR</a>, with any helper</p>
+          </div>
+          <div class="cmd"><pre><code>yay -S krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+        </li>
+        <li class="inst">
+          <div class="inst-meta">
+            <h3>Fedora</h3>
+            <p>42, 43, 44 and Rawhide via <a href="https://copr.fedorainfracloud.org/coprs/isac322/krema/">COPR</a></p>
+          </div>
+          <div class="cmd"><pre><code>sudo dnf copr enable isac322/krema &amp;&amp; sudo dnf install krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+        </li>
+        <li class="inst">
+          <div class="inst-meta">
+            <h3>Ubuntu</h3>
+            <p>25.10 and 26.04 via the <a href="https://launchpad.net/~isac322/+archive/ubuntu/krema">Launchpad PPA</a></p>
+          </div>
+          <div class="cmd"><pre><code>sudo add-apt-repository ppa:isac322/krema &amp;&amp; sudo apt install krema</code></pre><button type="button" class="copy" hidden><svg aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+        </li>
+        <li class="inst">
+          <div class="inst-meta">
+            <h3>openSUSE &amp; Debian</h3>
+            <p>Tumbleweed, Slowroll, Leap 16.0, Debian 13 and Ubuntu 25.04 on the Open Build Service</p>
+          </div>
+          <div class="cmd cmd-link">
+            <p>Add the repository that matches your release, then install the <code>krema</code> package.</p>
+            <a class="btn btn-ghost" href="https://build.opensuse.org/package/show/home:isac322/krema">Open the OBS package<svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+        </li>
+        <li class="inst">
+          <div class="inst-meta">
+            <h3>From source</h3>
+            <p>C++23, Qt 6.8+, KDE Frameworks 6 and CMake 3.22+</p>
+          </div>
+          <div class="cmd cmd-link">
+            <p>Dependencies and build steps live in the repository README.</p>
+            <a class="btn btn-ghost" href="https://github.com/isac322/krema#build--run">Build instructions on GitHub<svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+        </li>
+      </ol>
+      <p class="status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <svg class="foot-mark" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><rect x="8" y="8" width="240" height="240" rx="56" fill="#1D2733"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F3F0EA"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#3DAEE9"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#3DAEE9" opacity="0.62"/></svg>
+      <p>Krema is free software under the <a href="https://github.com/isac322/krema/blob/master/LICENSES/GPL-3.0-or-later.txt">GPL-3.0-or-later</a> license. Made for KDE Plasma&nbsp;6.</p>
+    </div>
+    <nav aria-label="Project links">
+      <ul class="foot-links">
+        <li><a href="https://github.com/isac322/krema">Source code</a></li>
+        <li><a href="https://github.com/isac322/krema/releases">Releases</a></li>
+        <li><a href="https://github.com/isac322/krema/blob/master/CHANGELOG.md">Changelog</a></li>
+        <li><a href="https://github.com/isac322/krema/issues">Report an issue</a></li>
+        <li><a href="https://aur.archlinux.org/packages/krema">AUR</a></li>
+        <li><a href="https://copr.fedorainfracloud.org/coprs/isac322/krema/">COPR</a></li>
+        <li><a href="https://build.opensuse.org/package/show/home:isac322/krema">OBS</a></li>
+        <li><a href="https://launchpad.net/~isac322/+archive/ubuntu/krema">Launchpad</a></li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

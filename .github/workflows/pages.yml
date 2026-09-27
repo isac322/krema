@@ -1,0 +1,81 @@
+name: Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "website/**"
+      - "branding/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          cp -R website _site
+
+          if [[ ! -f branding/social/og-image.png ]]; then
+            echo "::error file=website/index.html::branding/social/og-image.png is missing but referenced by og:image"
+            exit 1
+          fi
+          cp branding/social/og-image.png _site/og-image.png
+
+          # Ship only the screenshots that exist; strip the markup for missing ones
+          # so the page never renders a broken image.
+          mkdir -p _site/screenshots
+          kept=0
+          for shot in dock-overview settings; do
+            src="branding/screenshots/${shot}.png"
+            if [[ -f "$src" ]]; then
+              cp "$src" "_site/screenshots/${shot}.png"
+              kept=$((kept + 1))
+            else
+              echo "::warning::${src} not found; omitting it from the page"
+              SHOT="$shot" perl -0pi -e 's/^<!-- shot:\Q$ENV{SHOT}\E:begin -->.*?<!-- shot:\Q$ENV{SHOT}\E:end -->\n//ms' _site/index.html
+            fi
+          done
+          if [[ "$kept" -eq 0 ]]; then
+            perl -0pi -e 's/^<!-- screenshots:begin -->.*?<!-- screenshots:end -->\n//ms' _site/index.html
+            rmdir _site/screenshots
+          fi
+
+          find _site -type f | sort
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

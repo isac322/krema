@@ -25,6 +25,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "shell/previewcontroller.h"
 
 #include <KAboutData>
 #include <LayerShellQt/Window>
@@ -42,6 +43,7 @@
 
 #include <QApplication>
 #include <QProcess>
+#include <QQuickItem>
 #include <QQuickStyle>
 #include <QScopeGuard>
 #include <QScreen>
@@ -113,16 +115,9 @@ QStringList screenNames()
     return names;
 }
 
-// Sets KWin output priority via kscreen-doctor, the same mechanism the
-// System Settings display page uses. Returns false when the tool is absent.
-//
-// A lone `output.<name>.priority.1` on a fresh KWin session does NOT make
-// KWin republish kde_output_order_v1: the incumbent primary keeps winning
-// rank, so the compositor emits nothing (live probe: no republish for 25s).
-// The observable reorder only happens on demote-then-promote — move the
-// incumbent down first, then promote the target — so this helper always
-// issues that two-call sequence, making every caller self-contained.
-bool makePrimary(const QString &outputName)
+// Runs one kscreen-doctor command, the same mechanism the System Settings
+// display page uses. Returns false when the tool is absent or the call fails.
+bool runKscreenDoctor(const QString &arg)
 {
     const QString tool = QStandardPaths::findExecutable(QStringLiteral("kscreen-doctor"));
     if (tool.isEmpty()) {
@@ -133,22 +128,31 @@ bool makePrimary(const QString &outputName)
     auto env = QProcessEnvironment::systemEnvironment();
     env.remove(QStringLiteral("QT_WAYLAND_SHELL_INTEGRATION"));
 
-    auto run = [&](const QString &arg) -> bool {
-        QProcess proc;
-        proc.setProcessEnvironment(env);
-        proc.start(tool, {arg});
-        proc.waitForFinished(kTimeoutMs);
-        if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
-            qWarning("kscreen-doctor %s failed (exit %d, started %d): %s",
-                     qUtf8Printable(arg),
-                     proc.exitCode(),
-                     proc.exitStatus() == QProcess::NormalExit,
-                     qUtf8Printable(QString::fromUtf8(proc.readAllStandardError())));
-            return false;
-        }
-        return true;
-    };
+    QProcess proc;
+    proc.setProcessEnvironment(env);
+    proc.start(tool, {arg});
+    proc.waitForFinished(kTimeoutMs);
+    if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
+        qWarning("kscreen-doctor %s failed (exit %d, started %d): %s",
+                 qUtf8Printable(arg),
+                 proc.exitCode(),
+                 proc.exitStatus() == QProcess::NormalExit,
+                 qUtf8Printable(QString::fromUtf8(proc.readAllStandardError())));
+        return false;
+    }
+    return true;
+}
 
+// Sets KWin output priority via kscreen-doctor.
+//
+// A lone `output.<name>.priority.1` on a fresh KWin session does NOT make
+// KWin republish kde_output_order_v1: the incumbent primary keeps winning
+// rank, so the compositor emits nothing (live probe: no republish for 25s).
+// The observable reorder only happens on demote-then-promote — move the
+// incumbent down first, then promote the target — so this helper always
+// issues that two-call sequence, making every caller self-contained.
+bool makePrimary(const QString &outputName)
+{
     // Demote the incumbent: give the OTHER output priority so the order
     // actually changes, then promote the requested output. With exactly two
     // outputs the other is the only alternative; with N the first non-target
@@ -163,11 +167,25 @@ bool makePrimary(const QString &outputName)
         }
     }
     if (!incumbent.isEmpty()) {
-        if (!run(QStringLiteral("output.%1.priority.1").arg(incumbent))) {
+        if (!runKscreenDoctor(QStringLiteral("output.%1.priority.1").arg(incumbent))) {
             return false;
         }
     }
-    return run(QStringLiteral("output.%1.priority.1").arg(outputName));
+    return runKscreenDoctor(QStringLiteral("output.%1.priority.1").arg(outputName));
+}
+
+// Moves an output on the virtual desktop and waits until Qt sees the new
+// origin.
+bool moveOutput(QScreen *screen, QPoint topLeft)
+{
+    if (!runKscreenDoctor(QStringLiteral("output.%1.position.%2,%3").arg(screen->name()).arg(topLeft.x()).arg(topLeft.y()))) {
+        return false;
+    }
+    return QTest::qWaitFor(
+        [&] {
+            return screen->geometry().topLeft() == topLeft;
+        },
+        kTimeoutMs);
 }
 
 // The wl_output a layer surface is actually bound to. Qt-side
@@ -380,6 +398,107 @@ TEST_CASE("Each preview surface binds the same output as its dock (AllScreens)",
     // Restore a neutral state for whichever case runs next under Randomized
     // ordering.
     app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
+}
+
+TEST_CASE("Preview popup centers on its icon on an output not at the desktop origin", "[primary-output][preview]")
+{
+    // Regression: showPreview() receives the icon position from QML
+    // mapToGlobal(), which includes the dock window's origin on the virtual
+    // desktop. recalcContentPosition() clamps in preview-surface-local
+    // coordinates, so on an output at x=1024 (horizontal dock) or y=768
+    // (vertical dock) the popup was pushed to the far edge of the output
+    // instead of centering on the icon.
+    using Edge = krema::DockPlatform::Edge;
+    REQUIRE(QGuiApplication::screens().size() == 2);
+    app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
+
+    QScreen *originScreen = nullptr;
+    QScreen *otherScreen = nullptr;
+    for (auto *screen : QGuiApplication::screens()) {
+        (screen->geometry().topLeft() == QPoint(0, 0) ? originScreen : otherScreen) = screen;
+    }
+    REQUIRE(originScreen);
+    REQUIRE(otherScreen);
+    // run-with-kwin.sh places the outputs side by side. Sections below may
+    // stack them; restore the side-by-side layout and the default edge for
+    // whichever case runs next under Randomized ordering.
+    const QPoint sideBySide(originScreen->geometry().width(), 0);
+    REQUIRE(moveOutput(otherScreen, sideBySide));
+    const auto restore = qScopeGuard([&] {
+        app().settings->setEdge(static_cast<int>(Edge::Bottom));
+        moveOutput(otherScreen, sideBySide);
+    });
+
+    auto run = [](QScreen *target, Edge edge) {
+        const bool vertical = (edge == Edge::Left || edge == Edge::Right);
+        app().settings->setEdge(static_cast<int>(edge));
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return makePrimary(target->name());
+            },
+            kTimeoutMs));
+
+        auto manager = makeManager();
+        manager->initialize();
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return dockScreenName(manager.get()) == target->name();
+            },
+            kTimeoutMs));
+
+        auto *shell = manager->primaryShell();
+        REQUIRE(shell);
+        auto *view = shell->view();
+        // The dock surface spans its whole output along the dock axis, so once
+        // placed the window origin on that axis is the output origin.
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                return vertical ? view->y() == target->geometry().y() : view->x() == target->geometry().x();
+            },
+            kTimeoutMs));
+
+        auto *preview = shell->previewController();
+        REQUIRE(preview);
+
+        // Icon at dock-local 500 along the dock axis, 48 px long; popup
+        // content 300x200.
+        constexpr qreal iconLocal = 500;
+        constexpr qreal iconExtent = 48;
+        constexpr qreal contentWidth = 300;
+        constexpr qreal contentHeight = 200;
+        preview->setContentSize(contentWidth, contentHeight);
+        // Same call main.qml makes: item.mapToGlobal(0, 0) on the icon.
+        const QPointF iconGlobal = view->contentItem()->mapToGlobal(vertical ? QPointF(0, iconLocal) : QPointF(iconLocal, 0));
+        preview->showPreview(0, vertical ? iconGlobal.y() : iconGlobal.x(), iconExtent);
+
+        INFO("output " << target->name().toStdString() << " at " << target->geometry().x() << "," << target->geometry().y() << ", edge "
+                       << static_cast<int>(edge));
+        if (vertical) {
+            CHECK(preview->contentY() == iconLocal + iconExtent / 2.0 - contentHeight / 2.0);
+        } else {
+            CHECK(preview->contentX() == iconLocal + iconExtent / 2.0 - contentWidth / 2.0);
+        }
+        preview->hidePreview();
+    };
+
+    SECTION("bottom dock on the output at x=0 (control)")
+    {
+        run(originScreen, Edge::Bottom);
+    }
+    SECTION("bottom dock on the output at non-zero x")
+    {
+        run(otherScreen, Edge::Bottom);
+    }
+    SECTION("left dock on an output at non-zero y")
+    {
+        REQUIRE(moveOutput(otherScreen, QPoint(0, originScreen->geometry().height())));
+        run(otherScreen, Edge::Left);
+    }
+    SECTION("right dock on an output at non-zero y")
+    {
+        REQUIRE(moveOutput(otherScreen, QPoint(0, originScreen->geometry().height())));
+        run(otherScreen, Edge::Right);
+    }
 }
 #if KREMA_TEST_HAS_MONITOR
 TEST_CASE("Startup creates exactly one dock shell on the Plasma primary", "[primary-output]")

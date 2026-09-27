@@ -181,7 +181,13 @@ void PreviewController::showPreview(int index, qreal itemGlobalPos, qreal itemEx
 
     const bool indexChanged = (m_parentIndex != index);
     m_parentIndex = index;
-    m_itemGlobalPos = itemGlobalPos;
+    // itemGlobalPos comes from QML mapToGlobal(); on outputs whose origin is
+    // not (0,0) it includes the dock window's position on the virtual desktop.
+    // recalcContentPosition() works in surface-local coordinates (clamped to
+    // the preview surface size), so undo the window offset here.
+    const auto dockEdge = m_dockView->platform()->edge();
+    const bool dockVertical = (dockEdge == DockPlatform::Edge::Left || dockEdge == DockPlatform::Edge::Right);
+    m_itemPos = itemGlobalPos - (dockVertical ? m_dockView->y() : m_dockView->x());
     m_itemExtent = itemExtent;
 
     recalcContentPosition();
@@ -539,7 +545,7 @@ void PreviewController::recalcContentPosition()
 
     if (vertical) {
         // Vertical dock: center popup vertically on the icon
-        const qreal popupCenter = m_itemGlobalPos + m_itemExtent / 2.0;
+        const qreal popupCenter = m_itemPos + m_itemExtent / 2.0;
         m_contentY = popupCenter - m_contentHeight / 2.0;
 
         const int screenH = m_previewView->height();
@@ -552,7 +558,7 @@ void PreviewController::recalcContentPosition()
         // contentX is determined by QML based on edge (left=0 or right=parent.width-width)
     } else {
         // Horizontal dock: center popup horizontally on the icon
-        const qreal popupCenter = m_itemGlobalPos + m_itemExtent / 2.0;
+        const qreal popupCenter = m_itemPos + m_itemExtent / 2.0;
         m_contentX = popupCenter - m_contentWidth / 2.0;
 
         const int screenW = m_previewView->width();

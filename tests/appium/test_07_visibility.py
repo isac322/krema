@@ -39,9 +39,6 @@ SETTLE_TIMEOUT = 5.0
 CENTRE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
 EDGE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT - 1)
 
-# Qt key combos (QKeyCombination::toCombined()) for Meta+F5.
-_META_F5 = 0x10000000 | 0x01000034
-
 
 # --------------------------------------------------------------------------- oracles
 
@@ -365,33 +362,19 @@ def test_vis005_smart_hide_hides_only_for_the_active_overlapping_window(krema: K
 # --------------------------------------------------------------------------- VIS-006
 
 
-@pytest.fixture
-def real_meta_f5():
-    """Let a real Meta+F5 reach krema: KWin's own MoveMouseToFocus binding
-    on the same key wins otherwise (README, investigation 2). Restored after
-    the test because KWin outlives it."""
-    old = shortcuts.shortcut_keys("MoveMouseToFocus", component="kwin")
-    shortcuts.set_shortcut_keys("MoveMouseToFocus", [], component="kwin")
-    try:
-        yield
-    finally:
-        shortcuts.set_shortcut_keys("MoveMouseToFocus", old, component="kwin")
-
-
-@pytest.mark.xfail(shortcuts.FOCUS_DOCK_KEY_DROPPED, strict=True, raises=WaitTimeout, reason=shortcuts.FOCUS_DOCK_KEY_DROPPED_REASON)
 @pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.AUTO_HIDE})
-def test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible(krema: Krema, apps: TestWindows, real_meta_f5) -> None:
+def test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible(krema: Krema, apps: TestWindows) -> None:
     apps.open("Keys")
     krema.wait_for_item("Keys")
     wait_until(
-        lambda: shortcuts.shortcut_keys("focus-dock") == [_META_F5],
-        message=lambda: f"krema focus-dock bound to Meta+F5 (keys: {shortcuts.shortcut_keys('focus-dock')})",
+        lambda: shortcuts.shortcut_keys("focus-dock") == [shortcuts.META_ALT_D],
+        message=lambda: f"krema focus-dock bound to Meta+Alt+D (keys: {shortcuts.shortcut_keys('focus-dock')})",
     )
     inp.move(*CENTRE)
     wait_hidden(krema, "Keys", why=" at start with the pointer away")
 
-    inp.key("Meta", "F5")
-    wait_until(lambda: krema.focused_item() == "Keys", message=lambda: f"Meta+F5 to focus the dock item (focused: {krema.focused_item()})")
+    inp.key("Meta", "Alt", "d")
+    wait_until(lambda: krema.focused_item() == "Keys", message=lambda: f"Meta+Alt+D to focus the dock item (focused: {krema.focused_item()})")
     wait_shown(krema, "Keys", why=" during keyboard navigation")
     krema.wait_keyboard_focus()
     assert kwin.cursor_pos() == CENTRE, "pointer is away from the dock: only keyboard navigation keeps it shown"

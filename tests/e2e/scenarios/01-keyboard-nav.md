@@ -1,7 +1,7 @@
 # Keyboard Navigation
 
 ## Features
-- dock-keyboard-entry: Meta+F5 global shortcut to focus the dock
+- dock-keyboard-entry: Meta+Alt+D global shortcut to focus the dock
 - dock-keyboard-nav: Left/Right arrow keys to move between dock items
 - dock-keyboard-activate: Enter/Space to activate focused app
 - dock-keyboard-new-instance: Shift+Enter to launch new instance
@@ -28,7 +28,7 @@
 
 ---
 
-## TC KBD-001: Dock Focus Entry via Meta+F5
+## TC KBD-001: Dock Focus Entry via Meta+Alt+D
 
 **Precondition:** Dock with at least 1 running app (e.g., kcalc). No keyboard focus on dock.
 **Steps:**
@@ -38,7 +38,7 @@
      interface="org.kde.kglobalaccel.Component" method="invokeShortcut"
      args=["string:focus-dock"]
    ```
-   Note: `keyboard_key "super+F5"` does NOT work in kwin-mcp — KGlobalAccel
+   Note: `keyboard_key "super+alt+d"` does NOT work in kwin-mcp — KGlobalAccel
    requires D-Bus invocation in the isolated session.
 2. Wait 500ms for Wayland async round-trip
 3. `accessibility_tree app_name="krema"`
@@ -52,7 +52,7 @@
 
 **Verification:** accessibility_tree (button `focused` state), screenshot (focus ring visible)
 
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_meta_f5_focuses_first_dock_item
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_meta_alt_d_focuses_first_dock_item (real key press; also asserts kglobalaccel keeps Meta+Alt+D bound to focus-dock)
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_focus_dock_shortcut_focuses_first_dock_item
 
 ---

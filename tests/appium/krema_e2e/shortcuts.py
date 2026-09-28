@@ -5,30 +5,16 @@
 Krema registers component ``krema`` with actions ``toggle-dock``,
 ``focus-dock``, ``activate-entry-1..9`` and ``new-instance-entry-1..9``
 (src/app/application.cpp).
-
-Note: in a stock KWin, Meta+F5 is also KWin's "Move Mouse to Focus"
-(component ``kwin``, action ``MoveMouseToFocus``) and KWin wins, so a real
-Meta+F5 key press never reaches krema unless that binding is cleared with
-:func:`set_shortcut_keys` (see README, investigation 2).
 """
 
 from __future__ import annotations
 
-from . import dbus, env
+from . import dbus
 from .waits import wait_until
 
-#: kglobalacceld before 6.7 gives a contested key to the component that
-#: registered it first and drops it from the later one (GlobalShortcut::setKeys:
-#: "skipping because key ... is already taken"; kglobalacceld d62b708 keeps
-#: contested keys since 6.6.90). KWin registers MoveMouseToFocus = Meta+F5
-#: before krema starts, so there krema's Focus Dock is left without a key.
-FOCUS_DOCK_KEY_DROPPED: bool = env.KGLOBALACCELD_VERSION < (6, 7)
-FOCUS_DOCK_KEY_DROPPED_REASON = (
-    "krema bug: the default Focus Dock shortcut Meta+F5 collides with KWin's default MoveMouseToFocus "
-    "(Meta+F5). kglobalacceld < 6.7 drops a key another component already holds, so krema's focus-dock "
-    "action registers with no key at all (allShortcutInfos keys [0]) and stays unbound even after KWin's "
-    "binding is cleared: Meta+F5 never focuses the dock on Plasma < 6.7"
-)
+#: Qt key combo (``QKeyCombination::toCombined()``) of krema's default Focus
+#: Dock shortcut, Meta+Alt+D.
+META_ALT_D = 0x10000000 | 0x08000000 | 0x44
 
 _SERVICE = "org.kde.kglobalaccel"
 _COMPONENT_IFACE = "org.kde.kglobalaccel.Component"
@@ -41,7 +27,7 @@ def shortcut_names(component: str = "krema") -> list[str]:
 
 def shortcut_keys(action: str, component: str = "krema") -> list[int]:
     """Active key codes (Qt ``QKeyCombination::toCombined()`` ints) bound to an
-    action, e.g. ``[Qt.META | Qt.Key_F5] == [0x10000000 | 0x01000034]``."""
+    action, e.g. ``[Qt.META | Qt.ALT | Qt.Key_D] == [META_ALT_D]``."""
     for info in dbus.call(_SERVICE, f"/component/{component}", _COMPONENT_IFACE, "allShortcutInfos"):
         if info[0] == action:
             return list(info[6])

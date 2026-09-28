@@ -136,7 +136,7 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Precondition:** Visibility mode set to AutoHide. Dock currently hidden.
 **Steps:**
-1. Trigger Meta+F5 (keyboard navigation entry)
+1. Trigger Meta+Alt+D (keyboard navigation entry)
 2. Wait 500ms
 3. `screenshot` — verify dock is visible
 4. Wait 5 seconds (longer than auto-hide timeout)

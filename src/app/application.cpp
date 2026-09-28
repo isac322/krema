@@ -220,13 +220,22 @@ void Application::registerGlobalShortcuts()
         }
     });
 
-    // Focus dock for keyboard navigation: Meta+F5
+    // Focus dock for keyboard navigation: Meta+Alt+D (like Plasma's "Move keyboard
+    // focus between panels", Meta+Alt+P). No stock Plasma 6 component claims it;
+    // the former default Meta+F5 is KWin's "Move Mouse to Focus", which always wins
+    // the key and makes kglobalacceld < 6.7 drop it from this action entirely.
     // In multi-monitor mode, focuses the dock on the screen containing the cursor;
     // in Follow Active mode, the dock on the active screen.
     auto *focusDockAction = m_actionCollection->addAction(QStringLiteral("focus-dock"));
     focusDockAction->setText(i18nc("@action global shortcut", "Focus Dock"));
-    kga->setDefaultShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
-    kga->setShortcut(focusDockAction, {QKeySequence(Qt::META | Qt::Key_F5)});
+    const QList<QKeySequence> focusDockShortcut{QKeySequence(Qt::META | Qt::ALT | Qt::Key_D)};
+    kga->setDefaultShortcut(focusDockAction, focusDockShortcut);
+    kga->setShortcut(focusDockAction, focusDockShortcut);
+    // Autoloading keeps the stored shortcut. Move users still on the old default
+    // (which never reaches krema on stock KWin) to the new one.
+    if (kga->shortcut(focusDockAction) == QList<QKeySequence>{QKeySequence(Qt::META | Qt::Key_F5)}) {
+        kga->setShortcut(focusDockAction, focusDockShortcut, KGlobalAccel::NoAutoloading);
+    }
     connect(focusDockAction, &QAction::triggered, this, [this]() {
         if (auto *shell = m_dockManager->shellAtCursor()) {
             shell->focusDock();

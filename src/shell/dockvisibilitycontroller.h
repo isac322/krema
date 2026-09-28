@@ -4,6 +4,7 @@
 #pragma once
 
 #include "platform/dockplatform.h"
+#include "platform/kwinpointermotionwatcher.h"
 
 #include <QObject>
 #include <QTimer>
@@ -96,6 +97,8 @@ Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();
     void panelRectChanged();
+    /// The pointer moved (anywhere on screen) during keyboard navigation.
+    void pointerMovedDuringKeyboardNavigation();
 
 private:
     void evaluateVisibility();
@@ -148,6 +151,9 @@ private:
 
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
+
+    // Reports pointer motion outside the dock surface while keyboard-navigating
+    KWinPointerMotionWatcher m_pointerMotionWatcher;
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;

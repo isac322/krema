@@ -84,6 +84,14 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
         });
     }
 
+    // Wayland gives the dock no pointer events while the pointer is over other
+    // windows; KWin reports that motion so keyboard navigation can end.
+    connect(&m_pointerMotionWatcher, &KWinPointerMotionWatcher::pointerMoved, this, [this]() {
+        if (m_keyboardActive) {
+            Q_EMIT pointerMovedDuringKeyboardNavigation();
+        }
+    });
+
     connectModelSignals();
 }
 
@@ -294,10 +302,12 @@ void DockVisibilityController::setKeyboardActive(bool active)
     m_platform->setKeyboardInteractivity(active);
 
     if (active) {
+        m_pointerMotionWatcher.arm();
         m_hideTimer.stop();
         m_evaluateTimer.stop();
         setVisible(true);
     } else {
+        m_pointerMotionWatcher.disarm();
         // When keyboard navigation ends and mouse is not hovering, start hide timer
         if (m_interactingCount == 0 && !m_hovered) {
             if (m_mode != DockPlatform::VisibilityMode::AlwaysVisible) {

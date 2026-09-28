@@ -184,6 +184,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/settings/*` | 06 |
 | `src/config/krema.kcfg` | 06 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
+| `src/platform/kwinpointermotionwatcher.*` | 01 |
 | `src/app/application.*` | 01, 06 |
 | `src/qml/SettingsDialog.qml` | 06 |
 | `src/shell/settingswindow.*` | 06, 07 |

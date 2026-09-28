@@ -78,6 +78,19 @@ Item {
         DockVisibility.setKeyboardActive(false)
     }
 
+    // Pointer motion anywhere on screen ends keyboard navigation. Motion over
+    // the dock is also seen by dockMouseArea.onPositionChanged; motion over
+    // other windows reaches the dock only through KWin.
+    Connections {
+        target: DockVisibility
+        function onPointerMovedDuringKeyboardNavigation() {
+            if (!root.keyboardNavigating)
+                return
+            PreviewController.endPreviewKeyboardNav()
+            root.endKeyboardNavigation()
+        }
+    }
+
     function navigateItem(delta) {
         keyboardNavigating = true
         let count = dockRepeater.count

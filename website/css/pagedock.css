@@ -1,0 +1,310 @@
+/* Pagedock: a working mini Krema dock pinned to the bottom of the page.
+   Tiles are filled rounded-square app icons on one translucent panel; zoom
+   grows icons upward out of the panel floor like Krema itself. The panel
+   surface is a separate .pd-bg element so it can widen with the zoom using
+   transforms only. Tokens come from css/site.css. */
+
+.pagedock {
+  --pd-tile: 56px;
+  --pd-gap: 8px;
+  --pd-pad-x: 10px;
+  --pd-pad-top: 8px;
+  --pd-floor: 18px; /* panel strip below the icons: running dots + active pill */
+  --pd-radius: 22px;
+  --pd-bottom: 8px;
+  /* Text scrolls under the panel; the surface stays translucent and blurred
+     so it never makes the words beneath illegible. */
+  --pd-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ink-2) 55%, transparent),
+    color-mix(in srgb, var(--ink) 64%, transparent)
+  );
+  --pd-shadow: 0 18px 40px -16px rgb(0 0 0 / 0.75), 0 2px 10px rgb(0 0 0 / 0.35);
+  --pd-speed: 160ms;
+
+  position: fixed;
+  left: 50%;
+  bottom: var(--pd-bottom);
+  z-index: 60;
+  translate: -50% 0;
+  padding: var(--pd-pad-top) var(--pd-pad-x) var(--pd-floor);
+  /* Finger scrubs magnify; the page scroll gesture is only borrowed by the
+     rest of the viewport, never by the dock. */
+  touch-action: none;
+  transition: transform 220ms var(--ease-out);
+}
+
+.pagedock.is-tracking { --pd-speed: 80ms; }
+
+/* Dodge: slide fully below the viewport edge. */
+.pagedock.is-hidden { transform: translateY(calc(100% + 24px)); }
+
+/* ---------- One translucent panel behind the icons ---------- */
+
+.pd-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--pd-radius);
+  background: var(--pd-surface);
+  box-shadow: var(--pd-shadow), inset 0 1px 0 rgb(244 236 224 / 0.09);
+  transform-origin: 50% 50%;
+  transition: transform var(--pd-speed) var(--ease-out),
+    border-radius var(--pd-speed) var(--ease-out);
+  pointer-events: none;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .pd-bg {
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+  }
+}
+
+/* ---------- Tiles: filled rounded-square app icons ---------- */
+
+.pd-tiles {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--pd-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pd-tiles > li {
+  flex: none;
+  list-style: none;
+  transition: translate var(--pd-speed) var(--ease-out);
+}
+
+.pd-tile {
+  position: relative;
+  display: block;
+  width: var(--pd-tile);
+  height: var(--pd-tile);
+  border-radius: var(--r-tile);
+  color: var(--bone);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.pd-tile:focus-visible { outline: none; }
+
+/* The icon face: brand-tinted fill, glossy top highlight, small inner shadow.
+   transform-origin bottom so zoom lifts out of the panel floor. */
+.pd-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-tile);
+  background: var(--pd-icon, linear-gradient(165deg, #533D2F, var(--ink-2) 78%));
+  box-shadow:
+    inset 0 1px 0 rgb(244 236 224 / 0.16),
+    inset 0 -8px 16px -10px rgb(0 0 0 / 0.55),
+    0 3px 8px -2px rgb(0 0 0 / 0.5);
+  color: var(--pd-glyph, var(--bone));
+  transform-origin: 50% 100%;
+  transition: scale var(--pd-speed) var(--ease-out), filter 160ms var(--ease-out);
+}
+/* Soft specular sweep across the top of every icon, like a tiny app icon. */
+.pd-face::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 46%);
+  pointer-events: none;
+}
+.pd-face svg {
+  display: block;
+  width: 56%;
+  height: 56%;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.35));
+  pointer-events: none;
+}
+.pd-tile:hover .pd-face { filter: brightness(1.12); }
+.pd-tile:focus-visible .pd-face {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+/* Per-icon treatments, all inside the ink/bone/Breeze palette. */
+.pd-face--home {
+  /* The real Zoom K icon: its own ink tile, no extra fill. */
+  --pd-icon: transparent;
+  box-shadow:
+    inset 0 1px 0 rgb(244 236 224 / 0.12),
+    inset 0 -10px 18px -10px rgb(0 0 0 / 0.6),
+    0 3px 10px -2px rgb(0 0 0 / 0.55);
+}
+.pd-face--home::before { background: linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 40%); }
+.pd-face--home svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.4));
+}
+.pd-face--roots { --pd-icon: linear-gradient(165deg, #4C382B, #32251D 80%); }
+.pd-face--everything {
+  --pd-icon: linear-gradient(165deg, color-mix(in srgb, var(--blue) 26%, var(--ink-2)), #32251C 82%);
+  --pd-glyph: var(--bone);
+}
+.pd-face--moments {
+  --pd-icon: linear-gradient(165deg, #3F2F24, #271C15 82%);
+}
+.pd-face--add {
+  --pd-icon: linear-gradient(165deg, color-mix(in srgb, var(--blue) 78%, #BF8146), var(--blue-deep) 88%);
+  --pd-glyph: var(--ink);
+}
+.pd-face--gh { --pd-icon: linear-gradient(165deg, #392A20, #1D1611 82%); }
+
+.pd-sep {
+  align-self: center;
+  width: 1px;
+  height: calc(var(--pd-tile) * 0.62);
+  margin-inline: 4px;
+  background: rgb(244 236 224 / 0.14);
+}
+
+/* ---------- Indicator dots on the panel floor: hidden → dot → active pill ---------- */
+
+.pd-ind {
+  position: absolute;
+  left: 50%;
+  bottom: -11px; /* onto the panel floor, under the icon */
+  width: 5px;
+  height: 5px;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: var(--bone-dim);
+  opacity: 0;
+  scale: 0.4;
+  pointer-events: none;
+  transition: opacity 220ms var(--ease-out), scale 220ms var(--ease-out),
+    width 220ms var(--ease-out), height 220ms var(--ease-out),
+    background-color 220ms, box-shadow 220ms;
+}
+.pd-tile.is-running .pd-ind {
+  opacity: 1;
+  scale: 1;
+}
+.pd-tile.is-active .pd-ind {
+  width: 18px;
+  height: 4px;
+  opacity: 1;
+  scale: 1;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--glow), 0 0 2px var(--blue);
+}
+
+/* ---------- Badge (inside the face so it inherits zoom scale for free) ---------- */
+
+.pd-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bone);
+  color: var(--ink);
+  font: 700 11.5px/20px var(--font);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--ink), 0 2px 6px rgb(0 0 0 / 0.4);
+  pointer-events: none;
+}
+
+/* ---------- Tooltip (in-scene, positioned by JS above the peak tile) ---------- */
+
+.pd-tip {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink-2) 94%, transparent);
+  color: var(--bone);
+  font: 500 13px/1.35 var(--font);
+  white-space: nowrap;
+  box-shadow: 0 8px 20px -8px rgb(0 0 0 / 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease-out);
+}
+.pd-tip.is-on { opacity: 1; }
+.pd-tip:empty { display: none; }
+
+/* ---------- Edge trigger hint shown while the dock is dodged away ---------- */
+
+.pd-edge {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 60;
+  width: 320px;
+  height: 3px;
+  translate: -50% 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--blue);
+  box-shadow: 0 0 12px var(--glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms var(--ease-out);
+}
+.pagedock.is-hidden + .pd-edge {
+  opacity: 1;
+  transition-delay: 120ms;
+}
+
+/* ---------- Genie ghost (animated by pagedock.js) ---------- */
+
+.pd-genie {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  transform-origin: 0 0;
+  background: rgb(244 236 224 / 0.1);
+  opacity: 0;
+  pointer-events: none;
+  contain: strict;
+  will-change: transform, opacity;
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 759.98px) {
+  .pagedock {
+    --pd-tile: 42px;
+    --pd-gap: 5px;
+    --pd-pad-x: 8px;
+    --pd-pad-top: 6px;
+    --pd-floor: 15px;
+    --pd-radius: 18px;
+    --pd-bottom: 6px;
+  }
+  .pd-sep { margin-inline: 2px; }
+  .pd-ind { bottom: -9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pagedock,
+  .pd-tiles > li,
+  .pd-face,
+  .pd-ind,
+  .pd-bg,
+  .pd-tip,
+  .pd-edge {
+    transition: none !important;
+  }
+  .pd-genie { display: none; }
+}
+
+@media print {
+  .pagedock,
+  .pd-edge,
+  .pd-genie { display: none; }
+}

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Krema now ships its own app icon, shown in the application launcher, task switcher, Discover, and window title bars
+
 ### Changed
 
 - The default Focus Dock shortcut moved from Meta+F5 to Meta+Alt+D: Meta+F5 belongs to KWin's "Move Mouse to Focus", so it never reached the dock and was left unbound on Plasma older than 6.7. Setups still on the old default switched automatically

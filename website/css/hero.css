@@ -1,0 +1,270 @@
+/* Hero lens: the headline wordmark behaves like a Krema dock.
+   Resting state = zoom wordmark ratios 0.72 / 0.87 / 1.16 / 0.87 / 0.72 with the
+   accent dot under the peak letter. js/hero.js drives the live parabolic zoom.
+   Horizontal box (max-width, --pad) comes from `main > section` in site.css. */
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  row-gap: 1rem;
+  min-height: 88vh;
+  min-height: 88svh;
+  padding-block: calc(var(--wordnav-h, 64px) + 1rem) calc(var(--pagedock-h, 76px) + 1rem);
+  /* Backstop only: hero.js keeps every zoomed letter inside the lens content
+     box (see render()), so the lens never reaches this edge. */
+  overflow-x: clip;
+  /* Horizontal drags magnify the letters; vertical scrolling stays native. */
+  touch-action: pan-y pinch-zoom;
+  /* cqw below = this content column, the box the zoomed lens must fit in. */
+  container-type: inline-size;
+}
+
+/* Narrow screens: the text column spans the page dock's width, so the next
+   section must start below the fold for the dock to show on the first screen. */
+@media (max-width: 59.99rem) {
+  .hero {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+}
+
+/* ---------- The lens (wordmark) ---------- */
+
+.lens {
+  /* Resting translateX offsets (em) close the gaps left by the resting scales,
+     keeping the k's left edge on the content column. JS replaces them with
+     measured values. */
+  --x1: -0.081em;
+  --x2: -0.189em;
+  --x3: -0.171em;
+  --x4: -0.186em;
+  --x5: -0.325em;
+  /* Baseline inside a letter box (line-height: 1). JS measures the real value. */
+  --base: 0.89em;
+  --dot: 0.075em;
+  --dot-gap: 0.06em;
+
+  position: relative; /* offsetParent for letters and the dot */
+  display: flex;
+  align-items: flex-end;
+  margin: 0 0 0.5rem;
+  /* Headroom for the 1.35x peak, room below the baseline for the dot. */
+  padding: 0.12em 0 0.06em;
+  font-family: var(--font, "Noto Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
+  /* Width-driven so the zoomed lockup always fits the column. Measured with
+     Noto Sans: icon + gap 0.68em, resting word 2.34em, worst-case zoomed word
+     (MAX 1.35, R ≤ 1.4 letters, pointer anywhere) ≤ 2.995em, ink allowance 0.05em
+     → worst case 3.73em wide, so font-size ≤ column / 3.75. The resting lockup
+     (3.02em) then fills ~80% of the column. Capped so the whole hero fits above
+     the fold on desktop. hero.js still fits/clamps each frame in case a
+     fallback font is wider, so nothing clips even then. */
+  font-size: clamp(56px, min(calc((100vw - 2 * var(--pad, 1.25rem)) / 3.75), 26rem, calc((100vh - 25rem) * 0.78)), 26rem);
+  font-size: clamp(56px, min(calc(100cqw / 3.75), 26rem, calc((100svh - 25rem) * 0.78)), 26rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: lowercase;
+  color: var(--bone, #f4ece0);
+  font-kerning: none; /* letters are separate boxes; kerning pairs would not apply anyway */
+  user-select: none;
+  -webkit-user-select: none;
+  /* The whole wordmark row is the touch target: horizontal finger drags feed
+     the zoom (hero.js captures the pointer), vertical pans still scroll. */
+  touch-action: pan-y pinch-zoom;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lens-ch {
+  position: relative;
+  display: inline-block;
+  /* Anchored on the baseline so letters grow upward from a shared floor,
+     like dock icons from the panel. */
+  transform-origin: 50% var(--base);
+  transform: translate3d(var(--x, 0), 0, 0) scale(var(--s, 1));
+  transition: transform 420ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+  will-change: transform;
+}
+
+/* nth-of-type: the lockup icon (an <svg>) precedes the letters and must not shift the indices. */
+.lens-ch:nth-of-type(1) { --s: 0.72; --x: var(--x1); }
+.lens-ch:nth-of-type(2) { --s: 0.87; --x: var(--x2); }
+.lens-ch:nth-of-type(3) { --s: 1.16; --x: var(--x3); }
+.lens-ch:nth-of-type(4) { --s: 0.87; --x: var(--x4); }
+.lens-ch:nth-of-type(5) { --s: 0.72; --x: var(--x5); }
+
+/* Zoom K app icon, locked up left of the word. Sized to the resting letters'
+   x-height..cap-height band (resting k ascender ≈ 0.72 × 0.73em ≈ 0.53em, peak e
+   x-height ≈ 1.16 × 0.54em ≈ 0.63em) and sat on the shared baseline: the letter
+   boxes end 1em below their top, the baseline sits at --base. It is a plain
+   flex item in em units, so it scales with the word on every screen; hero.js
+   measures the letters after it, so the zoom never paints over it. */
+.lens-icon {
+  flex: none;
+  width: 0.58em;
+  height: 0.58em;
+  margin: 0 0.1em calc(1em - var(--base)) 0;
+  border-radius: 22%;
+  box-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.35);
+}
+
+/* Zero-size baseline probe injected by JS. */
+.lens-probe {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: baseline;
+}
+
+/* No-JS accent dot: lives inside the peak letter, just under its baseline.
+   Sizes are divided by the peak's 1.16 scale so they match the JS dot. */
+.lens-ch:nth-of-type(3)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(var(--base) + var(--dot-gap) / 1.16);
+  width: calc(var(--dot) / 1.16);
+  height: calc(var(--dot) / 1.16);
+  border-radius: 50%;
+  background: var(--blue, #d69a5e);
+  box-shadow: 0 0 0.12em 0.015em var(--glow, rgba(214, 154, 94, 0.35));
+  transform: translateX(-50%);
+}
+
+/* JS-driven dot: slides under the letter nearest the pointer.
+   --dot-top (lens coords) = letter top + baseline, set by JS. */
+.lens-dot {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(var(--dot-top, 1em) + var(--dot-gap));
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--blue, #d69a5e);
+  box-shadow: 0 0 0.14em 0.02em var(--glow, rgba(214, 154, 94, 0.35));
+  transform: translate3d(0, 0, 0) translateX(-50%);
+  transition:
+    transform 420ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    opacity 200ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  will-change: transform;
+  pointer-events: none;
+}
+
+.js .lens-dot { display: block; opacity: 0; }
+.js .lens.is-ready .lens-dot { opacity: 1; }
+.js .lens.is-ready .lens-ch:nth-of-type(3)::after { display: none; }
+
+/* Until measured, and while the pointer drives the lens, writes land instantly:
+   the rAF loop is the animation. The spring only plays on release. */
+.js .lens:not(.is-ready) .lens-ch,
+.js .lens:not(.is-ready) .lens-dot,
+.lens.is-live .lens-ch,
+.lens.is-live .lens-dot {
+  transition: none;
+}
+
+/* ---------- Copy ---------- */
+
+.hero-tag {
+  margin: 0;
+  font-family: var(--font, "Noto Sans", system-ui, sans-serif);
+  font-size: clamp(0.95rem, 1.3vw, 1.1rem);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  color: var(--blue, #d69a5e);
+}
+
+.hero-lede {
+  margin: 0;
+  max-width: 46ch;
+  font-size: clamp(1.05rem, 1.2vw, 1.2rem);
+  line-height: 1.55;
+  color: var(--bone-dim, #cdbfae);
+  text-wrap: pretty;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* Primary first. Phones: both buttons share one row and stay at least a
+   comfortable touch height. */
+.ctas > * { min-height: 44px; }
+
+@media (max-width: 29.99rem) {
+  .ctas > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* Only meaningful when the lens is live. Sits right under the wordmark it
+   refers to and fades out on the first sweep. */
+.hero-hint {
+  display: none;
+  align-items: center;
+  gap: 0.5em;
+  margin: -0.25rem 0 0;
+  font-family: var(--mono, "Hack", "JetBrains Mono", ui-monospace, monospace);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: var(--muted, #a89684);
+  transition: opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.hero-hint::before {
+  content: "\2194";
+  font-family: var(--font, "Noto Sans", system-ui, sans-serif);
+  font-size: 1.1em;
+  color: var(--blue, #d69a5e);
+  animation: hero-hint-nudge 1.6s var(--ease-out, ease-out) 1.2s 3;
+}
+
+@keyframes hero-hint-nudge {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-3px); }
+  65% { transform: translateX(3px); }
+}
+
+.js .hero-hint { display: flex; }
+.hero.is-touched .hero-hint { opacity: 0; }
+
+/* ---------- Wide screens: wordmark on top; tag + lede left, CTAs bottom-right ---------- */
+
+@media (min-width: 60rem) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 2.5rem;
+  }
+  .lens { grid-column: 1 / -1; grid-row: 1; }
+  /* Directly under the wordmark, before the tag. */
+  .hero-hint { grid-column: 1 / -1; grid-row: 2; }
+  .hero-tag { grid-column: 1 / -1; grid-row: 3; white-space: nowrap; }
+  .hero-lede { grid-column: 1; grid-row: 4; }
+  .ctas {
+    grid-column: 2;
+    grid-row: 4;
+    align-self: end;
+    justify-self: end;
+    margin-top: 0;
+  }
+}
+
+/* ---------- Reduced motion: state changes are instant ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .lens-ch,
+  .lens-dot,
+  .hero-hint {
+    transition: none !important;
+  }
+  .hero-hint::before { animation: none; }
+}

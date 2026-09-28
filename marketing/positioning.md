@@ -69,6 +69,21 @@ experience.
 5. **6 background styles** including acrylic frosted glass and Mica
 6. **Full keyboard accessibility** — AT-SPI screen reader support with visual focus ring
 
+## Visual Identity
+
+The brand is built on one idea: the dock zooms.
+
+- **Zoom K icon** — the "K" is drawn from a dock. The bone stem is the dock
+  panel; the arms are caramel icon tiles that shrink as they move away from
+  the largest tile, following the parabolic zoom falloff.
+- **Zoom wordmark** — lowercase monoline "krema" with letters scaled like a
+  zooming dock (the "e" is the hovered item) and a caramel active-indicator
+  dot under it.
+- **Palette** — Ink `#18110D`, Bone `#F4ECE0`, Caramel `#D69A5E` (accent).
+
+Files, usage rules, minimum sizes, and regeneration steps live in the
+[brand guide](../branding/README.md).
+
 ## Tone & Voice
 
 - **Enthusiastic but not hype-y** — let features speak for themselves

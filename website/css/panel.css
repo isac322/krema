@@ -1,0 +1,314 @@
+/* Section R (#roots): the stock Plasma 6 panel and Krema on one wallpaper,
+   split by a draggable handle.
+
+   The scene is drawn at 1:1 CSS px in "logical" desktop pixels, like a
+   Plasma session at scale 1 (or 2 on HiDPI screens). Below 920 px of width
+   js/panel.js scales the whole scene down instead of squeezing the panel.
+
+   The left half reproduces a capture of the default Plasma 6.7 panel
+   (Breeze Dark, Fedora 44, 1280x720 at scale 1 and 2; branding/panel-ref).
+   Every size, offset and colour in the .pp block below was measured from
+   that capture. Keep it Breeze: none of it follows the site palette. */
+
+@font-face {
+  font-family: "Krema Noto Sans";
+  src: url("../media/noto-sans-panel.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.roots-lede {
+  max-width: 44rem;
+  color: var(--bone-dim);
+  font-size: 1.0625rem;
+}
+main > section.roots > .section-title + .roots-lede { margin-top: 0.9rem; }
+
+/* ---------- Frame, scene, wallpaper ---------- */
+
+.cmp {
+  --pos: 50%;
+  --k: 1;
+  --sh: 320;
+  position: relative;
+  height: 322px; /* scene + the 1px border on both sides, so no scene row is clipped */
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-win);
+  background: #0a1b3c;
+  box-shadow: 0 30px 80px -34px rgb(0 0 0 / 0.85);
+  touch-action: pan-y;
+  isolation: isolate;
+  contain: layout paint;
+}
+.cmp.is-scaled { height: calc(var(--sh) * var(--k) * 1px + 2px); }
+
+.cmp-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* "Roast Contours" (branding/wallpaper/), bottom band of a 16:9 screen,
+     anchored to the bottom edge like the real screen. */
+  background: #18110d url("../media/roots-wall.webp") 50% 100% / cover no-repeat;
+  background-image: image-set(url("../media/roots-wall-1x.webp") 1x, url("../media/roots-wall.webp") 2x);
+  font-family: "Krema Noto Sans", "Noto Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cmp.is-scaled .cmp-scene {
+  right: auto;
+  bottom: auto;
+  width: calc(var(--sw) * 1px);
+  height: calc(var(--sh) * 1px);
+  transform: scale(var(--k));
+  transform-origin: 0 0;
+}
+
+.cmp-pane { position: absolute; inset: 0; }
+.cmp-a { z-index: 1; clip-path: inset(0 calc(100% - var(--pos)) 0 0); }
+.cmp-b { clip-path: inset(0 0 0 var(--pos)); }
+
+/* ---------- Stock Plasma 6 panel (Breeze Dark) ---------- */
+
+/* Floating panel: 8 px from the screen edges, 46 px thick (2 x ceil(2.5
+   gridUnit / 2) with an 18 px gridUnit), window colour at 85% opacity. */
+.pp {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  height: 46px;
+  box-sizing: border-box;
+  border: 1px solid rgb(32 36 39 / 0.99);
+  border-top-color: rgb(32 35 38 / 0.92);
+  border-radius: 5px;
+  background: rgb(32 35 38 / 0.846) padding-box;
+  color: #fcfcfc;
+}
+.pp img { position: absolute; display: block; }
+.pp-kick { left: 10px; top: 6px; width: 32px; height: 32px; }
+
+/* Pager: one cell per virtual desktop, the current one in the highlight colour. */
+.pp-desk {
+  position: absolute;
+  top: 3px;
+  width: 67px;
+  height: 38px;
+  background: rgb(252 252 252 / 0.095);
+}
+.pp-desk:first-of-type { left: 49px; }
+.pp-desk + .pp-desk { left: 117px; }
+.pp-desk.is-current { background: rgb(61 174 233 / 0.6); }
+.pp-win {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #5da4c9;
+  background: #5098bd;
+}
+.pp-win.is-active { border-color: #8acef1; background: #65acd1; }
+
+/* Icons-only Task Manager: 52 px buttons on a 54 px pitch, 32 px icons. */
+.pp-tasks { position: absolute; left: 189px; top: -1px; bottom: -1px; margin: 0; padding: 0; list-style: none; }
+.pp-task {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 52px;
+}
+.pp-task img { left: 10px; top: 7px; width: 32px; height: 32px; }
+.pp-task.is-running { background: #3b4753; box-shadow: inset 0 3px #636c76; }
+.pp-task.is-active { background: #2a6486; box-shadow: inset 0 3px #3aa0d5; }
+.pp-task.is-running.is-hover,
+.pp-task.is-active.is-hover { background: #265572; box-shadow: inset 0 3px #3daee9; }
+/* Hover lightens the icon (KIconEffect "active" state, about 25% toward white). */
+.pp-task.is-hover img { filter: contrast(0.6) brightness(1.25); }
+
+/* Task tooltip: the panel's own frame, name over the generic name or window title. */
+.pp-tip {
+  position: absolute;
+  left: 0;
+  bottom: 55px;
+  display: grid;
+  padding: 10px 12px 11px;
+  border: 1px solid rgb(32 36 39 / 0.99);
+  border-radius: 5px;
+  background: rgb(32 35 38 / 0.846) padding-box;
+  color: rgb(252 252 252 / 0.7);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.pp-tip b { color: #fcfcfc; font-size: 15.6px; font-weight: 400; line-height: 22px; }
+.pp-tip.is-on { opacity: 1; transition: opacity 0.1s 0.4s; }
+
+/* System tray, clock and Peek at Desktop, placed from the right edge. */
+.pp-tray img { top: 11px; width: 22px; height: 22px; }
+.pp-clock {
+  position: absolute;
+  right: 53px;
+  top: 0;
+  bottom: 0;
+  width: 64px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pp-time { font-size: 17px; }
+.pp-date { margin-top: 1px; font-size: 13px; }
+.pp-peek { right: 12px; top: 11px; width: 22px; height: 22px; }
+
+/* ---------- Krema dock (default settings, Breeze Dark) ---------- */
+
+/* IconSize 48, IconSpacing 4, CornerRadius 12, floating 8 px above the
+   edge, panel background at 60%, MaxZoomFactor 1.6. */
+.kd {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  height: 64px;
+  padding: 0 8px;
+  translate: -50% 0;
+  border-radius: 12px;
+  background: rgb(41 43 48 / 0.6);
+}
+.kd-row { display: flex; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
+.kd-item {
+  position: relative;
+  width: 48px;
+  height: 56px;
+  transform-origin: 50% 100%; /* scale grows away from the screen edge; js/panel.js sets translate + scale */
+}
+/* Krema's icon normalization crops each icon's transparent padding; --n is
+   the resulting scale per icon, measured from the capture. Icons of windows
+   that are not active draw at 80% opacity. */
+.kd-item img {
+  display: block;
+  width: calc(48px * var(--n, 1));
+  height: calc(48px * var(--n, 1));
+  margin: calc(24px * (1 - var(--n, 1)));
+  opacity: 0.8;
+}
+.kd-item.is-active img { opacity: 1; }
+.kd-dot {
+  position: absolute;
+  left: 50%;
+  top: 52px;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  border-radius: 50%;
+  background: #fcfcfc;
+  opacity: 0.8;
+}
+.kd-item.is-active .kd-dot { width: 4px; height: 4px; margin-left: -2px; }
+.kd-tip {
+  position: absolute;
+  left: 0;
+  bottom: 80px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #292c30;
+  color: #fcfcfc;
+  font-size: 13px;
+  line-height: 17px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.kd-tip.is-on { opacity: 1; transition-delay: 0.2s; }
+
+/* ---------- Labels, handle, range ---------- */
+
+.cmp-tag {
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(17 12 9 / 0.78);
+  color: var(--bone);
+  font: 600 12px/1.4 var(--mono);
+  pointer-events: none;
+}
+.cmp-tag-a { left: 12px; }
+.cmp-tag-b { right: 12px; }
+
+.cmp-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pos);
+  z-index: 3;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--bone);
+  box-shadow: 0 0 12px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+.cmp-grip {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: var(--bone);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+}
+.cmp-grip::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  background: var(--night);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 7l-5 5 5 5M15 7l5 5-5 5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 7l-5 5 5 5M15 7l5 5-5 5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.cmp:has(.cmp-range:focus-visible) .cmp-grip { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+/* The native range is the whole control: transparent, over the scene, so
+   mouse, touch and keyboard all drive it. The grip and line only mirror it. */
+.cmp-range {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.cmp-range::-webkit-slider-thumb { -webkit-appearance: none; width: 44px; height: 100%; }
+.cmp-range::-moz-range-thumb { width: 44px; height: 100%; border: 0; }
+
+.roots-note {
+  max-width: 46rem;
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.roots-note a { color: inherit; }
+.roots-note a:hover { color: var(--bone); }
+
+@media (max-width: 600px) {
+  .cmp-tag { top: 8px; padding: 2px 7px; font-size: 10px; }
+  .cmp-tag-a { left: 8px; }
+  .cmp-tag-b { right: 8px; }
+  .cmp-grip { top: 50%; width: 32px; height: 32px; }
+  .cmp-grip::before { inset: 7px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kd-tip, .kd-tip.is-on, .pp-tip.is-on { transition: none; }
+}

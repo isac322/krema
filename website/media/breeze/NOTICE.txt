@@ -1,0 +1,28 @@
+Icons in this directory, copied unmodified from Fedora 44 packages:
+
+- Breeze icon theme (breeze-dark), breeze-icon-theme 6.30.0.
+  Copyright (C) 2014 Uri Herrera and others, KDE.
+  GNU Lesser General Public License, version 3 or later:
+  https://www.gnu.org/licenses/lgpl-3.0.html
+  Source: https://invent.kde.org/frameworks/breeze-icons
+  Files: accessories-calculator.svg, arrow-up.svg, audio-volume-high.svg,
+  gwenview.svg, kate.svg, klipper-symbolic.svg, network-wired-activated.svg,
+  notifications.svg, okular.svg, preferences-system-32.svg,
+  preferences-system-48.svg, start-here-kde-plasma-symbolic.svg,
+  user-desktop-symbolic.svg, utilities-terminal-32.svg,
+  utilities-terminal-48.svg
+
+- org.kde.dolphin.svg, from Dolphin 26.08.1.
+  SPDX-FileCopyrightText: 2016 Alessandro Longo, 2025 Darshan Phaldesai
+  SPDX-License-Identifier: LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
+  Source: https://invent.kde.org/system/dolphin
+
+- firefox-128.webp, downscaled from Firefox's 256 px application icon.
+  Firefox and the Firefox logo are trademarks of the Mozilla Foundation.
+
+../roots-wall.webp and ../roots-wall-1x.webp: "Roast Contours", original
+artwork made for Krema (branding/wallpaper/), same licence as the repository
+(GPL-3.0-or-later).
+
+../noto-sans-panel.woff2: Noto Sans Regular, ASCII subset. SIL Open Font
+License 1.1 (https://openfontlicense.org).

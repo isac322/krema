@@ -1,0 +1,197 @@
+/* Wordnav: the zoom wordmark K-R-E-M-A is the section navigation.
+   Letter scale/offset and dot position are written per frame by js/wordnav.js. */
+
+html { scroll-padding-top: calc(var(--wordnav-h) + 8px); }
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.wordnav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  height: var(--wordnav-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding-inline: clamp(0.75rem, 3vw, 1.75rem);
+  font-family: var(--font);
+}
+
+/* Bar surface lives on a pseudo-element so it can fade without touching children. */
+.wordnav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(17 12 9 / 0.82);
+  background: color-mix(in srgb, var(--night) 82%, transparent);
+  border-bottom: 1px solid var(--line);
+  transition: opacity 0.3s var(--ease-out);
+}
+
+/* ---------- Home icon ---------- */
+
+.wn-home {
+  justify-self: start;
+  display: inline-flex;
+  border-radius: 9px;
+  transition: opacity 0.3s var(--ease-out), visibility 0s;
+}
+.wn-icon { width: 30px; height: 30px; }
+
+/* ---------- Letters ---------- */
+
+.wordnav nav {
+  position: relative;
+  height: var(--wordnav-h);
+  display: flex;
+  align-items: flex-end;
+  transition: opacity 0.3s var(--ease-out), visibility 0s;
+}
+
+.wn-letters {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px; /* keep in sync with GAP in js/wordnav.js */
+  margin: 0;
+  padding: 0 0 20px;
+  list-style: none;
+}
+
+.wn-item {
+  position: relative;
+  list-style: none;
+  will-change: transform;
+}
+
+.wn-l {
+  display: block;
+  padding: 4px 5px;
+  border-radius: 6px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--bone-dim);
+  text-decoration: none;
+  transform-origin: 50% 100%;
+  will-change: transform;
+  transition: color 0.2s var(--ease-out);
+}
+.wn-l:hover,
+.wn-l.is-active { color: var(--bone); }
+.wn-l:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.wn-cap {
+  position: absolute;
+  left: 50%;
+  bottom: -19px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  line-height: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+/* Caption shows for the active letter, unless another letter is hovered or focused. */
+.wn-l.is-active + .wn-cap { opacity: 1; }
+.wn-letters:hover .wn-l.is-active + .wn-cap,
+.wn-letters:has(.wn-l:focus-visible) .wn-l.is-active + .wn-cap { opacity: 0; }
+.wn-letters .wn-item:hover .wn-cap,
+.wn-letters .wn-l:focus-visible + .wn-cap { opacity: 1; }
+
+.wn-dot {
+  position: absolute;
+  left: 0;
+  bottom: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 8px 1px var(--glow);
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.35s var(--ease-spring);
+}
+
+/* ---------- GitHub star pill: mark + "Star" + count chip (chip styles in site.css) ---------- */
+
+.wn-star {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.35rem 0.3rem 0.75rem;
+  border: 1px solid rgb(244 236 224 / 0.34);
+  border-radius: 999px;
+  color: var(--bone);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.2s var(--ease-out), background-color 0.2s var(--ease-out);
+}
+/* Without a count the pill keeps even padding on both sides. */
+.wn-star:not(:has(.star-chip:not([hidden]))) { padding-right: 0.8rem; }
+.wn-star-mark { width: 16px; height: 16px; flex: none; }
+.wn-star .star-chip { font-size: 0.8125rem; }
+.wn-star:hover { border-color: rgb(244 236 224 / 0.6); background: rgb(244 236 224 / 0.06); }
+.wn-star:hover .star-chip { color: var(--bone); }
+.wn-star:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- Pre-scroll state (JS only): the hero wordmark leads, the nav rests dimmed ---------- */
+
+.js .wordnav:not(.is-shown)::before { opacity: 0; }
+.js .wordnav:not(.is-shown) nav,
+.js .wordnav:not(.is-shown) .wn-home {
+  opacity: 0.6;
+}
+.js .wordnav:not(.is-shown) nav:is(:hover, :focus-within),
+.js .wordnav:not(.is-shown) .wn-home:is(:hover, :focus-visible) {
+  opacity: 1;
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 639px) {
+  .wn-home { display: none; }
+  .wordnav { grid-template-columns: 1fr auto 1fr; }
+  .wordnav nav { grid-column: 2; }
+  /* Mark + count only; the link's aria-label keeps the full name. */
+  .wn-star {
+    grid-column: 3;
+    gap: 0.35rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0.3rem 0.35rem 0.3rem 0.6rem;
+    justify-content: center;
+  }
+  .wn-star:not(:has(.star-chip:not([hidden]))) { padding: 0; }
+  .wn-star-label { display: none; }
+  .wn-star-mark { width: 18px; height: 18px; }
+  .wn-star .star-chip { font-size: 0.75rem; padding-inline: 0.4em 0.45em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordnav::before,
+  .wordnav nav,
+  .wn-home,
+  .wn-l,
+  .wn-cap,
+  .wn-dot,
+  .wn-star,
+  .js .wordnav:not(.is-shown) nav,
+  .js .wordnav:not(.is-shown) .wn-home { transition: none; }
+}

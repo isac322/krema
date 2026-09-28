@@ -1,9 +1,28 @@
-# Krema
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/logo/krema-lockup-dark.svg">
+    <img src="branding/logo/krema-lockup.svg" alt="Krema — KDE Plasma 6 dock" height="96">
+  </picture>
+</h1>
+
+<p align="center"><strong>The zooming dock for KDE Plasma 6, native to Wayland.</strong></p>
+
+<p align="center">
 
 [![WIP](https://img.shields.io/badge/Status-Work_in_Progress-yellow.svg)](#roadmap)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6-1d99f3.svg)](https://kde.org/plasma-desktop/)
+[![KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6-a8682f.svg)](https://kde.org/plasma-desktop/)
 [![Qt 6](https://img.shields.io/badge/Qt-6.8+-41cd52.svg)](https://www.qt.io/)
+[![Website](https://img.shields.io/badge/Website-krema.bhyoo.com-d69a5e.svg)](https://krema.bhyoo.com/)
+
+</p>
+
+<p align="center">
+  <a href="https://krema.bhyoo.com/">Website</a> ·
+  <a href="#installation">Install</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
 > **Note:** Krema is under active development. Core features are functional, but some features are still in progress. See the [Roadmap](ROADMAP.md) for details.
 
@@ -17,6 +36,17 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **A dock that speaks Plasma** — Uses KDE's own frameworks (Kirigami, KConfig, KColorScheme, KGlobalAccel) and respects your theme, shortcuts, and desktop conventions
 - **Lightweight by design** — GPU-accelerated rendering via QRhi, Wayland-native via Layer Shell, lazy resource allocation
 - **Make it yours** — 7 background styles including acrylic frosted glass and Mica, configurable zoom, spacing, and position
+
+## Screenshots
+
+<img src="branding/screenshots/dock-zoom.png" alt="Krema dock with parabolic zoom — icons magnify smoothly as the pointer glides across them" width="100%">
+
+<table>
+  <tr>
+    <td><img src="branding/screenshots/dock-overview.png" alt="Krema dock along the bottom of a Plasma desktop, pinned launchers with running-app indicators below open Dolphin and Konsole windows"></td>
+    <td><img src="branding/screenshots/settings.png" alt="Krema settings window — Kirigami form cards controlling icon size, spacing, zoom and behavior"></td>
+  </tr>
+</table>
 
 ## Features
 

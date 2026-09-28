@@ -43,6 +43,14 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - Debian/Ubuntu: OBS DEB Depends를 `qml6-module-org-kde-kirigami`/`qml6-module-org-kde-pipewire`로 수정 (packaging/obs/debian.control), 임시 repack DEB로 4개 타겟 smoke 통과
   - openSUSE: spec의 Requires를 Tumbleweed/Leap 패키지명으로 분리 (packaging/obs/krema.spec), 기존 artifact + `krema-suse-compat-provides` + `dbus-1-daemon` 포함 runtime image로 2개 타겟 smoke 통과
 
+- [x] 브랜드 아이덴티티 (feat/brand-identity PR)
+  - 줌 K 아이콘 + 줌 워드마크 원본: `branding/logo/` (`branding/logo/generate.ts`로 재생성, 가이드 `branding/README.md`, 토큰 `branding/palette/`)
+  - hicolor 아이콘 설치 + `Icon=com.bhyoo.krema`, AppStream icon/branding/screenshots, 창 아이콘
+  - 소셜·스토어 이미지 `branding/social/`, 실제 스크린샷 `branding/screenshots/` (재생성: `regen/`)
+  - GitHub Pages 랜딩 `website/` → https://krema.bhyoo.com/ (Pages custom domain 설정됨, DNS·repo 설정은 isac322/homelab Terraform PR #355)
+  - 랜딩 기능 영상 `website/media/` (실제 Krema 녹화, 재생성: `branding/clips/NOTES.md`)
+  - 외부 적용 완료: GitHub social preview, COPR 설명/설치 안내/AppStream, AUR keywords
+
 - [x] E2E 자동화 하니스 (tests/appium, tests/qml)
   - `tests/appium/run-e2e.sh`: unprivileged Docker 컨테이너 안에서 `kwin_wayland --virtual` + AT-SPI + PipeWire 세션을 띄우고 real input(fake-input)으로 실제 독을 구동. pytest 스위트 `test_01..07` + `test_smoke.py`가 `tests/e2e/scenarios/`의 48개 TC 전부 커버 (오라클: AT-SPI, KWin window list, kremarc, ScreenShot2 스크린샷, AT-SPI 이벤트). 멀티모니터는 `KREMA_E2E_OUTPUT_COUNT=2`. 캡처가 필요한 테스트는 DRM render node 필요 (`modprobe vgem`; macOS는 Lima VM 사용, OrbStack/Docker Desktop VM에는 vgem/vkms 없음)
   - `tests/qml/` (Tier 1, ctest label `qml`): 실제 QML 파일을 offscreen + mock C++ 백엔드로 검증
@@ -81,3 +89,7 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
 - `distro-e2e.yml`은 기본 브랜치에 머지된 뒤에야 workflow_dispatch 가능
+- PR #32 머지 후 첫 Pages 배포 → GitHub Pages 인증서 발급 확인 → HTTPS 강제 (DNS·repo 설정은 homelab #355로 적용 완료)
+- 로그인 필요 채널 등록: OBS 프로젝트 title/description(`packaging/obs/project.meta.xml`), Launchpad PPA 설명/프로젝트 로고, KDE Store, AlternativeTo(Latte Dock 대안), Flathub 제출
+
+- Krema 버그(미수정): 드래그 재배치 후 포인터를 움직이지 않고 다시 누르면 이전 hoveredIndex의 아이콘이 드래그됨 (main.qml onReleased가 hoveredIndex를 재계산하지 않음; branding/clips 촬영 중 발견)

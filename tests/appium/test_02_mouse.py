@@ -18,7 +18,7 @@ from PIL import Image
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import ITEMS_XPATH, DescriptionChanges, Krema, Rect, painted_rect
-from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
+from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
 APP1, APP2 = env.TEST_APP_ID, env.TEST_APP2_ID
@@ -215,19 +215,6 @@ def test_mouse001_left_click_activates_and_unminimizes_running_app(krema: Krema,
     assert active.title == "First"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=WaitTimeout,
-    reason=(
-        "krema bug: the dock resolves a click through root.hoveredIndex, which only updateHoveredItem() "
-        "sets. That runs from dockMouseArea.onPositionChanged (main.qml ~591, onClicked ~564) and, since the "
-        "push-aside zoom, from dockPanel.scheduleHoverUpdate() (~891) when zoomed icons move under a tracked "
-        "pointer. When an item appears (or the layout shifts) in an unzoomed dock under a resting pointer, "
-        "nothing re-evaluates the item under it: hoveredIndex stays -1 (or stale) and a click without prior "
-        "motion is dropped (onClicked returns on hoveredIndex < 0). Seen as the ctx001 flake when a test "
-        "started with the pointer resting on the spot where its dock item appeared"
-    ),
-)
 def test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer(krema: Krema, apps: TestWindows) -> None:
     """A user whose pointer rests on the dock where an app's icon then
     appears clicks without moving: the click must go to that icon."""

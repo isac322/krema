@@ -91,9 +91,7 @@ def krema(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFacto
 
     The pointer is parked at :data:`POINTER_PARK` first, so no test starts
     with it resting where the previous one left it (e.g. on the spot where
-    this test's dock item will appear: krema resolves the item under the
-    pointer only on pointer motion, see
-    test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer).
+    this test's dock item will appear, which would start the test hovered).
     """
     inp.move(*POINTER_PARK)
     marker = request.node.get_closest_marker("kremarc")

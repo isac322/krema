@@ -359,6 +359,45 @@ Item {
         return { near: restNear, far: restNear + extent * scale }
     }
 
+    // Map a pointer position (root coordinates) onto the zoom/hover state and
+    // re-run the hit test. dockPanel.mouseX = primary axis (along the dock),
+    // dockPanel.mouseY = secondary axis (depth), so all zoom/hover logic works
+    // identically regardless of orientation; -1 = outside the dock zone.
+    function trackPointer(x, y) {
+        let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
+
+        if (DockView.isVertical) {
+            // Vertical: primary = Y screen axis, secondary = X screen axis
+            let panelNear = dockPanel.x
+            let panelFar = dockPanel.x + dockPanel.width
+            let inZone = (DockView.edge === 2)
+                ? (x >= panelNear && x <= panelFar + zoomExtension)    // Left
+                : (x >= panelNear - zoomExtension && x <= panelFar)    // Right
+            if (inZone) {
+                dockPanel.mouseX = y - dockPanel.y   // primary = Y
+                dockPanel.mouseY = x - dockPanel.x   // secondary = X
+            } else {
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+            }
+        } else {
+            // Horizontal: primary = X screen axis, secondary = Y screen axis
+            let panelTop = dockPanel.y
+            let panelBottom = dockPanel.y + dockPanel.height
+            let inZone = (DockView.edge === 0)
+                ? (y >= panelTop && y <= panelBottom + zoomExtension)   // Top
+                : (y >= panelTop - zoomExtension && y <= panelBottom)   // Bottom
+            if (inZone) {
+                dockPanel.mouseX = x - dockPanel.x
+                dockPanel.mouseY = y - dockPanel.y
+            } else {
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+            }
+        }
+        updateHoveredItem()
+    }
+
     function updateHoveredItem() {
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
@@ -525,8 +564,15 @@ Item {
             }
         }
 
-        // Start drag hold timer on left-button press
+        // Start drag hold timer on left-button press.
+        // The item under a resting pointer can change without any motion
+        // event (an item appears, the centred dock re-lays out), leaving
+        // hoveredIndex stale: resolve it from the press position first so the
+        // press, drag and click target the item actually under the pointer.
+        // Keyboard navigation keeps its focused item as the target.
         onPressed: function(mouse) {
+            if (!root.keyboardNavigating)
+                root.trackPointer(mouse.x, mouse.y)
             if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
                 root._dragStartX = mouse.x
                 root._dragStartY = mouse.y
@@ -615,42 +661,7 @@ Item {
                 return  // Skip normal zoom handling during drag
             }
 
-            // --- Normal zoom tracking ---
-            // Remap mouse coordinates: mouseX = primary axis (along dock),
-            // mouseY = secondary axis (depth). This lets all zoom/hover logic
-            // work identically regardless of orientation.
-            let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
-
-            if (DockView.isVertical) {
-                // Vertical: primary = Y screen axis, secondary = X screen axis
-                let panelNear = dockPanel.x
-                let panelFar = dockPanel.x + dockPanel.width
-                let inZone = (DockView.edge === 2)
-                    ? (mouse.x >= panelNear && mouse.x <= panelFar + zoomExtension)    // Left
-                    : (mouse.x >= panelNear - zoomExtension && mouse.x <= panelFar)    // Right
-                if (inZone) {
-                    dockPanel.mouseX = mouse.y - dockPanel.y   // primary = Y
-                    dockPanel.mouseY = mouse.x - dockPanel.x   // secondary = X
-                } else {
-                    dockPanel.mouseX = -1
-                    dockPanel.mouseY = -1
-                }
-            } else {
-                // Horizontal: primary = X screen axis, secondary = Y screen axis
-                let panelTop = dockPanel.y
-                let panelBottom = dockPanel.y + dockPanel.height
-                let inZone = (DockView.edge === 0)
-                    ? (mouse.y >= panelTop && mouse.y <= panelBottom + zoomExtension)   // Top
-                    : (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom)   // Bottom
-                if (inZone) {
-                    dockPanel.mouseX = mouse.x - dockPanel.x
-                    dockPanel.mouseY = mouse.y - dockPanel.y
-                } else {
-                    dockPanel.mouseX = -1
-                    dockPanel.mouseY = -1
-                }
-            }
-            root.updateHoveredItem()
+            root.trackPointer(mouse.x, mouse.y)
         }
     }
 

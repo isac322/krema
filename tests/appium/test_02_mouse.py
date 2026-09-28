@@ -279,11 +279,16 @@ def test_mouse002_pinned_launch_bounces(krema: Krema) -> None:
     _require_capture()
     _install_slow_launcher(krema)
     krema.start()
+    rest = wait_stable(lambda: krema.screen_rect(krema.item(SLOW_NAME)))
     krema.hover_item(SLOW_NAME)
-    item = wait_stable(lambda: krema.screen_rect(krema.item(SLOW_NAME)))
+    # The hovered icon is zoomed: where it is drawn comes from painted_rect
+    # (Qt < 6.9 reports zoomed extents with the unscaled size).
+    item = wait_stable(lambda: painted_rect(krema.screen_rect(krema.item(SLOW_NAME)), rest))
     ref = _pixels(krema.screenshot("hovered"))
 
-    krema.click_item(SLOW_NAME)
+    # Click where the pointer already rests: a click at a centre recomputed
+    # from the zoomed extents would move the pointer and the zoom layout.
+    inp.click()
 
     lift = _max_lift_while_launching(krema, ref, item, SLOW_ID, 0, "launch")
     assert len(_app_windows(SLOW_ID)) == 1, "the app launched"

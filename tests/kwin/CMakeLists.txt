@@ -64,6 +64,16 @@ target_link_libraries(krema_hittest_tests PRIVATE
     krema_lib
 )
 
+add_executable(krema_preview_tests
+    test_preview_setting.cpp
+)
+
+target_link_libraries(krema_preview_tests PRIVATE
+    Catch2::Catch2
+    Qt6::Test
+    krema_lib
+)
+
 if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
     add_test(NAME krema_kwin_tests
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_kwin_tests>
@@ -92,6 +102,11 @@ if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_hittest_tests>
     )
     set_tests_properties(krema_hittest_tests PROPERTIES TIMEOUT 300)
+
+    add_test(NAME krema_preview_tests
+        COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_preview_tests>
+    )
+    set_tests_properties(krema_preview_tests PROPERTIES TIMEOUT 120)
 else()
-    message(STATUS "kwin_wayland or dbus-run-session not found: krema_kwin_tests, krema_grouped_activation_tests, krema_showdesktop_tests, krema_tooltip_tests and krema_hittest_tests are built but not registered with CTest")
+    message(STATUS "kwin_wayland or dbus-run-session not found: krema_kwin_tests, krema_grouped_activation_tests, krema_showdesktop_tests, krema_tooltip_tests, krema_hittest_tests and krema_preview_tests are built but not registered with CTest")
 endif()

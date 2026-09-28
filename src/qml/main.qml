@@ -1084,24 +1084,11 @@ Item {
 
     // Auto-trigger preview when a hovered launcher's window appears.
     // Reacts to TasksModel row insertion — more responsive than polling.
+    // _tryAutoPreview() honours the "Enable window preview" setting.
     Connections {
         target: DockModel.tasksModel
         function onRowsInserted() {
-            if (root.hoveredIndex < 0) return
-            if (PreviewController.visible) return
-            let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
-            let isWindow = DockModel.tasksModel.data(
-                idx, TaskManager.AbstractTasksModel.IsWindow)
-            if (isWindow) {
-                tooltipItem.show = false
-                let item = dockRepeater.itemAt(root.hoveredIndex)
-                if (item) {
-                    let globalPos = item.mapToGlobal(0, 0)
-                    let pos = DockView.isVertical ? globalPos.y : globalPos.x
-                    let ext = DockView.isVertical ? item.height : item.width
-                    PreviewController.showPreview(root.hoveredIndex, pos, ext)
-                }
-            }
+            root._tryAutoPreview()
         }
     }
 

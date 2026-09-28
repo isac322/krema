@@ -50,8 +50,9 @@ public:
     ~DockVisibilityController() override;
 
     [[nodiscard]] bool isDockVisible() const;
-    /// Whether the pointer is over the dock or its trigger area.
-    [[nodiscard]] bool isHovered() const;
+    /// Whether the dock is held shown by an interaction lock (context menu,
+    /// preview, drag, settings dialog) or keyboard navigation.
+    [[nodiscard]] bool isInteracting() const;
 
     [[nodiscard]] int mode() const;
     void setMode(int mode);

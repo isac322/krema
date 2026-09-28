@@ -102,9 +102,9 @@ bool DockVisibilityController::isDockVisible() const
     return m_visible;
 }
 
-bool DockVisibilityController::isHovered() const
+bool DockVisibilityController::isInteracting() const
 {
-    return m_hovered;
+    return m_interactingCount > 0 || m_keyboardActive;
 }
 
 int DockVisibilityController::mode() const

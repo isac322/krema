@@ -58,13 +58,22 @@ def settings_windows(krema: Krema) -> list[kwin.Window]:
     return [w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")]
 
 
+#: Thickness of krema's edge strips (kEdgeTriggerThickness): the Follow Active
+#: Mouse trigger maps one on each inactive output. They are not docks.
+EDGE_TRIGGER_PX = 4
+
+
 def dock_surfaces(krema: Krema) -> list[kwin.Window]:
     """Mapped dock surfaces of this krema (layer-shell, full output width,
-    anchored to the bottom edge), sorted left to right."""
+    anchored to the bottom edge, taller than an edge strip), sorted left to right."""
     out = [
         w
         for w in krema.windows()
-        if w.skip_taskbar and not w.desktops and w.client_width == W and w.client_y + w.client_height == H
+        if w.skip_taskbar
+        and not w.desktops
+        and w.client_width == W
+        and w.client_y + w.client_height == H
+        and w.client_height > EDGE_TRIGGER_PX
     ]
     return sorted(out, key=lambda w: w.client_x)
 
@@ -658,15 +667,6 @@ def test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen(kr
 
 
 @pytest.mark.outputs(2)
-@pytest.mark.xfail(
-    strict=True,
-    raises=WaitTimeout,
-    reason="krema bug: Follow active + Mouse trigger never follows the pointer. setShellVisible(false) "
-    "unmaps the other screens' docks (view()->hide(), multidockmanager.cpp:363), but the mouse trigger "
-    "only reacts to a hover detected by that dock's visibility controller (multidockmanager.cpp:271-281); "
-    "an unmapped surface gets no pointer events, so the pointer at the second output's bottom edge for 5 s "
-    "leaves no dock surface there and logs no 'Active screen changing'.",
-)
 @pytest.mark.kremarc({**FOLLOW_ACTIVE, "FollowActiveTrigger": 0})
 def test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen(krema: Krema, apps: TestWindows) -> None:
     apps.open("Alpha")

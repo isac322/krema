@@ -201,12 +201,6 @@ def test_vis001_always_visible_dock_stays_shown_over_a_maximized_window(krema: K
         assert item_diff < 8, f"dock item pixels changed ({item_diff:.1f}) with the pointer away"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="krema bug: AlwaysVisible reserves no exclusive zone. WaylandDockPlatform::setVisibilityMode(AlwaysVisible) "
-    "applies m_exclusiveZone only if > 0, but nothing ever sets a positive zone (only MultiDockManager sets -1/0), "
-    "so KWin maximizes windows to the full 1024x768 underneath the dock panel",
-)
 @pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.ALWAYS_VISIBLE})
 def test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows(krema: Krema, apps: TestWindows) -> None:
     win = apps.open("Reserve", width=400, height=300)

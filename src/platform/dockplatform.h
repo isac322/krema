@@ -46,8 +46,10 @@ public:
     /// Anchor the dock to the given screen edge.
     virtual void setEdge(Edge edge) = 0;
 
-    /// Reserve screen space so other windows do not overlap the dock.
-    /// Pass 0 to disable (auto-hide), or the dock height/width.
+    /// Thickness to reserve at the anchored edge while the mode is AlwaysVisible:
+    /// the panel bar (icon + padding + floating gap), measured from the screen
+    /// edge, not the zoom/tooltip overflow. Other modes reserve nothing and
+    /// ignore other surfaces' zones, whatever this value is.
     virtual void setExclusiveZone(int zone) = 0;
 
     /// Set the gap between the dock and the screen edge (floating mode).

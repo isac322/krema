@@ -355,11 +355,11 @@ void MultiDockManager::setShellVisible(DockShell *shell, bool visible)
         return;
     }
 
+    // hide() unmaps the layer surface, which releases its exclusive zone;
+    // show() recreates it with the zone of the current visibility mode.
     if (visible) {
         shell->view()->show();
-        shell->view()->platform()->setExclusiveZone(-1); // Restore exclusive zone
     } else {
-        shell->view()->platform()->setExclusiveZone(0); // Don't reserve space
         shell->view()->hide();
     }
 }

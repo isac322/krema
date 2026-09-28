@@ -291,7 +291,7 @@ void DockVisibilityController::setKeyboardActive(bool active)
     qCDebug(lcVisibility) << "Keyboard navigation active:" << active;
 
     // Toggle layer-shell keyboard interactivity with the navigation state
-    m_platform->setKeyboardInteractivity(active);
+    applyKeyboardInteractivity();
 
     if (active) {
         m_hideTimer.stop();
@@ -305,6 +305,25 @@ void DockVisibilityController::setKeyboardActive(bool active)
             }
         }
     }
+}
+
+void DockVisibilityController::setDragActive(bool active)
+{
+    if (m_dragActive == active) {
+        return;
+    }
+    m_dragActive = active;
+    qCDebug(lcVisibility) << "Internal drag active:" << active;
+
+    // A pointer drag gives the dock no keyboard focus by itself; grab it so
+    // Escape can cancel the drag. Released as soon as the drag ends.
+    applyKeyboardInteractivity();
+    setInteracting(active);
+}
+
+void DockVisibilityController::applyKeyboardInteractivity()
+{
+    m_platform->setKeyboardInteractivity(m_keyboardActive || m_dragActive);
 }
 
 void DockVisibilityController::setInteracting(bool interacting)

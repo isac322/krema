@@ -83,6 +83,10 @@ public:
     /// Set keyboard navigation active state. Prevents dock from hiding.
     Q_INVOKABLE void setKeyboardActive(bool active);
 
+    /// Set internal (reorder) drag active state. Holds the interaction lock and
+    /// grabs layer-shell keyboard interactivity so Escape can cancel the drag.
+    Q_INVOKABLE void setDragActive(bool active);
+
     /// Current panel rectangle (surface-local coordinates).
     [[nodiscard]] QRect panelRect() const;
 
@@ -148,6 +152,13 @@ private:
 
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
+
+    // Internal reorder drag active: dock holds keyboard focus so Escape reaches it
+    bool m_dragActive = false;
+
+    /// Apply layer-shell keyboard interactivity: exclusive while keyboard
+    /// navigating or dragging, none otherwise.
+    void applyKeyboardInteractivity();
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;

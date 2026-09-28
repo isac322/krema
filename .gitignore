@@ -224,3 +224,9 @@ build/
 
 .claude/worktrees
 .omo/
+
+# Tier 3 VM QA cache and artifacts (tests/vm/run-vm-qa.sh)
+tests/vm/.cache/
+tests/vm/artifacts/
+# `*build-*` above would otherwise hide the package builder.
+!tests/vm/build-package.sh

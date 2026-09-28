@@ -48,6 +48,8 @@ add_library(krema_lib STATIC
     models/taskiconprovider.cpp
     models/notificationtracker.h
     models/notificationtracker.cpp
+    models/launcherentrytracker.h
+    models/launcherentrytracker.cpp
 
     utils/zoomcalculator.h
     utils/surfacegeometry.h

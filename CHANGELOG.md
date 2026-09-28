@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Icon scale, attention animation duration, badge display mode, "Use system color", "Use accent color" and "Only dodge active window" now persist across restarts instead of reverting to their defaults
 - Fixed tooltips on left and right docks being cut off after a few characters; they now show the full app name, and very long names end with an ellipsis
 - Fixed the window preview popping up when a window opened while a dock icon was hovered (for example right after clicking a launcher), even with "Enable window preview" turned off
+- App badge counts and progress bars sent through the Unity LauncherEntry API (for example download progress or unread counts) show on dock icons again on Plasma 6.6 and later, where they had stopped appearing; these badges also stay visible during Do Not Disturb, like Krema's other badges
 
 ## [0.8.0] - 2026-09-28
 

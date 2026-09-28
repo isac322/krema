@@ -245,3 +245,15 @@ Each view is also positioned on its target screen before creation, and `handleSc
 **Key lessons:**
 - A perpendicular reserve sized for one orientation is wrong for the other: size it from what actually opens on that side.
 - Growing the surface is safe only because the input region is set from the panel rect, never from the surface size.
+
+## 13. A private Plasma QML module disappeared; Qt.createComponent failed silently (2026-09)
+
+**Symptom:** On Fedora 44 (Plasma 6.7.5) app badges and progress bars sent over the Unity LauncherEntry API never showed on dock icons.
+
+**Cause:** `DockItem.qml` created `SmartLauncherItem` with `Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem")`. plasma-desktop 6.6 (commit `4bff79ad`, "Port to plasma_add_applet") compiled that module into the task manager applet plugin, so `qt6/qml/org/kde/plasma/private/taskmanager` no longer exists. The component was never Ready, and the `status` check skipped creation without a log line.
+
+**Fix:** `LauncherEntryTracker` (C++) receives `com.canonical.Unity.LauncherEntry.Update` itself, following the upstream backend semantics; see `notification-badge-approaches.md`. `krema_launcher_entry_tests` sends real D-Bus signals and checks the dock item's badge and progress bar.
+
+**Key lessons:**
+- A private module is not a dependency Krema can keep: when the protocol underneath is public (here a D-Bus signal), implement the protocol.
+- A silent fallback (`if (comp.status === Component.Ready)`) hides a missing feature. Cover each feature with a test that observes the visible result.

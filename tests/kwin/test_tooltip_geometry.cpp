@@ -16,6 +16,7 @@
 
 #include "krema.h"
 #include "models/dockmodel.h"
+#include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
@@ -55,6 +56,7 @@ struct App {
     std::unique_ptr<KremaSettings> settings;
     std::unique_ptr<krema::DockModel> model;
     std::unique_ptr<krema::NotificationTracker> tracker;
+    std::unique_ptr<krema::LauncherEntryTracker> launcherEntries;
 };
 
 // Mirrors the QML singletons Application::run() registers.
@@ -67,6 +69,7 @@ App &app()
         a->settings->setMonitorMode(krema::MultiDockManager::PrimaryOnly);
         a->model = std::make_unique<krema::DockModel>();
         a->tracker = std::make_unique<krema::NotificationTracker>();
+        a->launcherEntries = std::make_unique<krema::LauncherEntryTracker>();
 
         auto *model = a->model.get();
         qmlRegisterSingletonType<krema::DockModel>("com.bhyoo.krema", 1, 0, "DockModel", [model](QQmlEngine *, QJSEngine *) -> QObject * {
@@ -83,6 +86,15 @@ App &app()
             QQmlEngine::setObjectOwnership(tracker, QQmlEngine::CppOwnership);
             return tracker;
         });
+        auto *launcherEntries = a->launcherEntries.get();
+        qmlRegisterSingletonType<krema::LauncherEntryTracker>("com.bhyoo.krema",
+                                                              1,
+                                                              0,
+                                                              "LauncherEntryTracker",
+                                                              [launcherEntries](QQmlEngine *, QJSEngine *) -> QObject * {
+                                                                  QQmlEngine::setObjectOwnership(launcherEntries, QQmlEngine::CppOwnership);
+                                                                  return launcherEntries;
+                                                              });
         return a;
     }();
     return *instance;

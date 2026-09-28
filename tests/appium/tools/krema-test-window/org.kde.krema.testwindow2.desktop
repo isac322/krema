@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Krema Second Test Window
+Comment=Second window fixture app so tests can have two distinct dock items
+Exec=krema-test-window --app-id org.kde.krema.testwindow2
+Icon=accessories-text-editor
+Categories=Utility;
+StartupWMClass=org.kde.krema.testwindow2

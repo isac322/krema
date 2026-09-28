@@ -52,6 +52,9 @@
 
 **Verification:** accessibility_tree (button `focused` state), screenshot (focus ring visible)
 
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_meta_f5_focuses_first_dock_item
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_focus_dock_shortcut_focuses_first_dock_item
+
 ---
 
 ## TC KBD-002: Arrow Key Navigation Between Items
@@ -72,6 +75,8 @@
 - Parabolic zoom glides with focus: focused item has the largest bounding box, neighbours on its sides move apart per the configured zoom style, and the dock background widens to contain them
 
 **Verification:** accessibility_tree (`focused` state shifts between buttons)
+
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd002_arrow_keys_move_focus_between_items
 
 ---
 
@@ -95,6 +100,8 @@
 
 **Verification:** accessibility_tree (popup name format, thumbnail `focused`), screenshot
 
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd003_down_opens_preview_with_first_thumbnail_focused
+
 ---
 
 ## TC KBD-004: Enter Activates Focused Thumbnail Window
@@ -116,6 +123,8 @@
 
 **Verification:** accessibility_tree (no `focused` buttons, popup not `showing`), list_windows
 
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd004_enter_activates_focused_thumbnail_window
+
 ---
 
 ## TC KBD-005: Escape Exits Keyboard Navigation
@@ -134,6 +143,8 @@
 
 **Verification:** accessibility_tree (no button-level `focused`)
 
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd005_escape_exits_keyboard_navigation
+
 ---
 
 ## TC KBD-006: Preview Thumbnail Navigation (Left/Right)
@@ -150,6 +161,8 @@
 - Focus ring visible on the focused thumbnail in screenshot
 
 **Verification:** accessibility_tree (`focused` on correct thumbnail button)
+
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd006_left_right_move_between_thumbnails
 
 ---
 
@@ -171,6 +184,9 @@
 
 **Verification:** accessibility_tree (thumbnail removed), list_windows (window gone)
 
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-parked]
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-at-centre] (strict xfail: krema bug, preview input region deeper than the popup)
+
 ---
 
 ## TC KBD-008: Mouse Movement Cancels Keyboard Mode
@@ -187,6 +203,9 @@
 - Keyboard mode cancelled — normal mouse hover behavior resumes
 
 **Verification:** accessibility_tree (no button `focused`)
+
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_cancels_keyboard_mode (strict xfail: krema bug, motion off the dock does not cancel keyboard mode)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_over_dock_cancels_keyboard_mode
 
 ---
 
@@ -209,3 +228,7 @@
 - After `keyboard_key Escape` + `mouse_move` away: dock resumes auto-hide
 
 **Verification:** accessibility_tree (persistent `showing`+`focused` during keyboard mode)
+
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_keyboard_mode_keeps_hidden_dock_visible[autohide|dodge|smarthide] (SmartHide = VisibilityMode=2 + DodgeActiveOnly=true)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[autohide|dodge]
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[smarthide] (strict xfail: krema bug, focus not returned to the active window after Escape, so SmartHide never re-hides)

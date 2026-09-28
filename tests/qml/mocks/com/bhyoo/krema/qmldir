@@ -1,0 +1,11 @@
+module com.bhyoo.krema
+singleton DockModel 1.0 DockModel.qml
+singleton DockSettings 1.0 DockSettings.qml
+singleton DockView 1.0 DockView.qml
+singleton DockVisibility 1.0 DockVisibility.qml
+singleton DockActions 1.0 DockActions.qml
+singleton DockContextMenu 1.0 DockContextMenu.qml
+singleton PreviewController 1.0 PreviewController.qml
+singleton NotificationTracker 1.0 NotificationTracker.qml
+singleton LauncherEntryTracker 1.0 LauncherEntryTracker.qml
+singleton KremaMocks 1.0 KremaMocks.qml

@@ -41,6 +41,8 @@
 
 **Verification:** accessibility_tree (PopupMenu present with correct name), screenshot (popup with thumbnails)
 
+**Automated:** tests/appium/test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails
+
 ---
 
 ## TC PREV-002: Multiple Thumbnails for Grouped Windows
@@ -58,6 +60,8 @@
 - Thumbnails arranged horizontally
 
 **Verification:** accessibility_tree (button count = window count), screenshot (layout)
+
+**Automated:** tests/appium/test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row
 
 ---
 
@@ -85,6 +89,8 @@
 and closed preview.
 
 **Verification:** accessibility_tree (popup 0x0), screenshot (correct window in foreground)
+
+**Automated:** tests/appium/test_03_preview.py::test_prev003_clicking_a_thumbnail_activates_that_window
 
 ---
 
@@ -117,6 +123,8 @@ conversion. **Preferred alternative: use keyboard Delete key (TC KBD-007).**
 
 **Verification:** list_windows (window count decreased), accessibility_tree (thumbnail removed)
 
+**Automated:** tests/appium/test_03_preview.py::test_prev004_close_button_closes_that_window, tests/appium/test_03_preview.py::test_prev004_delete_key_closes_focused_thumbnail_window, tests/appium/test_03_preview.py::test_prev004_closing_last_window_closes_preview_and_returns_to_dock
+
 ---
 
 ## TC PREV-005: Preview Closes on Mouse Leave
@@ -138,6 +146,8 @@ Direct jump to a distant point will trigger hidePreviewDelayed immediately.
 
 **Verification:** accessibility_tree (popup 0x0, no `showing`)
 
+**Automated:** tests/appium/test_03_preview.py::test_prev005_preview_closes_when_pointer_leaves, tests/appium/test_03_preview.py::test_prev005_close_on_leave_is_delayed
+
 ---
 
 ## TC PREV-006: Single Window Preview
@@ -156,6 +166,8 @@ Direct jump to a distant point will trigger hidePreviewDelayed immediately.
 
 **Verification:** accessibility_tree (1 Button in PopupMenu), screenshot
 
+**Automated:** tests/appium/test_03_preview.py::test_prev006_single_window_preview
+
 ---
 
 ## TC PREV-007: Preview Popup Accessible Announce
@@ -170,3 +182,5 @@ Direct jump to a distant point will trigger hidePreviewDelayed immediately.
   (e.g., "2 windows for Dolphin")
 
 **Verification:** accessibility_tree (announcement text), logs
+
+**Automated:** tests/appium/test_03_preview.py::test_prev007_opening_preview_announces_window_count

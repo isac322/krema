@@ -46,6 +46,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - If kcalc was minimized, it un-minimizes
 
 **Verification:** screenshot (kcalc in foreground), list_windows (kcalc present)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app, tests/appium/test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer (strict xfail for a krema bug)
 
 ---
 
@@ -64,6 +65,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - Indicator dot appears under the icon
 
 **Verification:** list_windows (new window), screenshot (indicator dot)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces, strict xfail for a krema bug)
 
 ---
 
@@ -90,6 +92,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - All items and the background return to the rest layout when the pointer leaves the dock
 
 **Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (item bounding boxes: shifted positions, grown sizes, no overlap)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover
 
 ---
 
@@ -114,6 +117,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 zoom active the item under the pointer comes from its visual position, not its
 rest position, and neighbouring items have shifted outward — never reuse a
 shifted item's zoomed bounding box as a target.
+**Automated:** tests/appium/test_02_mouse.py::test_mouse004_tooltip_shows_app_name_on_hover
 
 ---
 
@@ -138,6 +142,7 @@ shifted item's zoomed bounding box as a target.
 Cannot programmatically verify which window is active. Use screenshot comparison.
 
 **Verification:** screenshot comparison (different window in foreground after scroll)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows
 
 **Automated:** `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`) covers the no-launch case
 
@@ -160,6 +165,7 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 **Verified in PoC:** kcalc went from 1 to 2 separate process entries.
 
 **Verification:** list_windows (kcalc entry count increased by 1)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse006_middle_click_launches_new_instance (bounce until the new window maps: tests/appium/test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps, strict xfail for a krema bug)
 
 ---
 
@@ -181,6 +187,8 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 - State updates within 1s of app launch/close
 
 **Verification:** screenshot comparison (dots appear/disappear)
+
+**Automated:** tests/appium/test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state
 
 ---
 
@@ -231,3 +239,4 @@ neighbour's zoomed position as a click target.
 - All icons return to base size when the pointer leaves the dock
 
 **Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (bounding-box sizes grow while centres stay fixed)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them

@@ -1,0 +1,18 @@
+run.rb: optional --output-count for the nested kwin_wayland
+
+Multi-monitor scenarios (e.g. SET-008, Monitor mode "All monitors") need
+more than one virtual output. kwin_wayland --virtual supports
+--output-count <n>; pass it through when COMPOSITOR_OUTPUT_COUNT is set
+(tests/appium/entrypoint.sh sets it from KREMA_E2E_OUTPUT_COUNT > 1).
+Unset keeps upstream's single output.
+
+--- a/run.rb
++++ b/run.rb
+@@ -120,6 +120,7 @@
+     extra_args << '--width=' + ENV['COMPOSITOR_WIDTH'] if ENV['COMPOSITOR_WIDTH']
+     extra_args << '--height=' + ENV['COMPOSITOR_HEIGHT'] if ENV['COMPOSITOR_HEIGHT']
+     extra_args << '--virtual' if ENV['LIBGL_ALWAYS_SOFTWARE']
++    extra_args << '--output-count=' + ENV['COMPOSITOR_OUTPUT_COUNT'] if ENV['COMPOSITOR_OUTPUT_COUNT']
+     extra_args << '--xwayland' if ENV.fetch('TEST_WITH_XWAYLAND', '0').to_i.positive?
+     extra_args << '--no-global-shortcuts' if ENV.fetch('TEST_WITHOUT_GLOBAL_SHORTCUTS', '1').to_i.positive?
+     # A bit awkward because of how argument parsing works on the kwin side: we must rely on shell word merging for

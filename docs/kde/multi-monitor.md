@@ -199,14 +199,15 @@ Architecture is the same as "All Screens" but:
 
 ### Strategy 1: Follow Mouse Cursor
 
-```cpp
-QPoint cursorPos = QCursor::pos();   // Global cursor position
-QScreen *screen = QGuiApplication::screenAt(cursorPos);
-```
+**Verified (SET-008): `QCursor::pos()` is not a global pointer position on Wayland.** QtWayland only knows the pointer while it is over one of the client's own surfaces, and polling is forbidden anyway (`.agents/rules/async-state.md`). The pointer has to enter a mapped surface of the dock on the target screen.
 
-- Reliable and simple
-- Use `QGuiApplication::focusWindowChanged` or a polling `QTimer` (for mouse-based switching)
-- **Problem**: Cursor can be on a screen with no important work; feels wrong when typing on screen A but cursor is on screen B
+Follow Active unmaps the inactive screens' docks (`setShellVisible(false)` → `QWindow::hide()`), and an unmapped surface receives no `wl_pointer.enter`, so reacting to a hover on the hidden dock (its `DockVisibilityController`) never fires. Krema instead maps an `EdgeTrigger` (`src/shell/edgetrigger.{h,cpp}`) on every inactive screen while the Mouse or Composite trigger is selected:
+
+- a transparent `QRasterWindow` (no scene graph) configured through the same `DockPlatform` as the dock: layer-shell `LayerTop`, namespace `dock` (Show Desktop keeps it), pinned output, exclusive zone -1, anchored to the dock edge
+- `kEdgeTriggerThickness` (4 px, `src/utils/inputregion.h`) thick along the whole edge: the same area as a hidden auto-hide dock's trigger strip
+- `QEvent::Enter` / `QEvent::Leave` on the window drive `MultiDockManager::onEdgeTriggerHovered()`; the switch is debounced (300 ms) and cancelled if the pointer leaves first
+- ignored while the active dock is held by an interaction lock or keyboard navigation (`DockVisibilityController::isInteracting()`): an open Settings dialog, context menu, preview or drag keeps the dock on its screen
+- a surface of the strip's size must still get a buffer: set the `QWindow` size after `DockPlatform::setSize()`, which on `KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE` resizes the window to `QSize(0, h)` itself
 
 ### Strategy 2: Follow Active Window (Recommended)
 

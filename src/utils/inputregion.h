@@ -9,6 +9,10 @@
 namespace krema
 {
 
+/// Thickness of the edge strip that reveals a hidden dock (and, in Follow
+/// Active mode with the mouse trigger, moves the dock to that screen).
+inline constexpr int kEdgeTriggerThickness = 4;
+
 struct InputRegionParams {
     int surfaceWidth;
     int surfaceHeight;
@@ -19,7 +23,7 @@ struct InputRegionParams {
     int zoomOverflowHeight;
     bool visible;
     bool hovered;
-    int triggerStripHeight = 4;
+    int triggerStripHeight = kEdgeTriggerThickness;
     int margin = 4;
     int edge = 1; // 0=Top, 1=Bottom, 2=Left, 3=Right
 };

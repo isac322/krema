@@ -1,0 +1,168 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+#
+# Tier-1 QML component tests and the Tier-2 AT-SPI E2E suite, both inside the
+# tests/appium image (Fedora, KWin, Qt/KF6). See tests/appium/README.md.
+#
+# Graphics: GitHub's Azure kernels have no vgem, so kwin_wayland --virtual
+# would fall back to QPainter (no ScreenShot2, no PipeWire screencast). vkms
+# gives a KMS-only /dev/dri/card0; tests/appium/entrypoint.sh then runs kwin's
+# DRM backend on it, compositing with OpenGL through Mesa's llvmpipe.
+
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  KREMA_E2E_IMAGE: krema-e2e:ci
+
+jobs:
+  qml:
+    name: QML tests (Tier 1)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build test image
+        uses: docker/build-push-action@v7
+        with:
+          context: tests/appium
+          tags: ${{ env.KREMA_E2E_IMAGE }}
+          load: true
+          cache-from: type=gha,scope=krema-e2e-image
+          cache-to: type=gha,scope=krema-e2e-image,mode=max
+
+      - name: Run ctest -L qml
+        run: |
+          mkdir -p qml-results
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/qml-results:/results" \
+            -e HOST_UID="$(id -u)" "$KREMA_E2E_IMAGE" sh -euc '
+              trap "chown -R $HOST_UID /results" EXIT
+              # Writable copy without .git: configuring a git checkout
+              # installs the ECM pre-commit hook into .git/hooks.
+              rsync -a --exclude /.git/ /src/ /work/
+              cmake -S /work -B /tmp/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON \
+                >/results/cmake-configure.log 2>&1 || { tail -n 80 /results/cmake-configure.log; exit 1; }
+              cmake --build /tmp/build --target krema_qml_tests >/results/build.log 2>&1 \
+                || { tail -n 80 /results/build.log; exit 1; }
+              ctest --test-dir /tmp/build -L qml --output-on-failure --no-tests=error \
+                --output-junit /results/junit.xml'
+
+      - name: JUnit summary
+        if: always()
+        run: python3 .github/scripts/junit-summary.py "QML tests" qml-results/junit.xml >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: qml-results
+          path: qml-results
+          if-no-files-found: ignore
+
+  e2e:
+    name: E2E suite (Tier 2)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Load vkms (KMS-only virtual GPU)
+        run: |
+          sudo modprobe vkms || {
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)"
+            sudo modprobe vkms
+          }
+          ls -l /dev/dri
+
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build test image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: tests/appium
+          tags: ${{ env.KREMA_E2E_IMAGE }}
+          load: true
+          cache-from: type=gha,scope=krema-e2e-image
+          cache-to: type=gha,scope=krema-e2e-image,mode=max
+
+      - name: Run tests/appium/run-e2e.sh
+        env:
+          KREMA_E2E_SKIP_BUILD: "1"
+          # Fail instead of silently falling back to --virtual/QPainter if
+          # the DRM path ever breaks.
+          KREMA_E2E_KWIN_BACKEND: drm
+        run: tests/appium/run-e2e.sh -rs
+
+      - name: JUnit summary
+        if: always()
+        run: |
+          python3 .github/scripts/junit-summary.py "E2E tests" tests/appium/artifacts/junit.xml \
+            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-artifacts
+          path: tests/appium/artifacts
+          if-no-files-found: ignore
+
+      - name: Build and load vgem (DRM render node)
+        # The @pytest.mark.outputs(2) tests (SET-008) need --output-count 2,
+        # a virtual-backend flag that only composites with OpenGL when a
+        # render node exists. The Azure kernel has no vgem and its vkms is
+        # too old for the configfs ABI, so build vgem out-of-tree. Ordered
+        # after the main run: a vgem failure must not block it.
+        id: vgem
+        run: |
+          sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
+          sudo tests/appium/setup-vgem.sh
+
+      - name: Run tests/appium/run-e2e.sh (2 outputs)
+        # vgem gives --virtual a render node: --output-count 2 then creates
+        # two side-by-side outputs composited with OpenGL (llvmpipe).
+        # -m outputs collects only the @pytest.mark.outputs(2) tests, so the
+        # single-output suite is not rerun and nothing shows as skipped.
+        if: always() && steps.build.outcome == 'success' && steps.vgem.outcome == 'success'
+        env:
+          KREMA_E2E_SKIP_BUILD: "1"
+          KREMA_E2E_KWIN_BACKEND: virtual
+          KREMA_E2E_OUTPUT_COUNT: "2"
+          KREMA_E2E_ARTIFACTS: tests/appium/artifacts-2out
+        run: tests/appium/run-e2e.sh -m outputs -rs
+
+      - name: JUnit summary (2 outputs)
+        if: always()
+        run: |
+          python3 .github/scripts/junit-summary.py "E2E tests (2 outputs)" tests/appium/artifacts-2out/junit.xml \
+            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-artifacts-2out
+          path: tests/appium/artifacts-2out
+          if-no-files-found: ignore

@@ -1,0 +1,186 @@
+# Krema distro E2E tests (Tier 3)
+
+Tier 2 (`tests/appium/`) runs the AT-SPI E2E suite against krema built from
+source on Fedora. Tier 3 runs **the same suite** against krema **installed from
+its distro package** on each supported distribution, with that distribution's
+own KWin, Qt, KDE Frameworks, Kirigami and PipeWire. It catches what Tier 2
+cannot:
+
+* packaging bugs: missing or misnamed runtime dependencies (`Requires` in
+  `packaging/obs/krema.spec`, `Depends` in `packaging/obs/debian.control`,
+  `depends` in `packaging/arch/PKGBUILD`), wrong install paths;
+* behaviour that differs with the Qt/KF/Kirigami/KWin versions a distro ships.
+
+Everything runs in one unprivileged container per target, exactly like Tier 2:
+no VM, no `--privileged`, no KVM.
+
+## Running
+
+```sh
+tests/distro/run-distro-e2e.sh fedora-43                    # full suite
+tests/distro/run-distro-e2e.sh debian-13 test_smoke.py -x   # any pytest arguments
+tests/distro/run-distro-e2e.sh opensuse-tumbleweed --shell  # shell in the container
+```
+
+Host requirements are Tier 2's (Docker with buildx, optionally `/dev/dri`;
+see `tests/appium/README.md`), plus GNU tar. In practice that means a Linux
+Docker host: Tier 3 needs a DRM render node for capture tests, and on host
+kernels >= 6.15 that node must be a platform-bus vgem (see the next
+paragraph). On macOS there is no usable path: OrbStack's Linux kernel has no
+DRM driver at all, so `/dev/dri` never appears in the container and the
+capture tests cannot run — use a Lima VM with vgem instead (the setup in
+`tests/appium/README.md`'s macOS section; it is what was used to develop
+and verify this tier).
+
+Results, JUnit XML and logs go to
+`tests/appium/artifacts-distro-<target>/`. The script exits with pytest's
+status.
+
+On a host kernel >= 6.15 load vgem with `sudo tests/appium/setup-vgem.sh`,
+not `modprobe vgem` (after `rmmod vgem` if it is already loaded). Since 6.15
+the kernel registers vgem on the faux bus; the targets with KWin < 6.5
+(`debian-13`, `ubuntu-25.04`, `ubuntu-25.10`, `opensuse-leap-16.0`) only use
+a platform-bus vgem (their libdrm < 2.4.126 cannot enumerate faux devices,
+and KWin < 6.5 opens a faux vgem's render node, where dumb buffers fail).
+Without it they composite with QPainter: no screenshots, no PipeWire
+thumbnails. `setup-vgem.sh` builds vgem out-of-tree as the platform device it
+was before 6.15, as the CI job does.
+
+What it does:
+
+1. **Package.** `tests/distro/build-package.sh <target>` packs the current
+   worktree as `krema-<version>.tar.gz` and builds it in a clean container of
+   the target's base image with the repo's own packaging
+   (`packaging/obs/krema.spec`, `packaging/obs/debian.*`,
+   `packaging/arch/PKGBUILD`; helpers in `pkg/`). The result is cached in
+   `tests/distro/.cache/packages/<target>/`; it is rebuilt only when missing
+   or with `KREMA_DISTRO_REBUILD_PACKAGE=1`, so **rebuild after changing
+   `src/` or `packaging/`**.
+2. **Image** `krema-e2e-distro:<target>` from `image/Dockerfile`
+   (`image/packages.sh` drives the stages; package names per family live in
+   `image/fedora.sh`, `image/suse.sh`, `image/debian.sh`, `image/arch.sh`):
+   * the Tier 2 runtime on the target distro: `kwin_wayland` (file
+     capabilities dropped, as in Tier 2), PipeWire + WirePlumber, AT-SPI,
+     the python modules of the suite, kwrite/kfind fixtures, Breeze
+     icons/style and fonts; `XDG_MENU_PREFIX=plasma-` as in a Plasma
+     session;
+   * KDE's selenium-webdriver-at-spi (same pinned commit and
+     `tests/appium/tools/*.patch`) and `krema-test-window`, both built in a
+     builder stage **on the same distro**;
+   * last layer: the krema package installed through the distro's package
+     manager (`dnf`, `zypper`, `apt-get`, `pacman -U`), so dependency
+     resolution is part of the test. Nothing of krema is built from source.
+3. **Suite.** `tests/appium/run-e2e.sh` with `KREMA_E2E_IMAGE`,
+   `KREMA_E2E_SKIP_BUILD=1` and `KREMA_E2E_BINARY=/usr/bin/krema`: the
+   session setup is Tier 2's `entrypoint.sh`, minus the source sync and
+   krema build. `KREMA_E2E_DISTRO=<target>` is exported to the tests, and
+   KWin runs with its Wayland permission checks on
+   (`KWIN_WAYLAND_NO_PERMISSION_CHECKS=0`, made overridable by
+   `tests/appium/tools/run-permission-checks.patch`): the installed
+   `com.bhyoo.krema.desktop` must declare the privileged interfaces krema
+   binds (`X-KDE-Wayland-Interfaces`), as in a real session. That
+   declaration also makes krema privileged for xdg-activation; on KWin < 6.5
+   without it krema cannot raise its own Settings window from the dock.
+   Tier 2 keeps the checks off: a krema built from source has no installed
+   desktop file.
+
+Environment:
+
+| Variable | Effect |
+| --- | --- |
+| `KREMA_DISTRO_REBUILD_PACKAGE=1` | rebuild the package even if one is cached |
+| `KREMA_DISTRO_SKIP_IMAGE_BUILD=1` | reuse the existing `krema-e2e-distro:<target>` image |
+| `KREMA_E2E_ARTIFACTS` | artifacts directory (default `tests/appium/artifacts-distro-<target>`) |
+| `KREMA_E2E_PLATFORM` | container platform; defaults to `linux/amd64` for `arch` and `opensuse-slowroll` |
+| other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, KWin backend, docker args) |
+
+## Targets
+
+Every row of `tests/docker/targets.tsv` (base images pinned by digest there),
+plus `arch`:
+
+| Target | Family | Base image | Platforms |
+| --- | --- | --- | --- |
+| `fedora-42` | fedora | `fedora:42` | amd64, arm64 |
+| `fedora-43` | fedora | `fedora:43` | amd64, arm64 |
+| `fedora-44` | fedora | `fedora:44` | amd64, arm64 |
+| `fedora-rawhide` | fedora | `fedora:rawhide` | amd64, arm64 |
+| `opensuse-tumbleweed` | suse | `opensuse/tumbleweed` | amd64, arm64 |
+| `opensuse-slowroll` | suse | `opensuse/tumbleweed` switched to the Slowroll repositories | amd64 |
+| `opensuse-leap-16.0` | suse | `opensuse/leap:16.0` | amd64, arm64 |
+| `debian-13` | debian | `debian:13-slim` | amd64, arm64 |
+| `ubuntu-25.04` | debian | `ubuntu:25.04` | amd64, arm64 |
+| `ubuntu-25.10` | debian | `ubuntu:25.10` | amd64, arm64 |
+| `ubuntu-26.04` | debian | `ubuntu:26.04` | amd64, arm64 |
+| `arch` | arch | `archlinux:latest` | amd64 |
+
+`arch` and `opensuse-slowroll` publish amd64 packages only; on an arm64 host
+they need amd64 emulation (qemu-user binfmt) and are otherwise CI-only.
+
+The target list is `targets.tsv`, one row per repository in
+`packaging/obs/project.meta.xml` (its `obs_repository` column). The weekly
+distro release watcher (`.github/workflows/distro-release-watch.yml`,
+`scripts/check_distro_releases.py`) only compares the OBS/COPR/PPA channels
+with upstream releases and does not read `targets.tsv`: when one of its
+`distro-release` issues adds an OBS repository, add the matching row here too
+(lock the base image with `tests/docker/update-digests.sh`) so Tier 3 runs on it.
+
+The pass criterion per target is Tier 2's result for the same suite. A
+difference that only one distro shows is root-caused: harness or image
+problems are fixed here; a genuine krema or packaging bug on that distro is
+reported and only then pinned with a `xfail(strict=True)` conditioned on
+`KREMA_E2E_DISTRO`.
+
+## CI
+
+`.github/workflows/distro-e2e.yml` runs every target as its own job on a
+GitHub-hosted `ubuntu-latest` (amd64) runner, so `arch` and
+`opensuse-slowroll` run natively there. It triggers on pull requests touching
+`src/`, `packaging/`, `tests/`, `CMakeLists.txt` or the workflow, on pushes to
+`master`, on published releases and on demand (`workflow_dispatch`, optional
+`targets` input: comma/space separated ids, default `all`). A newer push to a
+pull request cancels its running jobs; `fail-fast` is off, so one distro's
+failure does not hide another's.
+
+Each job builds and loads the platform-bus vgem with
+`tests/appium/setup-vgem.sh` (see Running) and runs
+`tests/distro/run-distro-e2e.sh <target> -rs` with
+`KREMA_E2E_KWIN_BACKEND=virtual`: `kwin_wayland --virtual` with one output,
+compositing with OpenGL through llvmpipe on the vgem device. It does not
+use the vkms + DRM backend of the Tier 2 job in `e2e.yml`: without logind or
+seatd in the container KWin opens devices through its noop session, which
+can only do so since KWin 6.5, and `debian-13`, `ubuntu-25.04`,
+`ubuntu-25.10` and `opensuse-leap-16.0` ship older KWin. The
+`@pytest.mark.outputs(2)` tests skip here; `e2e.yml` covers them. The job
+adds a JUnit summary to the step summary (a skip caused by QPainter
+compositing or a missing render node fails it) and uploads
+`tests/appium/artifacts-distro-<target>/` as `distro-e2e-<target>`.
+
+Expected result per target (the 4 skips are the 2-output tests; the extra
+strict xfails pin library-version-specific krema issues — see "Known krema
+bugs" in `tests/appium/README.md`). Verified by
+https://github.com/isac322/krema/actions/runs/36421577648 (attempts 1 and 2,
+12/12 targets):
+
+| Targets | Result | Reasons for the extra xfails |
+| --- | --- | --- |
+| `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `arch` | 68 passed, 4 skipped, 8 xfailed | latest KWin/Qt/KF/LayerShellQt — only the unconditional strict xfails |
+| `fedora-42`, `opensuse-leap-16.0`, `ubuntu-25.10`, `ubuntu-26.04` | 66 passed, 4 skipped, 10 xfailed | +2 for kglobalacceld < 6.7: a real Meta+F5 and keyboard navigation on an auto-hide dock (`test_kbd001_meta_f5_focuses_first_dock_item`, `test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible`), because krema's default Meta+F5 collides with KWin's `MoveMouseToFocus` and old kglobalacceld drops the contested key |
+| `debian-13`, `ubuntu-25.04` | 64 passed, 4 skipped, 12 xfailed | +2 for kglobalacceld < 6.7 (same as above) and +2 for LayerShellQt < 6.4 (`test_set002`, `test_set006`): krema built without `setDesiredSize` resizes through `QWindow::resize(QSize(0, h))`, which leaves the window 0 px wide so the surface is never recommitted |
+
+Package and image are built from scratch on every run (about 2 minutes
+each), the suite takes about 8 minutes, and a full-matrix run about
+15 minutes. There is no layer cache: twelve distro images would not fit the
+repository's 10 GB Actions cache, which `e2e.yml` also uses.
+
+## Cleanup
+
+The script leaves the package cache (`tests/distro/.cache/`), the image
+`krema-e2e-distro:<target>`, its base image and BuildKit's layer cache.
+Remove them with:
+
+```sh
+rm -rf tests/distro/.cache
+docker image rm krema-e2e-distro:<target>
+docker builder prune
+```

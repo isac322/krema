@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+#
+# Tier-3 distro E2E (tests/distro/README.md): per target, build the krema
+# package from this tree with the repo's packaging, build an image with that
+# distro's KWin/Qt/KF plus the package installed through its package manager,
+# and run the Tier-2 AT-SPI suite against /usr/bin/krema.
+#
+# Graphics: KWin's --virtual backend on an out-of-tree vgem (render node),
+# compositing with OpenGL through llvmpipe, as in e2e.yml's 2-output run.
+# Not e2e.yml's vkms + DRM backend: in a container KWin has no logind/seatd
+# and uses its noop session, whose openRestricted() only opens devices since
+# KWin 6.5 (debian-13, ubuntu-25.04/25.10 and leap-16.0 ship older KWin).
+# One output: the @pytest.mark.outputs(2) tests are left to e2e.yml and skip.
+#
+# No image layer cache: package and image build in a few minutes per target,
+# and twelve distro images would not fit the repository's 10 GB Actions
+# cache, which e2e.yml also uses.
+
+name: Distro E2E
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "packaging/**"
+      - "tests/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/distro-e2e.yml"
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Targets (comma/space separated ids from tests/docker/targets.tsv or 'arch'), or 'all'"
+        required: false
+        default: all
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: distro-e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  targets:
+    name: Resolve targets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/docker/targets.tsv
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve target list
+        id: resolve
+        env:
+          REQUESTED: ${{ inputs.targets || 'all' }}
+        run: |
+          known="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/docker/targets.tsv; echo arch)"
+          if [[ -z ${REQUESTED// } || $REQUESTED == all ]]; then
+            selected="$known"
+          else
+            selected="$(tr -s ', ' '\n' <<<"$REQUESTED" | sed '/^$/d')"
+            for t in $selected; do
+              grep -qxF -- "$t" <<<"$known" || { echo "::error::unknown target '$t' (known: $(tr '\n' ' ' <<<"$known"))"; exit 1; }
+            done
+          fi
+          matrix="$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' <<<"$selected")"
+          echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
+          echo "targets: $matrix"
+
+  distro-e2e:
+    name: Distro E2E (${{ matrix.target }})
+    needs: targets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build and load vgem (DRM render node)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
+          sudo tests/appium/setup-vgem.sh
+
+      - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
+        env:
+          KREMA_E2E_KWIN_BACKEND: virtual
+        run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
+
+      - name: JUnit summary
+        if: always()
+        run: |
+          python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET" \
+            "tests/appium/artifacts-distro-$TARGET/junit.xml" \
+            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: distro-e2e-${{ matrix.target }}
+          path: tests/appium/artifacts-distro-${{ matrix.target }}
+          if-no-files-found: ignore

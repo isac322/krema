@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Krema Test Window
+Comment=Deterministic window fixture for Krema E2E tests
+Exec=krema-test-window --app-id org.kde.krema.testwindow
+Icon=utilities-terminal
+Categories=Utility;
+StartupWMClass=org.kde.krema.testwindow

@@ -1,7 +1,10 @@
 # E2E Test Scenarios
 
 Accessibility-first end-to-end test scenarios for Krema dock.
-Scenarios are verified using `kwin-mcp` (KWin virtual compositor + AT-SPI).
+The 48 original TCs below are automated in `tests/appium/` (AT-SPI harness running a
+real KWin session); MOUSE-008 and VIS-007 are covered by `tests/kwin` ctests. See the coverage matrix in
+`tests/appium/README.md`. The kwin-mcp workflow in this document remains
+useful for exploratory QA and for one-off manual checks.
 
 ## Convention
 
@@ -145,15 +148,19 @@ Key states used in assertions:
 
 Always use **800x600** — dock elements are large enough for visual verification.
 
-## Known Limitations (Not Testable via kwin-mcp)
+## Known kwin-mcp limitations
 
-| Mechanism | Limitation | Alternative |
-|-----------|-----------|-------------|
-| Screen edge trigger | EIS mouse does not trigger layer-shell edge zones | D-Bus `focus-dock` |
-| Active window identification | `list_windows` shows no active/focused state | AT-SPI `active` state on frames (unreliable) |
-| QMenu items | Native QMenu not in AT-SPI tree | Screenshot coordinate-based clicks |
-| Close button click (22x22) | Very small target with coordinate conversion | Keyboard Delete key |
-| Tooltip AT-SPI | Tooltips are `Accessible.ignored: true` by design | Screenshot-only verification |
+These are limitations of the kwin-mcp session (EIS input, its own compositor
+view), not of the scenarios: the `tests/appium/` harness handles each as
+noted.
+
+| Mechanism | kwin-mcp limitation | kwin-mcp workaround | In tests/appium |
+|-----------|---------------------|---------------------|-----------------|
+| Screen edge trigger | EIS mouse does not trigger layer-shell edge zones | D-Bus `focus-dock` | Real fake-input pointer reaches the edge strip (`test_vis003_auto_hide_shows_on_screen_edge_approach`) |
+| Active window identification | `list_windows` shows no active/focused state | AT-SPI `active` state on frames (unreliable) | `kwin.active_window()` via KWin scripting (`evaluate`) |
+| QMenu items | Native QMenu not in AT-SPI tree | Screenshot coordinate-based clicks | KWin popup window + keyboard navigation over `context_menu_entries()` order |
+| Close button click (22x22) | Very small target with coordinate conversion | Keyboard Delete key | Clicked directly: screen coordinates from the AT-SPI rect plus the surface's KWin position (`test_prev004_close_button_closes_that_window`) |
+| Tooltip AT-SPI | Tooltips are `Accessible.ignored: true` by design | Screenshot-only verification | Screenshot diff: the tooltip is the only pixel change (`test_mouse004_tooltip_shows_app_name_on_hover`) |
 
 See `docs/kwin-mcp-issues.md` for detailed issue descriptions and workaround instructions.
 

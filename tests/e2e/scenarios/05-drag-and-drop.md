@@ -44,6 +44,8 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 
 **Verification:** accessibility_tree (button order changed), screenshot (drag ghost visible during drag)
 
+**Automated:** tests/appium/test_05_drag.py::test_dnd_001_drag_reorders_dock_items
+
 ---
 
 ## TC DND-002: Reorder Persists After Restart
@@ -60,6 +62,8 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 - After restart, dock items appear in the reordered position
 
 **Verification:** screenshot (same order after restart)
+
+**Automated:** tests/appium/test_05_drag.py::test_dnd_002_reorder_persists_after_restart
 
 ---
 
@@ -83,6 +87,8 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 
 **Verification:** screenshot (ghost icon + opacity change + drop indicator line)
 
+**Automated:** tests/appium/test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator
+
 ---
 
 ## TC DND-004: Cancel Drag Returns to Original Position
@@ -100,3 +106,7 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 - No reorder occurs
 
 **Verification:** screenshot (order unchanged)
+
+**Automated:** tests/appium/test_05_drag.py::test_dnd_004_drag_released_outside_dock_keeps_order (drag outside the dock; unpinned task, since dragging a pinned launcher out of the dock unpins it by design)
+
+**Automated:** tests/appium/test_05_drag.py::test_dnd_004_escape_cancels_drag (strict xfail: Escape does not cancel an internal drag)

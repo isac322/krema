@@ -46,6 +46,7 @@ use screenshot-based coordinate estimation.
 - Quit: +180px
 
 **Verification:** screenshot only (menu visible with expected entries)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item, tests/appium/test_04_context_menu.py::test_ctx001_about_krema_is_the_fifth_entry, tests/appium/test_04_context_menu.py::test_ctx001_quit_is_the_last_entry (entry order is verified by effect for every enabled position; the header label text itself is not read since QMenu is not in AT-SPI — its presence as a disabled row is verified by the keyboard highlight skipping it)
 
 ---
 
@@ -66,6 +67,7 @@ use screenshot-based coordinate estimation.
 - Pin state persists (saved to config)
 
 **Verification:** screenshot (icon present without indicator), config file check
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes
 
 ---
 
@@ -83,6 +85,7 @@ use screenshot-based coordinate estimation.
 - If app was running, icon stays until app closes
 
 **Verification:** screenshot (icon gone)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app, tests/appium/test_04_context_menu.py::test_ctx003_unpinned_running_app_stays_until_it_closes
 
 ---
 
@@ -101,6 +104,7 @@ use screenshot-based coordinate estimation.
 - Bounce animation on dock icon
 
 **Verification:** list_windows (count +1)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx004_new_instance_launches_another_window
 
 ---
 
@@ -120,6 +124,7 @@ use screenshot-based coordinate estimation.
 - If app was not pinned, icon removed
 
 **Verification:** list_windows (no windows for that app)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx005_close_closes_every_window_of_an_unpinned_app, tests/appium/test_04_context_menu.py::test_ctx005_close_keeps_a_pinned_app_without_indicator
 
 ---
 
@@ -145,3 +150,5 @@ use screenshot-based coordinate estimation.
 "Icon size" label and "Zoom factor" slider with Increase/Decrease actions.
 
 **Verification:** list_windows (krema window count +1), find_ui_elements (FormCard widgets), screenshot (dialog layout)
+
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx006_settings_entry_opens_the_settings_window

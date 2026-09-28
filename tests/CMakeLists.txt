@@ -14,3 +14,8 @@ add_test(NAME krema_desktop_entries
 add_subdirectory(unit)
 add_subdirectory(integration)
 add_subdirectory(kwin)
+add_subdirectory(qml)
+
+if(KREMA_E2E_TESTS)
+    add_subdirectory(appium)
+endif()

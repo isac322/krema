@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Setting the background opacity to 0% made the dock background fully transparent and removed the blur, instead of silently saving 10%
 - Icon scale, attention animation duration, badge display mode, "Use system color", "Use accent color" and "Only dodge active window" now persist across restarts instead of reverting to their defaults
 - Fixed tooltips on left and right docks being cut off after a few characters; they now show the full app name, and very long names end with an ellipsis
-- With "Enable window preview" turned off, the window preview no longer pops up when a window opens while you hover a dock icon, for example right after clicking a launcher
+- Fixed the window preview popping up when a window opened while a dock icon was hovered (for example right after clicking a launcher), even with "Enable window preview" turned off
 
 ## [0.8.0] - 2026-09-28
 

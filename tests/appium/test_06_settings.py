@@ -207,16 +207,9 @@ def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
 
     After the keyboard-chosen menu entry the pointer still rests on ``name``,
     whose hover preview then opens (window item); it must be gone before the
-    dialog is used, or it takes the wheel and clicks aimed at the dialog. The
-    dock first finishes re-centring for krema's own new Settings item: a
-    leave that sweeps over the dock and preview while the icons still move
-    under the stale pointer position was seen to leave the preview open
-    afterwards (see README "Known krema bugs")."""
+    dialog is used, or it takes the wheel and clicks aimed at the dialog."""
     hover_ready(k, name)
-    before = len(k.items())
     win = k.open_settings(name, ENTRIES)
-    wait_until(lambda: len(k.items()) > before, message="krema's Settings item in the dock")
-    wait_stable(lambda: [Rect.of(e) for e in k.items()], duration=0.5)
     k.move_away()
     return win
 

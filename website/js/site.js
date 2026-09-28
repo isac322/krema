@@ -1,5 +1,5 @@
-// Krema landing page: JS flag, copy-to-clipboard buttons for install commands,
-// and the live GitHub star count on the star CTAs.
+// Krema landing page: JS flag, install distro tabs, copy-to-clipboard buttons
+// for install commands, and the live GitHub star count on the star CTAs.
 (() => {
   "use strict";
 
@@ -8,9 +8,44 @@
   const status = document.querySelector(".install .status");
   const canCopy = !!(navigator.clipboard && window.isSecureContext);
 
+  // Distro picker: without JS every panel shows, stacked. With JS one panel
+  // shows at a time behind a tablist with roving focus.
+  document.querySelectorAll("[data-install]").forEach((root) => {
+    const list = root.querySelector('[role="tablist"]');
+    const tabs = Array.from(root.querySelectorAll('[role="tab"]'));
+    const panels = tabs.map((t) => document.getElementById(t.getAttribute("aria-controls")));
+    if (!list || panels.some((p) => !p)) return;
+    const select = (i, focus) => {
+      tabs.forEach((t, k) => {
+        const on = k === i;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        panels[k].hidden = !on;
+      });
+      if (focus) tabs[i].focus();
+    };
+    tabs.forEach((t, i) => {
+      t.addEventListener("click", () => select(i, false));
+      t.addEventListener("keydown", (e) => {
+        let n = -1;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") n = (i + 1) % tabs.length;
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") n = (i - 1 + tabs.length) % tabs.length;
+        else if (e.key === "Home") n = 0;
+        else if (e.key === "End") n = tabs.length - 1;
+        if (n < 0) return;
+        e.preventDefault();
+        select(n, true);
+      });
+    });
+    list.hidden = false;
+    select(Math.max(0, tabs.findIndex((t) => t.getAttribute("aria-selected") === "true")), false);
+  });
+
   document.querySelectorAll(".cmd .copy").forEach((btn) => {
     const code = btn.parentElement.querySelector("code");
-    const distro = btn.closest(".inst")?.querySelector("h3")?.textContent.trim() ?? "";
+    const panel = btn.closest('[role="tabpanel"]');
+    const tab = panel && document.getElementById(panel.getAttribute("aria-labelledby"));
+    const distro = tab?.textContent.trim() ?? "";
     const label = btn.querySelector("span");
     const idle = `Copy the ${distro} install command`;
     let timer = 0;

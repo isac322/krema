@@ -66,7 +66,7 @@
   line-height: 1;
   letter-spacing: -0.035em;
   text-transform: lowercase;
-  color: var(--bone, #f3f0ea);
+  color: var(--bone, #f4ece0);
   font-kerning: none; /* letters are separate boxes; kerning pairs would not apply anyway */
   user-select: none;
   -webkit-user-select: none;
@@ -127,8 +127,8 @@
   width: calc(var(--dot) / 1.16);
   height: calc(var(--dot) / 1.16);
   border-radius: 50%;
-  background: var(--blue, #3daee9);
-  box-shadow: 0 0 0.12em 0.015em var(--glow, rgba(61, 174, 233, 0.35));
+  background: var(--blue, #d69a5e);
+  box-shadow: 0 0 0.12em 0.015em var(--glow, rgba(214, 154, 94, 0.35));
   transform: translateX(-50%);
 }
 
@@ -142,8 +142,8 @@
   width: var(--dot);
   height: var(--dot);
   border-radius: 50%;
-  background: var(--blue, #3daee9);
-  box-shadow: 0 0 0.14em 0.02em var(--glow, rgba(61, 174, 233, 0.35));
+  background: var(--blue, #d69a5e);
+  box-shadow: 0 0 0.14em 0.02em var(--glow, rgba(214, 154, 94, 0.35));
   transform: translate3d(0, 0, 0) translateX(-50%);
   transition:
     transform 420ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
@@ -175,7 +175,7 @@
   font-variant-caps: all-small-caps;
   letter-spacing: 0.06em;
   line-height: 1.4;
-  color: var(--blue, #3daee9);
+  color: var(--blue, #d69a5e);
 }
 
 .hero-lede {
@@ -183,7 +183,7 @@
   max-width: 46ch;
   font-size: clamp(1.05rem, 1.2vw, 1.2rem);
   line-height: 1.55;
-  color: var(--bone-dim, #b9c0ca);
+  color: var(--bone-dim, #cdbfae);
   text-wrap: pretty;
 }
 
@@ -216,7 +216,7 @@
   font-family: var(--mono, "Hack", "JetBrains Mono", ui-monospace, monospace);
   font-size: 0.8rem;
   letter-spacing: 0.08em;
-  color: var(--muted, #93a0b0);
+  color: var(--muted, #a89684);
   transition: opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
@@ -224,7 +224,7 @@
   content: "\2194";
   font-family: var(--font, "Noto Sans", system-ui, sans-serif);
   font-size: 1.1em;
-  color: var(--blue, #3daee9);
+  color: var(--blue, #d69a5e);
   animation: hero-hint-nudge 1.6s var(--ease-out, ease-out) 1.2s 3;
 }
 

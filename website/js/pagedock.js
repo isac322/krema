@@ -443,7 +443,7 @@
   const rootStyle = getComputedStyle(document.documentElement);
   const cssVar = (name, fallback) => rootStyle.getPropertyValue(name).trim() || fallback;
   const EASE = cssVar("--ease-out", "cubic-bezier(.22,1,.36,1)");
-  const BLUE = cssVar("--blue", "#3DAEE9");
+  const BLUE = cssVar("--blue", "#D69A5E");
 
   const bounce = (it) => {
     if (!it.face || !it.face.animate) return;

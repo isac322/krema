@@ -7,8 +7,8 @@
   "scope": "./",
   "display": "browser",
   "lang": "en",
-  "theme_color": "#141C26",
-  "background_color": "#141C26",
+  "theme_color": "#18110D",
+  "background_color": "#18110D",
   "icons": [
     { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

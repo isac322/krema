@@ -94,7 +94,7 @@ Key states used in assertions:
 
 ### Important Patterns
 
-1. **Global shortcuts**: `keyboard_key "super+F5"` does NOT trigger KGlobalAccel in
+1. **Global shortcuts**: `keyboard_key "super+alt+d"` does NOT trigger KGlobalAccel in
    kwin-mcp (EIS limitation). Use D-Bus `invokeShortcut` instead:
    ```
    dbus_call service="org.kde.kglobalaccel" path="/component/krema"

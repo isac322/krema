@@ -48,8 +48,30 @@ Item {
     Accessible.focused: isKeyboardFocused
     Accessible.onPressAction: DockActions.activate(index)
 
-    // SmartLauncherItem for badge count / urgent status (created in Component.onCompleted)
-    property QtObject _smartLauncherItem: null
+    // Launcher URL of this item's app, the key for LauncherEntryTracker (Unity API)
+    readonly property url _launcherUrl: model.LauncherUrlWithoutIcon ?? ""
+
+    // Unity LauncherEntry state (count, progress, urgent) sent by the app over D-Bus
+    readonly property bool _launcherCountVisible: {
+        let _rev = LauncherEntryTracker.revision  // reactive dependency
+        return LauncherEntryTracker.countVisible(_launcherUrl)
+    }
+    readonly property int _launcherCount: {
+        let _rev = LauncherEntryTracker.revision  // reactive dependency
+        return LauncherEntryTracker.count(_launcherUrl)
+    }
+    readonly property bool _launcherUrgent: {
+        let _rev = LauncherEntryTracker.revision  // reactive dependency
+        return LauncherEntryTracker.urgent(_launcherUrl)
+    }
+    readonly property bool _progressVisible: {
+        let _rev = LauncherEntryTracker.revision  // reactive dependency
+        return LauncherEntryTracker.progressVisible(_launcherUrl)
+    }
+    readonly property int _progress: {
+        let _rev = LauncherEntryTracker.revision  // reactive dependency
+        return LauncherEntryTracker.progress(_launcherUrl)
+    }
 
     // Desktop entry name for notification lookup (e.g. "org.kde.dolphin", "slack")
     readonly property string _appId: {
@@ -58,14 +80,14 @@ Item {
     }
 
     // === Inbox (persistent badge) ===
-    // Sources: SmartLauncher.count (1st, app-managed), fd.o watcher unreadCount (2nd, dock-managed)
+    // Sources: LauncherEntry count (1st, app-managed), fd.o watcher unreadCount (2nd, dock-managed)
     // Clear: focus → fd.o auto-clear, context menu → manual clear, SNI→Active → fd.o clear
-    // Unified badge count (priority: SmartLauncher > WatchedNotifications)
+    // Unified badge count (priority: LauncherEntry > WatchedNotifications)
     readonly property int _badgeCount: {
         let _rev = NotificationTracker.revision  // reactive dependency
-        // 1st: SmartLauncherItem (Unity API) — exact count from the app
-        if (_smartLauncherItem && _smartLauncherItem.countVisible)
-            return _smartLauncherItem.count
+        // 1st: LauncherEntry (Unity API) — exact count from the app
+        if (_launcherCountVisible)
+            return _launcherCount
         // 2nd: WatchedNotifications — unread notification count
         if (_appId.length > 0) {
             let n = NotificationTracker.unreadCount(_appId)
@@ -75,22 +97,21 @@ Item {
     }
 
     // === Notification (transient attention) ===
-    // Sources: Window.IsDemandingAttention, SmartLauncher.urgent, SNI NeedsAttention, badgeCount increase
+    // Sources: Window.IsDemandingAttention, LauncherEntry urgent, SNI NeedsAttention, badgeCount increase
     // → _triggerAttention() → auto-stops after attentionAnimationDuration. Suppressed by DND.
     //
     // API support matrix:
     //   fd.o RegisterWatcher: notification(badge↑→animation) + inbox(badge count) + clear(focus/menu/SNI)
     //   Portal: transparent (routed to fd.o)
     //   SNI: notification(NeedsAttention→animation) + clear(→Active clears fd.o)
-    //   SmartLauncher: inbox(count→badge, app-managed) + notification(urgent→animation)
+    //   LauncherEntry: inbox(count→badge, app-managed) + notification(urgent→animation) + progress bar
     //   Window: notification(IsDemandingAttention→animation)
-    //   Jobs: transparent (exposed via SmartLauncherItem.progress)
     //   DND: suppresses notification animation (badge persists)
-    // Attention condition (Plasma-compatible: IsDemandingAttention OR SmartLauncher.urgent OR SNI NeedsAttention)
+    // Attention condition (Plasma-compatible: IsDemandingAttention OR LauncherEntry urgent OR SNI NeedsAttention)
     readonly property bool _isDemandingAttention: {
         let _rev = NotificationTracker.revision  // reactive dependency
         return (model.IsDemandingAttention ?? false)
-            || (_smartLauncherItem !== null && _smartLauncherItem.urgent)
+            || _launcherUrgent
             || (_appId.length > 0 && NotificationTracker.sniNeedsAttention(_appId))
     }
 
@@ -133,7 +154,7 @@ Item {
         console.log("[NOTIF-TRACE] '" + displayName + "' appId=" + _appId
                     + " isDemandingAttention=" + _isDemandingAttention
                     + " | model.IsDemandingAttention=" + (model.IsDemandingAttention ?? false)
-                    + " | smartLauncher.urgent=" + (_smartLauncherItem !== null && _smartLauncherItem.urgent)
+                    + " | launcherEntry.urgent=" + _launcherUrgent
                     + " | sniNeedsAttention=" + (_appId.length > 0 ? NotificationTracker.sniNeedsAttention(_appId) : false)
                     + " | badgeCount=" + _badgeCount)
         if (_isDemandingAttention) {
@@ -247,7 +268,7 @@ Item {
             maxLaunchTimer.stop()
         }
         // Clear fd.o watcher badges when window gains focus.
-        // SmartLauncher count is app-managed (separate source), so always clear fd.o unconditionally.
+        // LauncherEntry count is app-managed (separate source), so always clear fd.o unconditionally.
         if (_isActive && _appId.length > 0) {
             NotificationTracker.clearUnreadNotifications(_appId)
         }
@@ -354,14 +375,6 @@ Item {
             currentScale = zoomFactor  // correct value after layout
             _zoomAnimReady = true
         })
-
-        // Create SmartLauncherItem for badge/urgent tracking
-        let comp = Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem")
-        if (comp && comp.status === Component.Ready) {
-            _smartLauncherItem = comp.createObject(dockItem)
-            _smartLauncherItem.launcherUrl = Qt.binding(() => DockModel.launcherUrl(dockItem.index))
-        }
-        if (comp) comp.destroy()
 
         // Debug: log appId for notification matching verification
         Qt.callLater(function() {
@@ -573,9 +586,10 @@ Item {
         }
     }
 
-    // Badge count overlay (unified: SmartLauncher + WatchedNotifications)
+    // Badge count overlay (unified: LauncherEntry + WatchedNotifications)
     Rectangle {
         id: badge
+        objectName: "badge"
         visible: dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
         anchors.right: iconImage.right
         anchors.top: iconImage.top
@@ -613,11 +627,11 @@ Item {
         }
     }
 
-    // Progress bar (SmartLauncher task progress)
+    // Progress bar (LauncherEntry task progress)
     Rectangle {
         id: progressBar
-        visible: dockItem._smartLauncherItem !== null
-                 && dockItem._smartLauncherItem.progressVisible
+        objectName: "progressBar"
+        visible: dockItem._progressVisible
         anchors.bottom: iconImage.bottom
         anchors.horizontalCenter: iconImage.horizontalCenter
         anchors.bottomMargin: 2
@@ -628,12 +642,11 @@ Item {
         Accessible.ignored: true
 
         Rectangle {
+            objectName: "progressFill"
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: parent.width * (dockItem._smartLauncherItem
-                                   ? dockItem._smartLauncherItem.progress / 100.0
-                                   : 0)
+            width: parent.width * dockItem._progress / 100.0
             radius: parent.radius
             color: Kirigami.Theme.highlightColor
 

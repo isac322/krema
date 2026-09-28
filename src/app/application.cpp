@@ -6,6 +6,7 @@
 #include "krema.h"
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
+#include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
@@ -127,8 +128,9 @@ int Application::run()
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
 
-    // Create notification tracker (before QML loading)
+    // Create notification trackers (before QML loading)
     m_notificationTracker = std::make_unique<NotificationTracker>();
+    m_launcherEntryTracker = std::make_unique<LauncherEntryTracker>();
 
     // Register global QML singletons (must be before any QML loading)
     // Use qmlRegisterSingletonType (not qmlRegisterSingletonInstance) so multiple
@@ -147,6 +149,11 @@ int Application::run()
     qmlRegisterSingletonType<NotificationTracker>("com.bhyoo.krema", 1, 0, "NotificationTracker", [tracker](QQmlEngine *, QJSEngine *) -> QObject * {
         QQmlEngine::setObjectOwnership(tracker, QQmlEngine::CppOwnership);
         return tracker;
+    });
+    auto *launcherEntries = m_launcherEntryTracker.get();
+    qmlRegisterSingletonType<LauncherEntryTracker>("com.bhyoo.krema", 1, 0, "LauncherEntryTracker", [launcherEntries](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(launcherEntries, QQmlEngine::CppOwnership);
+        return launcherEntries;
     });
 
     // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode).

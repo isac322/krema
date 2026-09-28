@@ -6,6 +6,7 @@
 #include "platform/dockplatform.h"
 
 #include <QObject>
+#include <QPersistentModelIndex>
 #include <QTimer>
 
 namespace TaskManager
@@ -81,7 +82,11 @@ public:
     Q_INVOKABLE void setInteracting(bool interacting);
 
     /// Set keyboard navigation active state. Prevents dock from hiding.
-    Q_INVOKABLE void setKeyboardActive(bool active);
+    /// Entering remembers the active window; leaving with @p restoreFocus
+    /// re-activates it, because KWin keeps a layer surface active after its
+    /// keyboard interactivity is dropped. Pass false when leaving because a
+    /// task was just activated (that activation already moves focus).
+    Q_INVOKABLE void setKeyboardActive(bool active, bool restoreFocus = true);
 
     /// Current panel rectangle (surface-local coordinates).
     [[nodiscard]] QRect panelRect() const;
@@ -109,6 +114,9 @@ private:
     [[nodiscard]] bool hasMaximizedOrFullscreenWindow() const;
 
     void connectModelSignals();
+
+    /// Re-activate the window that was active when keyboard navigation began.
+    void restoreKeyboardReturnTask();
 
     DockPlatform *m_platform;
     TaskManager::TasksModel *m_tasksModel;
@@ -148,6 +156,9 @@ private:
 
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
+
+    // Window that was active when keyboard navigation began (focus returns here)
+    QPersistentModelIndex m_keyboardReturnTask;
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;

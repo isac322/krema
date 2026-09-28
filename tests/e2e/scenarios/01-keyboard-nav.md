@@ -230,5 +230,4 @@
 **Verification:** accessibility_tree (persistent `showing`+`focused` during keyboard mode)
 
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_keyboard_mode_keeps_hidden_dock_visible[autohide|dodge|smarthide] (SmartHide = VisibilityMode=2 + DodgeActiveOnly=true)
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[autohide|dodge]
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[smarthide] (strict xfail: krema bug, focus not returned to the active window after Escape, so SmartHide never re-hides)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[autohide|dodge|smarthide] (Escape returns focus to the previously active window, so SmartHide sees it again)

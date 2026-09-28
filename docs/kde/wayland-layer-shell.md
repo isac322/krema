@@ -85,6 +85,20 @@ enum KeyboardInteractivity {
 };
 ```
 
+**KWin focus hand-back (verified in KWin 6.7.5 `src/layershellv1window.cpp`
+`LayerShellV1Window::handleAcceptsFocusChanged`):** when a Top/Overlay layer
+surface switches to a focus-accepting mode, KWin calls
+`workspace()->activateWindow(this)` and the surface becomes the *active
+window* (the previously active window gets `IsActive=false` in the
+TaskManager models). Switching back to `KeyboardInteractivityNone` does
+**nothing**: KWin does not call `activateNextWindow()`, so the layer surface
+stays active and no task is active. The client must hand focus back itself,
+e.g. remember `TasksModel::activeTask()` before enabling interactivity and
+call `TasksModel::requestActivate()` on it afterwards (KWin honours that
+request with forced activation, `window.cpp` `activeRequested` →
+`activateWindow(this, true)`). Krema does this in
+`DockVisibilityController::setKeyboardActive()`.
+
 #### ScreenConfiguration (deprecated since 6.6)
 
 ```cpp

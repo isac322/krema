@@ -471,24 +471,7 @@ def test_kbd009_keyboard_mode_keeps_hidden_dock_visible(krema: Krema, apps: Test
 
 @pytest.mark.parametrize(
     "visibility",
-    [
-        pytest.param(AUTOHIDE, id="autohide"),
-        pytest.param(DODGE, id="dodge"),
-        pytest.param(
-            SMARTHIDE,
-            id="smarthide",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "krema bug: ending keyboard navigation (Escape) only drops the dock's layer-shell keyboard "
-                    "interactivity; focus is never handed back to the previously active window. KWin keeps the "
-                    "dock surface as the active window (kwin-windows.json: active=True on krema's 1024x108 "
-                    "surface, Cover active=False), so SmartHide (DodgeActiveOnly) sees no active overlapping "
-                    "window and the dock never hides again"
-                ),
-            ),
-        ),
-    ],
+    [pytest.param(AUTOHIDE, id="autohide"), pytest.param(DODGE, id="dodge"), pytest.param(SMARTHIDE, id="smarthide")],
 )
 def test_kbd009_dock_auto_hides_again_after_escape(krema: Krema, apps: TestWindows, visibility: dict) -> None:
     first = _keyboard_mode_keeps_dock_shown(krema, apps, visibility)

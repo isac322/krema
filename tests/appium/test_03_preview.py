@@ -46,6 +46,14 @@ def _require_capture() -> None:
     assert kwin.can_capture(), f"KWin compositing is {kwin.compositing_type()}: PipeWire thumbnails need a DRM render node"
 
 
+def _assert_stays(predicate, duration: float, message: str) -> None:
+    """Assert ``predicate`` holds on every poll for ``duration`` seconds."""
+    deadline = time.monotonic() + duration
+    while time.monotonic() < deadline:
+        assert predicate(), message
+        time.sleep(0.05)
+
+
 def _wait_thumbnail_color(krema: Krema, title: str, matches, shot: str) -> Image.Image:
     """Wait until the thumbnail of ``title`` shows the window's solid content
     color over most of its image (the live PipeWire frame, not the icon)."""
@@ -81,11 +89,16 @@ def test_prev001_hover_opens_preview_above_dock_with_live_thumbnails(krema: Krem
         assert krema.find(pv.close_xpath(title)) is not None, f"close button of {title!r}"
         assert krema.find(f"{pv.thumb_xpath(title)}/label").get_attribute("name") == title
 
-    # Above the (bottom) dock, horizontally over the hovered item.
+    # Above the (bottom) dock, horizontally over the hovered item, right where
+    # the dock surface (panel bar + zoom headroom) ends: no gap in between, in
+    # the default AlwaysVisible mode too, where the dock reserves its panel
+    # bar as exclusive zone.
     popup_rect = pv.screen_rect(krema, popup)
     item = krema.screen_rect(krema.item(APP))
     assert popup_rect.y + popup_rect.height <= item.y, f"popup {popup_rect} not above item {item}"
     assert popup_rect.x <= item.center[0] <= popup_rect.x + popup_rect.width
+    dock = krema.surface_rect("dock")
+    assert abs(dock.y - (popup_rect.y + popup_rect.height)) <= 8, f"popup {popup_rect} detached from the dock surface {dock}"
 
     # Live PipeWire thumbnails: each shows its own window's content color.
     image = _wait_thumbnail_color(krema, "Red", pv.is_red, "prev001-red")
@@ -248,6 +261,40 @@ def test_prev005_close_on_leave_is_delayed(krema: Krema, apps: TestWindows) -> N
     # taken before the move, so it never overstates the delay.
     elapsed = time.monotonic() - t0
     assert elapsed >= 1.5 * 0.95, f"preview closed {elapsed:.3f}s after leaving, before the 1.5 s hide delay"
+
+
+@pytest.mark.kremarc({"PinnedLaunchers": [], "PreviewHoverDelay": 2000})
+def test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving(krema: Krema, apps: TestWindows) -> None:
+    """The pointer leaves the dock through the open preview while a new task
+    row makes the dock re-centre. The dock must not hit-test its last pointer
+    position again as the icons move: that re-hovered the item and, one
+    PreviewHoverDelay later, reopened its preview with the pointer far from
+    the dock, where nothing closes it any more."""
+    apps.open("Alpha", app_id=env.TEST_APP_ID)
+    krema.wait_for_item("Alpha")
+    krema.move_away()
+    popup = pv.open_by_hover(krema, "Alpha")
+
+    # A fast flick from the item onto the preview: the first motion event
+    # already lands on the preview, so the dock's last pointer position is
+    # the zoomed item's centre (a glide would leave the dock from above the
+    # icon, where the hit test finds nothing). The second event is motion
+    # inside the preview, which its HoverHandler needs to see the pointer.
+    x, y = pv.screen_rect(krema, popup).center
+    inp.move_path([(x, y), (x + 4, y)], step_ms=20)
+    # Past the 200 ms hide delay the dock started on leave: the preview holds
+    # the pointer.
+    _assert_stays(krema.preview_visible, 0.5, "preview closed with the pointer resting on it")
+
+    # Beta's new task row re-centres the dock under the stale position; the
+    # pointer then leaves the preview well within PreviewHoverDelay.
+    apps.open("Beta", app_id=env.TEST_APP2_ID)
+    krema.wait_for_item("Beta")
+    inp.move(env.SCREEN_WIDTH // 2, 20)  # outside dock and preview input area
+    wait_until(lambda: not krema.preview_visible(), timeout=5, message="preview to close after the pointer left")
+
+    # Longer than PreviewHoverDelay (2 s) since Beta's row appeared.
+    _assert_stays(lambda: not krema.preview_visible(), 3.0, "preview reopened with the pointer away from the dock")
 
 
 # ---------------------------------------------------------------- PREV-006

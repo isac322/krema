@@ -279,6 +279,9 @@ void DockView::updateSize()
         m_platform->setSize(QSize(0, h));
     }
 
+    // AlwaysVisible reserves the panel bar so maximized windows end above it.
+    m_platform->setExclusiveZone(panelBarHeight());
+
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
     }

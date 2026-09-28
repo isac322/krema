@@ -103,7 +103,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 | Meta+\` | Toggle dock visibility |
 | Meta+1-9 | Activate Nth app |
 | Meta+Shift+1-9 | Launch new instance of Nth app |
-| Meta+F5 | Focus dock for keyboard navigation |
+| Meta+Alt+D | Focus dock for keyboard navigation |
 | Arrow keys | Navigate between dock items / preview thumbnails |
 | Enter | Activate focused item |
 | Escape | Exit keyboard navigation |

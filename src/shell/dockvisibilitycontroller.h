@@ -4,8 +4,11 @@
 #pragma once
 
 #include "platform/dockplatform.h"
+#include "platform/kwinpointermotionwatcher.h"
 
 #include <QObject>
+#include <QModelIndex>
+#include <QVariantList>
 #include <QTimer>
 
 namespace TaskManager
@@ -48,8 +51,9 @@ public:
     ~DockVisibilityController() override;
 
     [[nodiscard]] bool isDockVisible() const;
-    /// Whether the pointer is over the dock or its trigger area.
-    [[nodiscard]] bool isHovered() const;
+    /// Whether the dock is held shown by an interaction lock (context menu,
+    /// preview, drag, settings dialog) or keyboard navigation.
+    [[nodiscard]] bool isInteracting() const;
 
     [[nodiscard]] int mode() const;
     void setMode(int mode);
@@ -81,7 +85,16 @@ public:
     Q_INVOKABLE void setInteracting(bool interacting);
 
     /// Set keyboard navigation active state. Prevents dock from hiding.
-    Q_INVOKABLE void setKeyboardActive(bool active);
+    /// Entering remembers the active window; leaving with @p restoreFocus
+    /// re-activates it, because KWin keeps a layer surface active after its
+    /// keyboard interactivity is dropped. Pass false when leaving because a
+    /// task was just activated (that activation already moves focus).
+    Q_INVOKABLE void setKeyboardActive(bool active, bool restoreFocus = true);
+
+    /// Set internal (reorder) drag active state. Holds the interaction lock and
+    /// grabs layer-shell keyboard interactivity so Escape can cancel the drag;
+    /// the release hands focus back to the previously active window.
+    Q_INVOKABLE void setDragActive(bool active);
 
     /// Current panel rectangle (surface-local coordinates).
     [[nodiscard]] QRect panelRect() const;
@@ -96,6 +109,8 @@ Q_SIGNALS:
     void dockVisibleChanged();
     void modeChanged();
     void panelRectChanged();
+    /// The pointer moved (anywhere on screen) during keyboard navigation.
+    void pointerMovedDuringKeyboardNavigation();
 
 private:
     void evaluateVisibility();
@@ -109,6 +124,18 @@ private:
     [[nodiscard]] bool hasMaximizedOrFullscreenWindow() const;
 
     void connectModelSignals();
+
+    /// Re-activate the window that was active when keyboard interactivity
+    /// (keyboard navigation or internal drag) was first acquired.
+    void restoreReturnTask();
+
+    /// Task (top-level or grouped child) whose window ids equal @p windowIds.
+    [[nodiscard]] QModelIndex findTask(const QVariantList &windowIds) const;
+
+    /// Apply layer-shell keyboard interactivity: exclusive while keyboard
+    /// navigating or dragging, none otherwise. Remembers the active window
+    /// on acquisition and hands focus back on full release.
+    void applyKeyboardInteractivity();
 
     DockPlatform *m_platform;
     TaskManager::TasksModel *m_tasksModel;
@@ -148,6 +175,18 @@ private:
 
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
+
+    // Window ids of the task that was active when keyboard interactivity was
+    // acquired (focus returns there)
+    QVariantList m_returnWindowIds;
+    // Reports pointer motion outside the dock surface while keyboard-navigating
+    KWinPointerMotionWatcher m_pointerMotionWatcher;
+
+    // Internal reorder drag active: dock holds keyboard focus so Escape reaches it
+    bool m_dragActive = false;
+
+    // Layer-shell keyboard interactivity currently requested from the platform
+    bool m_interactivityActive = false;
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;

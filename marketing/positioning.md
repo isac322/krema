@@ -42,7 +42,7 @@ experience.
 
 ### For Accessibility-Minded Users
 **"A dock for everyone."**
-- Full keyboard navigation (Meta+F5 to focus, arrow keys, Enter/Escape)
+- Full keyboard navigation (Meta+Alt+D to focus, arrow keys, Enter/Escape)
 - AT-SPI screen reader support with accessible names and announcements
 - Visual focus ring following KDE accessibility guidelines
 

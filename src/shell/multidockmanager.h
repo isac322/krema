@@ -19,6 +19,7 @@ namespace krema
 
 class DockModel;
 class DockShell;
+class EdgeTrigger;
 class NotificationTracker;
 class SettingsWindow;
 
@@ -95,8 +96,12 @@ private:
 
     // --- Follow Active ---
     void setActiveScreen(QScreen *screen);
+    /// Debounced switch to @p screen (prevents flicker on rapid Alt+Tab).
+    void scheduleActiveScreen(QScreen *screen);
     void onActiveWindowChanged();
-    void onMouseScreenChanged();
+    void onEdgeTriggerHovered(QScreen *screen, bool hovered);
+    /// Map the Mouse-trigger edge strips of the inactive screens only.
+    void updateEdgeTriggers();
     void setShellVisible(DockShell *shell, bool visible);
 
     KremaSettings *m_settings;
@@ -110,6 +115,10 @@ private:
     std::unique_ptr<SettingsWindow> m_settingsWindow;
     std::unordered_map<QScreen *, std::unique_ptr<DockShell>> m_shells;
     QScreen *m_activeScreen = nullptr;
+    QScreen *m_pendingScreen = nullptr;
+    // Follow Active + Mouse/Composite trigger: one edge strip per screen. The
+    // inactive screens' docks are unmapped and get no pointer events.
+    std::unordered_map<QScreen *, std::unique_ptr<EdgeTrigger>> m_edgeTriggers;
 
     QTimer m_topologyDebounce;
     QTimer m_followActiveDebounce;

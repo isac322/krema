@@ -9,6 +9,7 @@
 #include "dockshell.h"
 #include "dockview.h"
 #include "dockvisibilitycontroller.h"
+#include "edgetrigger.h"
 #include "krema.h"
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
@@ -23,6 +24,8 @@
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QScreen>
+
+#include <utility>
 
 Q_LOGGING_CATEGORY(lcMultiDock, "krema.shell.multidock")
 
@@ -44,6 +47,9 @@ MultiDockManager::MultiDockManager(KremaSettings *settings, DockModel *model, No
     // Debounce follow-active screen switches (prevents flicker on rapid Alt+Tab)
     m_followActiveDebounce.setSingleShot(true);
     m_followActiveDebounce.setInterval(300);
+    connect(&m_followActiveDebounce, &QTimer::timeout, this, [this]() {
+        setActiveScreen(std::exchange(m_pendingScreen, nullptr));
+    });
 
     // Monitor screen lifecycle
     connect(qApp, &QGuiApplication::screenAdded, this, &MultiDockManager::onScreenAdded);
@@ -135,7 +141,9 @@ void MultiDockManager::applyMode()
 {
     // Stop follow-active tracking when switching modes
     m_followActiveDebounce.stop();
+    m_pendingScreen = nullptr;
     m_activeScreen = nullptr;
+    m_edgeTriggers.clear();
 
     destroyAllShells();
 
@@ -214,6 +222,11 @@ DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
 
 void MultiDockManager::destroyShellForScreen(QScreen *screen)
 {
+    m_edgeTriggers.erase(screen);
+    if (m_pendingScreen == screen) {
+        m_followActiveDebounce.stop();
+        m_pendingScreen = nullptr;
+    }
     if (auto it = m_shells.find(screen); it != m_shells.end()) {
         qCInfo(lcMultiDock) << "Destroying dock shell for screen:" << screen->name();
         m_shells.erase(it);
@@ -264,22 +277,23 @@ void MultiDockManager::setupFollowActive()
     }
 
     if (trigger == TriggerMouse || trigger == TriggerComposite) {
-        // Event-driven mouse detection: when any dock's visibility controller
-        // detects hover, switch to that screen. This avoids polling QCursor::pos().
-        // Only hover counts: the settings dialog's interaction lock also shows
-        // the hidden docks' controllers, which is not pointer activity.
+        // The inactive screens' docks are unmapped and receive no pointer
+        // events, so each screen gets an edge strip of its own, mapped while
+        // the screen is inactive: the pointer reaching the dock edge there
+        // moves the dock. Event-driven (wl_pointer enter/leave), no polling.
         for (const auto &[screen, shell] : m_shells) {
-            auto *controller = shell->view()->visibilityController();
-            connect(controller, &DockVisibilityController::dockVisibleChanged, this, [this, screen = screen, controller]() {
-                if (m_mode == FollowActive && screen != m_activeScreen && controller->isHovered()) {
-                    m_followActiveDebounce.stop();
-                    connect(&m_followActiveDebounce, &QTimer::timeout, this, [this, screen]() {
-                        setActiveScreen(screen);
-                    });
-                    m_followActiveDebounce.start();
-                }
+            auto *view = shell->view();
+            auto edgeTrigger = std::make_unique<EdgeTrigger>(screen, static_cast<DockPlatform::Edge>(view->edge()));
+            auto *edgeTriggerPtr = edgeTrigger.get();
+            connect(view, &DockView::edgeChanged, edgeTriggerPtr, [edgeTriggerPtr, view]() {
+                edgeTriggerPtr->setEdge(static_cast<DockPlatform::Edge>(view->edge()));
             });
+            connect(edgeTriggerPtr, &EdgeTrigger::hoveredChanged, this, [this, screen = screen](bool hovered) {
+                onEdgeTriggerHovered(screen, hovered);
+            });
+            m_edgeTriggers.emplace(screen, std::move(edgeTrigger));
         }
+        updateEdgeTriggers();
     }
 
     qCInfo(lcMultiDock) << "Follow Active mode initialized, trigger:" << trigger
@@ -310,6 +324,46 @@ void MultiDockManager::setActiveScreen(QScreen *screen)
     // Show new active shell
     m_activeScreen = screen;
     setShellVisible(it->second.get(), true);
+    updateEdgeTriggers();
+}
+
+void MultiDockManager::scheduleActiveScreen(QScreen *screen)
+{
+    m_pendingScreen = screen;
+    m_followActiveDebounce.start();
+}
+
+void MultiDockManager::onEdgeTriggerHovered(QScreen *screen, bool hovered)
+{
+    if (m_mode != FollowActive || screen == m_activeScreen) {
+        return;
+    }
+
+    if (!hovered) {
+        // Left the edge before the debounce elapsed: stay put.
+        if (m_pendingScreen == screen) {
+            m_followActiveDebounce.stop();
+            m_pendingScreen = nullptr;
+        }
+        return;
+    }
+
+    // A context menu, preview, drag, keyboard navigation or the settings
+    // dialog holds the dock shown where it is; do not pull it away.
+    if (auto *active = activeShell(); active && active->view()->visibilityController() && active->view()->visibilityController()->isInteracting()) {
+        qCDebug(lcMultiDock) << "Pointer at the edge of" << screen->name() << "ignored: the active dock is in use";
+        return;
+    }
+
+    qCDebug(lcMultiDock) << "Pointer at the edge of" << screen->name();
+    scheduleActiveScreen(screen);
+}
+
+void MultiDockManager::updateEdgeTriggers()
+{
+    for (const auto &[screen, edgeTrigger] : m_edgeTriggers) {
+        edgeTrigger->setVisible(screen != m_activeScreen);
+    }
 }
 
 void MultiDockManager::onActiveWindowChanged()
@@ -338,12 +392,7 @@ void MultiDockManager::onActiveWindowChanged()
 
         auto *targetScreen = QGuiApplication::screenAt(screenGeo.center());
         if (targetScreen && targetScreen != m_activeScreen) {
-            // Debounce: schedule the switch
-            m_followActiveDebounce.disconnect();
-            connect(&m_followActiveDebounce, &QTimer::timeout, this, [this, targetScreen]() {
-                setActiveScreen(targetScreen);
-            });
-            m_followActiveDebounce.start();
+            scheduleActiveScreen(targetScreen);
         }
         break;
     }
@@ -355,11 +404,11 @@ void MultiDockManager::setShellVisible(DockShell *shell, bool visible)
         return;
     }
 
+    // hide() unmaps the layer surface, which releases its exclusive zone;
+    // show() recreates it with the zone of the current visibility mode.
     if (visible) {
         shell->view()->show();
-        shell->view()->platform()->setExclusiveZone(-1); // Restore exclusive zone
     } else {
-        shell->view()->platform()->setExclusiveZone(0); // Don't reserve space
         shell->view()->hide();
     }
 }

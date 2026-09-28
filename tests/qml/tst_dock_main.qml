@@ -309,8 +309,39 @@ Item {
             verify(its[1].launching)
             verify(!its[0].launching)
             compare(its[1].accessibleDescription, "Starting")
-            // No IsStartup acknowledgement arrives: the 500 ms safety net ends the bounce.
-            tryCompare(its[1], "launching", false, 3000)
+            // No startup task arrives (TasksModel filters them for apps with a
+            // window): the feedback outlives the 500 ms handoff bridge...
+            wait(800)
+            verify(its[1].launching)
+            // ...and ends when the new window joins the group.
+            DockModel.tasksModel.setTaskData(1, "ChildCount", 2)
+            tryCompare(its[1], "launching", false)
+        }
+
+        function test_launchSignalOnActiveAppEndsWithoutNewWindow() {
+            addTasks(["A"], { IsActive: true })
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            DockActions.taskLaunching(0)
+            verify(item.launching)
+            // A single-instance app ignoring the request opens no window: the
+            // no-op detection ends the feedback after the launch feedback timeout.
+            wait(3000)
+            verify(item.launching)
+            tryCompare(item, "launching", false, 5000)
+        }
+
+        function test_launchSignalBouncesLauncherUntilItsWindowMaps() {
+            // A pinned launcher with no startup task (a plain KWin session never
+            // reports one): the click alone must drive the feedback, past the
+            // 500 ms startup handoff, until the launcher row gives way to the app.
+            DockModel.tasksModel.addTask({ display: "Launcher", IsWindow: false, IsLauncher: true })
+            let item = items(makeDock(1))[0]
+            DockActions.taskLaunching(0)
+            verify(item.launching)
+            compare(item.accessibleDescription, "Pinned, Starting")
+            wait(1000)
+            verify(item.launching, "launch feedback dropped before the app's window mapped")
         }
 
         function test_startupNotificationDrivesLaunchState() {
@@ -360,6 +391,26 @@ Item {
             tryCompare(dock, "keyboardNavigating", false)
             compare(DockVisibility.keyboardActive, false)
             compare(DockActions.callsTo("activate").length, 0)
+        }
+
+        function test_pointerMotionOffDockEndsKeyboardNavigation() {
+            addTasks(["A", "B"])
+            let dock = makeDock(2)
+            let its = items(dock)
+            dock.startKeyboardNavigation()
+            DockVisibility.setKeyboardActive(true)
+            PreviewController.startPreviewKeyboardNav()
+            verify(its[0].isKeyboardFocused)
+            DockVisibility.pointerMovedDuringKeyboardNavigation()
+            compare(dock.keyboardNavigating, false)
+            compare(dock.hoveredIndex, -1)
+            verify(!its[0].isKeyboardFocused)
+            compare(DockVisibility.keyboardActive, false)
+            compare(PreviewController.previewKeyboardActive, false)
+            // Keys no longer navigate.
+            keyClick(Qt.Key_Right)
+            compare(dock.hoveredIndex, -1)
+            for (let it of its) tryCompare(it, "currentScale", 1.0)
         }
 
         function test_keyboardVerticalDockUsesUpDown() {
@@ -446,6 +497,34 @@ Item {
             compare(dock._dragActive, false)
             compare(DockVisibility.interacting, false)
             // The drag must not also count as a click.
+            compare(DockActions.callsTo("activate").length, 0)
+        }
+
+        function test_escapeCancelsDragWithoutReorder() {
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            let from = centerOf(its[0])
+            let to = centerOf(its[2])
+            mouseMove(stage, from.x, from.y)
+            tryCompare(dock, "hoveredIndex", 0)
+            mousePress(stage, from.x, from.y, Qt.LeftButton)
+            tryCompare(dock, "_dragPending", true, 2000)
+            mouseMove(stage, to.x, to.y, -1, Qt.LeftButton)
+            tryCompare(dock, "_dragTargetIndex", 2)
+            // The dock grabs the keyboard for the drag so Escape reaches it.
+            compare(DockVisibility.dragActive, true)
+            dock.forceActiveFocus()
+            keyClick(Qt.Key_Escape)
+            compare(dock._dragActive, false)
+            compare(dock._dragTargetIndex, -1)
+            compare(DockVisibility.dragActive, false)
+            compare(DockVisibility.interacting, false)
+            // Moving on with the button still held must not restart the drag.
+            mouseMove(stage, centerOf(its[1]).x, to.y, -1, Qt.LeftButton)
+            compare(dock._dragActive, false)
+            mouseRelease(stage, centerOf(its[1]).x, to.y, Qt.LeftButton)
+            compare(DockActions.callsTo("moveTask").length, 0)
             compare(DockActions.callsTo("activate").length, 0)
         }
     }

@@ -54,18 +54,23 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 - [x] E2E 자동화 하니스 (tests/appium, tests/qml)
   - `tests/appium/run-e2e.sh`: unprivileged Docker 컨테이너 안에서 `kwin_wayland --virtual` + AT-SPI + PipeWire 세션을 띄우고 real input(fake-input)으로 실제 독을 구동. pytest 스위트 `test_01..07` + `test_smoke.py`가 `tests/e2e/scenarios/`의 48개 TC 전부 커버 (오라클: AT-SPI, KWin window list, kremarc, ScreenShot2 스크린샷, AT-SPI 이벤트). 멀티모니터는 `KREMA_E2E_OUTPUT_COUNT=2`. 캡처가 필요한 테스트는 DRM render node 필요 (`modprobe vgem`; macOS는 Lima VM 사용, OrbStack/Docker Desktop VM에는 vgem/vkms 없음)
   - `tests/qml/` (Tier 1, ctest label `qml`): 실제 QML 파일을 offscreen + mock C++ 백엔드로 검증
-  - 문서: `tests/appium/README.md` (Local setup, env vars, Coverage matrix, known bugs), `tests/e2e/README.md` (자동화 반영 + kwin-mcp 한계 테이블 갱신), `docs/kde/lessons-learned.md` §13-14
+  - 문서: `tests/appium/README.md` (Local setup, env vars, Coverage matrix, known bugs 없음 + 새 버그 strict xfail 고정 규칙), `tests/e2e/README.md` (자동화 반영 + kwin-mcp 한계 테이블 갱신), `docs/kde/lessons-learned.md` §13-14
   - Harness notes: 세션당 하나의 장수명 inputsynth가 KWin fake-input pointer device를 세션 전체에 등록해 둠 (`krema_e2e/input.py`의 `hold_pointer_capability`, `pytest_plugin.py`의 세션 fixture `_pointer_capability`). 호출마다 device를 만들면 KWin이 seat pointer capability를 잃고 Qt가 leave 없이 wl_pointer를 release → 느린 CI에서 stuck hover flake가 발생. `KREMA_E2E_DOCKER_ARGS`로 docker run 옵션 전달 가능 (예: `--cpus=2`로 CI 재현).
 
 - [x] Tier 3 배포판별 컨테이너 E2E (tests/distro) — 기존 풀 세션 VM QA 방식을 컨테이너 방식으로 교체 (VM 인프라 + 워크플로 삭제됨)
   - `tests/distro/build-package.sh <target>`: repo의 packaging(spec/debian/PKGBUILD)으로 타겟 패키지 빌드 (캐시 `tests/distro/.cache/`)
   - `tests/distro/run-distro-e2e.sh <target>`: 타겟 배포판 이미지에 패키지를 패키지 매니저로 설치 후 Tier 2 AT-SPI 스위트(tests/appium)를 `/usr/bin/krema`에 대해 실행. KWin permission checks ON(`KWIN_WAYLAND_NO_PERMISSION_CHECKS=0`) — 설치된 `com.bhyoo.krema.desktop`의 `X-KDE-Wayland-Interfaces` 선언 검증
   - 로컬: Linux Docker 호스트 + platform-bus vgem (`sudo tests/appium/setup-vgem.sh`); macOS는 OrbStack에 DRM이 없어 캡처 테스트 불가 → vgem을 올린 Lima VM 사용 (검증도 그렇게 함)
-  - CI: `.github/workflows/distro-e2e.yml` (PR/push/release/workflow_dispatch, 타겟별 matrix job) — https://github.com/isac322/krema/actions/runs/36421577648 attempts 1,2 모두 12/12 통과. 기대 결과: arch/slowroll/tumbleweed/fedora-43/44/rawhide `68 passed, 4 skipped, 8 xfailed`; fedora-42/leap-16.0/ubuntu-25.10/26.04 `66/4/10`; debian-13/ubuntu-25.04 `64/4/12` (master #40/#42/#43 rebase 후 MOUSE-009·SET-010 추가, 푸시 줌 검증 반영) (상세: `tests/distro/README.md`)
+  - CI: `.github/workflows/distro-e2e.yml` (PR/push/release/workflow_dispatch, 타겟별 matrix job) — 이전 기준 https://github.com/isac322/krema/actions/runs/36421577648 attempts 1,2 모두 12/12 통과. xfail 버그 수정(`fix/e2e-xfail-bugs`) 이후 기대 결과: 12개 타겟 전부 Tier 2와 동일한 `77 passed, 4 skipped, 0 xfailed` (라이브러리 차이는 하니스에서 Qt AT-SPI 역할/extent로 흡수) (상세: `tests/distro/README.md`)
+
+- [x] E2E 스위트가 strict xfail로 고정했던 krema 버그 전부 수정 (`fix/e2e-xfail-bugs`; CI E2E 1-output `77 passed, 4 skipped`, 2-output `4 passed`, xfail 0):
+  - KBD-007 프리뷰 input region = 보이는 팝업 (AlwaysVisible exclusive zone 대비 팝업 마진 포함), KBD-008 포인터 이동 시 키보드 모드 종료(KWin 스크립트 포인터 감시), KBD-009 키보드 내비/드래그 후 이전 윈도우로 포커스 복귀
+  - MOUSE-001 press 시 hover 아이템 재계산, MOUSE-002/006 새 윈도우가 map될 때까지 launch bounce (5 s no-op 컷오프)
+  - DND-004 Escape로 드래그 취소 (드래그 중 독이 키보드를 잡고 이후 포커스 반환), SET-008 EdgeTrigger 스트립이 포인터를 따라 다른 화면으로, VIS-001 AlwaysVisible exclusive zone
+  - SET-002/006 LayerShellQt < 6.4 compat resize 수정, #43 이후 stale-hover 프리뷰 수정 (`test_03_preview.py::test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving` 추가, `open_settings` 회피 코드 제거)
+  - 기본 Focus Dock 단축키 Meta+F5 → **Meta+Alt+D** (KWin MoveMouseToFocus 충돌 해소, 기존 Meta+F5 사용자는 자동 이전; KBD-001/VIS-006, 테스트명 `test_kbd001_meta_alt_d_focuses_first_dock_item`)
 
 ## 알려진 이슈
-
-- 푸시 줌(#43) 이후: 독이 새 태스크 행으로 재정렬되는 도중 포인터가 열린 미리보기를 거쳐 독을 떠나면 창 미리보기가 포인터와 무관하게 열린 채 남을 수 있음 (결정적 재현 미확보, `test_06_settings.py::open_settings`에서 레이아웃 안정화 대기로 회피; 상세 `tests/appium/README.md`)
 
 - AllScreens/FollowActive: 실제 듀얼 모니터에서 검증 필요
 - QML fade/slide 전환 애니메이션 미구현 (현재 instant show/hide)
@@ -75,20 +80,6 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 - 현재 OBS 원격 DEB artifacts는 `libkirigami2-6`, `kpipewire` Depends 때문에 Debian 13/Ubuntu 25.04/25.10/26.04에 설치 불가; 수정된 `packaging/obs/debian.control`로 재빌드 필요. 임시 repack 검증에서는 Debian 13/Ubuntu 25.04/25.10/26.04 4개 전부 GUI smoke 통과
 - 현재 OBS 원격 openSUSE RPM artifacts는 `kf6-kirigami-addons`/`kpipewire`/`plasma-workspace`/`layer-shell-qt` Requires가 Tumbleweed/Leap 16.0/Slowroll 패키지명과 불일치; 수정된 `packaging/obs/krema.spec`로 재빌드 필요. 기존 artifact + `krema-suse-compat-provides` 조합으로는 Tumbleweed/Leap 16.0 GUI smoke 통과
 - Slowroll OBS artifact는 x86_64만 제공되며 현재 arm64 Docker 호스트는 binfmt에 `qemu-x86_64` 핸들러가 없어 amd64 컨테이너 실행이 `exec format error`로 막힘. Arch에서는 `yay -S qemu-user-static qemu-user-static-binfmt` 후 `systemctl restart systemd-binfmt`(또는 재로그인) 하면 `tests/docker/run-smoke.sh opensuse-slowroll <package-dir>`로 검증 가능. x86_64 컴팩트 RPM은 `/tmp/opencode/krema-fixed-artifacts/opensuse-slowroll/`에 준비됨 (`krema-0.7.0-18.1.x86_64.rpm`, `krema-suse-compat-provides-0.7.0-1.x86_64.rpm`)
-- E2E 스위트가 발견한 krema 버그 9건 (strict xfail로 고정; 상세: `tests/appium/README.md` "Known krema bugs"):
-  - 프리뷰 input region이 수평 독에서 surface 전체 높이를 덮음 → Delete 후 pointer focus가 보이지 않는 영역에 재진입해 키보드 내비 종료 (KBD-007 pointer-at-centre)
-  - 독 밖으로의 포인터 이동이 키보드 내비게이션을 종료하지 않음 (KBD-008)
-  - Escape 후 이전 활성 윈도우로 포커스가 돌아가지 않아 SmartHide가 재숨김하지 않음 (KBD-009 smarthide)
-  - 포인터 모션 없이 발생한 클릭이 정지 포인터 아래로 나타난/이동한 아이템에 도달하지 않음 — `updateHoveredItem()`가 `dockMouseArea.onPositionChanged`에서만 호출되고 `onClicked`가 stale `root.hoveredIndex` 사용 (`src/qml/main.qml` ~484-498, ~511-574) (MOUSE-001)
-  - startup task가 없을 때 pinned launcher 클릭에 launch bounce 없음 (MOUSE-002)
-  - middle-click 새 인스턴스의 launch bounce가 새 윈도우가 map되기 전에 끝남 — startup task가 없으면 `launchSafetyTimer`(`src/qml/DockItem.qml`)가 500ms 후 `manualLaunching`을 해제 (MOUSE-006)
-  - Escape가 진행 중인 드래그를 취소하지 않음 (DND-004)
-  - Follow active + Mouse trigger가 포인터의 화면으로 독을 이동하지 않음 (SET-008)
-  - AlwaysVisible이 exclusive zone을 예약하지 않아 최대화 윈도우가 독 아래로 확장됨 (VIS-001)
-- 구 라이브러리에서만 드러나는 조건부 strict xfail (Tier 3 distro 타겟에서 확인):
-  - LayerShellQt < 6.4 (`KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE`, debian-13/ubuntu-25.04): `src/shell/dockview.cpp`이 double-anchored 축에 0을 넘기면 compat 경로(`src/platform/waylanddockplatform.cpp:139-142`)가 `m_window->resize(QSize(0, h))`로 윈도우를 0px 너비로 만들어 surface가 재커밋되지 않음 → 독 크기/edge 변경이 재시작까지 적용되지 않음 (SET-002, SET-006). 제안 수정: `resize(QSize(width(), h))` (미적용)
-  - kglobalacceld < 6.7 (fedora-42/leap-16.0/ubuntu-25.10/26.04/debian-13/ubuntu-25.04): 경쟁 키를 드롭 → krema 기본 Meta+F5가 KWin MoveMouseToFocus에 밀려 언바인드됨. 실제 Meta+F5 테스트(kbd001)와 auto-hide 키보드 내비 테스트(vis006)가 xfail
-- 제품 발견사항: 기본 Focus Dock 단축키 Meta+F5가 KWin 기본값 MoveMouseToFocus와 충돌 → stock KWin에서 실제 Meta+F5가 krema에 도달하지 않음
 - 배포판 패키지 검증 중 발견: `krema --version`이 버전을 출력하지 않음 (명령행 파서 없음), 번역 도메인 미설정 (`KLocalizedString::setApplicationDomain` 없음 → `Domain is not set` 경고, i18n 미적용)
 
 ## 다음 작업
@@ -97,7 +88,6 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 - M8b 잔여: PipeWire 글로벌 스트림 캡, 앱 목록 필터 정책 토글(all apps vs per-screen)
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
-- E2E 스위트 strict xfail 버그 9건 수정 (위 알려진 이슈 참조) — 수정하면 XPASS로 드러나므로 마커 제거 필요
 - `distro-e2e.yml`은 기본 브랜치에 머지된 뒤에야 workflow_dispatch 가능
 - PR #32 머지 후 첫 Pages 배포 → GitHub Pages 인증서 발급 확인 → HTTPS 강제 (DNS·repo 설정은 homelab #355로 적용 완료)
 - 로그인 필요 채널 등록: OBS 프로젝트 title/description(`packaging/obs/project.meta.xml`), Launchpad PPA 설명/프로젝트 로고, KDE Store, AlternativeTo(Latte Dock 대안), Flathub 제출

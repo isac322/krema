@@ -18,7 +18,7 @@ from PIL import Image
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import ITEMS_XPATH, DescriptionChanges, Krema, Rect, painted_rect
-from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
+from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
 APP1, APP2 = env.TEST_APP_ID, env.TEST_APP2_ID
@@ -215,19 +215,6 @@ def test_mouse001_left_click_activates_and_unminimizes_running_app(krema: Krema,
     assert active.title == "First"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=WaitTimeout,
-    reason=(
-        "krema bug: the dock resolves a click through root.hoveredIndex, which only updateHoveredItem() "
-        "sets. That runs from dockMouseArea.onPositionChanged (main.qml ~591, onClicked ~564) and, since the "
-        "push-aside zoom, from dockPanel.scheduleHoverUpdate() (~891) when zoomed icons move under a tracked "
-        "pointer. When an item appears (or the layout shifts) in an unzoomed dock under a resting pointer, "
-        "nothing re-evaluates the item under it: hoveredIndex stays -1 (or stale) and a click without prior "
-        "motion is dropped (onClicked returns on hoveredIndex < 0). Seen as the ctx001 flake when a test "
-        "started with the pointer resting on the spot where its dock item appeared"
-    ),
-)
 def test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer(krema: Krema, apps: TestWindows) -> None:
     """A user whose pointer rests on the dock where an app's icon then
     appears clicks without moving: the click must go to that icon."""
@@ -286,27 +273,22 @@ def test_mouse002_left_click_launches_pinned_app(krema: Krema) -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "krema bug: clicking a pinned launcher shows no launch bounce when the task model reports no startup "
-        "task. main.qml onTaskLaunching skips manualLaunching for launchers (comment: 'IsStartup fires within "
-        "~5ms'), so DockItem.launching depends solely on IsStartup; in a real KWin 6 session the launcher row is "
-        "replaced directly by the window row (krema.model: rows remove/insert only when the window maps, no "
-        "startup row, no 'Starting' description) and the icon lift stays 0 px for the whole 3 s launch"
-    ),
-)
 @pytest.mark.no_krema_autostart
 @pytest.mark.kremarc({"PinnedLaunchers": [config.launcher(SLOW_ID)], **QUIET_HOVER})
 def test_mouse002_pinned_launch_bounces(krema: Krema) -> None:
     _require_capture()
     _install_slow_launcher(krema)
     krema.start()
+    rest = wait_stable(lambda: krema.screen_rect(krema.item(SLOW_NAME)))
     krema.hover_item(SLOW_NAME)
-    item = wait_stable(lambda: krema.screen_rect(krema.item(SLOW_NAME)))
+    # The hovered icon is zoomed: where it is drawn comes from painted_rect
+    # (Qt < 6.9 reports zoomed extents with the unscaled size).
+    item = wait_stable(lambda: painted_rect(krema.screen_rect(krema.item(SLOW_NAME)), rest))
     ref = _pixels(krema.screenshot("hovered"))
 
-    krema.click_item(SLOW_NAME)
+    # Click where the pointer already rests: a click at a centre recomputed
+    # from the zoomed extents would move the pointer and the zoom layout.
+    inp.click()
 
     lift = _max_lift_while_launching(krema, ref, item, SLOW_ID, 0, "launch")
     assert len(_app_windows(SLOW_ID)) == 1, "the app launched"
@@ -514,10 +496,10 @@ def test_mouse005_scroll_wheel_cycles_grouped_windows(krema: Krema, apps: TestWi
 
 # ------------------------------------------------------------------ MOUSE-006
 # The launch bounce runs while DockItem.launching is true, which is exactly
-# while the item's description carries "Starting". A window item is launching
-# only for launchSafetyTimer's 500 ms when no startup task arrives, too short
-# for a screenshot poll to catch reliably, so the feedback is observed as
-# AT-SPI description events recorded from before the click.
+# while the item's description carries "Starting". A window item never gets a
+# startup task (TasksModel filters those of apps with a window), so its feedback
+# is observed as AT-SPI description events recorded from before the click,
+# which needs no screenshot capture.
 def _starting_seen(changes: DescriptionChanges) -> bool:
     return any("Starting" in t for t in changes.texts("krema"))
 
@@ -568,16 +550,6 @@ class LaunchFeedbackEndedEarly(AssertionError):
     """The launch feedback ended while the new instance had no window yet."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=LaunchFeedbackEndedEarly,
-    reason=(
-        "krema bug: a middle-click new instance bounces for 500 ms only. main.qml sets manualLaunching on the "
-        "window item; with no startup task (none in a KWin 6 session: IsStartup never turns true) "
-        "DockItem.qml launchSafetyTimer clears it after 500 ms, so launching, the bounce and the 'Starting' "
-        "description end while the app is still starting (here 3 s before its window maps)"
-    ),
-)
 @pytest.mark.no_krema_autostart
 @pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
 def test_mouse006_launch_bounce_lasts_until_the_new_window_maps(krema: Krema, apps: TestWindows) -> None:

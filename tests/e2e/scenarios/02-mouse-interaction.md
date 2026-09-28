@@ -46,7 +46,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - If kcalc was minimized, it un-minimizes
 
 **Verification:** screenshot (kcalc in foreground), list_windows (kcalc present)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app, tests/appium/test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer (strict xfail for a krema bug)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app, tests/appium/test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer
 
 ---
 
@@ -65,7 +65,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - Indicator dot appears under the icon
 
 **Verification:** list_windows (new window), screenshot (indicator dot)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces, strict xfail for a krema bug)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces)
 
 ---
 
@@ -160,12 +160,12 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 
 **Expected:**
 - One additional kcalc process appears (separate entry in list_windows)
-- Bounce animation plays on the dock icon (screenshot verification)
+- Bounce animation plays on the dock icon until the new window maps (screenshot verification); if the app is already active and no new window appears within 5s (single-instance no-op), the bounce stops
 
 **Verified in PoC:** kcalc went from 1 to 2 separate process entries.
 
 **Verification:** list_windows (kcalc entry count increased by 1)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse006_middle_click_launches_new_instance (bounce until the new window maps: tests/appium/test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps, strict xfail for a krema bug)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse006_middle_click_launches_new_instance (bounce until the new window maps: tests/appium/test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps)
 
 ---
 

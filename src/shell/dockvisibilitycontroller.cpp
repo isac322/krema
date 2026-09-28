@@ -84,6 +84,14 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
         });
     }
 
+    // Wayland gives the dock no pointer events while the pointer is over other
+    // windows; KWin reports that motion so keyboard navigation can end.
+    connect(&m_pointerMotionWatcher, &KWinPointerMotionWatcher::pointerMoved, this, [this]() {
+        if (m_keyboardActive) {
+            Q_EMIT pointerMovedDuringKeyboardNavigation();
+        }
+    });
+
     connectModelSignals();
 }
 
@@ -94,9 +102,9 @@ bool DockVisibilityController::isDockVisible() const
     return m_visible;
 }
 
-bool DockVisibilityController::isHovered() const
+bool DockVisibilityController::isInteracting() const
 {
-    return m_hovered;
+    return m_interactingCount > 0 || m_keyboardActive;
 }
 
 int DockVisibilityController::mode() const
@@ -282,28 +290,122 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     applyInputRegion();
 }
 
-void DockVisibilityController::setKeyboardActive(bool active)
+void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
 {
     if (m_keyboardActive == active) {
         return;
     }
     m_keyboardActive = active;
-    qCDebug(lcVisibility) << "Keyboard navigation active:" << active;
+    qCDebug(lcVisibility) << "Keyboard navigation active:" << active << "restoreFocus:" << restoreFocus;
 
-    // Toggle layer-shell keyboard interactivity with the navigation state
-    m_platform->setKeyboardInteractivity(active);
+    // The ending action activated a task itself and that activation already
+    // moved focus: forget the remembered window so the release of keyboard
+    // interactivity (a drag may still hold it) does not steal focus back.
+    if (!active && !restoreFocus) {
+        m_returnWindowIds.clear();
+    }
 
     if (active) {
+        m_pointerMotionWatcher.arm();
         m_hideTimer.stop();
         m_evaluateTimer.stop();
         setVisible(true);
     } else {
+        m_pointerMotionWatcher.disarm();
+
         // When keyboard navigation ends and mouse is not hovering, start hide timer
         if (m_interactingCount == 0 && !m_hovered) {
             if (m_mode != DockPlatform::VisibilityMode::AlwaysVisible) {
                 m_hideTimer.start();
             }
         }
+    }
+
+    // Store/restore of the previously active window lives in
+    // applyKeyboardInteractivity(): it is shared with internal drags.
+    applyKeyboardInteractivity();
+}
+
+void DockVisibilityController::restoreReturnTask()
+{
+    // Dropping layer-shell keyboard interactivity does not deactivate the dock:
+    // KWin (LayerShellV1Window::handleAcceptsFocusChanged) only activates a
+    // layer surface when it gains focus and never hands focus back. The dock
+    // would stay the active window, keeping keys away from the user's window
+    // and hiding the active window from DodgeActiveOnly (SmartHide).
+    if (!m_tasksModel || m_returnWindowIds.isEmpty()) {
+        return;
+    }
+    // The user moved focus to another window meanwhile: leave it there.
+    const QModelIndex current = m_tasksModel->activeTask();
+    if (current.isValid() && current.data(TaskManager::AbstractTasksModel::WinIdList).toList() != m_returnWindowIds) {
+        return;
+    }
+    const QModelIndex task = findTask(m_returnWindowIds);
+    // Closed meanwhile, or minimized while the dock held focus: don't undo that.
+    if (!task.isValid() || task.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
+        return;
+    }
+    qCDebug(lcVisibility) << "Returning focus to" << task.data(Qt::DisplayRole).toString();
+    m_tasksModel->requestActivate(task);
+}
+
+QModelIndex DockVisibilityController::findTask(const QVariantList &windowIds) const
+{
+    // Look the task up by window ids at restore time: a model index taken when
+    // the dock grabbed focus does not survive a reorder (TasksModel::move() +
+    // syncLaunchers() reset the launcher rows the window task is merged into).
+    const auto matches = [&windowIds](const QModelIndex &index) {
+        return index.data(TaskManager::AbstractTasksModel::WinIdList).toList() == windowIds;
+    };
+    for (int row = 0; row < m_tasksModel->rowCount(); ++row) {
+        const QModelIndex task = m_tasksModel->index(row, 0);
+        if (matches(task)) {
+            return task;
+        }
+        for (int child = 0; child < m_tasksModel->rowCount(task); ++child) {
+            const QModelIndex window = m_tasksModel->index(child, 0, task);
+            if (matches(window)) {
+                return window;
+            }
+        }
+    }
+    return {};
+}
+
+void DockVisibilityController::setDragActive(bool active)
+{
+    if (m_dragActive == active) {
+        return;
+    }
+    m_dragActive = active;
+    qCDebug(lcVisibility) << "Internal drag active:" << active;
+
+    // A pointer drag gives the dock no keyboard focus by itself; grab it so
+    // Escape can cancel the drag. Released as soon as the drag ends.
+    applyKeyboardInteractivity();
+    setInteracting(active);
+}
+
+void DockVisibilityController::applyKeyboardInteractivity()
+{
+    const bool interactive = m_keyboardActive || m_dragActive;
+    if (interactive == m_interactivityActive) {
+        return;
+    }
+    if (interactive) {
+        // Remember the active window before the dock takes keyboard focus:
+        // KWin activates the dock surface once it becomes keyboard-interactive
+        // (keyboard navigation or a drag) and never hands focus back.
+        if (m_tasksModel) {
+            m_returnWindowIds = m_tasksModel->activeTask().data(TaskManager::AbstractTasksModel::WinIdList).toList();
+        }
+    }
+    m_interactivityActive = interactive;
+    m_platform->setKeyboardInteractivity(interactive);
+    if (!interactive) {
+        restoreReturnTask();
+        m_returnWindowIds.clear();
     }
 }
 

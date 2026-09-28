@@ -21,7 +21,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -49,7 +49,7 @@ jobs:
             echo "$CHANGED"
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.changed.outputs.has_changes == 'true'
         with:
           python-version: "3.12"
@@ -67,7 +67,7 @@ jobs:
         if: >
           github.event_name == 'pull_request' &&
           steps.changed.outputs.has_changes == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const report = `${{ steps.check.outputs.report }}`;

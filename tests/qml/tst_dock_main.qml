@@ -393,6 +393,26 @@ Item {
             compare(DockActions.callsTo("activate").length, 0)
         }
 
+        function test_pointerMotionOffDockEndsKeyboardNavigation() {
+            addTasks(["A", "B"])
+            let dock = makeDock(2)
+            let its = items(dock)
+            dock.startKeyboardNavigation()
+            DockVisibility.setKeyboardActive(true)
+            PreviewController.startPreviewKeyboardNav()
+            verify(its[0].isKeyboardFocused)
+            DockVisibility.pointerMovedDuringKeyboardNavigation()
+            compare(dock.keyboardNavigating, false)
+            compare(dock.hoveredIndex, -1)
+            verify(!its[0].isKeyboardFocused)
+            compare(DockVisibility.keyboardActive, false)
+            compare(PreviewController.previewKeyboardActive, false)
+            // Keys no longer navigate.
+            keyClick(Qt.Key_Right)
+            compare(dock.hoveredIndex, -1)
+            for (let it of its) tryCompare(it, "currentScale", 1.0)
+        }
+
         function test_keyboardVerticalDockUsesUpDown() {
             DockView.edge = 3
             addTasks(["A", "B"])

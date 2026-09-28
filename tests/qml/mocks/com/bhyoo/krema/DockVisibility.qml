@@ -19,6 +19,7 @@ QtObject {
     function setHovered(v) { _record("setHovered", arguments); hovered = v }
     function setInteracting(v) { _record("setInteracting", arguments); interacting = v }
     function setKeyboardActive(v) { _record("setKeyboardActive", arguments); keyboardActive = v }
+    signal pointerMovedDuringKeyboardNavigation()
 
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["calls", "dockVisible", "hovered", "interacting", "keyboardActive", "panelRect"]

@@ -12,6 +12,8 @@ add_library(krema_lib STATIC
     platform/dockplatform.h
     platform/dockplatformfactory.h
     platform/dockplatformfactory.cpp
+    platform/kwinpointermotionwatcher.h
+    platform/kwinpointermotionwatcher.cpp
     platform/waylanddockplatform.h
     platform/waylanddockplatform.cpp
 

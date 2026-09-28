@@ -24,6 +24,8 @@
 - src/shell/dockvisibilitycontroller.cpp
 - src/platform/waylanddockplatform.h
 - src/platform/waylanddockplatform.cpp
+- src/platform/kwinpointermotionwatcher.h
+- src/platform/kwinpointermotionwatcher.cpp
 - src/app/application.cpp
 
 ---
@@ -204,7 +206,7 @@
 
 **Verification:** accessibility_tree (no button `focused`)
 
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_cancels_keyboard_mode (strict xfail: krema bug, motion off the dock does not cancel keyboard mode)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_cancels_keyboard_mode
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_over_dock_cancels_keyboard_mode
 
 ---

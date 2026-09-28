@@ -369,15 +369,6 @@ def test_kbd007_delete_closes_focused_thumbnail_window(krema: Krema, apps: TestW
 
 
 # ---------------------------------------------------------------------- KBD-008
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "krema bug: keyboard mode is only cancelled by dockMouseArea.onPositionChanged (src/qml/main.qml), "
-        "i.e. pointer motion over the dock surface. Wayland delivers motion only to the surface under the "
-        "pointer, so moving the mouse elsewhere on screen (400,300) leaves keyboard mode on and the dock "
-        "button keeps the focused state"
-    ),
-)
 def test_kbd008_mouse_movement_cancels_keyboard_mode(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["Mouse One", "Mouse Two"])
     inp.move(40, 40)

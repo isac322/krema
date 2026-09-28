@@ -61,6 +61,8 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - M9: Widget System + System Tray
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
-- homelab PR #355 머지(Terraform PAT에 krema Administration/Pages 권한 추가 후) → krema.bhyoo.com CNAME·homepage 적용, 이후 Pages HTTPS 강제
-- Krema 버그: `src/qml/main.qml` onRowsInserted가 PreviewEnabled=false여도 hover 중인 런처의 창이 뜨면 미리보기 팝업을 엶 (branding/clips 촬영 중 발견)
+- PR #32 머지 후 첫 Pages 배포 → GitHub Pages 인증서 발급 확인 → HTTPS 강제 (DNS·repo 설정은 homelab #355로 적용 완료)
+- Krema 버그: `src/qml/main.qml` onRowsInserted가 PreviewEnabled=false여도 hover 중인 런처의 창이 뜨면 미리보기 팝업을 엶 (branding/clips 촬영 중 발견, launch/middle 클립에 팝업이 잠깐 보임)
+- Krema 버그: Plasma 6.7에서 `Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem")`가 조용히 실패해 진행률 막대·Unity 배지가 표시되지 않음 (모듈이 applet .so로 컴파일돼 QML 경로에 없음)
+- 창 미리보기 썸네일 영상: GPU/DRM 렌더 노드가 있는 호스트 필요 (OrbStack VM엔 /dev/dri·vgem·vkms 없음)
 - 로그인 필요 채널 등록: OBS 프로젝트 title/description(`packaging/obs/project.meta.xml`), Launchpad PPA 설명/프로젝트 로고, KDE Store, AlternativeTo(Latte Dock 대안), Flathub 제출

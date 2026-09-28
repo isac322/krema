@@ -59,7 +59,7 @@
 
 | Feature | User Benefit | Differentiator | Status |
 |---------|-------------|----------------|--------|
-| Keyboard Navigation | Meta+F5 focus, arrow keys, Enter/Escape | Full keyboard control | M7 |
+| Keyboard Navigation | Meta+Alt+D focus, arrow keys, Enter/Escape | Full keyboard control | M7 |
 | AT-SPI Screen Reader | Accessible names, roles, and announcements | Inclusive design | M7 |
 | Visual Focus Ring | Clear focus indicator with Kirigami styling | KDE-native a11y | M7 |
 | Preview Keyboard Access | Navigate preview thumbnails via keyboard | Unique a11y depth | M7 |
@@ -93,7 +93,7 @@
 3. **6 background styles** including acrylic frosted glass and Mica
 4. **Deep KDE integration** — 8+ KDE libraries, not a generic Qt app
 5. **Wayland-native** — Layer Shell protocol, no X11 compatibility layers
-6. **Full keyboard accessibility** — Meta+F5 navigation with AT-SPI screen reader support
+6. **Full keyboard accessibility** — Meta+Alt+D navigation with AT-SPI screen reader support
 7. **Global keyboard shortcuts** — Meta+1-9 for instant app access
 8. **Mouse wheel window cycling** — unique UX innovation
 9. **Icon size normalization** — auto-detect padding for uniform icon appearance

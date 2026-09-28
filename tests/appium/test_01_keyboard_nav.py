@@ -20,8 +20,8 @@ from PIL import Image
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import Krema, Rect, has_state, painted_rect
-from krema_e2e.shortcuts import FOCUS_DOCK_KEY_DROPPED, FOCUS_DOCK_KEY_DROPPED_REASON, invoke_shortcut, set_shortcut_keys, shortcut_keys
-from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
+from krema_e2e.shortcuts import META_ALT_D, invoke_shortcut, shortcut_keys
+from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
 # Three distinct app ids so every window is its own (ungrouped) dock item,
@@ -157,21 +157,21 @@ def _assert_dock_keyboard_entry(krema: Krema, first: str, rest: dict[str, Rect])
         assert ring > 200 and ring > 3 * plain, f"no focus ring on {first!r}: {ring} blue px focused vs {plain} unfocused"
 
 
-@pytest.mark.xfail(FOCUS_DOCK_KEY_DROPPED, strict=True, raises=WaitTimeout, reason=FOCUS_DOCK_KEY_DROPPED_REASON)
-def test_kbd001_meta_f5_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
+def test_kbd001_meta_alt_d_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["First", "Second"])
     park_pointer()
     rest = item_rects(krema)
     assert focused_items(krema) == []
+    # The default key must survive registration: no stock Plasma component
+    # claims it, so kglobalacceld (any version) keeps it for krema.
+    wait_until(
+        lambda: shortcut_keys("focus-dock") == [META_ALT_D],
+        message=lambda: f"krema focus-dock bound to Meta+Alt+D (keys: {shortcut_keys('focus-dock')})",
+    )
 
-    # KWin's default "Move Mouse to Focus" also owns Meta+F5 and wins; free it.
-    kwin_keys = shortcut_keys("MoveMouseToFocus", component="kwin")
-    set_shortcut_keys("MoveMouseToFocus", [], component="kwin")
-    try:
-        inp.key("Meta", "F5")
-        _assert_dock_keyboard_entry(krema, "First", rest)
-    finally:
-        set_shortcut_keys("MoveMouseToFocus", kwin_keys, component="kwin")
+    inp.key("Meta", "Alt", "d")
+
+    _assert_dock_keyboard_entry(krema, "First", rest)
 
 
 def test_kbd001_focus_dock_shortcut_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:

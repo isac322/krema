@@ -89,11 +89,16 @@ def test_prev001_hover_opens_preview_above_dock_with_live_thumbnails(krema: Krem
         assert krema.find(pv.close_xpath(title)) is not None, f"close button of {title!r}"
         assert krema.find(f"{pv.thumb_xpath(title)}/label").get_attribute("name") == title
 
-    # Above the (bottom) dock, horizontally over the hovered item.
+    # Above the (bottom) dock, horizontally over the hovered item, right where
+    # the dock surface (panel bar + zoom headroom) ends: no gap in between, in
+    # the default AlwaysVisible mode too, where the dock reserves its panel
+    # bar as exclusive zone.
     popup_rect = pv.screen_rect(krema, popup)
     item = krema.screen_rect(krema.item(APP))
     assert popup_rect.y + popup_rect.height <= item.y, f"popup {popup_rect} not above item {item}"
     assert popup_rect.x <= item.center[0] <= popup_rect.x + popup_rect.width
+    dock = krema.surface_rect("dock")
+    assert abs(dock.y - (popup_rect.y + popup_rect.height)) <= 8, f"popup {popup_rect} detached from the dock surface {dock}"
 
     # Live PipeWire thumbnails: each shows its own window's content color.
     image = _wait_thumbnail_color(krema, "Red", pv.is_red, "prev001-red")

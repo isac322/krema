@@ -21,6 +21,11 @@
     const FADE = 180; // stage crossfade, ms (matches shots.css)
     const TAP_DRIFT = 10; // px of finger travel that turns a tap into a scrub
     const SCROLL_IDLE = 400; // ms after the last row scroll before the zoom settles
+    const EDGE = 0.15; // share of the row width at each end that scrolls it on hover
+    const EDGE_SPEED = 720; // px/s with the pointer at the very edge
+    const EDGE_TAU = 110; // ms; how quickly the glide speed follows the pointer
+    const GLIDE_TAU = 70; // ms; how quickly a wheel or keyboard glide reaches its target
+    const WHEEL_LINE = 33; // px per wheel "line" (Firefox reports lines, not pixels)
 
     // ---------- Model: one entry per figure, tile built from its data ----------
 
@@ -105,12 +110,25 @@
     let scrolling = false;
     let scrollTimer = 0;
     let touch = null; // { id, x0, dragged }
+    let glideFrame = 0; // edge hover + wheel glide, see the picker section below
+    let glideLast = 0;
+    let glidePos = 0; // fractional scrollLeft; the browser may round the real one
+    let edgeVel = 0; // px/s
+    let glideTarget = null; // scrollLeft a wheel or keyboard glide is heading for
+    let edgeHold = false; // wheel or keyboard input pauses the edge until the mouse moves
+    let mouseXY = ""; // last mouse position, to tell a real move from a repeat event
 
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(render);
     };
 
     dock.hidden = false;
+    // The rail holds the row and draws the edge chevrons: the row's own mask
+    // and scrolling would fade or carry anything drawn inside it.
+    const rail = document.createElement("div");
+    rail.className = "ex-rail";
+    dock.before(rail);
+    rail.append(dock);
     toggle.hidden = false;
     ex.classList.add("is-pending"); // keeps the space, shows nothing until an item checks out
 
@@ -197,7 +215,10 @@
         if (user && live) live.textContent = `${c.name}. ${c.line}`.trim();
         sync();
       }
-      if (focus) c.tile.focus();
+      if (focus) {
+        c.tile.focus({ preventScroll: true });
+        reveal(c);
+      }
     };
 
     const neighbour = (from, step) => {
@@ -340,6 +361,7 @@
       auto = false;
       writeToggle();
       sync();
+      stopGlide();
     };
     if (motionQuery.addEventListener) motionQuery.addEventListener("change", onMotionChange);
 
@@ -461,13 +483,16 @@
       else if (scrolling) x = dock.scrollLeft + dock.clientWidth / 2;
       else if (focusClip && focusClip.ready) x = focusClip.center;
       dock.classList.toggle("is-tracking", pointerX !== null || scrolling);
-      // A scrolling row fades out on whichever side still has tiles to reveal.
-      if (m.scroll) {
-        dock.classList.toggle("has-more-start", dock.scrollLeft > 2);
-        dock.classList.toggle("has-more-end", dock.scrollLeft < m.maxScroll - 2);
-      } else {
-        dock.classList.remove("has-more-start", "has-more-end");
+      // A scrolling row fades out on whichever side still has tiles to reveal;
+      // the rail around it draws a chevron in each fade.
+      const moreStart = m.scroll && dock.scrollLeft > 2;
+      const moreEnd = m.scroll && dock.scrollLeft < m.maxScroll - 2;
+      for (const el of [dock, rail]) {
+        el.classList.toggle("has-more-start", moreStart);
+        el.classList.toggle("has-more-end", moreEnd);
       }
+      rail.classList.toggle("is-edge-start", edgeVel < -1);
+      rail.classList.toggle("is-edge-end", edgeVel > 1);
       for (const c of clips) {
         const s = x === null || !c.ready || !m.reach ? 1 : zoomAt(Math.abs(x - c.center));
         if (Math.abs(s - c.s) < 0.0005) continue;
@@ -480,8 +505,12 @@
       "pointermove",
       (e) => {
         if (e.pointerType === "mouse") {
+          const xy = `${e.clientX},${e.clientY}`;
+          if (xy !== mouseXY) edgeHold = false; // a real move hands the row back to the edge
+          mouseXY = xy;
           pointerX = e.clientX;
           schedule();
+          startGlide();
           return;
         }
         if (!touch || e.pointerId !== touch.id) return;
@@ -528,6 +557,7 @@
         if (e.pointerType !== "mouse") return;
         pointerX = null;
         schedule();
+        startGlide(); // eases the edge glide to a stop
       },
       { passive: true }
     );
@@ -573,6 +603,134 @@
     };
     window.addEventListener("resize", remeasure, { passive: true });
     if ("ResizeObserver" in window) new ResizeObserver(remeasure).observe(dock);
+
+    // ---------- Picker: edge hover + wheel glide (mouse only) ----------
+    // Hovering the outer EDGE of the row glides it that way, faster the deeper
+    // the pointer sits in the zone; the speed eases in and out rather than
+    // snapping. A vertical wheel over the row scrolls it sideways until it runs
+    // out of room, then the page takes the wheel. The pointer's clientX stays
+    // put while the row moves, so render() keeps the tile under it magnified.
+
+    const edgeTarget = () => {
+      if (pointerX === null || edgeHold || touch || reduced() || !m.scroll) return 0;
+      const w = dock.clientWidth;
+      const zone = w * EDGE;
+      const x = pointerX - m.left;
+      let d = 0;
+      if (x < zone) d = -(zone - x) / zone;
+      else if (x > w - zone) d = (x - (w - zone)) / zone;
+      d = Math.max(-1, Math.min(1, d));
+      if ((d < 0 && dock.scrollLeft <= 0.5) || (d > 0 && dock.scrollLeft >= m.maxScroll - 0.5)) return 0;
+      return Math.sign(d) * d * d * EDGE_SPEED; // gentle near the zone's inner edge
+    };
+
+    const endGlide = () => {
+      if (glideFrame) cancelAnimationFrame(glideFrame);
+      glideFrame = 0;
+      glideLast = 0;
+      edgeVel = 0;
+      dock.classList.remove("is-gliding");
+      schedule();
+    };
+
+    const glide = (now) => {
+      glideFrame = 0;
+      if (needMeasure) measure();
+      const dt = glideLast ? Math.min(now - glideLast, 50) : 1000 / 60;
+      if (!glideLast) glidePos = dock.scrollLeft;
+      else if (Math.abs(dock.scrollLeft - glidePos) > 1) {
+        glidePos = dock.scrollLeft; // something else (a swipe, a scrollbar) moved the row: let it
+        glideTarget = null;
+        edgeVel = 0;
+      }
+      glideLast = now;
+      const max = m.maxScroll;
+      let pos = glidePos;
+      const target = edgeTarget();
+      if (target) glideTarget = null; // the edge takes over from a wheel glide
+      if (glideTarget !== null) {
+        pos += (glideTarget - pos) * (1 - Math.exp(-dt / GLIDE_TAU));
+        if (Math.abs(glideTarget - pos) < 0.5) {
+          pos = glideTarget;
+          glideTarget = null;
+        }
+      } else {
+        edgeVel += (target - edgeVel) * (1 - Math.exp(-dt / EDGE_TAU));
+        pos += (edgeVel * dt) / 1000;
+      }
+      pos = Math.max(0, Math.min(max, pos));
+      if (pos <= 0 || pos >= max) edgeVel = 0; // ran out of row
+      glidePos = pos;
+      dock.scrollLeft = pos;
+      if (glideTarget === null && !target && Math.abs(edgeVel) < 12) return endGlide();
+      schedule();
+      glideFrame = requestAnimationFrame(glide);
+    };
+
+    function startGlide() {
+      if (glideFrame || reduced()) return;
+      if (needMeasure) measure();
+      if (glideTarget === null && !edgeTarget() && !edgeVel) return;
+      // Snapping would pull every small step back to the nearest tile.
+      dock.classList.add("is-gliding");
+      glideFrame = requestAnimationFrame(glide);
+    }
+
+    function stopGlide() {
+      glideTarget = null;
+      if (glideFrame) endGlide();
+    }
+
+    // Glide to a scrollLeft, or jump there with reduced motion. This is explicit
+    // input, so a pointer parked in an edge zone must not undo it.
+    const glideTo = (to) => {
+      edgeHold = true;
+      if (reduced()) {
+        stopGlide();
+        dock.scrollLeft = to;
+        return;
+      }
+      glideTarget = to;
+      edgeVel = 0;
+      startGlide();
+    };
+
+    // Keyboard focus: bring the tile clear of the edge fades. Done by hand
+    // because scroll snapping pulls a small scrollIntoView back to the tile
+    // it started on.
+    function reveal(c) {
+      edgeHold = true; // a parked pointer must not scroll the focused tile away
+      rail.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
+      if (needMeasure) measure();
+      if (!m.scroll) return;
+      const pad = parseFloat(getComputedStyle(dock).getPropertyValue("--ex-fade")) || 0;
+      const from = glideTarget !== null ? glideTarget : dock.scrollLeft;
+      const l = c.tile.offsetLeft - pad;
+      const r = c.tile.offsetLeft + c.tile.offsetWidth + pad - dock.clientWidth;
+      const to = Math.max(0, Math.min(m.maxScroll, l < from ? l : r > from ? r : from));
+      if (Math.abs(to - from) >= 1) glideTo(to);
+      else if (edgeVel) stopGlide();
+    }
+
+    dock.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.ctrlKey || e.shiftKey) return; // zoom, and the native sideways wheel
+        if (needMeasure) measure();
+        if (!m.scroll) return;
+        const unit = e.deltaMode === 1 ? WHEEL_LINE : e.deltaMode === 2 ? dock.clientWidth : 1;
+        const dx = e.deltaX * unit;
+        const dy = e.deltaY * unit;
+        if (!dy || Math.abs(dx) >= Math.abs(dy)) return; // a sideways swipe scrolls natively
+        const from = glideTarget !== null ? glideTarget : dock.scrollLeft;
+        const max = m.maxScroll;
+        if ((dy < 0 && from <= 0.5) || (dy > 0 && from >= max - 0.5)) return; // the page scrolls
+        e.preventDefault();
+        const to = Math.max(0, Math.min(max, from + dy));
+        glideTo(to);
+      },
+      { passive: false }
+    );
   };
 
   initClips();

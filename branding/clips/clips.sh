@@ -95,11 +95,31 @@ count_class() {   # number of normal windows whose class contains $1
 }
 wait_class() {    # wait_class CLASS N: wait until N windows of CLASS exist
     local i
-    for i in $(seq 60); do
+    for i in $(seq 300); do
         [ "$(count_class "$1")" -ge "$2" ] && return 0
-        sleep 0.5
+        sleep 0.1
     done
     echo "timeout waiting for $1" >&2
+}
+wait_gone() {     # wait_gone CLASS: wait until no window of CLASS is left
+    local i
+    for i in $(seq 300); do
+        [ "$(count_class "$1")" -eq 0 ] && return 0
+        sleep 0.1
+    done
+    echo "timeout closing $1" >&2
+}
+# kwin_until JS MARK: run the KWin script JS again and again until it prints
+# MARK (it prints it once its window is there and it has done its job).
+kwin_until() {
+    local i n
+    n=$(grep -c "$2" /tmp/kwin.log || true)
+    for i in $(seq 200); do
+        kwin_js "$1"
+        [ "$(grep -c "$2" /tmp/kwin.log)" -gt "$n" ] && return 0
+        sleep 0.05
+    done
+    echo "timeout waiting for $2" >&2
 }
 
 # GPU session: a KWin screencast of the recorded band (the pointer embedded),
@@ -136,19 +156,23 @@ rec_start() {
     rm -f "/tmp/$CLIP.mkv"
     if [ -n "${GPU:-}" ]; then
         stream_start 0 "$CROP_Y" 1280 640
-        rm -f /tmp/rec.fifo
+        rm -f /tmp/rec.fifo /tmp/rec.ready /tmp/rec.trim
         mkfifo /tmp/rec.fifo
         $JF_FFMPEG -nostdin -hide_banner -loglevel warning -blocksize 1048576 -f matroska -i /tmp/rec.fifo \
             -c:v h264_rkmpp -rc_mode CQP -qp_init 10 -g 120 -fps_mode passthrough -y "/tmp/$CLIP.mkv" >/tmp/enc.log 2>&1 &
         ENC=$!
-        env $CAPTURE_GL python3 "$HERE/record.py" "$SERIAL" /tmp/rec.fifo ${CAPTURE_GL:+--gl} >/tmp/gst.log 2>&1 &
+        env $CAPTURE_GL python3 "$HERE/record.py" "$SERIAL" /tmp/rec.fifo ${CAPTURE_GL:+--gl} \
+            --ready /tmp/rec.ready --trim /tmp/rec.trim >/tmp/gst.log 2>&1 &
         REC=$!
-        for i in $(seq 100); do
+        # Live once the first frame is in; ffmpeg probes its input for a few
+        # seconds before it writes anything, but it reads (and keeps) the
+        # frames meanwhile, so there is no need to wait for it.
+        for i in $(seq 200); do
             kill -0 "$REC" 2>/dev/null && kill -0 "$ENC" 2>/dev/null || { cat /tmp/gst.log /tmp/enc.log >&2; return 1; }
-            [ "$(stat -c %s "/tmp/$CLIP.mkv" 2>/dev/null || echo 0)" -gt 0 ] && break
-            sleep 0.1
+            [ -e /tmp/rec.ready ] && break
+            sleep 0.02
         done
-        sleep 0.3
+        kill -USR1 "$REC"   # trim start (see record.py --trim)
         return
     fi
     # x11grab paces itself on the (slowed) session clock and stamps frames with
@@ -167,6 +191,7 @@ rec_start() {
     sleep 0.3
 }
 rec_stop() {
+    [ -n "${GPU:-}" ] && kill -USR1 "$REC"   # trim end
     kill -INT "$REC"
     wait "$REC" || true
     if [ -n "${GPU:-}" ]; then
@@ -174,6 +199,7 @@ rec_stop() {
         grep -h 'record.py:' /tmp/gst.log >&2 || true
         kill "$STREAM" 2>/dev/null || true
         wait "$STREAM" 2>/dev/null || true
+        cp /tmp/rec.trim "$RAW/$CLIP.trim"
     fi
     cp "/tmp/$CLIP.mkv" "$RAW/$CLIP.mkv"
     rm -f "/tmp/$CLIP.mkv"
@@ -196,10 +222,14 @@ kremarc() {   # kremarc KEY=VALUE...: write the demo config plus overrides
     } >~/.config/kremarc
 }
 start_krema() {
-    pkill -x krema 2>/dev/null && sleep 1 || true
+    pkill -x krema 2>/dev/null || true
+    while pgrep -x krema >/dev/null; do sleep 0.05; done
     # MOZ_LEGACY_PROFILES: Firefox (launched by Krema) uses the profile from setup.
     MOZ_LEGACY_PROFILES=1 krema >>/tmp/krema.log 2>&1 &
-    sleep 6
+    # Ready when KWin lists the dock's layer surface: by then its first frame
+    # (icons included) is on screen, about 1 s after the start.
+    kwin_until "for (const w of workspace.windowList()) if (w.resourceClass == 'krema' && w.dock) print('DOCK-UP');" DOCK-UP
+    sleep 0.2
 }
 
 firefox_profile() {
@@ -269,17 +299,25 @@ setup() {
     firefox_profile
     window_rules
     /usr/libexec/kactivitymanagerd >/tmp/kamd.log 2>&1 &
-    sleep 1
+    for _ in $(seq 100); do busctl --user status org.kde.ActivityManager >/dev/null 2>&1 && break; sleep 0.05; done
     plasmashell --no-respawn >/tmp/plasmashell.log 2>&1 &
-    for _ in $(seq 60); do busctl --user status org.kde.plasmashell >/dev/null 2>&1 && break; sleep 1; done
-    sleep 8
+    # Ready once the desktop and the default panel exist (the panel has to be
+    # there to be removed) and the notification server (the panel's system
+    # tray starts it; the attention clip needs it) owns its name.
+    local js="print(desktops().length + ' ' + panels().length)" state
+    for _ in $(seq 300); do
+        state=$(busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$js" 2>/dev/null || true)
+        case $state in
+        *'"'[1-9]*' '[1-9]*) busctl --user status org.freedesktop.Notifications >/dev/null 2>&1 && break ;;
+        esac
+        sleep 0.1
+    done
     # Drop the default panel so Krema is the only dock; set the wallpaper.
     busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s \
       "panels().forEach(function(p){p.remove()}); desktops().forEach(function(d){d.wallpaperPlugin='org.kde.image'; d.currentConfigGroup=['Wallpaper','org.kde.image','General']; d.writeConfig('Image','$WALLPAPER'); d.writeConfig('FillMode', 2)});" >/dev/null
     demo_files
     start_krema
     move 640 300
-    sleep 2
     echo SETUP-DONE
 }
 
@@ -309,24 +347,20 @@ geometry() {   # a still of the whole screen in /out/geometry.png
 # above the dock. While it is open the dock has a ninth entry (the settings
 # window, Zoom K icon), which shifts every icon left by half a slot.
 open_settings() {
-    local i placed
-    move "$(icon_x $SYSSETTINGS)" "$ICON_Y"; sleep 0.8
-    xdotool click 3; sleep 1.5
+    move "$(icon_x $SYSSETTINGS)" "$ICON_Y"; sleep 0.3
+    xdotool click 3
+    kwin_until "for (const w of workspace.windowList()) if (w.resourceClass == 'krema' && w.popupWindow) print('MENU-UP');" MENU-UP
+    sleep 0.2
     # Bottom-up in the menu: Quit, About Krema, Settings...
     xdotool key Up Up Up Return
-    for i in $(seq 30); do
-        sleep 1
-        placed=$(grep -c SETTINGS-PLACED /tmp/kwin.log || true)
-        kwin_js "for (const w of workspace.windowList()) if (w.normalWindow && w.caption.indexOf('Krema') >= 0) {
-            w.frameGeometry = {x: 300, y: 92, width: 680, height: 470}; workspace.activeWindow = w; print('SETTINGS-PLACED'); }"
-        [ "$(grep -c SETTINGS-PLACED /tmp/kwin.log)" -gt "$placed" ] && break
-    done
-    sleep 2
+    kwin_until "for (const w of workspace.windowList()) if (w.normalWindow && w.caption.indexOf('Krema') >= 0) {
+        w.frameGeometry = {x: 300, y: 92, width: 680, height: 470}; workspace.activeWindow = w; print('SETTINGS-PLACED'); }" SETTINGS-PLACED
+    sleep 0.5
     move 1150 300
 }
 close_settings() {
     kwin_js "for (const w of workspace.windowList()) if (w.normalWindow && w.caption.indexOf('Krema') >= 0) w.closeWindow();"
-    sleep 1
+    kwin_until "let n = 0; for (const w of workspace.windowList()) if (w.normalWindow && w.caption.indexOf('Krema') >= 0) n++; if (n == 0) print('SETTINGS-GONE');" SETTINGS-GONE
 }
 
 # 1. Parabolic zoom: enter from the upper left, sweep right and back, leave.
@@ -411,13 +445,12 @@ open_dolphins() {
     local d i=0
     for d in Documents Downloads Pictures; do
         dolphin --new-window "$HOME/$d" >/dev/null 2>&1 &
-        wait_class dolphin $((i + 1))
-        sleep 1.5
-        kwin_js "for (const w of workspace.windowList()) if (w.normalWindow && w.resourceClass.indexOf('dolphin') >= 0 && w.caption.indexOf('$d') == 0) {
-            w.frameGeometry = {x: $((250 + 90 * i)), y: $((100 + 36 * i)), width: 600, height: 400}; workspace.activeWindow = w; }"
+        # Placed once the window shows its folder in the caption.
+        kwin_until "for (const w of workspace.windowList()) if (w.normalWindow && w.resourceClass.indexOf('dolphin') >= 0 && w.caption.indexOf('$d') == 0) {
+            w.frameGeometry = {x: $((250 + 90 * i)), y: $((100 + 36 * i)), width: 600, height: 400}; workspace.activeWindow = w; print('DOLPHIN-$d'); }" "DOLPHIN-$d"
         i=$((i + 1))
     done
-    sleep 1
+    sleep 0.3
 }
 
 # 5. Wheel: three Dolphin windows; the wheel over the Dolphin icon brings each
@@ -436,7 +469,7 @@ clip_wheel() {
     sleep 0.5
     rec_stop
     close_class dolphin
-    sleep 2
+    wait_gone dolphin
 }
 
 # 6. Middle click: a middle click on the running Konsole opens a second window.
@@ -465,15 +498,26 @@ clip_middle() {
     sleep 1.2
     rec_stop
     close_class konsole
-    sleep 1
+    wait_gone konsole
 }
 
 # 7. Reorder: press and hold Kate, drag it two places right, drop; then drag it
 #    back so the loop ends where it began.
-drag() {   # drag X1 Y1 X2 Y2 SECONDS: press-hold, glide, release
+# drag X1 Y1 X2 Y2 SECONDS [HOLD]: press, hold HOLD s (default 0.5; Krema's
+# press-and-hold is 300 ms), glide, wait 0.3 s, release. On the GPU session
+# all of it goes through one X connection (glide.py --hold): KWin releases a
+# button about 1 s after the XTEST client that pressed it exits, so after an
+# `xdotool mousedown` the drag would end partway through the glide (see
+# NOTES.md).
+drag() {
+    local hold=${6:-0.5}
+    if [ -n "${GPU:-}" ]; then
+        python3 "$HERE/glide.py" "$(p "$1")" "$(p "$2")" "$(p "$3")" "$(p "$4")" "$5" --hold "$hold" 2>/dev/null
+        return
+    fi
     move "$1" "$2"
     xdotool mousedown 1
-    sleep 0.5
+    sleep "$hold"
     glide "$1" "$2" "$3" "$4" "$5"
     sleep 0.3
     xdotool mouseup 1
@@ -487,14 +531,13 @@ clip_reorder() {
     glide 1000 300 "$a" "$ICON_Y" 1.0
     sleep 0.3
     drag "$a" "$ICON_Y" "$b" "$ICON_Y" 1.2
-    sleep 0.8
-    # The pointer rests on Kate in its new slot: press there (no warp; the
-    # push-aside zoom moves icons under a warped pointer) and drag it back.
-    xdotool mousedown 1
-    sleep 0.5
-    glide "$b" "$ICON_Y" "$(( a - 10 ))" "$ICON_Y" 1.2
-    sleep 0.3
-    xdotool mouseup 1
+    sleep 0.65
+    # Krema keeps the hovered index from before a drag until the pointer moves
+    # again (hover tracking pauses while dragging), so a press right after the
+    # drop would pick up the icon now in Kate's old slot. A small move first
+    # re-targets Kate, then drag it back.
+    glide "$b" "$ICON_Y" "$(( b - 6 ))" "$ICON_Y" 0.15
+    drag "$(( b - 6 ))" "$ICON_Y" "$(( a - 10 ))" "$ICON_Y" 1.2
     sleep 0.3
     glide "$(( a - 10 ))" "$ICON_Y" 1000 300 1.0
     sleep 0.5
@@ -580,7 +623,7 @@ clip_styles() {
     open_settings
     move 970 400
     for i in $(seq "$STYLE_SCROLL"); do xdotool click 5; sleep 0.15; done
-    sleep 1
+    sleep 0.5
     move 1150 300
     rec_start styles
     sleep 0.4
@@ -601,7 +644,7 @@ clip_styles() {
 clip_autohide() {
     kremarc VisibilityMode=1
     start_krema
-    move 640 380; sleep 2
+    move 640 380; sleep 1.2   # the dock hides again after its start
     rec_start autohide
     sleep 0.7
     glide 640 380 600 719 0.8
@@ -622,29 +665,22 @@ clip_dodge() {
     start_krema
     kate >/dev/null 2>&1 &
     wait_class kate 1
-    sleep 3
-    place kate 330 110 620 440
     sleep 1
+    place kate 330 110 620 440
+    sleep 0.3
     # Title bar of the Kate window, 14 px below its top edge.
     move 1000 300
     rec_start dodge
     sleep 0.5
     glide 1000 300 760 124 0.9
-    xdotool mousedown 1
-    sleep 0.2
-    glide 760 124 760 284 1.2
-    xdotool mouseup 1
-    sleep 1.6
-    xdotool mousedown 1
-    sleep 0.2
-    glide 760 284 760 124 1.2
-    xdotool mouseup 1
-    sleep 0.3
+    drag 760 124 760 284 1.2 0.2
+    sleep 1.3
+    drag 760 284 760 124 1.2 0.2
     glide 760 124 1000 300 0.8
     sleep 1.2
     rec_stop
     close_class kate
-    sleep 1
+    wait_gone kate
     kremarc
     start_krema
 }
@@ -681,8 +717,8 @@ konsole_run() {
     n=$(count_class konsole)
     konsole --separate --hide-menubar --hide-tabbar -e "$@" >/dev/null 2>&1 &
     wait_class konsole $((n + 1))
-    sleep 1.5
-    kwin_js "const w = workspace.activeWindow; if (w && w.resourceClass.indexOf('konsole') >= 0) w.frameGeometry = $g;"
+    kwin_until "const l = workspace.windowList().filter(w => w.normalWindow && w.resourceClass.indexOf('konsole') >= 0);
+        if (l.length == $((n + 1))) { const w = l[l.length - 1]; w.frameGeometry = $g; workspace.activeWindow = w; print('KONSOLE-$((n + 1))'); }" "KONSOLE-$((n + 1))"
     sleep 0.5
 }
 TOP=(top -d 0.4)
@@ -708,7 +744,7 @@ clip_previews() {
     konsole_run 360 150 560 360 "${TOP[@]}"
     x=$(icon_x $KONSOLE)
     move 1000 300
-    sleep 1
+    sleep 0.3
     rec_start previews
     sleep 0.5
     glide 1000 300 "$x" "$ICON_Y" 1.0
@@ -719,7 +755,7 @@ clip_previews() {
     sleep 1.2
     rec_stop
     close_class konsole
-    sleep 1
+    wait_gone konsole
 }
 
 # 15. Groups: three Konsole windows -> the popup shows three live thumbnails.
@@ -740,7 +776,7 @@ clip_groups() {
     konsole_run 640 180 520 330 "${GROUP_TOP[@]}"
     x=$(icon_x $KONSOLE)
     move 1100 200
-    sleep 1
+    sleep 0.3
     rec_start groups
     sleep 0.4
     glide 1100 200 "$x" "$ICON_Y" 0.8
@@ -759,7 +795,7 @@ clip_groups() {
     sleep 0.7
     rec_stop
     close_class konsole
-    sleep 1
+    wait_gone konsole
 }
 
 # 16. Progress: Dolphin (pinned, not running) reports a transfer through the

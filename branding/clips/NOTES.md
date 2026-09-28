@@ -31,9 +31,9 @@ Sizes and durations are printed by `encode.sh`. Clips are 2560×1280 (2×
 density of a 1280×640 logical crop), 60 fps constant frame rate resampled
 from the variable-rate capture, no audio, at most 1.8 MB per file. The
 wallpaper is Roast Contours (`branding/wallpaper/roast-contours.png`); its
-thin lines need low CRFs (VP9 22, H.264 16 to 24) to stay clean. Each clip
-starts and ends in the same resting state, so it loops cleanly. Posters
-(`.webp`) are the first frame.
+thin lines band at high compression, so every video is encoded to use its
+whole 1.8 MB budget. Each clip starts and ends in the same resting state, so
+it loops cleanly. Posters (`.webp`) are the first frame.
 
 `stills.sh` retakes `branding/screenshots/{dock-overview,dock-zoom,settings}.png`
 in its own GPU session at 1920×1080, scale 1:
@@ -141,6 +141,11 @@ real time (`SPEED=1`, no libfaketime).
 - Output 2560×1440, scale 2 through `kscreen-doctor`. Input: xdotool (and
   `glide.py`, XTest paced on the monotonic clock) on KWin's Xwayland; XTEST
   reaches KWin through libei (`kwinrc [Xwayland] XwaylandEisNoPrompt=true`).
+  Every X client gets its own libei device, and about 1 s after the client
+  that pressed a button exits, KWin releases that button (the client sees a
+  `wl_pointer.button` release while no release was sent). So a press,
+  the motion after it and its release must come from one process: drags use
+  `glide.py --hold`, never `xdotool mousedown` followed by a glide.
 - Recording (`rec_start`): `sessiontool` starts a region screencast with the
   pointer embedded; `record.py` reads it with GStreamer and pipes I420
   Matroska through a 1 MiB FIFO into jellyfin-ffmpeg (taken from the
@@ -196,7 +201,16 @@ clips/thumbs.sh down        # (clean also removes the image, hw/ and out/)
 nix shell nixpkgs#ffmpeg -c branding/clips/encode.sh RAW_DIR
 ```
 
-`encode.sh` at 2560 wide with low CRFs takes about 5 minutes per clip.
+Shooting, measured on rock5bp (CPUS=7, `bash -x` timestamps): image build
+(cached) 2 s, container start 3 to 4 s, `setup` 5.7 s, the 13 GPU clips
+162 s, of which 115 s is recording. Most clips take their recording plus
+about 1 s; `styles`, `groups` and `dodge` open windows first (8, 7 and 5 s).
+Nothing sleeps a fixed time to wait for a program: `start_krema` waits for
+the dock's layer surface, KWin scripts for their own marker, windows for
+KWin's window list, `rec_start` for the first frame. Copying the raws
+(50 MB) to the Mac takes 2 s. Encoding is the long part: 2560×1280 VP9 at
+`-cpu-used 2` needs several minutes per clip even with all encodes in
+parallel.
 
 Measured capture rate while something moves (`record.py`, CPUS=7, idle
 node): zoom 49, launch 48, reorder 52, dodge 56, wheel 52, autohide 50,
@@ -224,13 +238,13 @@ Re-measure them if the layout changes.
 | `thumbs.sh` | Host side of the GPU session: fetch libmali and jellyfin-ffmpeg, build, run the container with the Rockchip devices, clean up. |
 | `gles-shim.c` | `libGLESv2.so.2` in front of libmali that makes KWin's shaders compile on Mali. |
 | `sessiontool.c` | Starts a KWin region screencast and prints its PipeWire serial. |
-| `record.py` | GStreamer recorder: DMA-BUF + GL readback, source-side frame limiter, capture statistics. |
-| `glide.py` | Pointer glide through XTest, every step on its own deadline. |
+| `record.py` | GStreamer recorder: DMA-BUF + GL readback, source-side frame limiter, capture statistics, `--ready` flag on the first frame, trim marks on SIGUSR1 (`--trim`). |
+| `glide.py` | Pointer glide through XTest, every step on its own deadline; `--hold S` makes it a drag (press, hold, glide, release in one X connection). |
 | `unity.py` | Sends Unity LauncherEntry updates read from stdin, including self-paced `ramp=FROM:TO:SECONDS` (`progress`, `timing`). |
 | `clips.sh` | `setup`, then one `clip_*` function per clip that drives input and records. Any helper can be called by name (`clips.sh open_settings geometry`). The clip list depends on the session; `clips.sh timing` is the timing probe. |
 | `stills.sh` | The three product stills in a 1920×1080 GPU session. |
-| `kwinscript.sh` | Runs a KWin script over D-Bus (`clips.sh` generates small scripts to place and close windows). |
-| `encode.sh` | Host side: trim, 60 fps CFR, encode WebM/MP4/WebP within 1.8 MB. |
+| `kwinscript.sh` | Runs a KWin script over D-Bus (`clips.sh` generates small scripts to place and close windows) and unloads it once its last line has printed a marker. |
+| `encode.sh` | Host side: trim to the recorder's marks, 60 fps CFR, encode WebM/MP4/WebP within 1.8 MB, every encode in parallel. |
 
 Xvfb session recording: `ffmpeg -f x11grab -framerate 120 -video_size
 2560x1280 -i :99+0,160 -draw_mouse 1 -c:v utvideo` writes a lossless capture
@@ -259,11 +273,14 @@ Raw captures are about 150–300 MB per second of clip. The full set needs
 about 40 GB. `clips.sh all` must run in a fresh container: the launch clip
 relies on Firefox's first (cold) start.
 
-Encoding: `fps=60`, Lanczos scale, BT.709 limited-range yuv420p. VP9
-(`-crf` 22…37, `-deadline good -cpu-used 2 -row-mt 1`) and H.264 High
-(`-crf` 16…28, `-preset veryslow`, faststart). For each clip `encode.sh`
-takes the lowest CRF that fits 1.8 MB, and at 2560 wide first. If a clip
-does not fit, it falls back to 1920 and then 1600 wide.
+Encoding: `fps=60`, Lanczos scale to 2560×1280, BT.709 limited-range
+yuv420p. Each video is a 2-pass encode at the bitrate that fills 96 % of
+1.8 MB over the clip's length: VP9 in constrained quality (`-crf 20`,
+`-deadline good`, `-cpu-used 4` for pass 1 and 2 for pass 2, `-row-mt 1
+-tile-columns 2`) and H.264 High (`-preset slow`, faststart). The trim comes
+from `RAW/<clip>.trim`, written by the recorder (the Xvfb clips `middle`
+and `pin` have fixed trims in `encode.sh`). All encodes of all clips run at
+once, `JOBS` at a time (default: half the cores), longest first.
 
 ## Limitations
 
@@ -283,5 +300,15 @@ does not fit, it falls back to 1920 and then 1600 wide.
   `clip_pin` needs a drop point inside the panel.
 - **Xvfb session: no blur.** QPainter compositing has no Blur or Background
   Contrast effect, so Acrylic shows its tint without blur.
-- **Trim points depend on the recording.** Re-check `START`/`DUR` in
-  `encode.sh` with a contact sheet after regenerating.
+- **Trim points of the Xvfb clips are fixed.** `middle` and `pin` have no
+  recorder marks; re-check their trims in `encode.sh` with a contact sheet
+  after regenerating.
+- **Krema keeps a stale hovered icon after a drag.** Hover tracking pauses
+  while dragging and the drop does not refresh it, so a press right after a
+  drop, without moving the pointer, picks the icon that now sits in the
+  dragged icon's old slot. `clip_reorder` moves the pointer 6 px before its
+  second drag.
+- **`encode.sh` can overshoot 1.8 MB.** The 2-pass target (96 % of the
+  budget) came out over it for groups (VP9 and H.264), styles and progress
+  (H.264) on the last run; those need a lower target before they are
+  re-encoded.

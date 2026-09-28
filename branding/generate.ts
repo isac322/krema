@@ -4,10 +4,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 const OUT = process.argv[2];
 mkdirSync(OUT, { recursive: true });
 
-const NIGHT = "#141C26", BONE = "#F3F0EA", BLUE = "#3DAEE9";
+// Palette A (matches website/css/site.css): ink tile, bone stem, caramel accent.
+const INK = "#18110D", BONE = "#F4ECE0", ACCENT = "#D69A5E";
 const r = (n: number) => Math.round(n * 100) / 100;
 const tile = (cx: number, cy: number, s: number, extra = "") =>
-  `<rect x="${r(cx - s / 2)}" y="${r(cy - s / 2)}" width="${s}" height="${s}" rx="${r(s * 0.27)}" fill="${BLUE}"${extra}/>`;
+  `<rect x="${r(cx - s / 2)}" y="${r(cy - s / 2)}" width="${s}" height="${s}" rx="${r(s * 0.27)}" fill="${ACCENT}"${extra}/>`;
 
 // Zoom K: stem = dock panel, arms = tiles shrinking away from the hovered (largest) tile.
 function iconBody(small: boolean): string {
@@ -27,7 +28,7 @@ function iconBody(small: boolean): string {
     arms += tile(bigCx + d, 128 - d, sizes[i + 1], op) + tile(bigCx + d, 128 + d, sizes[i + 1], op);
   });
   const top = 128 - reach;
-  return `<rect x="8" y="8" width="240" height="240" rx="56" fill="${NIGHT}"/>` +
+  return `<rect x="8" y="8" width="240" height="240" rx="56" fill="${INK}"/>` +
     `<rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/>` +
     `<rect x="${r(stemX)}" y="${r(top)}" width="${stemW}" height="${r(2 * reach)}" rx="${stemW / 2}" fill="${BONE}"/>` + arms;
 }
@@ -50,7 +51,7 @@ function wordmarkBody(ink: string) {
   GLYPHS.forEach((g, i) => {
     const s = ZOOM[i];
     paths += `<path transform="translate(${r(x)},${r(100 - 100 * s)}) scale(${s})" d="${g.d}" stroke-width="${r(STROKE / s)}"/>`;
-    if (i === 2) dot = `<circle cx="${r(x + (g.w * s) / 2)}" cy="${DOT_Y}" r="${DOT_R}" fill="${BLUE}"/>`;
+    if (i === 2) dot = `<circle cx="${r(x + (g.w * s) / 2)}" cy="${DOT_Y}" r="${DOT_R}" fill="${ACCENT}"/>`;
     x += g.w * s + TRACK;
   });
   const width = x - TRACK + STROKE / 2;
@@ -68,7 +69,7 @@ const svg = (vb: string, body: string, title: string) =>
 writeFileSync(`${OUT}/krema-icon.svg`, svg("0 0 256 256", iconBody(false), "Krema"));
 writeFileSync(`${OUT}/krema-icon-small.svg`, svg("0 0 256 256", iconBody(true), "Krema"));
 
-for (const [name, ink] of [["", NIGHT], ["-dark", BONE]] as const) {
+for (const [name, ink] of [["", INK], ["-dark", BONE]] as const) {
   const wm = wordmarkBody(ink);
   writeFileSync(`${OUT}/krema-wordmark${name}.svg`, svg(`${wm.vb.x} ${wm.vb.y} ${wm.vb.w} ${wm.vb.h}`, wm.body, "krema"));
 

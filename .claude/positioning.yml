@@ -104,13 +104,13 @@ search_intents:
 brand:
   website: "https://krema.bhyoo.com/"
   guide: branding/README.md
-  icon_concept: "Zoom K — bone stem is the dock panel; Breeze-blue tiles along the K arms shrink with parabolic zoom falloff"
+  icon_concept: "Zoom K — bone stem is the dock panel; caramel tiles along the K arms shrink with parabolic zoom falloff"
   wordmark_concept: "Monoline lowercase 'krema' scaled like a zooming dock (0.72, 0.87, 1.16, 0.87, 0.72); accent indicator dot under the hovered 'e'"
   palette:
-    night: "#141C26"      # icon tile, ink on light backgrounds
-    bone: "#F3F0EA"       # icon stem (dock panel), ink on dark backgrounds
-    breeze_blue: "#3DAEE9"  # accent: tiles, indicator dot
-    neutrals: ["#0E141B", "#1D2733", "#EFF0F1"]
+    ink: "#18110D"        # icon tile, ink on light backgrounds
+    bone: "#F4ECE0"       # icon stem (dock panel), ink on dark backgrounds
+    caramel: "#D69A5E"    # accent: tiles, indicator dot
+    neutrals: ["#110C09", "#231A14", "#CDBFAE", "#A89684", "#A8682F"]  # night, ink-2, bone-dim, muted, deep caramel (website/css/site.css)
   assets:
     icon: branding/krema-icon.svg
     icon_small: branding/krema-icon-small.svg  # 16/22/24 px

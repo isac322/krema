@@ -74,12 +74,12 @@ experience.
 The brand is built on one idea: the dock zooms.
 
 - **Zoom K icon** — the "K" is drawn from a dock. The bone stem is the dock
-  panel; the arms are Breeze-blue icon tiles that shrink as they move away from
+  panel; the arms are caramel icon tiles that shrink as they move away from
   the largest tile, following the parabolic zoom falloff.
 - **Zoom wordmark** — lowercase monoline "krema" with letters scaled like a
-  zooming dock (the "e" is the hovered item) and a Breeze-blue active-indicator
+  zooming dock (the "e" is the hovered item) and a caramel active-indicator
   dot under it.
-- **Palette** — Night `#141C26`, Bone `#F3F0EA`, Breeze Blue `#3DAEE9` (accent).
+- **Palette** — Ink `#18110D`, Bone `#F4ECE0`, Caramel `#D69A5E` (accent).
 
 Files, usage rules, minimum sizes, and regeneration steps live in the
 [brand guide](../branding/README.md).

@@ -9,10 +9,10 @@ icons under the pointer.
 ### Zoom K (app icon)
 
 - **Stem** (bone) is the dock panel.
-- **Arms** are Breeze-blue rounded tiles — dock icons — that shrink and fade as
+- **Arms** are caramel rounded tiles (dock icons) that shrink and fade as
   they move away from the largest tile next to the stem. The falloff follows the
   same parabolic zoom curve the dock uses on hover.
-- The night tile behind it keeps the mark legible on both light and dark desktops.
+- The ink tile behind it keeps the mark legible on both light and dark desktops.
 
 ### Zoom wordmark
 
@@ -23,7 +23,7 @@ zooming dock, with the pointer resting on the `e`:
 |--------|------|------|------|------|------|
 | Scale  | 0.72 | 0.87 | 1.16 | 0.87 | 0.72 |
 
-The Breeze-blue dot under the `e` is the dock's active-indicator. It is always
+The caramel dot under the `e` is the dock's active-indicator. It is always
 the accent color, whichever ink the letters use. Never re-scale letters
 individually, even out the sizes, or move the dot to another letter.
 
@@ -33,12 +33,12 @@ individually, even out the sizes, or move the dot to another letter.
 |------|------------|------------|
 | `krema-icon.svg` | Full Zoom K icon (three tile sizes per arm) | App icon at 32 px and larger, avatars, store listings, favicons ≥ 32 px |
 | `krema-icon-small.svg` | Simplified Zoom K (two larger tiles per arm) | 16, 22, and 24 px: panels, tray, menus, small favicons |
-| `krema-wordmark.svg` | Zoom wordmark, night ink | Light backgrounds |
-| `krema-wordmark-dark.svg` | Zoom wordmark, bone ink | Dark backgrounds |
-| `krema-lockup.svg` | Horizontal lockup: icon + wordmark, night ink | Headers and banners on light backgrounds (README, website) |
-| `krema-lockup-dark.svg` | Horizontal lockup, bone ink | Headers and banners on dark backgrounds |
-| `krema-lockup-stacked.svg` | Stacked lockup: icon above wordmark, night ink | Square or portrait spaces on light backgrounds (posters, slides, social avatars with text) |
-| `krema-lockup-stacked-dark.svg` | Stacked lockup, bone ink | Square or portrait spaces on dark backgrounds |
+| `krema-wordmark.svg` | Zoom wordmark, ink letters | Light backgrounds |
+| `krema-wordmark-dark.svg` | Zoom wordmark, bone letters | Dark backgrounds |
+| `krema-lockup.svg` | Horizontal lockup: icon + wordmark, ink letters | Headers and banners on light backgrounds (README, website) |
+| `krema-lockup-dark.svg` | Horizontal lockup, bone letters | Headers and banners on dark backgrounds |
+| `krema-lockup-stacked.svg` | Stacked lockup: icon above wordmark, ink letters | Square or portrait spaces on light backgrounds (posters, slides, social avatars with text) |
+| `krema-lockup-stacked-dark.svg` | Stacked lockup, bone letters | Square or portrait spaces on dark backgrounds |
 | `generate.ts` | Bun script that emits every SVG above | Regenerating the masters — edit this, not the SVGs |
 | `social/` | Raster social images (e.g. `social/github-social-preview.png`) | GitHub social preview, link cards, announcement posts |
 
@@ -49,16 +49,20 @@ with the surface behind it. On the web, switch between them with
 
 ## Palette
 
+The brand shares its palette with the website (`website/css/site.css`).
+
 | Swatch | Name | Hex | Role |
 |--------|------|-----|------|
-| ![](https://img.shields.io/badge/-%20%20%20%20-141C26?style=flat-square) | Night | `#141C26` | Icon tile, wordmark ink on light backgrounds, dark surfaces |
-| ![](https://img.shields.io/badge/-%20%20%20%20-F3F0EA?style=flat-square) | Bone | `#F3F0EA` | Icon stem (the dock panel), wordmark ink on dark backgrounds, light surfaces |
-| ![](https://img.shields.io/badge/-%20%20%20%20-3DAEE9?style=flat-square) | Breeze Blue | `#3DAEE9` | Accent only: icon tiles, the indicator dot, links and highlights |
+| ![](https://img.shields.io/badge/-%20%20%20%20-18110D?style=flat-square) | Ink | `#18110D` | Icon tile, wordmark ink on light backgrounds, dark surfaces |
+| ![](https://img.shields.io/badge/-%20%20%20%20-F4ECE0?style=flat-square) | Bone | `#F4ECE0` | Icon stem (the dock panel), wordmark ink on dark backgrounds, light surfaces |
+| ![](https://img.shields.io/badge/-%20%20%20%20-D69A5E?style=flat-square) | Caramel | `#D69A5E` | Accent only: icon tiles, the indicator dot, links and highlights |
 
-Secondary neutrals for layouts (never inside the logo): `#0E141B` (deeper
-night), `#1D2733` (raised dark surface), `#EFF0F1` (Breeze light gray).
+Secondary colors for layouts (never inside the logo): `#110C09` (night, the
+deepest background), `#231A14` (ink-2, raised dark surface), `#CDBFAE`
+(bone-dim, body copy on dark), `#A89684` (muted, secondary copy), `#A8682F`
+(deep caramel, pressed or hover accent).
 
-Breeze Blue is an accent. Use it for small, meaningful marks; do not flood large
+Caramel is an accent. Use it for small, meaningful marks; do not flood large
 areas with it.
 
 ## Clear space and minimum sizes
@@ -76,7 +80,7 @@ areas with it.
 ## Don'ts
 
 - Don't recolor the tiles, the stem, or the indicator dot. The tiles are always
-  Breeze Blue, the stem is always Bone, the tile is always Night.
+  Caramel, the stem is always Bone, the tile is always Ink.
 - Don't rotate, skew, mirror, or add shadows, gradients, or outlines to any mark.
 - Don't reorder, respace, or re-scale the wordmark letters, or typeset "krema"
   in another font as a stand-in for the wordmark.
@@ -103,6 +107,12 @@ Rasterize with [resvg](https://github.com/linebender/resvg) and optimize with
 # Icon at a given pixel size (use the small variant for 16/22/24 px)
 nix shell nixpkgs#resvg -c resvg -w 256 branding/krema-icon.svg krema-256.png
 nix shell nixpkgs#resvg -c resvg -w 22 branding/krema-icon-small.svg krema-22.png
+
+# App icons shipped in src/icons/: 16, 22, 24 from krema-icon-small.svg;
+# 32, 48, 64, 128, 256 from krema-icon.svg; sc-apps-*.svg is a copy of krema-icon.svg.
+# Website: favicon.svg and favicon.ico (16/32/48) and favicon-32.png use the small
+# variant; icon-192/512.png use the full icon; apple-touch-icon.png (glyph at 90%)
+# and maskable-512.png (glyph at 78%) put the glyph without its tile on a flat Ink square.
 
 # Lockup at a fixed height (nested SVGs resolve relative to --resources-dir)
 nix shell nixpkgs#resvg -c resvg -h 192 --resources-dir branding \

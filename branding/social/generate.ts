@@ -8,35 +8,37 @@ import { $ } from "bun";
 import { join } from "node:path";
 
 const OUT = import.meta.dir;
-const NIGHT = "#141C26";
-const DEEP = "#0E141B";
-const RAISED = "#1D2733";
-const BONE = "#F3F0EA";
-const BLUE = "#3DAEE9";
-const MUTED = "#9AA5B1"; // bone at reduced contrast for secondary copy
+// Palette A (matches website/css/site.css).
+const INK = "#18110D"; // icon tile, top of card backgrounds
+const NIGHT = "#110C09"; // bottom of card backgrounds
+const INK2 = "#231A14"; // raised surfaces: glow, dock panel
+const TILE = "#2B211A"; // unlit dock tiles
+const BONE = "#F4ECE0";
+const ACCENT = "#D69A5E"; // caramel
+const MUTED = "#A89684"; // secondary copy
 const FONT = "Noto Sans";
 
 // ---------- brand primitives (inline copies of the masters) ----------
 
 const iconBody = (tile = true) =>
   (tile
-    ? `<rect x="8" y="8" width="240" height="240" rx="56" fill="${NIGHT}"/>` +
+    ? `<rect x="8" y="8" width="240" height="240" rx="56" fill="${INK}"/>` +
       `<rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/>`
     : "") +
   `<rect x="44" y="32" width="32" height="192" rx="16" fill="${BONE}"/>` +
-  `<rect x="86" y="98" width="60" height="60" rx="16.2" fill="${BLUE}"/>` +
-  `<rect x="151" y="57" width="36" height="36" rx="9.72" fill="${BLUE}" opacity="0.66"/>` +
-  `<rect x="151" y="163" width="36" height="36" rx="9.72" fill="${BLUE}" opacity="0.66"/>` +
-  `<rect x="192" y="32" width="20" height="20" rx="5.4" fill="${BLUE}" opacity="0.38"/>` +
-  `<rect x="192" y="204" width="20" height="20" rx="5.4" fill="${BLUE}" opacity="0.38"/>`;
+  `<rect x="86" y="98" width="60" height="60" rx="16.2" fill="${ACCENT}"/>` +
+  `<rect x="151" y="57" width="36" height="36" rx="9.72" fill="${ACCENT}" opacity="0.66"/>` +
+  `<rect x="151" y="163" width="36" height="36" rx="9.72" fill="${ACCENT}" opacity="0.66"/>` +
+  `<rect x="192" y="32" width="20" height="20" rx="5.4" fill="${ACCENT}" opacity="0.38"/>` +
+  `<rect x="192" y="204" width="20" height="20" rx="5.4" fill="${ACCENT}" opacity="0.38"/>`;
 
 const iconSmallBody =
-  `<rect x="8" y="8" width="240" height="240" rx="56" fill="${NIGHT}"/>` +
+  `<rect x="8" y="8" width="240" height="240" rx="56" fill="${INK}"/>` +
   `<rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/>` +
   `<rect x="34" y="32" width="40" height="192" rx="20" fill="${BONE}"/>` +
-  `<rect x="86" y="88" width="80" height="80" rx="21.6" fill="${BLUE}"/>` +
-  `<rect x="174" y="32" width="48" height="48" rx="12.96" fill="${BLUE}" opacity="0.62"/>` +
-  `<rect x="174" y="176" width="48" height="48" rx="12.96" fill="${BLUE}" opacity="0.62"/>`;
+  `<rect x="86" y="88" width="80" height="80" rx="21.6" fill="${ACCENT}"/>` +
+  `<rect x="174" y="32" width="48" height="48" rx="12.96" fill="${ACCENT}" opacity="0.62"/>` +
+  `<rect x="174" y="176" width="48" height="48" rx="12.96" fill="${ACCENT}" opacity="0.62"/>`;
 
 /** App icon (256 master) placed at x,y with side `size`. */
 const icon = (x: number, y: number, size: number, tile = true) =>
@@ -52,7 +54,7 @@ const wordmarkInner = (ink: string) =>
   `<path transform="translate(117.72,-16) scale(1.16)" d="M2,70 H58 A28,28 0 1 0 51.4,88" stroke-width="11.21"/>` +
   `<path transform="translate(211,13) scale(0.87)" d="M0,40 V100 M0,60 C0,47 8,40 18,40 C29,40 34,47 34,60 V100 M34,60 C34,47 42,40 52,40 C63,40 68,47 68,60 V100" stroke-width="14.94"/>` +
   `<path transform="translate(296.16,28) scale(0.72)" d="M56,40 V100 M56,70 A28,28 0 1 1 0,70 A28,28 0 1 1 56,70" stroke-width="18.06"/>` +
-  `</g><circle cx="151.36" cy="126" r="8.5" fill="${BLUE}"/>`;
+  `</g><circle cx="151.36" cy="126" r="8.5" fill="${ACCENT}"/>`;
 
 /** Wordmark with given height; returns markup and width. */
 const wordmark = (x: number, y: number, h: number, ink = BONE) => {
@@ -93,13 +95,13 @@ const text = (
 const FEATURES = "Wayland-native · parabolic zoom · PipeWire previews";
 const TAGLINE = "A lightweight dock for KDE Plasma 6";
 
-/** Night background with subtle depth: vertical gradient + soft raised glow. */
+/** Ink background with subtle depth: vertical gradient + soft raised glow. */
 const background = (w: number, h: number, glow: { cx: number; cy: number; rx: number; ry: number }) =>
   `<defs>` +
-  `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${NIGHT}"/><stop offset="1" stop-color="${DEEP}"/></linearGradient>` +
+  `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${INK}"/><stop offset="1" stop-color="${NIGHT}"/></linearGradient>` +
   `<radialGradient id="glow" cx="${glow.cx}" cy="${glow.cy}" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(${glow.cx},${glow.cy}) scale(${glow.rx},${glow.ry}) translate(${-glow.cx},${-glow.cy})">` +
-  `<stop offset="0" stop-color="${RAISED}" stop-opacity="0.9"/><stop offset="1" stop-color="${RAISED}" stop-opacity="0"/></radialGradient>` +
-  `<radialGradient id="accentGlow"><stop offset="0" stop-color="${BLUE}" stop-opacity="0.22"/><stop offset="1" stop-color="${BLUE}" stop-opacity="0"/></radialGradient>` +
+  `<stop offset="0" stop-color="${INK2}" stop-opacity="0.9"/><stop offset="1" stop-color="${INK2}" stop-opacity="0"/></radialGradient>` +
+  `<radialGradient id="accentGlow"><stop offset="0" stop-color="${ACCENT}" stop-opacity="0.22"/><stop offset="1" stop-color="${ACCENT}" stop-opacity="0"/></radialGradient>` +
   `</defs>` +
   `<rect width="${w}" height="${h}" fill="url(#bg)"/>` +
   `<rect width="${w}" height="${h}" fill="url(#glow)"/>`;
@@ -107,7 +109,7 @@ const background = (w: number, h: number, glow: { cx: number; cy: number; rx: nu
 /**
  * A dock: a row of rounded tiles on a panel, with parabolic zoom around the
  * hovered tile. Tiles are bottom-aligned (they grow upward, like the real dock).
- * Hovered tile is Breeze blue; its neighbours carry fading blue, echoing the logo.
+ * Hovered tile is caramel; its neighbours carry fading caramel, echoing the logo.
  * `cx` centre x, `baseY` panel bottom y, `base` unzoomed tile size.
  */
 function dock(cx: number, baseY: number, base: number, count: number, hovered: number, zoom = 1.9, radius = 2.6) {
@@ -126,22 +128,22 @@ function dock(cx: number, baseY: number, base: number, count: number, hovered: n
   const panelY = baseY - panelH;
   const tileBottom = baseY - pad - base * 0.12;
   let out =
-    `<rect x="${r(panelX)}" y="${r(panelY)}" width="${r(panelW)}" height="${r(panelH)}" rx="${r(panelH * 0.32)}" fill="${RAISED}" fill-opacity="0.85"/>` +
+    `<rect x="${r(panelX)}" y="${r(panelY)}" width="${r(panelW)}" height="${r(panelH)}" rx="${r(panelH * 0.32)}" fill="${INK2}" fill-opacity="0.85"/>` +
     `<rect x="${r(panelX + 1)}" y="${r(panelY + 1)}" width="${r(panelW - 2)}" height="${r(panelH - 2)}" rx="${r(panelH * 0.32 - 1)}" fill="none" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="2"/>`;
   let x = cx - rowW / 2;
-  const blueAlpha = [1, 0.5, 0.22];
+  const accentAlpha = [1, 0.5, 0.22];
   sizes.forEach((s, i) => {
     const d = Math.abs(i - hovered);
     const y = tileBottom - s;
     const rx = s * 0.27;
-    out += `<rect x="${r(x)}" y="${r(y)}" width="${r(s)}" height="${r(s)}" rx="${r(rx)}" fill="#2A3645"/>`;
-    if (d < blueAlpha.length)
-      out += `<rect x="${r(x)}" y="${r(y)}" width="${r(s)}" height="${r(s)}" rx="${r(rx)}" fill="${BLUE}" fill-opacity="${blueAlpha[d]}"/>`;
+    out += `<rect x="${r(x)}" y="${r(y)}" width="${r(s)}" height="${r(s)}" rx="${r(rx)}" fill="${TILE}"/>`;
+    if (d < accentAlpha.length)
+      out += `<rect x="${r(x)}" y="${r(y)}" width="${r(s)}" height="${r(s)}" rx="${r(rx)}" fill="${ACCENT}" fill-opacity="${accentAlpha[d]}"/>`;
     out += `<rect x="${r(x + 0.75)}" y="${r(y + 0.75)}" width="${r(s - 1.5)}" height="${r(s - 1.5)}" rx="${r(rx - 0.75)}" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1.5"/>`;
-    // running-app indicator dots: hovered = blue accent, a few others = bone
+    // running-app indicator dots: hovered = caramel accent, a few others = bone
     const dotY = baseY - pad * 0.62;
     const dotR = Math.max(1.5, base * 0.045);
-    if (i === hovered) out += `<circle cx="${r(x + s / 2)}" cy="${r(dotY)}" r="${r(dotR)}" fill="${BLUE}"/>`;
+    if (i === hovered) out += `<circle cx="${r(x + s / 2)}" cy="${r(dotY)}" r="${r(dotR)}" fill="${ACCENT}"/>`;
     else if (i % 3 === 0) out += `<circle cx="${r(x + s / 2)}" cy="${r(dotY)}" r="${r(dotR)}" fill="${BONE}" fill-opacity="0.55"/>`;
     x += s + gap;
   });
@@ -188,7 +190,7 @@ const add = (name: string, w: number, h: number, body: string, label?: string) =
       wm.svg +
       text(84, 340, 44, "A lightweight dock", { weight: 600 }) +
       text(84, 396, 44, "for KDE Plasma 6", { weight: 600 }) +
-      `<rect x="84" y="436" width="56" height="6" rx="3" fill="${BLUE}"/>` +
+      `<rect x="84" y="436" width="56" height="6" rx="3" fill="${ACCENT}"/>` +
       text(84, 492, 26, "Wayland-native · parabolic zoom", { fill: MUTED }) +
       text(84, 530, 26, "PipeWire window previews", { fill: MUTED }) +
       icon(ix, iy, iconSize),
@@ -233,12 +235,12 @@ const add = (name: string, w: number, h: number, body: string, label?: string) =
   );
 }
 
-// 5. Avatars — flat night background, icon glyph with generous padding (circle-crop safe).
+// 5. Avatars — flat ink background, icon glyph with generous padding (circle-crop safe).
 for (const [name, S] of [["avatar", 512], ["avatar-400", 400]] as const) {
   // Glyph occupies x 44..212, y 32..224 of the 256 master; at 0.72 its farthest
   // corner sits ~0.6 of the radius from centre, well inside a circle crop.
   const size = S * 0.72;
-  add(name, S, S, `<rect width="${S}" height="${S}" fill="${NIGHT}"/>` + icon((S - size) / 2, (S - size) / 2, size, false));
+  add(name, S, S, `<rect width="${S}" height="${S}" fill="${INK}"/>` + icon((S - size) / 2, (S - size) / 2, size, false));
 }
 
 // 6. Launchpad
@@ -276,7 +278,7 @@ add("kde-store-logo", 256, 256, iconBody());
       `<rect x="${r(90 + lw + 60)}" y="${(H - 120) / 2}" width="3" height="120" rx="1.5" fill="${BONE}" fill-opacity="0.18"/>` +
       text(90 + lw + 108, 170, 56, "Release notes", { weight: 600 }) +
       text(90 + lw + 110, 214, 26, "KDE Plasma 6 dock", { fill: MUTED }) +
-      `<rect x="${r(90 + lw + 110)}" y="232" width="48" height="5" rx="2.5" fill="${BLUE}"/>` +
+      `<rect x="${r(90 + lw + 110)}" y="232" width="48" height="5" rx="2.5" fill="${ACCENT}"/>` +
       dock(1135, 206, 18, 5, 2).svg,
     "Krema — Release notes",
   );

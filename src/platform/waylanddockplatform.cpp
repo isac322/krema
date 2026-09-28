@@ -137,8 +137,13 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
 void WaylandDockPlatform::setSize(const QSize &size)
 {
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+    // LayerShellQt < 6.4 derives the layer-surface set_size from the QWindow
+    // geometry (zeroing anchor-constrained axes itself), so size the window.
+    // A 0 here means "stretch" for the layer surface, not a 0 px window: keep
+    // the window's current extent on that axis. A 0 px wide window is never
+    // rendered again, so the new size would never be committed.
     if (m_window) {
-        m_window->resize(size);
+        m_window->resize(size.width() > 0 ? size.width() : m_window->width(), size.height() > 0 ? size.height() : m_window->height());
     }
 #else
     if (m_layerWindow) {

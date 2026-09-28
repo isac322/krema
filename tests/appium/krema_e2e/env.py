@@ -67,8 +67,3 @@ def _library_version(soname: str) -> tuple[int, ...]:
 #: Plasma's kglobalacceld version, e.g. (6, 3, 6). Before 6.7 (commit d62b708)
 #: it drops a shortcut key that another component already holds.
 KGLOBALACCELD_VERSION: tuple[int, ...] = _library_version("libKGlobalAccelD.so.0")
-
-#: LayerShellQt version, e.g. (6, 3, 6). krema built against < 6.4 (no
-#: Window::setDesiredSize) sizes its layer surfaces through QWindow::resize
-#: (KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE).
-LAYERSHELLQT_VERSION: tuple[int, ...] = _library_version("libLayerShellQtInterface.so.6")

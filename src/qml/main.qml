@@ -62,7 +62,7 @@ Item {
         target: root.Window.window
         function onActiveChanged() {
             if (root.Window.window && root.Window.window.active
-                    && root.keyboardNavigating && !root.activeFocus) {
+                    && (root.keyboardNavigating || root._dragActive) && !root.activeFocus) {
                 root.forceActiveFocus()
             }
         }
@@ -137,6 +137,14 @@ Item {
     }
 
     Keys.onPressed: function(event) {
+        // Escape cancels an internal reorder drag (the dock grabs keyboard
+        // interactivity while dragging, see DockVisibility.setDragActive)
+        if (_dragActive && event.key === Qt.Key_Escape) {
+            cancelDrag()
+            event.accepted = true
+            return
+        }
+
         if (!keyboardNavigating) return
 
         // Preview keyboard mode: route keys to PreviewController
@@ -267,6 +275,16 @@ Item {
                 root._dragSourceIndex = root.hoveredIndex
             }
         }
+    }
+
+    // Cancel an active internal drag without reordering (Escape). The button is
+    // still held: _dragWasActive stays set so the eventual release is not a click.
+    function cancelDrag() {
+        root._dragActive = false
+        root._dragPending = false
+        root._dragSourceIndex = -1
+        root._dragTargetIndex = -1
+        DockVisibility.setDragActive(false)
     }
 
     // Compute the target index where the dragged item would be inserted.
@@ -571,7 +589,7 @@ Item {
                 root._dragWasActive = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
-                DockVisibility.setInteracting(false)
+                DockVisibility.setDragActive(false)
             } else if (root._dragPending) {
                 root._dragPending = false
                 root._dragWasActive = false
@@ -620,7 +638,7 @@ Item {
                 root._dragPending = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
-                DockVisibility.setInteracting(false)
+                DockVisibility.setDragActive(false)
             } else {
                 root._dragPending = false
             }
@@ -669,7 +687,7 @@ Item {
                 if (Math.sqrt(dx * dx + dy * dy) > root._dragThreshold) {
                     root._dragActive = true
                     root._dragWasActive = true
-                    DockVisibility.setInteracting(true)  // Prevent dock hide during drag
+                    DockVisibility.setDragActive(true)  // Prevent dock hide + grab keyboard for Escape
                     tooltipItem.show = false
                     tooltipTimer.stop()
                 }

@@ -353,12 +353,6 @@ def test_dnd_004_drag_released_outside_dock_keeps_order(krema: Krema, apps) -> N
     assert krema.config_path.read_text() == rc_before
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="krema bug: Escape does not cancel an internal drag. main.qml handles Escape only in Keys.onPressed "
-    "while keyboardNavigating, and the dock surface has no keyboard focus during a pointer drag, so the "
-    "ghost/indicator stay and the release still reorders (DND-004 lists Escape as a cancel gesture).",
-)
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND, TW, TW2))
 def test_dnd_004_escape_cancels_drag(krema: Krema) -> None:
     scene = Scene.capture(krema, [KWRITE, KFIND, TW, TW2])

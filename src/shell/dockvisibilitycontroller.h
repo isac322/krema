@@ -90,6 +90,10 @@ public:
     /// task was just activated (that activation already moves focus).
     Q_INVOKABLE void setKeyboardActive(bool active, bool restoreFocus = true);
 
+    /// Set internal (reorder) drag active state. Holds the interaction lock and
+    /// grabs layer-shell keyboard interactivity so Escape can cancel the drag.
+    Q_INVOKABLE void setDragActive(bool active);
+
     /// Current panel rectangle (surface-local coordinates).
     [[nodiscard]] QRect panelRect() const;
 
@@ -165,6 +169,13 @@ private:
     QPersistentModelIndex m_keyboardReturnTask;
     // Reports pointer motion outside the dock surface while keyboard-navigating
     KWinPointerMotionWatcher m_pointerMotionWatcher;
+
+    // Internal reorder drag active: dock holds keyboard focus so Escape reaches it
+    bool m_dragActive = false;
+
+    /// Apply layer-shell keyboard interactivity: exclusive while keyboard
+    /// navigating or dragging, none otherwise.
+    void applyKeyboardInteractivity();
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;

@@ -109,4 +109,4 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 
 **Automated:** tests/appium/test_05_drag.py::test_dnd_004_drag_released_outside_dock_keeps_order (drag outside the dock; unpinned task, since dragging a pinned launcher out of the dock unpins it by design)
 
-**Automated:** tests/appium/test_05_drag.py::test_dnd_004_escape_cancels_drag (strict xfail: Escape does not cancel an internal drag)
+**Automated:** tests/appium/test_05_drag.py::test_dnd_004_escape_cancels_drag (Escape while dragging; the dock grabs layer-shell keyboard interactivity for the drag)

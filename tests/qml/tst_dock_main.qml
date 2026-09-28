@@ -499,5 +499,33 @@ Item {
             // The drag must not also count as a click.
             compare(DockActions.callsTo("activate").length, 0)
         }
+
+        function test_escapeCancelsDragWithoutReorder() {
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            let from = centerOf(its[0])
+            let to = centerOf(its[2])
+            mouseMove(stage, from.x, from.y)
+            tryCompare(dock, "hoveredIndex", 0)
+            mousePress(stage, from.x, from.y, Qt.LeftButton)
+            tryCompare(dock, "_dragPending", true, 2000)
+            mouseMove(stage, to.x, to.y, -1, Qt.LeftButton)
+            tryCompare(dock, "_dragTargetIndex", 2)
+            // The dock grabs the keyboard for the drag so Escape reaches it.
+            compare(DockVisibility.dragActive, true)
+            dock.forceActiveFocus()
+            keyClick(Qt.Key_Escape)
+            compare(dock._dragActive, false)
+            compare(dock._dragTargetIndex, -1)
+            compare(DockVisibility.dragActive, false)
+            compare(DockVisibility.interacting, false)
+            // Moving on with the button still held must not restart the drag.
+            mouseMove(stage, centerOf(its[1]).x, to.y, -1, Qt.LeftButton)
+            compare(dock._dragActive, false)
+            mouseRelease(stage, centerOf(its[1]).x, to.y, Qt.LeftButton)
+            compare(DockActions.callsTo("moveTask").length, 0)
+            compare(DockActions.callsTo("activate").length, 0)
+        }
     }
 }

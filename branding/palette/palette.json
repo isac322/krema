@@ -1,0 +1,37 @@
+{
+  "name": "Krema crema",
+  "colors": {
+    "night": {
+      "hex": "#110C09",
+      "role": "deepest background"
+    },
+    "ink": {
+      "hex": "#18110D",
+      "role": "surfaces, logo tile, ink on light"
+    },
+    "ink-2": {
+      "hex": "#231A14",
+      "role": "raised surfaces"
+    },
+    "bone": {
+      "hex": "#F4ECE0",
+      "role": "light surfaces, ink on dark"
+    },
+    "bone-dim": {
+      "hex": "#CDBFAE",
+      "role": "body copy on dark"
+    },
+    "muted": {
+      "hex": "#A89684",
+      "role": "secondary copy"
+    },
+    "caramel": {
+      "hex": "#D69A5E",
+      "role": "accent: tiles, links, highlights"
+    },
+    "caramel-deep": {
+      "hex": "#A8682F",
+      "role": "pressed/hover accent"
+    }
+  }
+}

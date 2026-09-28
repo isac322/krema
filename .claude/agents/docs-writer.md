@@ -123,7 +123,7 @@ When writing documents, identify where images maximize message impact and output
 [For designed-image]
 - **Nano Banana prompt**: Ready-to-paste AI image generation prompt
   (Example: "Minimalist logo for a dock application called 'Krema'. Clean geometric shapes
-  suggesting a dock bar with magnified icons. KDE blue (#1d99f3) accent color.
+  suggesting a dock bar with magnified icons. Caramel (#d69a5e) accent color.
   Flat design, no text, transparent background, SVG-ready.")
 ```
 

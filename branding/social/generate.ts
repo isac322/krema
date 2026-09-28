@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
-// Generates Krema social/store images: SVG sources + optimized PNG exports.
+// Generates Krema social/store images: SVG masters + optimized PNG exports.
 // Usage: bun branding/social/generate.ts            (writes SVGs and PNGs)
 //        bun branding/social/generate.ts --svg-only (writes SVGs only)
-// Requires nix (resvg, oxipng, noto-fonts). Text is rendered with Noto Sans
-// passed explicitly to resvg, so output never depends on system fonts.
+// Requires nix (resvg/usvg, oxipng, noto-fonts). Committed SVGs have all text
+// baked to paths by usvg with Noto Sans passed explicitly, so every asset
+// renders identically without the font installed.
 import { $ } from "bun";
 import { join } from "node:path";
 
@@ -286,15 +287,32 @@ add("kde-store-logo", 256, 256, iconBody());
 
 // ---------- write + render ----------
 
-for (const a of assets) await Bun.write(join(OUT, `${a.name}.svg`), a.svg);
-if (process.argv.includes("--svg-only")) process.exit(0);
-
+// Committed SVGs must contain no <text>: usvg bakes glyphs to paths with the
+// explicit Noto Sans file, so the masters render identically everywhere.
+// Raw text SVGs are staging-only and stay in a temp dir.
 const fontDir = (await $`nix build nixpkgs#noto-fonts --no-link --print-out-paths`.text()).trim();
 const font = join(fontDir, "share/fonts/noto/NotoSans.ttf");
+const rawDir = await $`mktemp -d`.text().then((s) => s.trim());
+
+// usvg drops <title>/ARIA; put them back so the masters stay accessible.
+for (const a of assets) {
+  const raw = join(rawDir, `${a.name}.svg`);
+  await Bun.write(raw, a.svg);
+  const baked = await $`nix shell nixpkgs#resvg -c usvg --use-font-file ${font} --font-family ${FONT} --quiet ${raw} -c`.text();
+  const title = a.svg.match(/<title>([^<]*)/)?.[1] ?? a.name;
+  await Bun.write(
+    join(OUT, `${a.name}.svg`),
+    baked
+      .replace("<svg ", `<svg role="img" aria-label="${title}" `)
+      .replace(/(<svg[^>]*>)/, `$1<title>${title}</title>`),
+  );
+}
+if (process.argv.includes("--svg-only")) process.exit(0);
+
 for (const a of assets) {
   const svg = join(OUT, `${a.name}.svg`);
   const png = join(OUT, `${a.name}.png`);
-  await $`nix shell nixpkgs#resvg -c resvg --skip-system-fonts --use-font-file ${font} --font-family ${FONT} -w ${a.w} -h ${a.h} ${svg} ${png}`;
+  await $`nix shell nixpkgs#resvg -c resvg -w ${a.w} -h ${a.h} ${svg} ${png}`;
 }
 const pngs = assets.map((a) => join(OUT, `${a.name}.png`));
 await $`nix shell nixpkgs#oxipng -c oxipng -o 4 --strip safe ${pngs}`.quiet();

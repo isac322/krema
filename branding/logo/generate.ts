@@ -1,7 +1,8 @@
-// Emits Krema brand master SVGs (Zoom K icon + zoom wordmark + lockups) into <repo>/branding/
+// Emits Krema brand master SVGs (Zoom K icon + zoom wordmark + lockups) next to
+// this script in <repo>/branding/logo/. Usage: bun branding/logo/generate.ts [dir]
 import { mkdirSync, writeFileSync } from "node:fs";
 
-const OUT = process.argv[2];
+const OUT = process.argv[2] ?? import.meta.dir;
 mkdirSync(OUT, { recursive: true });
 
 // Palette A (matches website/css/site.css): ink tile, bone stem, caramel accent.

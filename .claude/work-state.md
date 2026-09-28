@@ -44,7 +44,7 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - openSUSE: spec의 Requires를 Tumbleweed/Leap 패키지명으로 분리 (packaging/obs/krema.spec), 기존 artifact + `krema-suse-compat-provides` + `dbus-1-daemon` 포함 runtime image로 2개 타겟 smoke 통과
 
 - [x] 브랜드 아이덴티티 (feat/brand-identity PR)
-  - 줌 K 아이콘 + 줌 워드마크 원본: `branding/` (`generate.ts`로 재생성, 가이드 `branding/README.md`)
+  - 줌 K 아이콘 + 줌 워드마크 원본: `branding/logo/` (`branding/logo/generate.ts`로 재생성, 가이드 `branding/README.md`, 토큰 `branding/palette/`)
   - hicolor 아이콘 설치 + `Icon=com.bhyoo.krema`, AppStream icon/branding/screenshots, 창 아이콘
   - 소셜·스토어 이미지 `branding/social/`, 실제 스크린샷 `branding/screenshots/` (재생성: `regen/`)
   - GitHub Pages 랜딩 `website/` → https://krema.bhyoo.com/ (Pages custom domain 설정됨, DNS·repo 설정은 isac322/homelab Terraform PR #355)

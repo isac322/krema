@@ -1,0 +1,12 @@
+/* Krema crema palette tokens. Mirrors website/css/site.css :root
+   (where --caramel/--caramel-deep appear as the legacy names --blue/--blue-deep). */
+:root {
+  --night: #110c09; /* deepest background */
+  --ink: #18110d; /* surfaces, logo tile, ink on light */
+  --ink-2: #231a14; /* raised surfaces */
+  --bone: #f4ece0; /* light surfaces, ink on dark */
+  --bone-dim: #cdbfae; /* body copy on dark */
+  --muted: #a89684; /* secondary copy */
+  --caramel: #d69a5e; /* accent: tiles, links, highlights */
+  --caramel-deep: #a8682f; /* pressed/hover accent */
+}

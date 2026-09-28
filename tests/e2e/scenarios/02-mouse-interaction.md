@@ -160,12 +160,12 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 
 **Expected:**
 - One additional kcalc process appears (separate entry in list_windows)
-- Bounce animation plays on the dock icon (screenshot verification)
+- Bounce animation plays on the dock icon until the new window maps (screenshot verification); if the app is already active and no new window appears within 5s (single-instance no-op), the bounce stops
 
 **Verified in PoC:** kcalc went from 1 to 2 separate process entries.
 
 **Verification:** list_windows (kcalc entry count increased by 1)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse006_middle_click_launches_new_instance (bounce until the new window maps: tests/appium/test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps, strict xfail for a krema bug)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse006_middle_click_launches_new_instance (bounce until the new window maps: tests/appium/test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps)
 
 ---
 

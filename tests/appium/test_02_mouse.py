@@ -501,10 +501,10 @@ def test_mouse005_scroll_wheel_cycles_grouped_windows(krema: Krema, apps: TestWi
 
 # ------------------------------------------------------------------ MOUSE-006
 # The launch bounce runs while DockItem.launching is true, which is exactly
-# while the item's description carries "Starting". A window item is launching
-# only for launchSafetyTimer's 500 ms when no startup task arrives, too short
-# for a screenshot poll to catch reliably, so the feedback is observed as
-# AT-SPI description events recorded from before the click.
+# while the item's description carries "Starting". A window item never gets a
+# startup task (TasksModel filters those of apps with a window), so its feedback
+# is observed as AT-SPI description events recorded from before the click,
+# which needs no screenshot capture.
 def _starting_seen(changes: DescriptionChanges) -> bool:
     return any("Starting" in t for t in changes.texts("krema"))
 
@@ -555,16 +555,6 @@ class LaunchFeedbackEndedEarly(AssertionError):
     """The launch feedback ended while the new instance had no window yet."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=LaunchFeedbackEndedEarly,
-    reason=(
-        "krema bug: a middle-click new instance bounces for 500 ms only. main.qml sets manualLaunching on the "
-        "window item; with no startup task (none in a KWin 6 session: IsStartup never turns true) "
-        "DockItem.qml launchSafetyTimer clears it after 500 ms, so launching, the bounce and the 'Starting' "
-        "description end while the app is still starting (here 3 s before its window maps)"
-    ),
-)
 @pytest.mark.no_krema_autostart
 @pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
 def test_mouse006_launch_bounce_lasts_until_the_new_window_maps(krema: Krema, apps: TestWindows) -> None:

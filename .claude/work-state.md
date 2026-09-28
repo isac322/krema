@@ -49,6 +49,11 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - 문서: `tests/appium/README.md` (Local setup, env vars, Coverage matrix, known bugs), `tests/e2e/README.md` (자동화 반영 + kwin-mcp 한계 테이블 갱신), `docs/kde/lessons-learned.md` §11
   - Harness notes: 세션당 하나의 장수명 inputsynth가 KWin fake-input pointer device를 세션 전체에 등록해 둠 (`krema_e2e/input.py`의 `hold_pointer_capability`, `pytest_plugin.py`의 세션 fixture `_pointer_capability`). 호출마다 device를 만들면 KWin이 seat pointer capability를 잃고 Qt가 leave 없이 wl_pointer를 release → 느린 CI에서 stuck hover flake가 발생. `KREMA_E2E_DOCKER_ARGS`로 docker run 옵션 전달 가능 (예: `--cpus=2`로 CI 재현).
 
+- [x] Tier 3 배포판별 풀 세션 VM QA (tests/vm)
+  - `tests/vm/build-package.sh <target|all> <outdir>`: repo의 packaging(spec/debian/PKGBUILD)으로 12개 타겟 패키지 빌드 (Docker)
+  - `tests/vm/run-vm-qa.sh <target> <pkgdir> [--interactive]`: 공식 cloud image + cloud-init으로 Plasma 6 Wayland + SDDM autologin, 패키지 설치, 실제 세션에서 10개 체크 (plasmashell/kwin, autostart, AT-SPI 독, 앱 실행→독 버튼, KWin 활성화, 크래시 없음) + QMP screendump. `--interactive`는 VNC로 수동 QA
+  - 로컬: macOS에서 `nix shell nixpkgs#qemu nixpkgs#xorriso -c ...` (HVF, aarch64 게스트만; Lima nested KVM은 게스트 부팅 불가). CI: `.github/workflows/vm-qa.yml` (workflow_dispatch/release/주간, x86_64 KVM) — 12/12 통과
+
 ## 알려진 이슈
 
 - AllScreens/FollowActive: 실제 듀얼 모니터에서 검증 필요
@@ -69,6 +74,7 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - Follow active + Mouse trigger가 포인터의 화면으로 독을 이동하지 않음 (SET-008)
   - AlwaysVisible이 exclusive zone을 예약하지 않아 최대화 윈도우가 독 아래로 확장됨 (VIS-001)
 - 제품 발견사항: 기본 Focus Dock 단축키 Meta+F5가 KWin 기본값 MoveMouseToFocus와 충돌 → stock KWin에서 실제 Meta+F5가 krema에 도달하지 않음
+- VM QA에서 발견: `krema --version`이 버전을 출력하지 않음 (명령행 파서 없음), 번역 도메인 미설정 (`KLocalizedString::setApplicationDomain` 없음 → `Domain is not set` 경고, i18n 미적용)
 
 ## 다음 작업
 
@@ -77,4 +83,4 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
 - E2E 스위트 strict xfail 버그 8건 수정 (위 알려진 이슈 참조) — 수정하면 XPASS로 드러나므로 마커 제거 필요
-- `.github/workflows/e2e.yml`을 CI에서 실행해 e2e 스위트 검증
+- `vm-qa.yml`은 기본 브랜치에 머지된 뒤에야 workflow_dispatch 가능

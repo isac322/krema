@@ -53,9 +53,11 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - `tests/distro/build-package.sh <target>`: repo의 packaging(spec/debian/PKGBUILD)으로 타겟 패키지 빌드 (캐시 `tests/distro/.cache/`)
   - `tests/distro/run-distro-e2e.sh <target>`: 타겟 배포판 이미지에 패키지를 패키지 매니저로 설치 후 Tier 2 AT-SPI 스위트(tests/appium)를 `/usr/bin/krema`에 대해 실행. KWin permission checks ON(`KWIN_WAYLAND_NO_PERMISSION_CHECKS=0`) — 설치된 `com.bhyoo.krema.desktop`의 `X-KDE-Wayland-Interfaces` 선언 검증
   - 로컬: Linux Docker 호스트 + platform-bus vgem (`sudo tests/appium/setup-vgem.sh`); macOS는 OrbStack에 DRM이 없어 캡처 테스트 불가 → vgem을 올린 Lima VM 사용 (검증도 그렇게 함)
-  - CI: `.github/workflows/distro-e2e.yml` (PR/push/release/workflow_dispatch, 타겟별 matrix job) — https://github.com/isac322/krema/actions/runs/36421577648 attempts 1,2 모두 12/12 통과. 기대 결과: arch/slowroll/tumbleweed/fedora-43/44/rawhide `66 passed, 4 skipped, 8 xfailed`; fedora-42/leap-16.0/ubuntu-25.10/26.04 `64/4/10`; debian-13/ubuntu-25.04 `62/4/12` (상세: `tests/distro/README.md`)
+  - CI: `.github/workflows/distro-e2e.yml` (PR/push/release/workflow_dispatch, 타겟별 matrix job) — https://github.com/isac322/krema/actions/runs/36421577648 attempts 1,2 모두 12/12 통과. 기대 결과: arch/slowroll/tumbleweed/fedora-43/44/rawhide `68 passed, 4 skipped, 8 xfailed`; fedora-42/leap-16.0/ubuntu-25.10/26.04 `66/4/10`; debian-13/ubuntu-25.04 `64/4/12` (master #40/#42/#43 rebase 후 MOUSE-009·SET-010 추가, 푸시 줌 검증 반영) (상세: `tests/distro/README.md`)
 
 ## 알려진 이슈
+
+- 푸시 줌(#43) 이후: 독이 새 태스크 행으로 재정렬되는 도중 포인터가 열린 미리보기를 거쳐 독을 떠나면 창 미리보기가 포인터와 무관하게 열린 채 남을 수 있음 (결정적 재현 미확보, `test_06_settings.py::open_settings`에서 레이아웃 안정화 대기로 회피; 상세 `tests/appium/README.md`)
 
 - AllScreens/FollowActive: 실제 듀얼 모니터에서 검증 필요
 - QML fade/slide 전환 애니메이션 미구현 (현재 instant show/hide)

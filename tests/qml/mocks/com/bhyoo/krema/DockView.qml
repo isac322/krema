@@ -4,6 +4,7 @@
 // Mock of DockView (production: per-engine context property).
 pragma Singleton
 import QtQuick
+import krema.test
 
 QtObject {
     // 0=Top, 1=Bottom, 2=Left, 3=Right
@@ -13,6 +14,14 @@ QtObject {
     property color backgroundColor: "#99000000"
     property int floatingPadding: 8
     property int iconCacheVersion: 0
+
+    // Production DockView::zoomLayout (krema::computeDockZoom), not a copy.
+    function zoomLayout(count, restStart, iconSize, spacing, restBackgroundStart, restBackgroundEnd,
+                        maxZoomFactor, style, active, cursor, minEdge, maxEdge) {
+        return ZoomLayoutEngine.zoomLayout(count, restStart, iconSize, spacing, restBackgroundStart,
+                                           restBackgroundEnd, maxZoomFactor, style, active, cursor,
+                                           minEdge, maxEdge)
+    }
 
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["edge", "backgroundStyleType", "backgroundColor", "floatingPadding", "iconCacheVersion"]

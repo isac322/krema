@@ -197,12 +197,13 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | KBD-009 | `test_01_keyboard_nav.py::test_kbd009_keyboard_mode_keeps_hidden_dock_visible`, `test_kbd009_dock_auto_hides_again_after_escape` | AT-SPI, KWin | pass; strict xfail on param `smarthide` |
 | MOUSE-001 | `test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app`, `test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer` | KWin, AT-SPI | pass; strict xfail (krema bug) |
 | MOUSE-002 | `test_02_mouse.py::test_mouse002_left_click_launches_pinned_app`, `test_mouse002_pinned_launch_bounces` | KWin, screenshot | pass; strict xfail (krema bug) |
-| MOUSE-003 | `test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover` | AT-SPI | pass |
+| MOUSE-003 | `test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover` | AT-SPI, screenshot | pass |
 | MOUSE-004 | `test_02_mouse.py::test_mouse004_tooltip_shows_app_name_on_hover` | screenshot | pass |
 | MOUSE-005 | `test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows` | KWin | pass |
 | MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance`, `test_mouse006_launch_bounce_lasts_until_the_new_window_maps` | KWin, AT-SPI events | pass; strict xfail (krema bug) |
 | MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state` | screenshot | pass |
 | MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`, added on master) | KWin | pass (C++ KWin test, not this suite) |
+| MOUSE-009 | `test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them` | AT-SPI, screenshot | pass |
 | PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails` | AT-SPI, screenshot | pass |
 | PREV-002 | `test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row` | AT-SPI | pass |
 | PREV-003 | `test_03_preview.py::test_prev003_clicking_a_thumbnail_activates_that_window` | KWin, AT-SPI | pass |
@@ -229,6 +230,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | SET-007 | `test_06_settings.py::test_set007_custom_tint_color_is_applied_and_saved` | AT-SPI, kremarc, screenshot | pass |
 | SET-008 | `test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings`, `test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen`, `test_set008_follow_active_shortcuts_act_on_the_shown_dock`, `test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen` | KWin, AT-SPI, kremarc | 3 pass; strict xfail (krema bug) |
 | SET-009 | `test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly` | KWin (process exit) | pass |
+| SET-010 | `test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists` | AT-SPI, kremarc | pass |
 | VIS-001 | `test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window`, `test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows` | AT-SPI, screenshot, KWin | pass; strict xfail (krema bug) |
 | VIS-002 | `test_07_visibility.py::test_vis002_auto_hide_hides_after_timeout_and_frees_the_screen` | AT-SPI, KWin | pass |
 | VIS-003 | `test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach` | AT-SPI, KWin | pass |
@@ -255,11 +257,13 @@ into XPASS and fails the run until the marker is removed.
   — after Escape, keyboard focus is not returned to the previously active
   window, so SmartHide never re-hides the dock (KBD-009).
 * `test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer`
-  — the dock resolves the item under the pointer only on pointer motion:
-  `updateHoveredItem()` runs only from `dockMouseArea.onPositionChanged`
-  (`src/qml/main.qml` ~511-574), and `onClicked` (~484-498) uses the stale
-  `root.hoveredIndex`. A click without prior motion on an item that
-  appeared or shifted under a resting pointer is dropped (MOUSE-001).
+  — the dock resolves the item under the pointer only on pointer motion or
+  when zoomed icons move under a pointer it already tracks:
+  `updateHoveredItem()` runs from `dockMouseArea.onPositionChanged` and
+  `dockPanel.scheduleHoverUpdate()` (`src/qml/main.qml` ~591, ~891), and
+  `onClicked` (~564) uses the stale `root.hoveredIndex`. A click without
+  prior motion on an item that appeared or shifted under a resting pointer
+  in an unzoomed dock is dropped (MOUSE-001).
 * `test_02_mouse.py::test_mouse002_pinned_launch_bounces`
   — clicking a pinned launcher shows no launch bounce when no startup task
   appears (MOUSE-002).
@@ -298,6 +302,22 @@ Product finding (not an xfail, worked around in
 shortcut Meta+F5 collides with KWin's default `MoveMouseToFocus` binding,
 so a real Meta+F5 never reaches krema on stock KWin — see
 "Investigations" §2.
+
+Product finding (not an xfail: no deterministic reproduction yet, worked
+around in `test_06_settings.py::open_settings`): after the push-aside zoom
+(#43), a window item's hover preview can stay open, or open again, with the
+pointer far from the dock. It happens when the pointer leaves the dock
+through the open preview while the dock is still re-centring for a new task
+row (krema's own Settings item right after Settings... is chosen from the
+menu): the dock's `onExited` keeps `dockPanel.mouseX` while the preview is
+visible, and `scheduleHoverUpdate()` re-runs the hit test with that stale
+position as the icons move. Without waiting for the dock layout to settle
+before leaving, SET-004/005/007 failed in all 4 runs (SET-003 in 2): the
+preview covered the Settings page and took its wheel and clicks, and
+SET-004 once timed out waiting 8 s for the preview to close with the
+pointer at the top of the screen. With the wait, 2 of 2 runs pass. Isolated
+attempts (dock → preview → away while another window's row appears) did not
+reproduce it.
 
 ## Writing tests
 

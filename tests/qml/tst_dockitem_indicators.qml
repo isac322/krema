@@ -34,8 +34,11 @@ Item {
             KremaMocks.resetAll()
         }
 
+        // Unity LauncherEntry state is keyed by the task's launcher URL.
+        readonly property string launcherUrl: "applications:org.kde.dolphin.desktop"
+
         function makeItem(roles) {
-            DockModel.tasksModel.addTask(Object.assign({ display: "Dolphin", AppId: "org.kde.dolphin" }, roles))
+            DockModel.tasksModel.addTask(Object.assign({ display: "Dolphin", AppId: "org.kde.dolphin", LauncherUrlWithoutIcon: launcherUrl }, roles))
             let row = createTemporaryObject(rowComponent, stage)
             verify(row)
             tryCompare(row, "count", 1)
@@ -149,29 +152,44 @@ Item {
             compare(T.badge(item).width, Math.round(96 * 0.38))
         }
 
-        function test_smartLauncherCountTakesPriority() {
+        function test_launcherEntryCountTakesPriority() {
             let item = makeItem({ IsWindow: true })
-            verify(item._smartLauncherItem !== null, "SmartLauncherItem mock was not instantiated")
             NotificationTracker.setUnread("org.kde.dolphin", 3)
             tryCompare(item, "_badgeCount", 3)
-            item._smartLauncherItem.count = 7
-            item._smartLauncherItem.countVisible = true
+            LauncherEntryTracker.setEntry(launcherUrl, { count: 7, countVisible: true })
             tryCompare(item, "_badgeCount", 7)
             compare(T.badgeLabel(item).text, "7")
-            item._smartLauncherItem.countVisible = false
+            LauncherEntryTracker.setEntry(launcherUrl, { countVisible: false })
             tryCompare(item, "_badgeCount", 3)
         }
 
-        function test_progressBarFollowsSmartLauncher() {
+        function test_launcherEntryIsPerApp() {
+            let item = makeItem({ IsWindow: true })
+            LauncherEntryTracker.setEntry("applications:org.kde.konsole.desktop", { count: 5, countVisible: true, progress: 40, progressVisible: true })
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            verify(!T.progressBar(item).visible)
+        }
+
+        function test_launcherEntryBadgeStaysVisibleDuringDoNotDisturb() {
+            NotificationTracker.dndActive = true
+            let item = makeItem({ IsWindow: true })
+            LauncherEntryTracker.setEntry(launcherUrl, { count: 2, countVisible: true })
+            tryCompare(item, "_badgeCount", 2)
+            verify(T.badge(item).visible)
+        }
+
+        function test_progressBarFollowsLauncherEntry() {
             let item = makeItem({ IsWindow: true })
             let bar = T.progressBar(item)
             verify(bar, "progress bar not found")
             verify(!bar.visible)
-            item._smartLauncherItem.progress = 50
-            item._smartLauncherItem.progressVisible = true
-            verify(bar.visible)
+            LauncherEntryTracker.setEntry(launcherUrl, { progress: 50, progressVisible: true })
+            tryVerify(() => bar.visible)
             let fill = bar.children[0]
             tryCompare(fill, "width", bar.width * 0.5)
+            LauncherEntryTracker.setEntry(launcherUrl, { progressVisible: false })
+            tryVerify(() => !bar.visible)
         }
 
         function test_activatingWindowClearsTrackerBadge() {
@@ -196,7 +214,7 @@ Item {
         }
 
         function test_attentionSourcesTrigger_data() {
-            return [{ tag: "badge-increase" }, { tag: "sni-needs-attention" }, { tag: "smartlauncher-urgent" }]
+            return [{ tag: "badge-increase" }, { tag: "sni-needs-attention" }, { tag: "launcher-entry-urgent" }]
         }
 
         function test_attentionSourcesTrigger(data) {
@@ -208,7 +226,7 @@ Item {
             else if (data.tag === "sni-needs-attention")
                 NotificationTracker.setSniAttention("org.kde.dolphin", true)
             else
-                item._smartLauncherItem.urgent = true
+                LauncherEntryTracker.setEntry(launcherUrl, { urgent: true })
             tryCompare(item, "_showAttentionAnim", true)
         }
 

@@ -153,10 +153,59 @@ Item {
             tryCompare(dock, "hoveredIndex", 2)
             compare(dock.hoveredName, "C")
             tryCompare(its[2], "currentScale", DockSettings.maxZoomFactor)
-            fuzzyCompare(its[1].zoomFactor, its[3].zoomFactor, 1e-6)
-            verify(its[1].zoomFactor > its[0].zoomFactor && its[0].zoomFactor > 1.0)
+            fuzzyCompare(its[1].zoomScale, its[3].zoomScale, 1e-6)
+            verify(its[1].zoomScale > its[0].zoomScale && its[0].zoomScale > 1.0)
             compare(its[2].z, 1)
             compare(its[1].z, 0)
+        }
+
+        function panelEdges() {
+            let r = DockVisibility.panelRect
+            return { left: r.x, right: r.x + r.width }
+        }
+
+        // Parabolic (default): the magnified row pushes neighbours aside and the
+        // reported dock background grows by the row's growth, evenly on both
+        // sides for a middle icon, then returns to its rest extent.
+        function test_parabolicHoverGrowsBackgroundAndPushesNeighbours() {
+            addTasks(["A", "B", "C", "D", "E"])
+            let dock = makeDock(5)
+            let its = items(dock)
+            let rest = panelEdges()
+            hoverItem(its[2])
+            tryCompare(its[2], "currentScale", DockSettings.maxZoomFactor)
+            let growth = 0
+            for (let it of its) growth += DockSettings.iconSize * (it.zoomScale - 1)
+            let zoomed = panelEdges()
+            // Integer rect, rounded outward: at most 1 px per side.
+            verify(Math.abs((rest.left - zoomed.left) - growth / 2) <= 1, "left edge grew by " + (rest.left - zoomed.left) + ", expected " + growth / 2)
+            verify(Math.abs((zoomed.right - rest.right) - growth / 2) <= 1, "right edge grew by " + (zoomed.right - rest.right) + ", expected " + growth / 2)
+            for (let i = 0; i + 1 < its.length; i++) {
+                let a = its[i], b = its[i + 1]
+                let aRight = a.itemCenterX + a.currentOffset + a.width * a.currentScale / 2
+                let bLeft = b.itemCenterX + b.currentOffset - b.width * b.currentScale / 2
+                verify(Math.abs((bLeft - aRight) - DockSettings.iconSpacing) < 1e-6, "gap " + i + " is " + (bLeft - aRight))
+            }
+            verify(its[0].currentOffset < 0 && its[4].currentOffset > 0, "outer icons not pushed aside")
+
+            mouseMove(stage, stage.width / 2, 2)
+            for (let it of its) tryCompare(it, "currentOffset", 0)
+            tryVerify(() => panelEdges().left === rest.left && panelEdges().right === rest.right, 2000, "background did not return to rest")
+        }
+
+        // In place: icons magnify over their neighbours; nothing moves and the
+        // background keeps its rest extent.
+        function test_inPlaceHoverKeepsBackgroundAndPositions() {
+            DockSettings.zoomStyle = 1
+            addTasks(["A", "B", "C", "D", "E"])
+            let dock = makeDock(5)
+            let its = items(dock)
+            let rest = panelEdges()
+            hoverItem(its[2])
+            tryCompare(its[2], "currentScale", DockSettings.maxZoomFactor)
+            for (let it of its) compare(it.currentOffset, 0)
+            compare(panelEdges().left, rest.left)
+            compare(panelEdges().right, rest.right)
         }
 
         function test_zoomSettlesWhenPointerLeavesPanel() {

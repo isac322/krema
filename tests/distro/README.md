@@ -117,6 +117,14 @@ plus `arch`:
 `arch` and `opensuse-slowroll` publish amd64 packages only; on an arm64 host
 they need amd64 emulation (qemu-user binfmt) and are otherwise CI-only.
 
+The target list is `targets.tsv`, one row per repository in
+`packaging/obs/project.meta.xml` (its `obs_repository` column). The weekly
+distro release watcher (`.github/workflows/distro-release-watch.yml`,
+`scripts/check_distro_releases.py`) only compares the OBS/COPR/PPA channels
+with upstream releases and does not read `targets.tsv`: when one of its
+`distro-release` issues adds an OBS repository, add the matching row here too
+(lock the base image with `tests/docker/update-digests.sh`) so Tier 3 runs on it.
+
 The pass criterion per target is Tier 2's result for the same suite. A
 difference that only one distro shows is root-caused: harness or image
 problems are fixed here; a genuine krema or packaging bug on that distro is
@@ -156,9 +164,9 @@ https://github.com/isac322/krema/actions/runs/36421577648 (attempts 1 and 2,
 
 | Targets | Result | Reasons for the extra xfails |
 | --- | --- | --- |
-| `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `arch` | 66 passed, 4 skipped, 8 xfailed | latest KWin/Qt/KF/LayerShellQt — only the unconditional strict xfails |
-| `fedora-42`, `opensuse-leap-16.0`, `ubuntu-25.10`, `ubuntu-26.04` | 64 passed, 4 skipped, 10 xfailed | +2 for kglobalacceld < 6.7: a real Meta+F5 and keyboard navigation on an auto-hide dock (`test_kbd001_meta_f5_focuses_first_dock_item`, `test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible`), because krema's default Meta+F5 collides with KWin's `MoveMouseToFocus` and old kglobalacceld drops the contested key |
-| `debian-13`, `ubuntu-25.04` | 62 passed, 4 skipped, 12 xfailed | +2 for kglobalacceld < 6.7 (same as above) and +2 for LayerShellQt < 6.4 (`test_set002`, `test_set006`): krema built without `setDesiredSize` resizes through `QWindow::resize(QSize(0, h))`, which leaves the window 0 px wide so the surface is never recommitted |
+| `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `arch` | 68 passed, 4 skipped, 8 xfailed | latest KWin/Qt/KF/LayerShellQt — only the unconditional strict xfails |
+| `fedora-42`, `opensuse-leap-16.0`, `ubuntu-25.10`, `ubuntu-26.04` | 66 passed, 4 skipped, 10 xfailed | +2 for kglobalacceld < 6.7: a real Meta+F5 and keyboard navigation on an auto-hide dock (`test_kbd001_meta_f5_focuses_first_dock_item`, `test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible`), because krema's default Meta+F5 collides with KWin's `MoveMouseToFocus` and old kglobalacceld drops the contested key |
+| `debian-13`, `ubuntu-25.04` | 64 passed, 4 skipped, 12 xfailed | +2 for kglobalacceld < 6.7 (same as above) and +2 for LayerShellQt < 6.4 (`test_set002`, `test_set006`): krema built without `setDesiredSize` resizes through `QWindow::resize(QSize(0, h))`, which leaves the window 0 px wide so the surface is never recommitted |
 
 Package and image are built from scratch on every run (about 2 minutes
 each), the suite takes about 8 minutes, and a full-matrix run about

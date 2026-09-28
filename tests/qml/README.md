@@ -28,20 +28,20 @@ from the source tree. They must not be copied into the build directory.
 
 | File | Component under test | Covers |
 |---|---|---|
-| `tst_dockitem_zoom.qml` | `DockItem.qml` | Parabolic zoom versus pointer distance: the peak equals `maxZoomFactor` at the hovered item, falloff is symmetric and monotonic, neighbours are attenuated, zoom stays at 1.0 outside the panel and beyond the Gaussian range, sigma scales with icon size, the max-zoom setting applies live, the scale animates up and settles back to 1.0, the transform matches `currentScale`, and each edge grows away from the screen edge |
+| `tst_dockitem_zoom.qml` | `DockItem.qml` | Hover zoom fed by the production zoom layout (`DockView.zoomLayout`): the peak equals `maxZoomFactor` at the hovered item, falloff is symmetric and monotonic, neighbours are attenuated, zoom stays at 1.0 outside the panel and beyond the Gaussian range, sigma scales with icon size, the max-zoom setting applies live, zoom eases in and settles back to the rest layout for both styles, the Scale and Translate transforms match `currentScale`/`currentOffset`, Parabolic pushes neighbours aside with constant gaps and keeps the hovered icon under the pointer, In place scales around fixed centres with overlap, and each edge grows away from the screen edge |
 | `tst_dockitem_geometry.qml` | `DockItem.qml` | Item size from `iconSize` per edge (including the indicator reserve), live resize, icon `sourceSize` covering max zoom, icon provider URL and cache-busting, placeholder initial, icon opacity for active/minimized/background/drag-source windows, dimming of other virtual desktops |
-| `tst_dockitem_indicators.qml` | `DockItem.qml` | Running dots driven by `IsWindow`/`ChildCount` (capped at 3), with live role updates and active/minimized styling; the badge shows the unread count (`99+` overflow) and follows the number/dot/off modes, scales with icon size, gives SmartLauncher priority, and clears when the window is activated; progress bar; attention triggers (window, badge increase, SNI, SmartLauncher urgent), the disable setting, DND suppression, auto-stop after the configured duration, and blink restoring icon opacity; accessible description |
-| `tst_dock_main.qml` | `main.qml` | One delegate per task (insert and remove), layout from `iconSize` and `iconSpacing` (with live updates), the panel hugging its content and centering, vertical docks, pointer hover to zoom through the real hit testing, zoom settling when the pointer leaves, hover reporting, launcher tooltip versus window preview, `previewEnabled=false`, left/middle/right click and wheel dispatch, launch bounce (`taskLaunching`, `IsStartup`), keyboard navigation (arrows, clamping, Return, Escape, vertical axis, preview open), `computeDropIndex`, `isDesktopFileUrl`, and press-hold drag reorder that does not also fire a click |
+| `tst_dockitem_indicators.qml` | `DockItem.qml` | Running dots driven by `IsWindow`/`ChildCount` (capped at 3), with live role updates and active/minimized styling; the badge shows the unread count (`99+` overflow) and follows the number/dot/off modes, scales with icon size, gives the Unity LauncherEntry count priority (per launcher URL, kept during Do Not Disturb), and clears when the window is activated; LauncherEntry progress bar; attention triggers (window, badge increase, SNI, LauncherEntry urgent), the disable setting, DND suppression, auto-stop after the configured duration, and blink restoring icon opacity; accessible description |
+| `tst_dock_main.qml` | `main.qml` | One delegate per task (insert and remove), layout from `iconSize` and `iconSpacing` (with live updates), the panel hugging its content and centering, vertical docks, pointer hover to zoom through the real hit testing, Parabolic hover growing the reported background evenly and pushing neighbours aside (In place: background and positions unchanged), zoom settling when the pointer leaves, hover reporting, launcher tooltip versus window preview, `previewEnabled=false`, left/middle/right click and wheel dispatch, launch bounce (`taskLaunching`, `IsStartup`), keyboard navigation (arrows, clamping, Return, Escape, vertical axis, preview open), `computeDropIndex`, `isDesktopFileUrl`, and press-hold drag reorder that does not also fire a click |
 | `tst_preview_popup.qml` | `PreviewPopup.qml` + `PreviewThumbnail.qml` | Visibility follows the controller; single-window versus grouped thumbnails (titles, window IDs, active/minimized); a lagging `WinIdList` limits the thumbnail count; incremental updates keep existing delegates (and so their PipeWire streams); app switches rebuild the thumbnails; a removed parent hides the popup; thumbnail click activates the right window and close closes it; thumbnail size follows the setting; the size is reported to the controller; keyboard focus ring; placement per edge; hover keeps the preview open and cancels keyboard navigation |
 
 ## How the C++ backends are replaced
 
 Production code exposes C++ objects as `com.bhyoo.krema` singletons
-(`DockModel`, `DockSettings`, `NotificationTracker`) and as per-engine context
-properties (`DockView`, `DockActions`, `DockContextMenu`, `DockVisibility`,
-`PreviewController`). `main.cpp` (`QUICK_TEST_MAIN_WITH_SETUP`) prepends
-`mocks/` to the QML import path, so the same identifiers resolve to test
-doubles:
+(`DockModel`, `DockSettings`, `NotificationTracker`, `LauncherEntryTracker`)
+and as per-engine context properties (`DockView`, `DockActions`,
+`DockContextMenu`, `DockVisibility`, `PreviewController`). `main.cpp`
+(`QUICK_TEST_MAIN_WITH_SETUP`) prepends `mocks/` to the QML import path, so
+the same identifiers resolve to test doubles:
 
 - `mocks/com/bhyoo/krema/*.qml`: QML singletons with the properties and
   methods the QML uses. Defaults mirror `src/config/krema.kcfg`. Action
@@ -54,13 +54,18 @@ doubles:
   `addChildTask(row, {...})`, `setTaskData(row, role, value)`, and
   `removeTask(row)`. `DockModel.iconName()`, `appId()`, `isPinned()`
   (`IsLauncher`), and `isOnCurrentDesktop()` read from those rows.
+- `DockView.zoomLayout()` is not a copy: it calls the C++ `ZoomLayoutEngine`
+  singleton (`krema.test`), which runs the production
+  `krema::computeDockZoom` (`src/utils/zoomcalculator.h`) exactly as
+  `DockView::zoomLayout` does. `DockItemRow.qml` feeds DockItem through the
+  same pipeline as `main.qml` (zoom cursor, eased `zoomAmount` for Parabolic).
+- `LauncherEntryTracker` (Unity LauncherEntry state) is keyed by the task's
+  `LauncherUrlWithoutIcon` role; tests set state with
+  `LauncherEntryTracker.setEntry(url, { count, countVisible, urgent, progress, progressVisible })`.
 - `org.kde.taskmanager` (`AbstractTasksModel` role enum,
   `ScreencastingRequest`) and `org.kde.pipewire` (`PipeWireSourceItem`) are
   C++ mocks registered in `qmltestmocks.cpp`. Type-less `qmldir` files under
   `mocks/` shadow the installed plugins.
-- `org.kde.plasma.private.taskmanager` `SmartLauncherItem` (created by
-  `DockItem` via `Qt.createComponent`) is a QML mock. Tests reach it through
-  `dockItem._smartLauncherItem`.
 - `i18n()` comes from the real `KLocalization::setupLocalizedContext`, as in
   `DockView`.
 

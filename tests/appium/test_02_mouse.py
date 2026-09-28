@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""tests/e2e/scenarios/02-mouse-interaction.md (MOUSE-001..007) with real
-pointer input through KWin fake-input and KWin / AT-SPI / screenshot oracles."""
+"""tests/e2e/scenarios/02-mouse-interaction.md (MOUSE-001..007, MOUSE-009) with
+real pointer input through KWin fake-input and KWin / AT-SPI / screenshot oracles."""
 
 from __future__ import annotations
 
@@ -165,8 +165,34 @@ def _item_rects(krema: Krema) -> list[Rect]:
     return wait_stable(lambda: [Rect.of(e) for e in krema.items()])
 
 
-def _zoomed_widths(krema: Krema, rest: list[Rect]) -> list[int]:
-    return [painted_rect(r, r0).width for r, r0 in zip([Rect.of(e) for e in krema.items()], rest, strict=True)]
+def _painted_rects(krema: Krema, rest: list[Rect]) -> list[Rect]:
+    """Where each dock item is drawn (surface-local), given its rest rects."""
+    return [painted_rect(r, r0) for r, r0 in zip([Rect.of(e) for e in krema.items()], rest, strict=True)]
+
+
+def _settled_painted_rects(krema: Krema, rest: list[Rect]) -> list[Rect]:
+    return wait_stable(lambda: _painted_rects(krema, rest))
+
+
+def _background_span(krema: Krema, y: int, tag: str) -> tuple[int, int]:
+    """Screen x extent [left, right) of the dock background on screen row
+    ``y`` (an item's centre row: below the panel's rounded corners, with
+    only the black desktop around it; icons lie inside the background)."""
+    row = _pixels(krema.screenshot(tag))[y]
+    xs = np.nonzero(row.sum(axis=1) > 30)[0]
+    assert len(xs), f"no dock background on screen row {y}"
+    return int(xs.min()), int(xs.max()) + 1
+
+
+def _monotonic(values: list[int], tolerance: int = 2) -> bool:
+    """True if ``values`` never reverses direction by more than ``tolerance``."""
+    lo = hi = values[0]
+    up = down = False
+    for v in values[1:]:
+        up = up or v > lo + tolerance
+        down = down or v < hi - tolerance
+        lo, hi = min(lo, v), max(hi, v)
+    return not (up and down)
 
 
 # ------------------------------------------------------------------ MOUSE-001
@@ -194,11 +220,12 @@ def test_mouse001_left_click_activates_and_unminimizes_running_app(krema: Krema,
     raises=WaitTimeout,
     reason=(
         "krema bug: the dock resolves a click through root.hoveredIndex, which only updateHoveredItem() "
-        "sets, and that runs only from dockMouseArea.onPositionChanged (main.qml ~511-574, onClicked ~484-498). "
-        "When an item appears (or the layout shifts) under a resting pointer, nothing re-evaluates the item "
-        "under it: hoveredIndex stays -1 (or stale) and a click without prior motion is dropped (onClicked "
-        "returns on hoveredIndex < 0). Seen as the ctx001 flake when a test started with the pointer resting "
-        "on the spot where its dock item appeared"
+        "sets. That runs from dockMouseArea.onPositionChanged (main.qml ~591, onClicked ~564) and, since the "
+        "push-aside zoom, from dockPanel.scheduleHoverUpdate() (~891) when zoomed icons move under a tracked "
+        "pointer. When an item appears (or the layout shifts) in an unzoomed dock under a resting pointer, "
+        "nothing re-evaluates the item under it: hoveredIndex stays -1 (or stale) and a click without prior "
+        "motion is dropped (onClicked returns on hoveredIndex < 0). Seen as the ctx001 flake when a test "
+        "started with the pointer resting on the spot where its dock item appeared"
     ),
 )
 def test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer(krema: Krema, apps: TestWindows) -> None:
@@ -286,24 +313,24 @@ def test_mouse002_pinned_launch_bounces(krema: Krema) -> None:
     assert lift >= 3, f"icon bounced while the app was starting (max lift {lift}px)"
 
 
-# ------------------------------------------------------------------ MOUSE-003
+# ------------------------------------------------------ MOUSE-003 / MOUSE-009
 ZOOM_LAUNCHERS = [APP1, APP2, "org.kde.kwrite", "org.kde.kfind", "qt6-designer", "qt6-linguist", "org.kde.kiod6"]
+ZOOM_KREMARC = {"PinnedLaunchers": [config.launcher(i) for i in ZOOM_LAUNCHERS], "MaxZoomFactor": 1.6}
 
 
-@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher(i) for i in ZOOM_LAUNCHERS], "MaxZoomFactor": 1.6})
-def test_mouse003_parabolic_zoom_on_hover(krema: Krema) -> None:
+def _zoom_rest_layout(krema: Krema) -> tuple[list[Rect], int, Rect]:
+    """Rest rects of the 7 pinned items, their common size and the dock
+    surface's screen rect."""
     wait_until(lambda: len(krema.items()) == len(ZOOM_LAUNCHERS), message="7 pinned items")
     krema.move_away(close_preview=False)
-    rest_rects = _item_rects(krema)
-    rest = [r.width for r in rest_rects]
-    assert len(set(rest)) == 1, f"all items at base size before hover: {rest}"
-    base = rest[0]
-    mid = len(rest) // 2
-    name = krema.item_names()[mid]
+    rest = _item_rects(krema)
+    widths = [r.width for r in rest]
+    assert len(set(widths)) == 1, f"all items at base size before hover: {widths}"
+    dock = wait_until(lambda: krema.surface_rect("dock"), message="dock surface geometry")
+    return rest, widths[0], dock
 
-    krema.hover_item(name)
-    w = wait_stable(lambda: _zoomed_widths(krema, rest_rects))
 
+def _assert_parabolic_falloff(w: list[int], base: int, mid: int) -> None:
     # Hovered item is zoomed close to MaxZoomFactor (pointer at its centre).
     assert w[mid] >= base * 1.5, f"hovered item zoomed to ~1.6x: {w}"
     # Zoom decreases with distance, symmetrically on both sides.
@@ -315,8 +342,89 @@ def test_mouse003_parabolic_zoom_on_hover(krema: Krema) -> None:
     # Items three icons away stay at base size.
     assert abs(w[0] - base) <= 1 and abs(w[-1] - base) <= 1, f"far items at base size: {w}"
 
+
+@pytest.mark.kremarc(ZOOM_KREMARC)
+def test_mouse003_parabolic_zoom_on_hover(krema: Krema) -> None:
+    """Default zoom style: magnified icons push their neighbours aside with
+    constant gaps, the background grows to contain them, a sweep across the
+    middle keeps the background edges and far icons still, and toward an end
+    each background edge moves one way only."""
+    _require_capture()
+    rest, base, dock = _zoom_rest_layout(krema)
+    rest_gap = rest[1].x - (rest[0].x + base)
+    row_y = dock.y + rest[0].center[1]
+    rest_bg = _background_span(krema, row_y, "rest")
+    mid = len(rest) // 2
+
+    krema.hover_item(krema.item_names()[mid])
+    p = _settled_painted_rects(krema, rest)
+    w = [r.width for r in p]
+    _assert_parabolic_falloff(w, base, mid)
+
+    # The hovered icon stays under the pointer; every other icon moves outward.
+    pointer_x = inp.pointer_position()[0] - dock.x
+    assert abs(p[mid].center[0] - pointer_x) <= 2, f"hovered icon centre {p[mid].center[0]} left the pointer at {pointer_x}"
+    for i, (r, r0) in enumerate(zip(p, rest)):
+        if i != mid:
+            shift = r.center[0] - r0.center[0]
+            assert shift * (i - mid) > 2, f"item {i} not pushed aside (centre shift {shift}): {p}"
+    # Gaps between the drawn icons stay at the rest spacing: no overlap.
+    gaps = [b.x - (a.x + a.width) for a, b in zip(p, p[1:])]
+    assert all(abs(g - rest_gap) <= 2 for g in gaps), f"gaps {gaps}, rest spacing {rest_gap}"
+    # The background grows by the row's growth, half on each side for a middle icon.
+    growth = sum(x - base for x in w)
+    bg = _background_span(krema, row_y, "zoomed")
+    assert abs((rest_bg[0] - bg[0]) - growth / 2) <= 3, f"left edge {rest_bg[0]} -> {bg[0]}, row growth {growth}"
+    assert abs((bg[1] - rest_bg[1]) - growth / 2) <= 3, f"right edge {rest_bg[1]} -> {bg[1]}, row growth {growth}"
+
+    # Sweep across the middle icons: background edges and far icons stay still.
+    x_left, x_right, x_end = (dock.x + rest[i].center[0] for i in (mid - 1, mid + 1, len(rest) - 1))
+    edges, far = [], []
+    for i, x in enumerate(range(x_left, x_right + 1, 8)):
+        inp.move(x, row_y)
+        q = _settled_painted_rects(krema, rest)
+        far.append((q[0].x, q[-1].x + q[-1].width))
+        edges.append(_background_span(krema, row_y, f"sweep-{i}"))
+    for side, name in ((0, "left"), (1, "right")):
+        for label, seq in (("background edge", [e[side] for e in edges]), ("far icon edge", [f[side] for f in far])):
+            assert max(seq) - min(seq) <= 2, f"{name} {label} moved during the middle sweep: {seq}"
+
+    # Toward the right end: each background edge moves smoothly, one way only.
+    trail = []
+    for i, x in enumerate(range(x_right, x_end + 1, 8)):
+        inp.move(x, row_y)
+        _settled_painted_rects(krema, rest)
+        trail.append(_background_span(krema, row_y, f"end-{i}"))
+    for side, name in ((0, "left"), (1, "right")):
+        seq = [t[side] for t in trail]
+        assert _monotonic(seq), f"{name} background edge went back and forth toward the end: {seq}"
+        assert max(abs(b - a) for a, b in zip(seq, seq[1:])) <= 12, f"{name} background edge jumped: {seq}"
+
     krema.move_away(close_preview=False)
-    wait_until(lambda: _zoomed_widths(krema, rest_rects) == rest, message="zoom to reset after leaving")
+    wait_until(lambda: _painted_rects(krema, rest) == rest, message="icons to return to the rest layout")
+    wait_until(lambda: _background_span(krema, row_y, "after") == rest_bg, message="background to return to its rest extent")
+
+
+@pytest.mark.kremarc({**ZOOM_KREMARC, "ZoomStyle": 1})
+def test_mouse009_in_place_zoom_scales_icons_without_moving_them(krema: Krema) -> None:
+    _require_capture()
+    rest, base, dock = _zoom_rest_layout(krema)
+    row_y = dock.y + rest[0].center[1]
+    rest_bg = _background_span(krema, row_y, "rest")
+    mid = len(rest) // 2
+
+    krema.hover_item(krema.item_names()[mid])
+    p = _settled_painted_rects(krema, rest)
+    _assert_parabolic_falloff([r.width for r in p], base, mid)
+    for i, (r, r0) in enumerate(zip(p, rest)):
+        assert abs(r.center[0] - r0.center[0]) <= 2, f"item {i} moved: centre {r0.center[0]} -> {r.center[0]}"
+    assert p[mid - 1].x + p[mid - 1].width > p[mid].x, f"left neighbour does not overlap the magnified icon: {p}"
+    assert p[mid + 1].x < p[mid].x + p[mid].width, f"right neighbour does not overlap the magnified icon: {p}"
+    bg = _background_span(krema, row_y, "zoomed")
+    assert abs(bg[0] - rest_bg[0]) <= 1 and abs(bg[1] - rest_bg[1]) <= 1, f"background {rest_bg} -> {bg}"
+
+    krema.move_away(close_preview=False)
+    wait_until(lambda: _painted_rects(krema, rest) == rest, message="icons to return to base size")
 
 
 # ------------------------------------------------------------------ MOUSE-004

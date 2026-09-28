@@ -17,6 +17,11 @@ target_compile_definitions(krema_qml_tests PRIVATE
     KREMA_QML_MOCKS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/mocks"
 )
 
+# utils/zoomcalculator.h (header-only) backs the DockView.zoomLayout() mock.
+target_include_directories(krema_qml_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
 target_link_libraries(krema_qml_tests PRIVATE
     Qt6::Gui
     Qt6::Qml

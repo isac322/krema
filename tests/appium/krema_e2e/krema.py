@@ -80,20 +80,19 @@ def painted_rect(rect: Rect, rest: Rect) -> Rect:
     ``rest``, the same item's rect while unzoomed (both in the same
     coordinates, surface-local or screen).
 
-    DockItem.qml scales the item about the centre of its bottom side. With
-    Qt >= 6.9 ``rect`` already is the scaled rect and is returned as is. With
-    older Qt (:data:`EXTENTS_IGNORE_SCALE`) the zoom factor comes from how far
-    the reported top-left corner rose above the resting one: scale s moves it
-    up by height * (s - 1) and left by width / 2 * (s - 1).
+    DockItem.qml scales the item about the centre of its bottom side, then
+    translates it along the dock by its zoom offset (the Parabolic style
+    pushes neighbours aside). With Qt >= 6.9 ``rect`` already is the
+    transformed rect and is returned as is. With older Qt
+    (:data:`EXTENTS_IGNORE_SCALE`) ``rect`` is the transformed top-left corner
+    with the unscaled size: scale s moves the corner up by height * (s - 1),
+    so the zoom factor comes from how far it rose above the resting one (the
+    horizontal shift mixes scale and offset and is not used).
     """
     if not EXTENTS_IGNORE_SCALE:
         return rect
     assert (rect.width, rect.height) == (rest.width, rest.height), f"{rect} and rest rect {rest} differ in size"
     grow = (rest.y - rect.y) / rest.height  # s - 1
-    # Both corners are rounded to whole pixels: allow 1 px plus the rounding
-    # of y carried over to x (width / 2 / height < 0.5).
-    shift = rest.x - rect.x
-    assert abs(shift - grow * rest.width / 2) <= 1.5, f"{rect} is not rest rect {rest} scaled about its bottom centre"
     return Rect(rect.x, rect.y, round(rest.width * (1 + grow)), round(rest.height * (1 + grow)))
 
 

@@ -239,3 +239,4 @@ neighbour's zoomed position as a click target.
 - All icons return to base size when the pointer leaves the dock
 
 **Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (bounding-box sizes grow while centres stay fixed)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them

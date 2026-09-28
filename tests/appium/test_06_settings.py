@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-009).
+"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-010).
 
 The real Kirigami/FormCard settings window is driven with real pointer and
 keyboard input (KWin fake-input) and located through AT-SPI. Every test
@@ -186,8 +186,23 @@ def open_menu(k: Krema, name: str = "Alpha") -> kwin.Window:
 
 
 def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
+    """Open Settings from ``name``'s context menu, then leave the dock like a
+    user heading for the dialog.
+
+    After the keyboard-chosen menu entry the pointer still rests on ``name``,
+    whose hover preview then opens (window item); it must be gone before the
+    dialog is used, or it takes the wheel and clicks aimed at the dialog. The
+    dock first finishes re-centring for krema's own new Settings item: a
+    leave that sweeps over the dock and preview while the icons still move
+    under the stale pointer position was seen to leave the preview open
+    afterwards (see README "Known krema bugs")."""
     hover_ready(k, name)
-    return k.open_settings(name, ENTRIES)
+    before = len(k.items())
+    win = k.open_settings(name, ENTRIES)
+    wait_until(lambda: len(k.items()) > before, message="krema's Settings item in the dock")
+    wait_stable(lambda: [Rect.of(e) for e in k.items()], duration=0.5)
+    k.move_away()
+    return win
 
 
 def config_value(krema: Krema, key: str) -> str | None:
@@ -739,3 +754,88 @@ def test_set009_quit_while_settings_is_open_exits_cleanly(tmp_path: Path, apps: 
         _assert_clean_exit(second, code)
     finally:
         second.stop()
+
+
+# ------------------------------------------------------------------- SET-010
+ZOOM_STYLE = "Zoom style"
+PARABOLIC, IN_PLACE = "Parabolic - neighbors move aside", "In place - icons overlap"
+
+
+def hovered_middle_layout(krema: Krema) -> tuple[int, int, list[Rect], list[Rect]]:
+    """Hover the middle dock item from rest; returns (index, base size, rest
+    rects, drawn rects once the zoom settled)."""
+    krema.move_away()
+    rest = wait_stable(lambda: [Rect.of(e) for e in krema.items()])
+    mid = len(rest) // 2
+    krema.hover_item(krema.item_names()[mid])
+    drawn = wait_stable(lambda: [painted_rect(Rect.of(e), r0) for e, r0 in zip(krema.items(), rest, strict=True)])
+    return mid, rest[mid].width, rest, drawn
+
+
+def centre_shifts(rest: list[Rect], drawn: list[Rect]) -> list[int]:
+    return [d.center[0] - r.center[0] for r, d in zip(rest, drawn)]
+
+
+@pytest.mark.kremarc(
+    {
+        "PinnedLaunchers": [kcfg.launcher(i) for i in (env.TEST_APP2_ID, "org.kde.kwrite", "org.kde.kfind", "qt6-designer")],
+        "MaxZoomFactor": 1.6,
+        "PreviewEnabled": False,
+    }
+)
+def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, apps: TestWindows) -> None:
+    apps.open("Alpha")
+    krema.wait_for_item("Alpha")
+    open_settings(krema)
+    open_page(krema, "Appearance")
+    row_xpath = f"{SETTINGS}//list_item[@name='{ZOOM_STYLE}']"
+
+    # Two entries, Parabolic by default.
+    assert current_choice(krema, ZOOM_STYLE) == PARABOLIC
+    click_el(krema, scroll_into_view(krema, row_xpath))
+    first = krema.wait_for(f"{SETTINGS}/dialog//list_item[@name='{PARABOLIC}']")
+    wait_until(lambda: has_state(first, "showing") and Rect.of(first).width > 0, message="zoom style options shown")
+    options = [
+        n for e in krema.find_all(f"{SETTINGS}/dialog//list_item") if has_state(e, "showing") and (n := e.get_attribute("name")) not in PAGES
+    ]
+    assert options == [PARABOLIC, IN_PLACE]
+    click_el(krema, first)
+    wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
+
+    # Parabolic: neighbours move aside.
+    mid, base, rest, drawn = hovered_middle_layout(krema)
+    shifts = centre_shifts(rest, drawn)
+    assert drawn[mid].width >= base * 1.5, f"middle item not zoomed: {drawn[mid]} (rest {rest[mid]})"
+    assert shifts[mid - 1] < -2 and shifts[mid + 1] > 2, f"Parabolic: neighbours not pushed aside, centre shifts {shifts}"
+
+    # In place applies live (no restart), persists, and scales icons where they are.
+    pid = krema.pid
+    choose(krema, ZOOM_STYLE, IN_PLACE)
+    wait_until(lambda: config_value(krema, "ZoomStyle") == "1", message="kremarc ZoomStyle=1")
+    mid, base, rest, drawn = hovered_middle_layout(krema)
+    shifts = centre_shifts(rest, drawn)
+    assert drawn[mid].width >= base * 1.5, f"middle item not zoomed: {drawn[mid]} (rest {rest[mid]})"
+    assert all(abs(s) <= 2 for s in shifts), f"In place: icons moved, centre shifts {shifts}"
+    assert drawn[mid - 1].x + drawn[mid - 1].width > drawn[mid].x, f"In place: no overlap with the magnified icon: {drawn}"
+    assert krema.pid == pid and krema.is_running(), "zoom style change must not restart krema"
+
+    # Back to Parabolic: 0 persisted (or the key dropped as the default).
+    choose(krema, ZOOM_STYLE, PARABOLIC)
+    wait_until(lambda: config_value(krema, "ZoomStyle") in ("0", None), message="kremarc ZoomStyle=0")
+    mid, base, rest, drawn = hovered_middle_layout(krema)
+    shifts = centre_shifts(rest, drawn)
+    assert shifts[mid - 1] < -2 and shifts[mid + 1] > 2, f"Parabolic again: neighbours not pushed aside, centre shifts {shifts}"
+    krema.move_away()
+
+    # Zoom factor 1.0 (a press at the slider's left end) disables the combo;
+    # raising it again (arrow keys on the focused slider) re-enables it.
+    assert has_state(krema.wait_for(row_xpath), "enabled")
+    slider = scroll_into_view(krema, f"{SETTINGS}//slider[@name='Zoom factor']")
+    r = krema.screen_rect(slider, "settings")
+    inp.click(r.x + 1, r.center[1])
+    wait_until(lambda: float(config_value(krema, "MaxZoomFactor") or 0) == 1.0, message="kremarc MaxZoomFactor=1")
+    wait_until(lambda: not has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo disabled at zoom 1.0")
+    for _ in range(6):
+        inp.key("right")
+    wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 0) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
+    wait_until(lambda: has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo enabled again")

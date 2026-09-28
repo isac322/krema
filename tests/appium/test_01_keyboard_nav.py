@@ -68,12 +68,20 @@ def item_rects(krema: Krema) -> dict[str, Rect]:
 
 def wait_widest(krema: Krema, name: str, rest: dict[str, Rect]) -> dict[str, Rect]:
     """Wait for the zoom animation to settle and check ``name`` is the widest
-    item. ``rest``: :func:`item_rects` before keyboard navigation zoomed any."""
+    item and, with the default Parabolic zoom style, that the items on its
+    sides moved aside (away from it). ``rest``: :func:`item_rects` before
+    keyboard navigation zoomed any."""
     rects = {n: painted_rect(r, rest[n]) for n, r in item_rects(krema).items()}
     widest = max(rects.values(), key=lambda r: r.width)
     assert rects[name].width == widest.width, rects
     others = [r.width for n, r in rects.items() if n != name]
     assert all(rects[name].width > w for w in others), f"{name!r} not zoomed beyond its neighbours: {rects}"
+    order = list(rects)
+    focus = order.index(name)
+    for i, n in enumerate(order):
+        if i != focus:
+            shift = rects[n].center[0] - rest[n].center[0]
+            assert shift * (i - focus) > 2, f"{n!r} not moved aside from focused {name!r} (centre shift {shift}): {rects}"
     return rects
 
 

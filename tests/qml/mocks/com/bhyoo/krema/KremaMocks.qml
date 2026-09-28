@@ -14,6 +14,7 @@ QtObject {
         DockContextMenu.reset()
         PreviewController.reset()
         NotificationTracker.reset()
+        LauncherEntryTracker.reset()
         DockModel.reset()
     }
 }

@@ -3,6 +3,8 @@
 
 #include "qmltestmocks.h"
 
+#include "utils/zoomcalculator.h"
+
 #include <QMetaEnum>
 #include <QQmlEngine>
 
@@ -162,6 +164,51 @@ void MockScreencastingRequest::setUuid(const QString &uuid)
     }
 }
 
+QVariantMap ZoomLayoutEngine::zoomLayout(int count,
+                                         qreal restStart,
+                                         qreal iconSize,
+                                         qreal spacing,
+                                         qreal restBackgroundStart,
+                                         qreal restBackgroundEnd,
+                                         qreal maxZoomFactor,
+                                         int style,
+                                         bool active,
+                                         qreal cursor,
+                                         qreal minEdge,
+                                         qreal maxEdge) const
+{
+    // Same mapping as DockView::zoomLayout: unknown styles fall back to Parabolic.
+    const auto zoomStyle = style == static_cast<int>(krema::ZoomStyle::InPlace) ? krema::ZoomStyle::InPlace : krema::ZoomStyle::Parabolic;
+    const krema::DockZoomLayout layout = krema::computeDockZoom(count,
+                                                                restStart,
+                                                                iconSize,
+                                                                spacing,
+                                                                restBackgroundStart,
+                                                                restBackgroundEnd,
+                                                                maxZoomFactor,
+                                                                zoomStyle,
+                                                                active,
+                                                                cursor,
+                                                                minEdge,
+                                                                maxEdge);
+    QVariantList scales;
+    scales.reserve(static_cast<qsizetype>(layout.scales.size()));
+    for (double scale : layout.scales) {
+        scales.append(scale);
+    }
+    QVariantList offsets;
+    offsets.reserve(static_cast<qsizetype>(layout.offsets.size()));
+    for (double offset : layout.offsets) {
+        offsets.append(offset);
+    }
+    return {
+        {QStringLiteral("scales"), scales},
+        {QStringLiteral("offsets"), offsets},
+        {QStringLiteral("leadingGrowth"), layout.leadingGrowth},
+        {QStringLiteral("trailingGrowth"), layout.trailingGrowth},
+    };
+}
+
 void registerMockTypes()
 {
     // The mocks/ import path carries a type-less qmldir for these URIs, which
@@ -174,6 +221,9 @@ void registerMockTypes()
     qmlRegisterType<MockScreencastingRequest>("org.kde.taskmanager", 0, 1, "ScreencastingRequest");
     qmlRegisterType<MockPipeWireSourceItem>("org.kde.pipewire", 0, 1, "PipeWireSourceItem");
     qmlRegisterType<MockTasksModel>("krema.test", 1, 0, "MockTasksModel");
+    qmlRegisterSingletonType<ZoomLayoutEngine>("krema.test", 1, 0, "ZoomLayoutEngine", [](QQmlEngine *, QJSEngine *) -> QObject * {
+        return new ZoomLayoutEngine;
+    });
 }
 
 } // namespace KremaQmlTest

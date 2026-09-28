@@ -32,9 +32,9 @@ function directChildren(item, predicate) {
     return out
 }
 
-// DockItem instances: the only items exposing both zoomFactor and currentScale.
+// DockItem instances: the only items exposing both zoomScale and currentScale.
 function isDockItem(o) {
-    return o.zoomFactor !== undefined && o.currentScale !== undefined
+    return o.zoomScale !== undefined && o.currentScale !== undefined
 }
 
 // DockItem's status indicator Flow (the only Flow inside a DockItem).
@@ -70,7 +70,7 @@ function placeholderLabel(dockItem) {
     return findFirst(iconImage(dockItem), o => o.text !== undefined)
 }
 
-// DockItem's SmartLauncher progress bar (3px high rounded track).
+// DockItem's LauncherEntry progress bar (3px high rounded track).
 function progressBar(dockItem) {
     return directChildren(dockItem, c => c.radius === 1.5 && c.height === 3)[0]
 }

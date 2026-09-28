@@ -7,4 +7,5 @@ singleton DockActions 1.0 DockActions.qml
 singleton DockContextMenu 1.0 DockContextMenu.qml
 singleton PreviewController 1.0 PreviewController.qml
 singleton NotificationTracker 1.0 NotificationTracker.qml
+singleton LauncherEntryTracker 1.0 LauncherEntryTracker.qml
 singleton KremaMocks 1.0 KremaMocks.qml

@@ -38,8 +38,7 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: distro-e2e-${{ github.ref }}
@@ -49,11 +48,13 @@ jobs:
   targets:
     name: Resolve targets
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.resolve.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           sparse-checkout: tests/docker/targets.tsv
@@ -81,6 +82,8 @@ jobs:
     name: Distro E2E (${{ matrix.target }})
     needs: targets
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -89,7 +92,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -111,7 +114,7 @@ jobs:
             "tests/appium/artifacts-distro-$TARGET/junit.xml" \
             --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: distro-e2e-${{ matrix.target }}

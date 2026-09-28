@@ -17,8 +17,7 @@ on:
     branches: [master]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -31,16 +30,18 @@ jobs:
   qml:
     name: QML tests (Tier 1)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build test image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: tests/appium
           tags: ${{ env.KREMA_E2E_IMAGE }}
@@ -68,7 +69,7 @@ jobs:
         if: always()
         run: python3 .github/scripts/junit-summary.py "QML tests" qml-results/junit.xml >>"$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: qml-results
@@ -78,9 +79,11 @@ jobs:
   e2e:
     name: E2E suite (Tier 2)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -94,11 +97,11 @@ jobs:
           ls -l /dev/dri
 
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build test image
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: tests/appium
           tags: ${{ env.KREMA_E2E_IMAGE }}
@@ -120,7 +123,7 @@ jobs:
           python3 .github/scripts/junit-summary.py "E2E tests" tests/appium/artifacts/junit.xml \
             --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-artifacts
@@ -157,7 +160,7 @@ jobs:
           python3 .github/scripts/junit-summary.py "E2E tests (2 outputs)" tests/appium/artifacts-2out/junit.xml \
             --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-artifacts-2out

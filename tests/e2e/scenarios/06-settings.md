@@ -242,4 +242,5 @@
 - Combo is disabled while zoom factor is 1.0 (no zoom to lay out)
 
 **Verification:** find_ui_elements (combo entries/state/enabled), screenshot (Parabolic vs In place zoom), accessibility_tree (item bounding-box centres), kremarc (`ZoomStyle` key)
+**Automated:** tests/appium/test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists
 

@@ -9,7 +9,10 @@
 //  - org.kde.taskmanager AbstractTasksModel (QML needs its role *enum*),
 //  - a QAbstractItemModel standing in for DockModel.tasksModel
 //    (Repeater model + index()/data()/makeModelIndex()),
-//  - org.kde.pipewire PipeWireSourceItem (a QQuickItem).
+//  - org.kde.pipewire PipeWireSourceItem (a QQuickItem),
+//  - ZoomLayoutEngine: DockView.zoomLayout() on the production
+//    krema::computeDockZoom, so the DockView mock lays out zoom exactly as
+//    the app does.
 // The com.bhyoo.krema singletons are plain QML files under mocks/.
 
 #include <QQuickItem>
@@ -37,6 +40,7 @@ public:
         ChildCount,
         WinIdList,
         LauncherUrl,
+        LauncherUrlWithoutIcon,
         IconName,
         IsOnCurrentDesktop,
     };
@@ -145,6 +149,27 @@ Q_SIGNALS:
 private:
     quint32 m_nodeId = 0;
     bool m_allowDmaBuf = false;
+};
+
+// Production DockView::zoomLayout() without the window: same arguments, same
+// result map (scales, offsets, leadingGrowth, trailingGrowth).
+class ZoomLayoutEngine : public QObject
+{
+    Q_OBJECT
+public:
+    using QObject::QObject;
+    Q_INVOKABLE QVariantMap zoomLayout(int count,
+                                       qreal restStart,
+                                       qreal iconSize,
+                                       qreal spacing,
+                                       qreal restBackgroundStart,
+                                       qreal restBackgroundEnd,
+                                       qreal maxZoomFactor,
+                                       int style,
+                                       bool active,
+                                       qreal cursor,
+                                       qreal minEdge,
+                                       qreal maxEdge) const;
 };
 
 void registerMockTypes();

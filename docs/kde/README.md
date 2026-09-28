@@ -15,6 +15,7 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | [kconfig.md](kconfig.md) | KConfig/KSharedConfig/KConfigGroup — persistent configuration, read/write, watchers |
 | [kglobalaccel.md](kglobalaccel.md) | KGlobalAccel — global keyboard shortcuts, registration, conflict handling |
 | [kaboutdata.md](kaboutdata.md) | KAboutData — application metadata, license, D-Bus/KGlobalAccel integration |
+| [kwin-scripting.md](kwin-scripting.md) | KWin Scripting D-Bus API (loadScript/run/unloadScript), `workspace.cursorPosChanged`, `callDBus` — global pointer motion |
 
 ### M4: Drag & Drop
 

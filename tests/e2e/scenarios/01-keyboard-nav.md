@@ -1,7 +1,7 @@
 # Keyboard Navigation
 
 ## Features
-- dock-keyboard-entry: Meta+F5 global shortcut to focus the dock
+- dock-keyboard-entry: Meta+Alt+D global shortcut to focus the dock
 - dock-keyboard-nav: Left/Right arrow keys to move between dock items
 - dock-keyboard-activate: Enter/Space to activate focused app
 - dock-keyboard-new-instance: Shift+Enter to launch new instance
@@ -24,11 +24,13 @@
 - src/shell/dockvisibilitycontroller.cpp
 - src/platform/waylanddockplatform.h
 - src/platform/waylanddockplatform.cpp
+- src/platform/kwinpointermotionwatcher.h
+- src/platform/kwinpointermotionwatcher.cpp
 - src/app/application.cpp
 
 ---
 
-## TC KBD-001: Dock Focus Entry via Meta+F5
+## TC KBD-001: Dock Focus Entry via Meta+Alt+D
 
 **Precondition:** Dock with at least 1 running app (e.g., kcalc). No keyboard focus on dock.
 **Steps:**
@@ -38,7 +40,7 @@
      interface="org.kde.kglobalaccel.Component" method="invokeShortcut"
      args=["string:focus-dock"]
    ```
-   Note: `keyboard_key "super+F5"` does NOT work in kwin-mcp — KGlobalAccel
+   Note: `keyboard_key "super+alt+d"` does NOT work in kwin-mcp — KGlobalAccel
    requires D-Bus invocation in the isolated session.
 2. Wait 500ms for Wayland async round-trip
 3. `accessibility_tree app_name="krema"`
@@ -52,7 +54,7 @@
 
 **Verification:** accessibility_tree (button `focused` state), screenshot (focus ring visible)
 
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_meta_f5_focuses_first_dock_item
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_meta_alt_d_focuses_first_dock_item (real key press; also asserts kglobalaccel keeps Meta+Alt+D bound to focus-dock)
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd001_focus_dock_shortcut_focuses_first_dock_item
 
 ---
@@ -185,7 +187,7 @@
 **Verification:** accessibility_tree (thumbnail removed), list_windows (window gone)
 
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-parked]
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-at-centre] (strict xfail: krema bug, preview input region deeper than the popup)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-at-centre]
 
 ---
 
@@ -204,7 +206,7 @@
 
 **Verification:** accessibility_tree (no button `focused`)
 
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_cancels_keyboard_mode (strict xfail: krema bug, motion off the dock does not cancel keyboard mode)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_cancels_keyboard_mode
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd008_mouse_movement_over_dock_cancels_keyboard_mode
 
 ---
@@ -230,5 +232,4 @@
 **Verification:** accessibility_tree (persistent `showing`+`focused` during keyboard mode)
 
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_keyboard_mode_keeps_hidden_dock_visible[autohide|dodge|smarthide] (SmartHide = VisibilityMode=2 + DodgeActiveOnly=true)
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[autohide|dodge]
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[smarthide] (strict xfail: krema bug, focus not returned to the active window after Escape, so SmartHide never re-hides)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[autohide|dodge|smarthide] (Escape returns focus to the previously active window, so SmartHide sees it again)

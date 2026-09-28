@@ -58,13 +58,22 @@ def settings_windows(krema: Krema) -> list[kwin.Window]:
     return [w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")]
 
 
+#: Thickness of krema's edge strips (kEdgeTriggerThickness): the Follow Active
+#: Mouse trigger maps one on each inactive output. They are not docks.
+EDGE_TRIGGER_PX = 4
+
+
 def dock_surfaces(krema: Krema) -> list[kwin.Window]:
     """Mapped dock surfaces of this krema (layer-shell, full output width,
-    anchored to the bottom edge), sorted left to right."""
+    anchored to the bottom edge, taller than an edge strip), sorted left to right."""
     out = [
         w
         for w in krema.windows()
-        if w.skip_taskbar and not w.desktops and w.client_width == W and w.client_y + w.client_height == H
+        if w.skip_taskbar
+        and not w.desktops
+        and w.client_width == W
+        and w.client_y + w.client_height == H
+        and w.client_height > EDGE_TRIGGER_PX
     ]
     return sorted(out, key=lambda w: w.client_x)
 
@@ -198,16 +207,9 @@ def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
 
     After the keyboard-chosen menu entry the pointer still rests on ``name``,
     whose hover preview then opens (window item); it must be gone before the
-    dialog is used, or it takes the wheel and clicks aimed at the dialog. The
-    dock first finishes re-centring for krema's own new Settings item: a
-    leave that sweeps over the dock and preview while the icons still move
-    under the stale pointer position was seen to leave the preview open
-    afterwards (see README "Known krema bugs")."""
+    dialog is used, or it takes the wheel and clicks aimed at the dialog."""
     hover_ready(k, name)
-    before = len(k.items())
     win = k.open_settings(name, ENTRIES)
-    wait_until(lambda: len(k.items()) > before, message="krema's Settings item in the dock")
-    wait_stable(lambda: [Rect.of(e) for e in k.items()], duration=0.5)
     k.move_away()
     return win
 
@@ -299,25 +301,7 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     assert has_state(krema.item("Alpha"), "showing")
 
 
-#: krema built against LayerShellQt < 6.4 (KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE)
-#: cannot resize its dock surface at runtime.
-RESIZE_DEADLOCK = pytest.mark.xfail(
-    env.LAYERSHELLQT_VERSION < (6, 4),
-    strict=True,
-    raises=WaitTimeout,
-    reason=(
-        "krema bug: on the KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE path (LayerShellQt < 6.4) "
-        "WaylandDockPlatform::setSize() calls QWindow::resize(QSize(0, h)) after DockView::updateSize() "
-        "set the width to the screen width, so the dock window ends up 0 px wide and Qt Quick stops "
-        "rendering it. The layer surface's set_size(0, h) is never committed (WAYLAND_DEBUG: no "
-        "wl_surface.commit after it), KWin sends no configure and the surface stays at its old size: "
-        "icon size and screen edge changes never reach the screen until krema restarts"
-    ),
-)
-
-
 # ------------------------------------------------------------------- SET-002
-@RESIZE_DEADLOCK
 @pytest.mark.kremarc({"PinnedLaunchers": [], "MaxZoomFactor": 1.6})
 def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(krema: Krema, apps: TestWindows) -> None:
     max_zoom = 1.6
@@ -464,7 +448,6 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
 
 
 # ------------------------------------------------------------------- SET-006
-@RESIZE_DEADLOCK
 def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindows) -> None:
     requires_capture()
     apps.open("Alpha")
@@ -658,15 +641,6 @@ def test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen(kr
 
 
 @pytest.mark.outputs(2)
-@pytest.mark.xfail(
-    strict=True,
-    raises=WaitTimeout,
-    reason="krema bug: Follow active + Mouse trigger never follows the pointer. setShellVisible(false) "
-    "unmaps the other screens' docks (view()->hide(), multidockmanager.cpp:363), but the mouse trigger "
-    "only reacts to a hover detected by that dock's visibility controller (multidockmanager.cpp:271-281); "
-    "an unmapped surface gets no pointer events, so the pointer at the second output's bottom edge for 5 s "
-    "leaves no dock surface there and logs no 'Active screen changing'.",
-)
 @pytest.mark.kremarc({**FOLLOW_ACTIVE, "FollowActiveTrigger": 0})
 def test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen(krema: Krema, apps: TestWindows) -> None:
     apps.open("Alpha")

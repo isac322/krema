@@ -16,6 +16,7 @@
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
+#include "shell/edgetrigger.h"
 #include "shell/multidockmanager.h"
 #include "shell/outputordermonitor.h"
 
@@ -388,7 +389,9 @@ TEST_CASE("Opening settings does not switch the Follow Active dock", "[settings]
 
     closeSettings();
 
-    // Control: pointer hover over the hidden dock still switches screens.
+    // Control: the pointer entering the other screen's edge strip still
+    // switches screens. The hidden dock itself is unmapped and gets no pointer
+    // events; the mapped edge strip on its screen stands in for it.
     DockShell *other = nullptr;
     for (auto *shell : app().manager->shells()) {
         if (shell != shown.first()) {
@@ -397,31 +400,35 @@ TEST_CASE("Opening settings does not switch the Follow Active dock", "[settings]
     }
     REQUIRE(other);
     auto *otherController = other->view()->visibilityController();
-    REQUIRE(QTest::qWaitFor(
-        [otherController] {
-            return !otherController->isDockVisible();
-        },
-        kTimeoutMs));
-    otherController->setHovered(true);
+    krema::EdgeTrigger *edgeTrigger = nullptr;
+    for (auto *window : QGuiApplication::allWindows()) {
+        if (auto *candidate = qobject_cast<krema::EdgeTrigger *>(window); candidate && candidate->screen() == other->view()->screen()) {
+            edgeTrigger = candidate;
+        }
+    }
+    REQUIRE(edgeTrigger);
+    CHECK(edgeTrigger->isVisible());
+    // An open dialog holds the dock where it is; closing it releases that.
+    REQUIRE(!shown.first()->view()->visibilityController()->isInteracting());
+    QEnterEvent enter(QPointF(1, 1), QPointF(1, 1), QPointF(1, 1));
+    QCoreApplication::sendEvent(edgeTrigger, &enter);
     CHECK(QTest::qWaitFor(
         [&] {
             const auto docks = shownDocks();
             return docks.size() == 1 && docks.first() == other;
         },
         kTimeoutMs));
-    otherController->setHovered(false);
+    // The strip of the now active screen is unmapped, the old screen's mapped.
+    CHECK(!edgeTrigger->isVisible());
 
     // QA-18: global shortcuts route to the visible Follow Active dock. Both
     // paths (focus-dock, toggle-dock, Meta+N) go through shellAtCursor() /
     // activeShell(); before the fix they returned the hidden primary-screen
     // shell, so toggling it only changed that dock's controller.
     CHECK(app().manager->shellAtCursor() == other);
+    const bool wasVisible = otherController->isDockVisible();
     app().manager->shellAtCursor()->view()->visibilityController()->toggleVisibility();
-    CHECK(QTest::qWaitFor(
-        [otherController] {
-            return !otherController->isDockVisible();
-        },
-        kTimeoutMs));
+    CHECK(otherController->isDockVisible() != wasVisible);
 
     app().settings->setFollowActiveTrigger(trigger);
     resetTo(MultiDockManager::PrimaryOnly);

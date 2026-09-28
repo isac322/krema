@@ -7,6 +7,8 @@
 
 #include <QLoggingCategory>
 
+#include <algorithm>
+
 Q_LOGGING_CATEGORY(lcWayland, "krema.platform.wayland")
 
 namespace krema
@@ -85,9 +87,7 @@ void WaylandDockPlatform::setEdge(Edge edge)
 void WaylandDockPlatform::setExclusiveZone(int zone)
 {
     m_exclusiveZone = zone;
-    if (m_layerWindow) {
-        m_layerWindow->setExclusiveZone(zone);
-    }
+    applyExclusiveZone();
 }
 
 void WaylandDockPlatform::setMargin(int margin)
@@ -115,16 +115,22 @@ void WaylandDockPlatform::setMargin(int margin)
 
 void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
 {
+    m_visibilityMode = mode;
+    applyExclusiveZone();
+}
+
+void WaylandDockPlatform::applyExclusiveZone()
+{
     if (!m_layerWindow) {
         return;
     }
 
-    m_visibilityMode = mode;
-
-    switch (mode) {
+    switch (m_visibilityMode) {
     case VisibilityMode::AlwaysVisible:
-        // Positive exclusive zone reserves space for the dock
-        m_layerWindow->setExclusiveZone(m_exclusiveZone > 0 ? m_exclusiveZone : 0);
+        // Reserve the panel thickness at the anchored edge (the surface is
+        // anchored to that edge and both perpendicular ones, so the compositor
+        // applies the zone there) so maximized windows end above the dock.
+        m_layerWindow->setExclusiveZone(std::max(m_exclusiveZone, 0));
         break;
     case VisibilityMode::AutoHide:
     case VisibilityMode::DodgeWindows:
@@ -137,8 +143,13 @@ void WaylandDockPlatform::setVisibilityMode(VisibilityMode mode)
 void WaylandDockPlatform::setSize(const QSize &size)
 {
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+    // LayerShellQt < 6.4 derives the layer-surface set_size from the QWindow
+    // geometry (zeroing anchor-constrained axes itself), so size the window.
+    // A 0 here means "stretch" for the layer surface, not a 0 px window: keep
+    // the window's current extent on that axis. A 0 px wide window is never
+    // rendered again, so the new size would never be committed.
     if (m_window) {
-        m_window->resize(size);
+        m_window->resize(size.width() > 0 ? size.width() : m_window->width(), size.height() > 0 ? size.height() : m_window->height());
     }
 #else
     if (m_layerWindow) {

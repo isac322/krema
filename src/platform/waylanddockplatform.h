@@ -37,6 +37,7 @@ public:
 
 private:
     void applyAnchors();
+    void applyExclusiveZone();
 
     LayerShellQt::Window *m_layerWindow = nullptr;
     QWindow *m_window = nullptr;

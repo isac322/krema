@@ -40,7 +40,7 @@
 **Verification:** screenshot (dock visible in all states)
 
 **Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window
-**Automated (strict xfail, krema bug — no exclusive zone reserved):** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
+**Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
 
 ---
 
@@ -136,7 +136,7 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Precondition:** Visibility mode set to AutoHide. Dock currently hidden.
 **Steps:**
-1. Trigger Meta+F5 (keyboard navigation entry)
+1. Trigger Meta+Alt+D (keyboard navigation entry)
 2. Wait 500ms
 3. `screenshot` — verify dock is visible
 4. Wait 5 seconds (longer than auto-hide timeout)

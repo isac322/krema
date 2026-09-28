@@ -156,17 +156,16 @@ adds a JUnit summary to the step summary (a skip caused by QPainter
 compositing or a missing render node fails it) and uploads
 `tests/appium/artifacts-distro-<target>/` as `distro-e2e-<target>`.
 
-Expected result per target (the 4 skips are the 2-output tests; the extra
-strict xfails pin library-version-specific krema issues — see "Known krema
-bugs" in `tests/appium/README.md`). Verified by
-https://github.com/isac322/krema/actions/runs/36421577648 (attempts 1 and 2,
-12/12 targets):
+Expected result: every target matches Tier 2 — `77 passed, 4 skipped,
+0 xfailed` (the 4 skips are the 2-output tests). The suite pins no krema bug
+with an xfail, conditional or not. Differences in the distros' libraries are
+handled in the harness rather than in expectations: Qt's AT-SPI roles and
+extents (`PAGE_ROLE`, `SETTINGS_STACK_XPATH`, `painted_rect()` in
+`tests/appium/krema_e2e/krema.py`, keyed on the runtime `env.QT_VERSION`).
 
-| Targets | Result | Reasons for the extra xfails |
-| --- | --- | --- |
-| `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `arch` | 68 passed, 4 skipped, 8 xfailed | latest KWin/Qt/KF/LayerShellQt — only the unconditional strict xfails |
-| `fedora-42`, `opensuse-leap-16.0`, `ubuntu-25.10`, `ubuntu-26.04` | 66 passed, 4 skipped, 10 xfailed | +2 for kglobalacceld < 6.7: a real Meta+F5 and keyboard navigation on an auto-hide dock (`test_kbd001_meta_f5_focuses_first_dock_item`, `test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible`), because krema's default Meta+F5 collides with KWin's `MoveMouseToFocus` and old kglobalacceld drops the contested key |
-| `debian-13`, `ubuntu-25.04` | 64 passed, 4 skipped, 12 xfailed | +2 for kglobalacceld < 6.7 (same as above) and +2 for LayerShellQt < 6.4 (`test_set002`, `test_set006`): krema built without `setDesiredSize` resizes through `QWindow::resize(QSize(0, h))`, which leaves the window 0 px wide so the surface is never recommitted |
+| Targets | Result |
+| --- | --- |
+| `fedora-42`, `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `opensuse-leap-16.0`, `debian-13`, `ubuntu-25.04`, `ubuntu-25.10`, `ubuntu-26.04`, `arch` | 77 passed, 4 skipped, 0 xfailed |
 
 Package and image are built from scratch on every run (about 2 minutes
 each), the suite takes about 8 minutes, and a full-matrix run about

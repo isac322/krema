@@ -109,4 +109,33 @@ QRect computeDockScreenRect(const DockScreenRectParams &p)
     return QRect(surfaceX + p.panelX, surfaceY + p.panelRefY, p.panelWidth, p.panelHeight);
 }
 
+QRegion computePreviewInputRegion(const PreviewInputRegionParams &p)
+{
+    // Mirror PreviewPopup.qml's popup placement: flush with the surface edge
+    // facing the dock, positioned along the dock axis by contentX/contentY.
+    QRectF popup(0, 0, p.contentWidth, p.contentHeight);
+    switch (p.edge) {
+    case 0: // Top: popup at the top of the surface
+        popup.moveTopLeft(QPointF(p.contentX, 0));
+        break;
+    case 1: // Bottom: popup at the bottom of the surface
+        popup.moveTopLeft(QPointF(p.contentX, p.surfaceHeight - p.contentHeight));
+        break;
+    case 2: // Left: popup at the left of the surface
+        popup.moveTopLeft(QPointF(0, p.contentY));
+        break;
+    case 3: // Right: popup at the right of the surface
+        popup.moveTopLeft(QPointF(p.surfaceWidth - p.contentWidth, p.contentY));
+        break;
+    }
+
+    const QRect rect = popup.toAlignedRect().intersected(QRect(0, 0, p.surfaceWidth, p.surfaceHeight));
+    if (rect.isEmpty()) {
+        // No popup geometry yet: block input with a 1x1 corner region
+        // (an empty QRegion clears the mask and accepts ALL input).
+        return QRegion(0, 0, 1, 1);
+    }
+    return QRegion(rect);
+}
+
 } // namespace krema

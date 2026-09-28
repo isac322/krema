@@ -193,13 +193,14 @@
 - All docks open the same settings dialog
 - Each output shows its own dock (not two docks stacked on the primary output)
 - Reopening Settings after switching back to "Primary monitor only" works
-- In "Follow active screen" mode with the mouse trigger, opening Settings does not move the dock to another screen
+- In "Follow active screen" mode with the mouse trigger, opening Settings does not move the dock to another screen (an open dialog, context menu, preview, drag or keyboard navigation holds the dock on its screen)
+- In "Follow active screen" mode with the mouse trigger (dialog closed), moving the pointer to the dock edge of another output moves the dock there
 - The Toggle Dock / Focus Dock / Meta+N shortcuts act on the currently shown dock, not the hidden primary-screen dock
 
 **Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
 
 **Verification:** list_windows (window counts), screenshot (dialog + docks)
-**Automated (E2E, run with `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py`):** tests/appium/test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings, ::test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen, ::test_set008_follow_active_shortcuts_act_on_the_shown_dock (Toggle Dock and Focus Dock; the dock is moved with the Focus trigger), strict xfail ::test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen (krema bug: with the Mouse trigger the dock never follows the pointer to another screen). Meta+N is not checked end to end: activating entry N has no per-dock observable result and remains covered by the integration test.
+**Automated (E2E, run with `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py`):** tests/appium/test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings, ::test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen, ::test_set008_follow_active_shortcuts_act_on_the_shown_dock (Toggle Dock and Focus Dock; the dock is moved with the Focus trigger), ::test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen (pointer at the second output's bottom edge). Meta+N is not checked end to end: activating entry N has no per-dock observable result and remains covered by the integration test.
 
 ---
 

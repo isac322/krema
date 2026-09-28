@@ -14,14 +14,19 @@ QtObject {
     property bool hovered: false
     property bool interacting: false
     property bool keyboardActive: false
+    property bool dragActive: false
     property rect panelRect
     function setPanelRect(x, y, w, h) { panelRect = Qt.rect(x, y, w, h) }
     function setHovered(v) { _record("setHovered", arguments); hovered = v }
     function setInteracting(v) { _record("setInteracting", arguments); interacting = v }
     function setKeyboardActive(v) { _record("setKeyboardActive", arguments); keyboardActive = v }
+    signal pointerMovedDuringKeyboardNavigation()
+
+    // Production: holds the interaction lock and the keyboard grab for the drag.
+    function setDragActive(v) { _record("setDragActive", arguments); dragActive = v; interacting = v }
 
     // Restores every property listed in _resettable to its declared value.
-    readonly property var _resettable: ["calls", "dockVisible", "hovered", "interacting", "keyboardActive", "panelRect"]
+    readonly property var _resettable: ["calls", "dockVisible", "hovered", "interacting", "keyboardActive", "dragActive", "panelRect"]
     property var _defaults: ({})
     Component.onCompleted: {
         for (const k of _resettable) _defaults[k] = this[k]

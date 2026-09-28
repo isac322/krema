@@ -62,20 +62,35 @@ Item {
         target: root.Window.window
         function onActiveChanged() {
             if (root.Window.window && root.Window.window.active
-                    && root.keyboardNavigating && !root.activeFocus) {
+                    && (root.keyboardNavigating || root._dragActive) && !root.activeFocus) {
                 root.forceActiveFocus()
             }
         }
     }
 
-    function endKeyboardNavigation() {
+    // restoreFocus=false when a task was just activated: that activation
+    // already moves focus, returning it would override the user's choice.
+    function endKeyboardNavigation(restoreFocus = true) {
         keyboardNavigating = false
         hoveredIndex = -1
         hoveredName = ""
         _zoomActive = false
         dockPanel.mouseX = -1
         dockPanel.mouseY = -1
-        DockVisibility.setKeyboardActive(false)
+        DockVisibility.setKeyboardActive(false, restoreFocus)
+    }
+
+    // Pointer motion anywhere on screen ends keyboard navigation. Motion over
+    // the dock is also seen by dockMouseArea.onPositionChanged; motion over
+    // other windows reaches the dock only through KWin.
+    Connections {
+        target: DockVisibility
+        function onPointerMovedDuringKeyboardNavigation() {
+            if (!root.keyboardNavigating)
+                return
+            PreviewController.endPreviewKeyboardNav()
+            root.endKeyboardNavigation()
+        }
     }
 
     function navigateItem(delta) {
@@ -122,6 +137,14 @@ Item {
     }
 
     Keys.onPressed: function(event) {
+        // Escape cancels an internal reorder drag (the dock grabs keyboard
+        // interactivity while dragging, see DockVisibility.setDragActive)
+        if (_dragActive && event.key === Qt.Key_Escape) {
+            cancelDrag()
+            event.accepted = true
+            return
+        }
+
         if (!keyboardNavigating) return
 
         // Preview keyboard mode: route keys to PreviewController
@@ -148,7 +171,7 @@ Item {
             case Qt.Key_Return:
             case Qt.Key_Enter:
                 PreviewController.activatePreviewThumbnail()
-                endKeyboardNavigation()
+                endKeyboardNavigation(false)
                 event.accepted = true
                 break
             case Qt.Key_Delete:
@@ -188,7 +211,7 @@ Item {
         case Qt.Key_Space:
             if (hoveredIndex >= 0) {
                 DockActions.activate(hoveredIndex)
-                endKeyboardNavigation()
+                endKeyboardNavigation(false)
             }
             event.accepted = true
             break
@@ -252,6 +275,16 @@ Item {
                 root._dragSourceIndex = root.hoveredIndex
             }
         }
+    }
+
+    // Cancel an active internal drag without reordering (Escape). The button is
+    // still held: _dragWasActive stays set so the eventual release is not a click.
+    function cancelDrag() {
+        root._dragActive = false
+        root._dragPending = false
+        root._dragSourceIndex = -1
+        root._dragTargetIndex = -1
+        DockVisibility.setDragActive(false)
     }
 
     // Compute the target index where the dragged item would be inserted.
@@ -359,6 +392,45 @@ Item {
         return { near: restNear, far: restNear + extent * scale }
     }
 
+    // Map a pointer position (root coordinates) onto the zoom/hover state and
+    // re-run the hit test. dockPanel.mouseX = primary axis (along the dock),
+    // dockPanel.mouseY = secondary axis (depth), so all zoom/hover logic works
+    // identically regardless of orientation; -1 = outside the dock zone.
+    function trackPointer(x, y) {
+        let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
+
+        if (DockView.isVertical) {
+            // Vertical: primary = Y screen axis, secondary = X screen axis
+            let panelNear = dockPanel.x
+            let panelFar = dockPanel.x + dockPanel.width
+            let inZone = (DockView.edge === 2)
+                ? (x >= panelNear && x <= panelFar + zoomExtension)    // Left
+                : (x >= panelNear - zoomExtension && x <= panelFar)    // Right
+            if (inZone) {
+                dockPanel.mouseX = y - dockPanel.y   // primary = Y
+                dockPanel.mouseY = x - dockPanel.x   // secondary = X
+            } else {
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+            }
+        } else {
+            // Horizontal: primary = X screen axis, secondary = Y screen axis
+            let panelTop = dockPanel.y
+            let panelBottom = dockPanel.y + dockPanel.height
+            let inZone = (DockView.edge === 0)
+                ? (y >= panelTop && y <= panelBottom + zoomExtension)   // Top
+                : (y >= panelTop - zoomExtension && y <= panelBottom)   // Bottom
+            if (inZone) {
+                dockPanel.mouseX = x - dockPanel.x
+                dockPanel.mouseY = y - dockPanel.y
+            } else {
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+            }
+        }
+        updateHoveredItem()
+    }
+
     function updateHoveredItem() {
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
@@ -366,6 +438,12 @@ Item {
             _zoomActive = false
             return
         }
+        // Hit-test only a pointer the dock has. After the pointer left for the
+        // preview, onExited keeps mouseX/mouseY as the zoom anchor; icons that
+        // move under that stale position (re-centring for a new task row) must
+        // not re-hover an item, or its preview reopens with the pointer away.
+        if (!dockMouseArea.containsMouse)
+            return
 
         // Rough secondary-axis check: outside the dockRow + zoom extension on
         // the side icons grow toward (away from the screen edge) → reset zoom.
@@ -511,7 +589,7 @@ Item {
                 root._dragWasActive = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
-                DockVisibility.setInteracting(false)
+                DockVisibility.setDragActive(false)
             } else if (root._dragPending) {
                 root._dragPending = false
                 root._dragWasActive = false
@@ -525,8 +603,15 @@ Item {
             }
         }
 
-        // Start drag hold timer on left-button press
+        // Start drag hold timer on left-button press.
+        // The item under a resting pointer can change without any motion
+        // event (an item appears, the centred dock re-lays out), leaving
+        // hoveredIndex stale: resolve it from the press position first so the
+        // press, drag and click target the item actually under the pointer.
+        // Keyboard navigation keeps its focused item as the target.
         onPressed: function(mouse) {
+            if (!root.keyboardNavigating)
+                root.trackPointer(mouse.x, mouse.y)
             if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
                 root._dragStartX = mouse.x
                 root._dragStartY = mouse.y
@@ -553,7 +638,7 @@ Item {
                 root._dragPending = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
-                DockVisibility.setInteracting(false)
+                DockVisibility.setDragActive(false)
             } else {
                 root._dragPending = false
             }
@@ -602,7 +687,7 @@ Item {
                 if (Math.sqrt(dx * dx + dy * dy) > root._dragThreshold) {
                     root._dragActive = true
                     root._dragWasActive = true
-                    DockVisibility.setInteracting(true)  // Prevent dock hide during drag
+                    DockVisibility.setDragActive(true)  // Prevent dock hide + grab keyboard for Escape
                     tooltipItem.show = false
                     tooltipTimer.stop()
                 }
@@ -615,42 +700,7 @@ Item {
                 return  // Skip normal zoom handling during drag
             }
 
-            // --- Normal zoom tracking ---
-            // Remap mouse coordinates: mouseX = primary axis (along dock),
-            // mouseY = secondary axis (depth). This lets all zoom/hover logic
-            // work identically regardless of orientation.
-            let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
-
-            if (DockView.isVertical) {
-                // Vertical: primary = Y screen axis, secondary = X screen axis
-                let panelNear = dockPanel.x
-                let panelFar = dockPanel.x + dockPanel.width
-                let inZone = (DockView.edge === 2)
-                    ? (mouse.x >= panelNear && mouse.x <= panelFar + zoomExtension)    // Left
-                    : (mouse.x >= panelNear - zoomExtension && mouse.x <= panelFar)    // Right
-                if (inZone) {
-                    dockPanel.mouseX = mouse.y - dockPanel.y   // primary = Y
-                    dockPanel.mouseY = mouse.x - dockPanel.x   // secondary = X
-                } else {
-                    dockPanel.mouseX = -1
-                    dockPanel.mouseY = -1
-                }
-            } else {
-                // Horizontal: primary = X screen axis, secondary = Y screen axis
-                let panelTop = dockPanel.y
-                let panelBottom = dockPanel.y + dockPanel.height
-                let inZone = (DockView.edge === 0)
-                    ? (mouse.y >= panelTop && mouse.y <= panelBottom + zoomExtension)   // Top
-                    : (mouse.y >= panelTop - zoomExtension && mouse.y <= panelBottom)   // Bottom
-                if (inZone) {
-                    dockPanel.mouseX = mouse.x - dockPanel.x
-                    dockPanel.mouseY = mouse.y - dockPanel.y
-                } else {
-                    dockPanel.mouseX = -1
-                    dockPanel.mouseY = -1
-                }
-            }
-            root.updateHoveredItem()
+            root.trackPointer(mouse.x, mouse.y)
         }
     }
 
@@ -1109,11 +1159,12 @@ Item {
     }
 
     // Handle launch bounce trigger from C++ signal.
-    // Only sets manualLaunching for already-running apps (IsWindow): their
-    // delegate stays alive, so manualLaunching persists through the bounce.
-    // For launchers (first launch), we skip manualLaunching entirely:
-    // IsStartup fires within ~5ms and, being model data, survives the
-    // delegate recreation caused by hideActivatedLaunchers.
+    // manualLaunching is set for every launch, launchers included: a task
+    // manager without startup notifications (a plain KWin 6 session) never
+    // reports an IsStartup task, so the click itself must start the feedback.
+    // For a launcher, the delegate's feedback ends when the launcher row is
+    // replaced (hideActivatedLaunchers) by the startup task, which carries
+    // on via IsStartup, or by the app's window.
     Connections {
         target: DockActions
         function onTaskLaunching(index) {
@@ -1122,9 +1173,6 @@ Item {
 
             // Announce launch to screen reader (must call on root Item, not Connections)
             root.announceLaunch(item.displayName)
-
-            // Skip for launcher items — IsStartup will drive the bounce.
-            if (!item.model.IsWindow) return
 
             item.manualLaunching = true
         }

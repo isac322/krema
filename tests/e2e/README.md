@@ -94,7 +94,7 @@ Key states used in assertions:
 
 ### Important Patterns
 
-1. **Global shortcuts**: `keyboard_key "super+F5"` does NOT trigger KGlobalAccel in
+1. **Global shortcuts**: `keyboard_key "super+alt+d"` does NOT trigger KGlobalAccel in
    kwin-mcp (EIS limitation). Use D-Bus `invokeShortcut` instead:
    ```
    dbus_call service="org.kde.kglobalaccel" path="/component/krema"
@@ -176,7 +176,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/PreviewThumbnail.qml` | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03 |
 | `src/shell/dockshell.*` | 01, 06 |
-| `src/shell/dockvisibilitycontroller.*` | 01, 06, 07 |
+| `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
 | `src/models/dockactions.*` | 02, 04, 05 |
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
@@ -184,11 +184,13 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/settings/*` | 06 |
 | `src/config/krema.kcfg` | 06 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
+| `src/platform/kwinpointermotionwatcher.*` | 01 |
 | `src/app/application.*` | 01, 06 |
 | `src/qml/SettingsDialog.qml` | 06 |
 | `src/shell/settingswindow.*` | 06, 07 |
 | `src/shell/dockview.*` | 02, 07 |
 | `src/models/dockmodel.*` | 02, 03 |
 | `src/shell/multidockmanager.*` | 02, 03, 06, 07 |
+| `src/shell/edgetrigger.*` | 06 |
 | `src/shell/outputordermonitor.*` | 02, 03, 07 |
 | `src/platform/dockplatform.*` | 01, 07 |

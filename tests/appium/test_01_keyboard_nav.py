@@ -20,8 +20,8 @@ from PIL import Image
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import Krema, Rect, has_state, painted_rect
-from krema_e2e.shortcuts import FOCUS_DOCK_KEY_DROPPED, FOCUS_DOCK_KEY_DROPPED_REASON, invoke_shortcut, set_shortcut_keys, shortcut_keys
-from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
+from krema_e2e.shortcuts import META_ALT_D, invoke_shortcut, shortcut_keys
+from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
 # Three distinct app ids so every window is its own (ungrouped) dock item,
@@ -33,8 +33,7 @@ TOP = {"Edge": config.EDGE_TOP}
 #: Screen centre (the scenario's "mouse_move x=400 y=300" target area).
 CENTRE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
 #: Neutral pointer spot: right edge, mid-height. Off the dock, its edge
-#: trigger strip and the preview's input region (which is centred on the
-#: dock item and much deeper than the visible popup, see KBD-007 xfail).
+#: trigger strip and the preview popup.
 PARK = (env.SCREEN_WIDTH - 10, env.SCREEN_HEIGHT // 2)
 
 
@@ -157,21 +156,21 @@ def _assert_dock_keyboard_entry(krema: Krema, first: str, rest: dict[str, Rect])
         assert ring > 200 and ring > 3 * plain, f"no focus ring on {first!r}: {ring} blue px focused vs {plain} unfocused"
 
 
-@pytest.mark.xfail(FOCUS_DOCK_KEY_DROPPED, strict=True, raises=WaitTimeout, reason=FOCUS_DOCK_KEY_DROPPED_REASON)
-def test_kbd001_meta_f5_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
+def test_kbd001_meta_alt_d_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["First", "Second"])
     park_pointer()
     rest = item_rects(krema)
     assert focused_items(krema) == []
+    # The default key must survive registration: no stock Plasma component
+    # claims it, so kglobalacceld (any version) keeps it for krema.
+    wait_until(
+        lambda: shortcut_keys("focus-dock") == [META_ALT_D],
+        message=lambda: f"krema focus-dock bound to Meta+Alt+D (keys: {shortcut_keys('focus-dock')})",
+    )
 
-    # KWin's default "Move Mouse to Focus" also owns Meta+F5 and wins; free it.
-    kwin_keys = shortcut_keys("MoveMouseToFocus", component="kwin")
-    set_shortcut_keys("MoveMouseToFocus", [], component="kwin")
-    try:
-        inp.key("Meta", "F5")
-        _assert_dock_keyboard_entry(krema, "First", rest)
-    finally:
-        set_shortcut_keys("MoveMouseToFocus", kwin_keys, component="kwin")
+    inp.key("Meta", "Alt", "d")
+
+    _assert_dock_keyboard_entry(krema, "First", rest)
 
 
 def test_kbd001_focus_dock_shortcut_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
@@ -314,21 +313,12 @@ def test_kbd006_left_right_move_between_thumbnails(krema: Krema, apps: TestWindo
 
 
 # ---------------------------------------------------------------------- KBD-007
-PREVIEW_REGION_BUG = (
-    "krema bug: with a top dock the preview input region is the full 400 px surface depth under the "
-    "popup (PreviewController::updateInputRegion, regionY=0/regionH=surfaceH), far larger than the "
-    "visible popup. A pointer resting there gets wl_pointer.enter when KWin re-picks pointer focus "
-    "after the window closes; PreviewPopup's HoverHandler then calls endPreviewKeyboardNav(), so no "
-    "thumbnail keeps the focused state (krema log: 'setPreviewHovered: true' right after Delete)"
-)
-
-
 @pytest.mark.kremarc({**TOP, "PinnedLaunchers": []})
 @pytest.mark.parametrize(
     "pointer",
     [
         pytest.param(PARK, id="pointer-parked"),
-        pytest.param(CENTRE, id="pointer-at-centre", marks=pytest.mark.xfail(strict=True, reason=PREVIEW_REGION_BUG)),
+        pytest.param(CENTRE, id="pointer-at-centre"),
     ],
 )
 def test_kbd007_delete_closes_focused_thumbnail_window(krema: Krema, apps: TestWindows, pointer: tuple[int, int]) -> None:
@@ -369,15 +359,6 @@ def test_kbd007_delete_closes_focused_thumbnail_window(krema: Krema, apps: TestW
 
 
 # ---------------------------------------------------------------------- KBD-008
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "krema bug: keyboard mode is only cancelled by dockMouseArea.onPositionChanged (src/qml/main.qml), "
-        "i.e. pointer motion over the dock surface. Wayland delivers motion only to the surface under the "
-        "pointer, so moving the mouse elsewhere on screen (400,300) leaves keyboard mode on and the dock "
-        "button keeps the focused state"
-    ),
-)
 def test_kbd008_mouse_movement_cancels_keyboard_mode(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["Mouse One", "Mouse Two"])
     inp.move(40, 40)
@@ -471,24 +452,7 @@ def test_kbd009_keyboard_mode_keeps_hidden_dock_visible(krema: Krema, apps: Test
 
 @pytest.mark.parametrize(
     "visibility",
-    [
-        pytest.param(AUTOHIDE, id="autohide"),
-        pytest.param(DODGE, id="dodge"),
-        pytest.param(
-            SMARTHIDE,
-            id="smarthide",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "krema bug: ending keyboard navigation (Escape) only drops the dock's layer-shell keyboard "
-                    "interactivity; focus is never handed back to the previously active window. KWin keeps the "
-                    "dock surface as the active window (kwin-windows.json: active=True on krema's 1024x108 "
-                    "surface, Cover active=False), so SmartHide (DodgeActiveOnly) sees no active overlapping "
-                    "window and the dock never hides again"
-                ),
-            ),
-        ),
-    ],
+    [pytest.param(AUTOHIDE, id="autohide"), pytest.param(DODGE, id="dodge"), pytest.param(SMARTHIDE, id="smarthide")],
 )
 def test_kbd009_dock_auto_hides_again_after_escape(krema: Krema, apps: TestWindows, visibility: dict) -> None:
     first = _keyboard_mode_keeps_dock_shown(krema, apps, visibility)

@@ -134,3 +134,82 @@ TEST_CASE("Dock screen rect computation", "[screen-rect]")
         REQUIRE(rect.y() == 0);
     }
 }
+
+TEST_CASE("Preview input region matches the visible popup", "[input-region][preview]")
+{
+    // 400 px deep preview surface; 300x180 popup.
+    krema::PreviewInputRegionParams p{};
+    p.contentWidth = 300;
+    p.contentHeight = 180;
+
+    SECTION("Top edge: popup flush with the top, nothing below it")
+    {
+        p.surfaceWidth = 1920;
+        p.surfaceHeight = 400;
+        p.contentX = 800;
+        p.edge = 0;
+
+        const QRegion region = krema::computePreviewInputRegion(p);
+
+        REQUIRE(region == QRegion(800, 0, 300, 180));
+        REQUIRE_FALSE(region.contains(QPoint(950, 180))); // just below the popup
+        REQUIRE_FALSE(region.contains(QPoint(950, 399))); // far side of the surface
+    }
+
+    SECTION("Bottom edge: popup flush with the bottom, nothing above it")
+    {
+        p.surfaceWidth = 1920;
+        p.surfaceHeight = 400;
+        p.contentX = 800;
+        p.edge = 1;
+
+        REQUIRE(krema::computePreviewInputRegion(p) == QRegion(800, 220, 300, 180));
+    }
+
+    SECTION("Left edge: popup flush with the left, nothing to its right")
+    {
+        p.surfaceWidth = 400;
+        p.surfaceHeight = 1080;
+        p.contentY = 450;
+        p.edge = 2;
+
+        REQUIRE(krema::computePreviewInputRegion(p) == QRegion(0, 450, 300, 180));
+    }
+
+    SECTION("Right edge: popup flush with the right, nothing to its left")
+    {
+        p.surfaceWidth = 400;
+        p.surfaceHeight = 1080;
+        p.contentY = 450;
+        p.edge = 3;
+
+        REQUIRE(krema::computePreviewInputRegion(p) == QRegion(100, 450, 300, 180));
+    }
+
+    SECTION("Fractional popup geometry is fully covered")
+    {
+        p.surfaceWidth = 1920;
+        p.surfaceHeight = 400;
+        p.contentX = 800.5;
+        p.contentWidth = 300.5;
+        p.contentHeight = 180.5;
+        p.edge = 0;
+
+        REQUIRE(krema::computePreviewInputRegion(p) == QRegion(800, 0, 301, 181));
+    }
+
+    SECTION("No popup size yet: 1x1 region, never an empty (accept-all) mask")
+    {
+        p.surfaceWidth = 1920;
+        p.surfaceHeight = 400;
+        p.contentX = 0;
+        p.contentWidth = 0;
+        p.contentHeight = 0;
+        p.edge = 1;
+
+        const QRegion region = krema::computePreviewInputRegion(p);
+
+        REQUIRE_FALSE(region.isEmpty());
+        REQUIRE(region == QRegion(0, 0, 1, 1));
+    }
+}

@@ -12,6 +12,8 @@ add_library(krema_lib STATIC
     platform/dockplatform.h
     platform/dockplatformfactory.h
     platform/dockplatformfactory.cpp
+    platform/kwinpointermotionwatcher.h
+    platform/kwinpointermotionwatcher.cpp
     platform/waylanddockplatform.h
     platform/waylanddockplatform.cpp
 
@@ -23,6 +25,8 @@ add_library(krema_lib STATIC
     shell/dockview.cpp
     shell/dockvisibilitycontroller.h
     shell/dockvisibilitycontroller.cpp
+    shell/edgetrigger.h
+    shell/edgetrigger.cpp
     shell/previewcontroller.h
     shell/previewcontroller.cpp
     shell/dockwidget.h

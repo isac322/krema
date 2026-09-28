@@ -282,13 +282,19 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     applyInputRegion();
 }
 
-void DockVisibilityController::setKeyboardActive(bool active)
+void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
 {
     if (m_keyboardActive == active) {
         return;
     }
     m_keyboardActive = active;
-    qCDebug(lcVisibility) << "Keyboard navigation active:" << active;
+    qCDebug(lcVisibility) << "Keyboard navigation active:" << active << "restoreFocus:" << restoreFocus;
+
+    // Remember the active window before the dock takes keyboard focus: KWin
+    // activates the dock surface once it becomes keyboard-interactive.
+    if (active && m_tasksModel) {
+        m_keyboardReturnTask = m_tasksModel->activeTask();
+    }
 
     // Toggle layer-shell keyboard interactivity with the navigation state
     m_platform->setKeyboardInteractivity(active);
@@ -298,6 +304,11 @@ void DockVisibilityController::setKeyboardActive(bool active)
         m_evaluateTimer.stop();
         setVisible(true);
     } else {
+        if (restoreFocus) {
+            restoreKeyboardReturnTask();
+        }
+        m_keyboardReturnTask = QPersistentModelIndex();
+
         // When keyboard navigation ends and mouse is not hovering, start hide timer
         if (m_interactingCount == 0 && !m_hovered) {
             if (m_mode != DockPlatform::VisibilityMode::AlwaysVisible) {
@@ -305,6 +316,29 @@ void DockVisibilityController::setKeyboardActive(bool active)
             }
         }
     }
+}
+
+void DockVisibilityController::restoreKeyboardReturnTask()
+{
+    // Dropping layer-shell keyboard interactivity does not deactivate the dock:
+    // KWin (LayerShellV1Window::handleAcceptsFocusChanged) only activates a
+    // layer surface when it gains focus and never hands focus back. The dock
+    // would stay the active window, keeping keys away from the user's window
+    // and hiding the active window from DodgeActiveOnly (SmartHide).
+    if (!m_tasksModel || !m_keyboardReturnTask.isValid()) {
+        return;
+    }
+    // The user moved focus to another window meanwhile: leave it there.
+    const QModelIndex current = m_tasksModel->activeTask();
+    if (current.isValid() && current != m_keyboardReturnTask) {
+        return;
+    }
+    // Don't undo a minimize done during navigation.
+    if (m_keyboardReturnTask.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
+        return;
+    }
+    qCDebug(lcVisibility) << "Returning focus to" << m_keyboardReturnTask.data(Qt::DisplayRole).toString();
+    m_tasksModel->requestActivate(m_keyboardReturnTask);
 }
 
 void DockVisibilityController::setInteracting(bool interacting)

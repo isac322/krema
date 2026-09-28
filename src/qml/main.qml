@@ -68,14 +68,16 @@ Item {
         }
     }
 
-    function endKeyboardNavigation() {
+    // restoreFocus=false when a task was just activated: that activation
+    // already moves focus, returning it would override the user's choice.
+    function endKeyboardNavigation(restoreFocus = true) {
         keyboardNavigating = false
         hoveredIndex = -1
         hoveredName = ""
         _zoomActive = false
         dockPanel.mouseX = -1
         dockPanel.mouseY = -1
-        DockVisibility.setKeyboardActive(false)
+        DockVisibility.setKeyboardActive(false, restoreFocus)
     }
 
     function navigateItem(delta) {
@@ -148,7 +150,7 @@ Item {
             case Qt.Key_Return:
             case Qt.Key_Enter:
                 PreviewController.activatePreviewThumbnail()
-                endKeyboardNavigation()
+                endKeyboardNavigation(false)
                 event.accepted = true
                 break
             case Qt.Key_Delete:
@@ -188,7 +190,7 @@ Item {
         case Qt.Key_Space:
             if (hoveredIndex >= 0) {
                 DockActions.activate(hoveredIndex)
-                endKeyboardNavigation()
+                endKeyboardNavigation(false)
             }
             event.accepted = true
             break

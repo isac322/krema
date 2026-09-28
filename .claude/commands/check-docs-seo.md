@@ -25,7 +25,6 @@ Read `.claude/positioning.yml` (canonical source of truth), then follow the docs
 
 Verify these are in sync:
 - `positioning.yml § keywords.metainfo_keywords` ↔ `metainfo.xml <keywords>`
-- `positioning.yml § keywords.primary` ↔ `CLAUDE.md § Documentation & SEO § Target Keywords`
 - `positioning.yml § product.meta_description` ↔ README.md first paragraph (within reasonable paraphrase)
 - Feature counts in README match actual implementation
 

@@ -134,7 +134,6 @@ packaging/arch/PKGBUILD            # packaging dependencies
 ```
 .claude/positioning.yml            # new canonical positioning
 .claude/agents/docs-seo.md         # compare all sections against manifest
-CLAUDE.md § Documentation & SEO    # compare keyword tiers
 marketing/strategy.md              # compare keywords
 src/com.bhyoo.krema.metainfo.xml   # compare keywords element
 ```
@@ -145,7 +144,7 @@ src/com.bhyoo.krema.metainfo.xml   # compare keywords element
 **`settings-change`** → README.md, metainfo.xml description
 **`deps-change`** → README.md (build instructions), packaging files
 **`manifest-update`** → All SEO-related files (full sync)
-**`strategy-update`** → metainfo.xml keywords, CLAUDE.md keyword tiers, GitHub topics
+**`strategy-update`** → metainfo.xml keywords, GitHub topics
 
 ### Evaluation Workflow
 
@@ -159,7 +158,7 @@ src/com.bhyoo.krema.metainfo.xml   # compare keywords element
 
 ## Self-Update Protocol
 
-This agent may update its own prompt (`.claude/agents/docs-seo.md`) and `CLAUDE.md § Documentation & SEO` when:
+This agent may update its own prompt (`.claude/agents/docs-seo.md`) and `.agents/rules/docs-seo.md` when:
 1. `manifest_version` in `.claude/positioning.yml` differs from the version in `## Current Product Positioning`
 2. New major capability shipped (not reflected in Target Search Intents)
 3. README H1 or positioning shifts

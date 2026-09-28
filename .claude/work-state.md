@@ -1,7 +1,7 @@
 # Work State
 
 > 세션 간 작업 상태 전달 파일. 각 세션 종료 시 갱신.
-> CLAUDE.md에서 @-import로 로딩됨. 세션 시작 시 1회 로딩 (세션 중 수정해도 현재 세션에는 미반영).
+> Manual handoff note — updated during releases; not auto-imported.
 
 ## 현재 마일스톤
 

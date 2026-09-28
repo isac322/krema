@@ -91,7 +91,8 @@ public:
     Q_INVOKABLE void setKeyboardActive(bool active, bool restoreFocus = true);
 
     /// Set internal (reorder) drag active state. Holds the interaction lock and
-    /// grabs layer-shell keyboard interactivity so Escape can cancel the drag.
+    /// grabs layer-shell keyboard interactivity so Escape can cancel the drag;
+    /// the release hands focus back to the previously active window.
     Q_INVOKABLE void setDragActive(bool active);
 
     /// Current panel rectangle (surface-local coordinates).
@@ -123,8 +124,14 @@ private:
 
     void connectModelSignals();
 
-    /// Re-activate the window that was active when keyboard navigation began.
-    void restoreKeyboardReturnTask();
+    /// Re-activate the window that was active when keyboard interactivity
+    /// (keyboard navigation or internal drag) was first acquired.
+    void restoreReturnTask();
+
+    /// Apply layer-shell keyboard interactivity: exclusive while keyboard
+    /// navigating or dragging, none otherwise. Remembers the active window
+    /// on acquisition and hands focus back on full release.
+    void applyKeyboardInteractivity();
 
     DockPlatform *m_platform;
     TaskManager::TasksModel *m_tasksModel;
@@ -165,17 +172,16 @@ private:
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
 
-    // Window that was active when keyboard navigation began (focus returns here)
-    QPersistentModelIndex m_keyboardReturnTask;
+    // Window that was active when keyboard interactivity was acquired (focus returns here)
+    QPersistentModelIndex m_returnTask;
     // Reports pointer motion outside the dock surface while keyboard-navigating
     KWinPointerMotionWatcher m_pointerMotionWatcher;
 
     // Internal reorder drag active: dock holds keyboard focus so Escape reaches it
     bool m_dragActive = false;
 
-    /// Apply layer-shell keyboard interactivity: exclusive while keyboard
-    /// navigating or dragging, none otherwise.
-    void applyKeyboardInteractivity();
+    // Layer-shell keyboard interactivity currently requested from the platform
+    bool m_interactivityActive = false;
 
     // DodgeWindows sub-option: true = dodge active window only, false = dodge all
     bool m_dodgeActiveOnly = false;

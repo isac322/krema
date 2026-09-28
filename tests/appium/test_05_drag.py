@@ -31,6 +31,7 @@ from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import Krema, Rect, painted_rect
 from krema_e2e.waits import wait_stable, wait_until
+from krema_e2e.windows import TestWindow, TestWindows
 
 ICON = 48  # krema.kcfg IconSize default; IconSpacing default is 4
 HOLD_MS = 450  # > main.qml dragHoldTimer (300 ms)
@@ -119,6 +120,33 @@ def dragging(start: tuple[int, int], legs: Sequence[tuple[int, int] | int]) -> I
 
 def wait_cursor(pos: tuple[int, int]) -> None:
     wait_until(lambda: kwin.cursor_pos() == tuple(pos), timeout=15, message=f"pointer to reach {pos}")
+
+
+# ------------------------------------------------------------ focus return
+
+
+#: Title of the window opened for TW's pinned launcher: the launcher item
+#: then shows the window title.
+FOCUS = "Focus"
+
+
+def open_active_window(apps: TestWindows, title: str) -> TestWindow:
+    """An active window in the top-left corner, clear of every drag/drop
+    point, whose focus a drag must hand back (the dock takes KWin's
+    activation while it holds keyboard interactivity for the drag). Its app
+    is TW: with TW pinned, the launcher item turns into this window's task."""
+    win = apps.open(title, app_id=env.TEST_APP_ID, width=300, height=200)
+    kwin.evaluate(
+        f"const w = workspace.windowList().find(w => String(w.internalId) === {win.internal_id!r});"
+        "w.frameGeometry = {x: 0, y: 0, width: 300, height: 200}; report(true);"
+    )
+    kwin.activate(win.internal_id)
+    wait_until(win.is_active, message=f"{title!r} to be active before the drag")
+    return win
+
+
+def wait_focus_returned(win: TestWindow) -> None:
+    wait_until(win.is_active, message=lambda: f"{win.title!r} active again after the drag (active: {kwin.active_window()})")
 
 
 # ------------------------------------------------------------------- pixels
@@ -242,22 +270,26 @@ class Scene:
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND, TW, TW2))
-def test_dnd_001_drag_reorders_dock_items(krema: Krema) -> None:
-    scene = Scene.capture(krema, [KWRITE, KFIND, TW, TW2])
+def test_dnd_001_drag_reorders_dock_items(krema: Krema, apps: TestWindows) -> None:
+    focus = open_active_window(apps, FOCUS)
+    scene = Scene.capture(krema, [KWRITE, KFIND, FOCUS, TW2])
     start = scene.center(KWRITE)
-    over = (scene.center(TW)[0], start[1])  # third item's slot
+    over = (scene.center(FOCUS)[0], start[1])  # third item's slot
 
     with dragging(start, [over, PAUSE_MS]):
         wait_cursor(over)
-        expected = scene.indicator_expected(TW, after=True)
+        expected = scene.indicator_expected(FOCUS, after=True)
         wait_until(
             lambda: (cols := scene.indicator_columns(scene.shot("mid-drag"), ghost_x=over[0])) and cols <= expected and cols,
             timeout=5,
-            message=f"drop indicator right after {TW!r} (columns {sorted(expected)})",
+            message=f"drop indicator right after {FOCUS!r} (columns {sorted(expected)})",
         )
+        krema.wait_keyboard_focus()  # the drag took KWin's activation
 
-    order = [KFIND, TW, KWRITE, TW2]
+    order = [KFIND, FOCUS, KWRITE, TW2]
     wait_until(lambda: krema.item_names() == order, message=lambda: f"AT-SPI order {order} (have {krema.item_names()})")
+    # The reordering drop activates no task: focus goes back.
+    wait_focus_returned(focus)
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND, TW, TW2))
@@ -326,8 +358,8 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND))
-def test_dnd_004_drag_released_outside_dock_keeps_order(krema: Krema, apps) -> None:
-    apps.open("Alpha", app_id=env.TEST_APP_ID)  # unpinned window task
+def test_dnd_004_drag_released_outside_dock_keeps_order(krema: Krema, apps: TestWindows) -> None:
+    alpha = open_active_window(apps, "Alpha")  # unpinned window task
     scene = Scene.capture(krema, [KWRITE, KFIND, "Alpha"])
     rc_before = krema.config_path.read_text()
     start = scene.center("Alpha")
@@ -342,6 +374,7 @@ def test_dnd_004_drag_released_outside_dock_keeps_order(krema: Krema, apps) -> N
             timeout=5,
             message="drag in progress with a pending reorder before the first item",
         )
+        krema.wait_keyboard_focus()  # the drag took KWin's activation
 
     # The drag ended: no indicator, the dock looks as before the drag.
     def at_rest() -> bool:
@@ -351,23 +384,26 @@ def test_dnd_004_drag_released_outside_dock_keeps_order(krema: Krema, apps) -> N
     wait_until(at_rest, timeout=5, message=lambda: f"dock back at rest (rects {scene.item_rects()} vs {scene.rects})")
     assert krema.item_names() == [KWRITE, KFIND, "Alpha"]
     assert krema.config_path.read_text() == rc_before
+    wait_focus_returned(alpha)
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND, TW, TW2))
-def test_dnd_004_escape_cancels_drag(krema: Krema) -> None:
-    scene = Scene.capture(krema, [KWRITE, KFIND, TW, TW2])
+def test_dnd_004_escape_cancels_drag(krema: Krema, apps: TestWindows) -> None:
+    focus = open_active_window(apps, FOCUS)
+    scene = Scene.capture(krema, [KWRITE, KFIND, FOCUS, TW2])
     rc_before = krema.config_path.read_text()
     start = scene.center(KWRITE)
-    over = (scene.center(TW)[0], start[1])
+    over = (scene.center(FOCUS)[0], start[1])
 
     with dragging(start, [over, PAUSE_MS]):
         wait_cursor(over)
-        expected = scene.indicator_expected(TW, after=True)
+        expected = scene.indicator_expected(FOCUS, after=True)
         wait_until(
             lambda: (cols := scene.indicator_columns(scene.shot("mid-drag"), ghost_x=over[0])) and cols <= expected and cols,
             timeout=5,
             message="drag in progress with a pending reorder",
         )
+        krema.wait_keyboard_focus()  # Escape goes to the dock, not to the focus window
         inp.key("Escape")
         wait_until(
             lambda: not scene.indicator_columns(scene.shot("after-escape"), ghost_x=over[0]),
@@ -375,5 +411,6 @@ def test_dnd_004_escape_cancels_drag(krema: Krema) -> None:
             message="Escape to cancel the drag (drop indicator gone)",
         )
 
-    assert krema.item_names() == [KWRITE, KFIND, TW, TW2]
+    assert krema.item_names() == [KWRITE, KFIND, FOCUS, TW2]
     assert krema.config_path.read_text() == rc_before
+    wait_focus_returned(focus)

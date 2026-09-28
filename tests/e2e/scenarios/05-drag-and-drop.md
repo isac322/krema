@@ -13,6 +13,8 @@
 - src/models/dockactions.cpp
 - src/models/dockmodel.h
 - src/models/dockmodel.cpp
+- src/shell/dockvisibilitycontroller.h
+- src/shell/dockvisibilitycontroller.cpp
 
 ---
 
@@ -38,6 +40,7 @@ NOT `mouse_drag` (which doesn't support hold delay).
 - During drag: ghost icon follows cursor (opacity 0.8), drop indicator line appears
 - After drop: item moved to new position, order persists
 - AT-SPI button order reflects new arrangement
+- The window that was active before the drag is active again (the dock holds keyboard interactivity only while dragging)
 
 **Verified in PoC:** Dolphin moved from position 1 to position 3.
 AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc].
@@ -104,6 +107,7 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 **Expected:**
 - Item returns to original position
 - No reorder occurs
+- The window that was active before the drag is active again
 
 **Verification:** screenshot (order unchanged)
 

@@ -298,14 +298,12 @@ void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
     m_keyboardActive = active;
     qCDebug(lcVisibility) << "Keyboard navigation active:" << active << "restoreFocus:" << restoreFocus;
 
-    // Remember the active window before the dock takes keyboard focus: KWin
-    // activates the dock surface once it becomes keyboard-interactive.
-    if (active && m_tasksModel) {
-        m_keyboardReturnTask = m_tasksModel->activeTask();
+    // The ending action activated a task itself and that activation already
+    // moved focus: forget the remembered window so the release of keyboard
+    // interactivity (a drag may still hold it) does not steal focus back.
+    if (!active && !restoreFocus) {
+        m_returnTask = QPersistentModelIndex();
     }
-
-    // Toggle layer-shell keyboard interactivity with the navigation state
-    applyKeyboardInteractivity();
 
     if (active) {
         m_pointerMotionWatcher.arm();
@@ -314,10 +312,6 @@ void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
         setVisible(true);
     } else {
         m_pointerMotionWatcher.disarm();
-        if (restoreFocus) {
-            restoreKeyboardReturnTask();
-        }
-        m_keyboardReturnTask = QPersistentModelIndex();
 
         // When keyboard navigation ends and mouse is not hovering, start hide timer
         if (m_interactingCount == 0 && !m_hovered) {
@@ -326,29 +320,33 @@ void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
             }
         }
     }
+
+    // Store/restore of the previously active window lives in
+    // applyKeyboardInteractivity(): it is shared with internal drags.
+    applyKeyboardInteractivity();
 }
 
-void DockVisibilityController::restoreKeyboardReturnTask()
+void DockVisibilityController::restoreReturnTask()
 {
     // Dropping layer-shell keyboard interactivity does not deactivate the dock:
     // KWin (LayerShellV1Window::handleAcceptsFocusChanged) only activates a
     // layer surface when it gains focus and never hands focus back. The dock
     // would stay the active window, keeping keys away from the user's window
     // and hiding the active window from DodgeActiveOnly (SmartHide).
-    if (!m_tasksModel || !m_keyboardReturnTask.isValid()) {
+    if (!m_tasksModel || !m_returnTask.isValid()) {
         return;
     }
     // The user moved focus to another window meanwhile: leave it there.
     const QModelIndex current = m_tasksModel->activeTask();
-    if (current.isValid() && current != m_keyboardReturnTask) {
+    if (current.isValid() && current != m_returnTask) {
         return;
     }
-    // Don't undo a minimize done during navigation.
-    if (m_keyboardReturnTask.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
+    // Don't undo a minimize done while the dock held focus.
+    if (m_returnTask.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
         return;
     }
-    qCDebug(lcVisibility) << "Returning focus to" << m_keyboardReturnTask.data(Qt::DisplayRole).toString();
-    m_tasksModel->requestActivate(m_keyboardReturnTask);
+    qCDebug(lcVisibility) << "Returning focus to" << m_returnTask.data(Qt::DisplayRole).toString();
+    m_tasksModel->requestActivate(m_returnTask);
 }
 
 void DockVisibilityController::setDragActive(bool active)
@@ -367,7 +365,24 @@ void DockVisibilityController::setDragActive(bool active)
 
 void DockVisibilityController::applyKeyboardInteractivity()
 {
-    m_platform->setKeyboardInteractivity(m_keyboardActive || m_dragActive);
+    const bool interactive = m_keyboardActive || m_dragActive;
+    if (interactive == m_interactivityActive) {
+        return;
+    }
+    if (interactive) {
+        // Remember the active window before the dock takes keyboard focus:
+        // KWin activates the dock surface once it becomes keyboard-interactive
+        // (keyboard navigation or a drag) and never hands focus back.
+        if (m_tasksModel) {
+            m_returnTask = m_tasksModel->activeTask();
+        }
+    }
+    m_interactivityActive = interactive;
+    m_platform->setKeyboardInteractivity(interactive);
+    if (!interactive) {
+        restoreReturnTask();
+        m_returnTask = QPersistentModelIndex();
+    }
 }
 
 void DockVisibilityController::setInteracting(bool interacting)

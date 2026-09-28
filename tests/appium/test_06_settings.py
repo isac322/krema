@@ -308,25 +308,7 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     assert has_state(krema.item("Alpha"), "showing")
 
 
-#: krema built against LayerShellQt < 6.4 (KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE)
-#: cannot resize its dock surface at runtime.
-RESIZE_DEADLOCK = pytest.mark.xfail(
-    env.LAYERSHELLQT_VERSION < (6, 4),
-    strict=True,
-    raises=WaitTimeout,
-    reason=(
-        "krema bug: on the KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE path (LayerShellQt < 6.4) "
-        "WaylandDockPlatform::setSize() calls QWindow::resize(QSize(0, h)) after DockView::updateSize() "
-        "set the width to the screen width, so the dock window ends up 0 px wide and Qt Quick stops "
-        "rendering it. The layer surface's set_size(0, h) is never committed (WAYLAND_DEBUG: no "
-        "wl_surface.commit after it), KWin sends no configure and the surface stays at its old size: "
-        "icon size and screen edge changes never reach the screen until krema restarts"
-    ),
-)
-
-
 # ------------------------------------------------------------------- SET-002
-@RESIZE_DEADLOCK
 @pytest.mark.kremarc({"PinnedLaunchers": [], "MaxZoomFactor": 1.6})
 def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(krema: Krema, apps: TestWindows) -> None:
     max_zoom = 1.6
@@ -473,7 +455,6 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
 
 
 # ------------------------------------------------------------------- SET-006
-@RESIZE_DEADLOCK
 def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindows) -> None:
     requires_capture()
     apps.open("Alpha")

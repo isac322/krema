@@ -163,7 +163,9 @@ def mean_diff(a: Image.Image, b: Image.Image) -> float:
 # --------------------------------------------------------------------------- VIS-001
 
 
-@pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.ALWAYS_VISIBLE})
+# Opaque panel: the window behind a translucent one would change the item's
+# pixels even though the dock stays on top.
+@pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.ALWAYS_VISIBLE, "BackgroundOpacity": 1.0})
 def test_vis001_always_visible_dock_stays_shown_over_a_maximized_window(krema: Krema, apps: TestWindows) -> None:
     win = apps.open("Always", width=400, height=300)
     krema.wait_for_item("Always")
@@ -382,6 +384,7 @@ def real_meta_f5():
         shortcuts.set_shortcut_keys("MoveMouseToFocus", old, component="kwin")
 
 
+@pytest.mark.xfail(shortcuts.FOCUS_DOCK_KEY_DROPPED, strict=True, raises=WaitTimeout, reason=shortcuts.FOCUS_DOCK_KEY_DROPPED_REASON)
 @pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.AUTO_HIDE})
 def test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible(krema: Krema, apps: TestWindows, real_meta_f5) -> None:
     apps.open("Keys")
@@ -396,6 +399,7 @@ def test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible(krema: Krema, a
     inp.key("Meta", "F5")
     wait_until(lambda: krema.focused_item() == "Keys", message=lambda: f"Meta+F5 to focus the dock item (focused: {krema.focused_item()})")
     wait_shown(krema, "Keys", why=" during keyboard navigation")
+    krema.wait_keyboard_focus()
     assert kwin.cursor_pos() == CENTRE, "pointer is away from the dock: only keyboard navigation keeps it shown"
 
     # Well past the hide delay: keyboard navigation locks visibility.

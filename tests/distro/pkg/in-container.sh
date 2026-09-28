@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
-# Container entrypoint for tests/vm/build-package.sh. Never run on the host.
+# Container entrypoint for tests/distro/build-package.sh. Never run on the host.
 #
 # Mounts provided by the host script:
 #   /stage           read-only, contains krema-<version>.tar.gz

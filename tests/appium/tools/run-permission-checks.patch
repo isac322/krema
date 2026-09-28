@@ -1,0 +1,29 @@
+run.rb: allow disabling KWIN_WAYLAND_NO_PERMISSION_CHECKS from the outside
+
+run.rb hard-codes the permission-check bypass before exec'ing the nested
+kwin_wayland. With checks disabled KWin never reads the client's
+X-KDE-Wayland-Interfaces and so never marks a client as privileged for
+xdg-activation token grants: on KWin < 6.5 a non-privileged client can only
+obtain a token while it owns the active surface, which makes a packaged dock
+application unable to activate its own Settings window after the user clicks
+its context menu (test_set001 fails on debian-13 / ubuntu-25.04 / 25.10).
+
+All clients that bind privileged interfaces in this harness
+(inputsynth, appidlister) ship .desktop files declaring
+X-KDE-Wayland-Interfaces, and Tier 3 runs krema from its installed distro
+package (com.bhyoo.krema.desktop declares the interfaces too), so letting the
+testsuite ask for real permission checks exercises the packaging contract.
+Tier 2 runs krema from the build tree, which no desktop file can match, so
+the default must stay enabled: entrypoint.sh exports
+KWIN_WAYLAND_NO_PERMISSION_CHECKS=0 only for Tier 3 runs and run.rb now
+honours a pre-set value.
+
+--- a/run.rb
++++ b/run.rb
+@@ -110,5 +110,5 @@
+     ENV['QT_QPA_PLATFORM'] = 'wayland'
+     ENV['KWIN_SCREENSHOT_NO_PERMISSION_CHECKS'] = '1'
+-    ENV['KWIN_WAYLAND_NO_PERMISSION_CHECKS'] = '1'
++    ENV['KWIN_WAYLAND_NO_PERMISSION_CHECKS'] ||= '1'
+     ENV['KWIN_PID'] = pid.to_s
+     ENV['KWIN_XKB_DEFAULT_KEYMAP'] = 'true'

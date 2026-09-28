@@ -11,7 +11,7 @@ from PIL import Image
 
 from krema_e2e import env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import Krema, Rect
+from krema_e2e.krema import Krema, Rect, painted_rect
 from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
@@ -68,11 +68,12 @@ def test_hovering_an_item_zooms_it_beyond_its_neighbour(krema: Krema, apps: Test
     krema.hover_item("One")
 
     hovered, neighbour = wait_stable(lambda: (Rect.of(krema.item("One")), Rect.of(krema.item("Two"))))
+    hovered, neighbour = painted_rect(hovered, rest[0]), painted_rect(neighbour, rest[1])
     assert hovered.width > rest[0].width
     assert hovered.width > neighbour.width
 
     krema.move_away()
-    wait_until(lambda: Rect.of(krema.item("One")).width == rest[0].width, message="zoom to reset after leaving")
+    wait_until(lambda: painted_rect(Rect.of(krema.item("One")), rest[0]).width == rest[0].width, message="zoom to reset after leaving")
 
 
 def test_focus_dock_shortcut_focuses_a_dock_button(krema: Krema, apps: TestWindows) -> None:
@@ -84,6 +85,7 @@ def test_focus_dock_shortcut_focuses_a_dock_button(krema: Krema, apps: TestWindo
 
     focused = wait_until(krema.focused_item, message="a dock button with the focused state")
     assert focused == "Focus target"
+    krema.wait_keyboard_focus()
     inp.key("Escape")
     wait_until(lambda: krema.focused_item() is None, message="Escape to end keyboard navigation")
 

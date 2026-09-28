@@ -38,7 +38,10 @@ How the `n` outputs are produced depends on the KWin backend:
   `KREMA_E2E_SCREEN_WIDTH` x `KREMA_E2E_SCREEN_HEIGHT` each. Needs a DRM
   render node to composite with OpenGL: `sudo modprobe vgem` on kernels
   that ship it, otherwise `sudo tests/appium/setup-vgem.sh` builds and
-  loads vgem out-of-tree.
+  loads vgem out-of-tree. On kernels >= 6.15, whose vgem is a faux device,
+  use `setup-vgem.sh` (after `rmmod vgem`) for Tier 3 targets with KWin <
+  6.5 (see `tests/distro/README.md`); it builds vgem as the platform device
+  those KWin versions expect.
 * `drm` — the output count is the card's number of connected connectors,
   each 1024x768. `entrypoint.sh` picks the card matching
   `KREMA_E2E_OUTPUT_COUNT` (preferring vkms; `KWIN_DRM_DEVICES` overrides).
@@ -90,7 +93,10 @@ VM with a generic kernel instead:
 ```sh
 limactl create --name=krema-e2e --cpus=8 --memory=16 --disk=80 \
     --vm-type=vz template://docker-rootful
-# load vgem on every boot (and once now):
+# load vgem on every boot (and once now); the VM's kernel (>= 6.15) makes it
+# a faux device, which KWin < 6.5 cannot use: for Tier 3 targets with such a
+# KWin, replace it after each boot with `sudo rmmod vgem &&
+# sudo tests/appium/setup-vgem.sh` (needs make, gcc and the kernel headers)
 limactl shell krema-e2e -- sudo sh -c 'echo vgem >/etc/modules-load.d/vgem.conf'
 limactl shell krema-e2e -- sudo modprobe vgem
 # the checkout must be writable: run-e2e.sh recreates tests/appium/artifacts/
@@ -180,7 +186,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 
 | TC | Test(s) | Oracle | Status |
 |---|---|---|---|
-| KBD-001 | `test_01_keyboard_nav.py::test_kbd001_meta_f5_focuses_first_dock_item`, `test_kbd001_focus_dock_shortcut_focuses_first_dock_item` | AT-SPI, screenshot | pass |
+| KBD-001 | `test_01_keyboard_nav.py::test_kbd001_meta_f5_focuses_first_dock_item`, `test_kbd001_focus_dock_shortcut_focuses_first_dock_item` | AT-SPI, screenshot | pass; strict xfail when kglobalacceld < 6.7 (kglobalacceld drops krema's contested Meta+F5) |
 | KBD-002 | `test_01_keyboard_nav.py::test_kbd002_arrow_keys_move_focus_between_items` | AT-SPI | pass |
 | KBD-003 | `test_01_keyboard_nav.py::test_kbd003_down_opens_preview_with_first_thumbnail_focused` | AT-SPI, screenshot | pass |
 | KBD-004 | `test_01_keyboard_nav.py::test_kbd004_enter_activates_focused_thumbnail_window` | KWin, AT-SPI | pass |
@@ -194,7 +200,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | MOUSE-003 | `test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover` | AT-SPI | pass |
 | MOUSE-004 | `test_02_mouse.py::test_mouse004_tooltip_shows_app_name_on_hover` | screenshot | pass |
 | MOUSE-005 | `test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows` | KWin | pass |
-| MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance` | KWin, screenshot | pass |
+| MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance`, `test_mouse006_launch_bounce_lasts_until_the_new_window_maps` | KWin, AT-SPI events | pass; strict xfail (krema bug) |
 | MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state` | screenshot | pass |
 | MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`, added on master) | KWin | pass (C++ KWin test, not this suite) |
 | PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails` | AT-SPI, screenshot | pass |
@@ -215,11 +221,11 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | DND-003 | `test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator` | screenshot | pass |
 | DND-004 | `test_05_drag.py::test_dnd_004_drag_released_outside_dock_keeps_order`, `test_dnd_004_escape_cancels_drag` | AT-SPI, kremarc, screenshot | pass; strict xfail (krema bug) |
 | SET-001 | `test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown` | KWin, AT-SPI | pass |
-| SET-002 | `test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion` | AT-SPI, kremarc | pass |
+| SET-002 | `test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion` | AT-SPI, kremarc | pass; strict xfail when LayerShellQt < 6.4 (krema resize bug) |
 | SET-003 | `test_06_settings.py::test_set003_auto_hide_applies_immediately_and_persists` | AT-SPI, kremarc | pass |
 | SET-004 | `test_06_settings.py::test_set004_acrylic_background_applies_live` | screenshot, kremarc | pass |
 | SET-005 | `test_06_settings.py::test_set005_changed_settings_persist_across_restart` | AT-SPI, kremarc, screenshot | pass |
-| SET-006 | `test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top` | KWin, kremarc, screenshot | pass |
+| SET-006 | `test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top` | KWin, kremarc, screenshot | pass; strict xfail when LayerShellQt < 6.4 (krema resize bug) |
 | SET-007 | `test_06_settings.py::test_set007_custom_tint_color_is_applied_and_saved` | AT-SPI, kremarc, screenshot | pass |
 | SET-008 | `test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings`, `test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen`, `test_set008_follow_active_shortcuts_act_on_the_shown_dock`, `test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen` | KWin, AT-SPI, kremarc | 3 pass; strict xfail (krema bug) |
 | SET-009 | `test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly` | KWin (process exit) | pass |
@@ -228,7 +234,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | VIS-003 | `test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach` | AT-SPI, KWin | pass |
 | VIS-004 | `test_07_visibility.py::test_vis004_dodge_windows_hides_while_a_window_overlaps_the_dock`, `test_vis004_dodge_windows_hides_for_an_inactive_overlapping_window` | AT-SPI, KWin | pass |
 | VIS-005 | `test_07_visibility.py::test_vis005_smart_hide_hides_only_for_the_active_overlapping_window` | AT-SPI, KWin | pass |
-| VIS-006 | `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible` | AT-SPI, KWin | pass |
+| VIS-006 | `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible` | AT-SPI, KWin | pass; strict xfail when kglobalacceld < 6.7 (kglobalacceld drops krema's contested Meta+F5) |
 | VIS-007 | `tests/kwin` ctest `krema_showdesktop_tests` (added on master) | KWin | pass (C++ KWin test, not this suite) |
 
 ## Known krema bugs found by the suite (strict xfail)
@@ -257,6 +263,10 @@ into XPASS and fails the run until the marker is removed.
 * `test_02_mouse.py::test_mouse002_pinned_launch_bounces`
   — clicking a pinned launcher shows no launch bounce when no startup task
   appears (MOUSE-002).
+* `test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps`
+  — a middle-click new instance bounces for 500 ms only: with no startup
+  task, `launchSafetyTimer` (`src/qml/DockItem.qml`) clears
+  `manualLaunching` while the app is still starting (MOUSE-006).
 * `test_05_drag.py::test_dnd_004_escape_cancels_drag`
   — Escape does not cancel an in-progress drag; the release still reorders
   (DND-004).
@@ -267,6 +277,21 @@ into XPASS and fails the run until the marker is removed.
 * `test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows`
   — AlwaysVisible reserves no exclusive zone, so maximized windows extend
   underneath the dock (VIS-001).
+
+Only with older libraries (seen on the `tests/distro/` targets; the xfail
+is conditioned on the runtime version, so it is a plain test elsewhere):
+
+* `test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion`,
+  `test_set006_screen_edge_top_moves_dock_to_top` (`env.LAYERSHELLQT_VERSION`
+  < 6.4) — krema built without `LayerShellQt::Window::setDesiredSize`
+  (`KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE`) sizes the dock with
+  `QWindow::resize(QSize(0, h))`, which leaves the window 0 px wide: Qt Quick
+  stops committing it, the new layer-surface size is never applied and the
+  dock keeps its old size and edge until krema restarts (SET-002, SET-006).
+* `test_01_keyboard_nav.py::test_kbd001_meta_f5_focuses_first_dock_item`,
+  `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible`
+  (`shortcuts.FOCUS_DOCK_KEY_DROPPED`, kglobalacceld < 6.7) — krema's
+  default Meta+F5 loses to KWin's `MoveMouseToFocus` and is left unbound.
 
 Product finding (not an xfail, worked around in
 `test_kbd001_meta_f5_focuses_first_dock_item`): krema's default Focus Dock
@@ -346,11 +371,12 @@ AT-SPI lookup (XPath tags are role names with `_`: `tool_bar`, `button`,
 | `items()`, `item_names() -> list[str]` | Dock item buttons in visual order. |
 | `item(name)`, `wait_for_item(name, timeout=10)`, `wait_for_no_item(name, timeout=10)` | One dock item by accessible name. |
 | `focused_item() -> str \| None` | Name of the item with the `focused` state. |
+| `wait_keyboard_focus(surface="dock")` | Wait until KWin gives the surface keyboard focus (its window is KWin's active window). Call it before the first key after entering keyboard navigation: the `focused` state appears before KWin applies the layer surface's keyboard interactivity, and an earlier key goes to the previously active window. |
 | `preview_popup()`, `preview_visible() -> bool`, `thumbnails() -> list` | Preview `[popup menu]` (always in the tree, 0x0 while hidden) and its thumbnail buttons (name = window title). |
 | `settings() -> WebElement \| None` | The Settings window frame (`SETTINGS_XPATH`). |
 | `page_source() -> str` | Whole tree as XML. |
 | `has_state(element, state) -> bool` (module function) | `focused`, `showing`, `visible`, `focusable`, `sensitive`, `active`, ... |
-| Constants | `TOOLBAR_XPATH`, `ITEMS_XPATH`, `PREVIEW_XPATH`, `THUMBNAILS_XPATH`, `SETTINGS_XPATH`, `DEFAULT_CONFIG` |
+| Constants | `TOOLBAR_XPATH`, `ITEMS_XPATH`, `PREVIEW_XPATH`, `THUMBNAILS_XPATH`, `SETTINGS_XPATH`, `DEFAULT_CONFIG`; `PAGE_ROLE` (a Settings page is `page_tab` before Qt 6.11, `panel` since) and `SETTINGS_STACK_XPATH` (the Settings page stack, matched by its page children because its own role varies by distro; Qt 6.11 adds a `filler` level), both from `env.QT_VERSION` (runtime `qVersion()`) |
 
 Geometry. On Wayland, AT-SPI rects (`element.rect`, `Rect.of(element)`) are
 relative to the element's surface. The surface's screen position comes from
@@ -359,10 +385,12 @@ KWin: the krema window whose client size equals the surface's AT-SPI frame.
 | Member | Description |
 |---|---|
 | `Rect(x, y, width, height)`, `.center`, `.contains(x, y)`, `Rect.of(element)` | |
+| `painted_rect(rect, rest) -> Rect` (module function), `EXTENTS_IGNORE_SCALE` | Where a zoomed bottom-edge dock item is drawn, given its unzoomed rect `rest`. Qt < 6.9 (`EXTENTS_IGNORE_SCALE`) reports a scaled item's transformed top-left corner with its untransformed size, so a zoomed item keeps its base width there; the zoom factor is recovered from how far the corner rose above `rest`. From 6.9 on it returns `rect` unchanged. Compare zoomed widths through it, never through `Rect.of(item).width`. |
 | `windows() -> list[kwin.Window]` | KWin windows of this krema (dock, preview, menus, settings). |
 | `surface_rect(surface="dock") -> Rect \| None` | Screen rect of `"dock"`, `"preview"` or `"settings"`; None while unmapped. |
 | `to_screen(rect, surface="dock") -> Rect`, `screen_rect(element, surface="dock") -> Rect` | Surface-local to screen coordinates. |
 | `item_center(name) -> (x, y)` | Screen centre of a dock item. |
+| `settled_item_center(name) -> (x, y)` | `item_center` once it has stopped moving (adding/removing an item animates the panel width and shifts its neighbours). `hover_item`, `click_item` and `scroll_item` aim with it. |
 
 Input and UI flows:
 
@@ -434,7 +462,7 @@ never drops, as with a real mouse. It parks the pointer mid-screen first.
 | `activate(internal_id)`, `set_minimized(internal_id, bool)` | Setup helpers, not assertions. |
 | `cursor_pos() -> (x, y)` | KWin's pointer position. |
 | `evaluate(js, timeout=10)` | Run JavaScript in KWin's scripting engine; the script calls `report(value)` once with a JSON-serializable value. |
-| `screenshot(path) -> Path` | Full-screen PNG via ScreenShot2. Raises `ScreenshotUnavailable` when KWin composites with QPainter. |
+| `screenshot(path) -> Path` | Full-screen PNG via ScreenShot2, flattened onto black (KWin 6.7 returns RGBA with a transparent desktop, KWin 6.3 an opaque image already on black), so pixel oracles see the same image on every KWin. Raises `ScreenshotUnavailable` when KWin composites with QPainter. |
 | `compositing_type() -> str`, `can_capture() -> bool` | `"OpenGL"` or `"QPainter"`. |
 
 `Window` fields: `internal_id`, `title`, `app_id` (desktop file name),
@@ -452,6 +480,7 @@ Its QMenu popups report `normal_window=False`.
 | `invoke_shortcut(name, component="krema", timeout=10)` | `invokeShortcut` over D-Bus; waits until the action is registered. Krema actions: `toggle-dock`, `focus-dock`, `activate-entry-1..9`, `new-instance-entry-1..9`. |
 | `shortcut_names(component="krema")`, `shortcut_keys(action, component="krema") -> [int]` | Registered actions and their active keys (Qt combined key ints). |
 | `set_shortcut_keys(action, keys, component="krema")` | Rebind; `[]` unbinds. |
+| `FOCUS_DOCK_KEY_DROPPED`, `FOCUS_DOCK_KEY_DROPPED_REASON` | True with kglobalacceld < 6.7, which drops a key another component already holds: krema's default Meta+F5 loses to KWin's `MoveMouseToFocus` and stays unbound (strict xfail of the real-Meta+F5 tests there). |
 
 ### `krema_e2e.config` (kremarc)
 
@@ -476,7 +505,9 @@ names are the entries in `src/config/krema.kcfg`.
   and `dbus.session_bus()` for the test session bus.
 * `env`: `SCREEN_WIDTH`, `SCREEN_HEIGHT`, `KREMA_BINARY`, `ARTIFACTS_DIR`,
   `WEBDRIVER_URL`, `TEST_APP_ID`, `TEST_APP_NAME`, `TEST_APP2_ID`,
-  `TEST_APP2_NAME`, and `artifact_path(name)`.
+  `TEST_APP2_NAME`, `QT_VERSION` and `KGLOBALACCELD_VERSION` (runtime
+  versions as int tuples, for version-conditional expectations), and
+  `artifact_path(name)`.
 
 ## Screenshots and previews (need a DRM device)
 

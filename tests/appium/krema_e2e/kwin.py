@@ -11,6 +11,7 @@ with ``callDBus()``.
 from __future__ import annotations
 
 import base64
+import io
 import itertools
 import json
 import os
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
 from gi.repository import Gio, GLib
 
 from . import dbus
@@ -228,8 +230,14 @@ def can_capture() -> bool:
 
 def screenshot(path: str | Path) -> Path:
     """Capture the whole virtual screen via KWin ScreenShot2 (through the
-    webdriver's screenshotter helper) and write a PNG to ``path`` (parents
-    created). Raises ScreenshotUnavailable when KWin runs without OpenGL."""
+    webdriver's screenshotter helper) and write an opaque RGB PNG to ``path``
+    (parents created). Raises ScreenshotUnavailable when KWin runs without
+    OpenGL.
+
+    The image is flattened onto black: KWin 6.7 returns RGBA with the
+    empty desktop transparent and translucent surfaces (the dock panel) at
+    their own alpha, while KWin 6.3 returns the same frame already composited
+    on black. Flattening makes every pixel oracle see the same image."""
     if not can_capture():
         raise ScreenshotUnavailable(
             "KWin is compositing with QPainter (no DRM render node in the container); "
@@ -238,7 +246,10 @@ def screenshot(path: str | Path) -> Path:
     proc = subprocess.run(["selenium-webdriver-at-spi-screenshotter", "0", "0", "0", "0"], capture_output=True, timeout=30)
     if proc.returncode != 0 or not proc.stdout:
         raise RuntimeError(f"screenshot failed: {proc.stderr.decode(errors='replace')[-2000:]}")
+    image = Image.open(io.BytesIO(base64.b64decode(proc.stdout))).convert("RGBA")
+    flat = Image.new("RGB", image.size, (0, 0, 0))
+    flat.paste(image, mask=image.getchannel("A"))
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(base64.b64decode(proc.stdout))
+    flat.save(out)
     return out

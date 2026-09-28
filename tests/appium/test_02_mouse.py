@@ -17,7 +17,7 @@ from PIL import Image
 
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import ITEMS_XPATH, Krema, Rect
+from krema_e2e.krema import ITEMS_XPATH, DescriptionChanges, Krema, Rect, painted_rect
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
@@ -161,8 +161,12 @@ def _dot_pixels(krema: Krema, name: str, shot: np.ndarray, baseline: np.ndarray)
     return int(_changed(shot[ys, xs], baseline[ys, xs]).sum())
 
 
-def _rest_widths(krema: Krema) -> list[int]:
-    return wait_stable(lambda: [Rect.of(e).width for e in krema.items()])
+def _item_rects(krema: Krema) -> list[Rect]:
+    return wait_stable(lambda: [Rect.of(e) for e in krema.items()])
+
+
+def _zoomed_widths(krema: Krema, rest: list[Rect]) -> list[int]:
+    return [painted_rect(r, r0).width for r, r0 in zip([Rect.of(e) for e in krema.items()], rest, strict=True)]
 
 
 # ------------------------------------------------------------------ MOUSE-001
@@ -290,14 +294,15 @@ ZOOM_LAUNCHERS = [APP1, APP2, "org.kde.kwrite", "org.kde.kfind", "qt6-designer",
 def test_mouse003_parabolic_zoom_on_hover(krema: Krema) -> None:
     wait_until(lambda: len(krema.items()) == len(ZOOM_LAUNCHERS), message="7 pinned items")
     krema.move_away(close_preview=False)
-    rest = _rest_widths(krema)
+    rest_rects = _item_rects(krema)
+    rest = [r.width for r in rest_rects]
     assert len(set(rest)) == 1, f"all items at base size before hover: {rest}"
     base = rest[0]
     mid = len(rest) // 2
     name = krema.item_names()[mid]
 
     krema.hover_item(name)
-    w = _rest_widths(krema)
+    w = wait_stable(lambda: _zoomed_widths(krema, rest_rects))
 
     # Hovered item is zoomed close to MaxZoomFactor (pointer at its centre).
     assert w[mid] >= base * 1.5, f"hovered item zoomed to ~1.6x: {w}"
@@ -311,7 +316,7 @@ def test_mouse003_parabolic_zoom_on_hover(krema: Krema) -> None:
     assert abs(w[0] - base) <= 1 and abs(w[-1] - base) <= 1, f"far items at base size: {w}"
 
     krema.move_away(close_preview=False)
-    wait_until(lambda: [Rect.of(e).width for e in krema.items()] == rest, message="zoom to reset after leaving")
+    wait_until(lambda: _zoomed_widths(krema, rest_rects) == rest, message="zoom to reset after leaving")
 
 
 # ------------------------------------------------------------------ MOUSE-004
@@ -400,28 +405,91 @@ def test_mouse005_scroll_wheel_cycles_grouped_windows(krema: Krema, apps: TestWi
 
 
 # ------------------------------------------------------------------ MOUSE-006
-@pytest.mark.no_krema_autostart
-@pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
-def test_mouse006_middle_click_launches_new_instance(krema: Krema, apps: TestWindows) -> None:
-    _require_capture()
+# The launch bounce runs while DockItem.launching is true, which is exactly
+# while the item's description carries "Starting". A window item is launching
+# only for launchSafetyTimer's 500 ms when no startup task arrives, too short
+# for a screenshot poll to catch reliably, so the feedback is observed as
+# AT-SPI description events recorded from before the click.
+def _starting_seen(changes: DescriptionChanges) -> bool:
+    return any("Starting" in t for t in changes.texts("krema"))
+
+
+def _starting_ended(changes: DescriptionChanges) -> bool:
+    """Whether a description with "Starting" was followed by one without."""
+    texts = changes.texts("krema")
+    first = next((i for i, t in enumerate(texts) if "Starting" in t), None)
+    return first is not None and any("Starting" not in t for t in texts[first + 1 :])
+
+
+def _open_slow_original(krema: Krema, apps: TestWindows):
     _install_slow_launcher(krema)
     krema.start()
     original = apps.open("Original", app_id=SLOW_ID)
     krema.wait_for_item("Original")
     assert [w.pid for w in _app_windows(SLOW_ID)] == [original.pid]
-    krema.hover_item("Original")
-    hovered = wait_stable(lambda: krema.screen_rect(krema.item("Original")))
-    ref = _pixels(krema.screenshot("hovered"))
+    return original
 
-    krema.click_item("Original", button="middle")
-    lift = _max_lift_while_launching(krema, ref, hovered, SLOW_ID, 1, "launch")
 
-    wins = _app_windows(SLOW_ID)
-    assert len(wins) == 2 and len({w.pid for w in wins}) == 2, f"one more window, in a separate process: {wins}"
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
+def test_mouse006_middle_click_launches_new_instance(krema: Krema, apps: TestWindows) -> None:
+    original = _open_slow_original(krema, apps)
+    changes = DescriptionChanges()
+    try:
+        krema.click_item("Original", button="middle")
+
+        wait_until(
+            lambda: _starting_seen(changes),
+            timeout=5,
+            message=lambda: f"dock item to start the launch feedback (bounce) (descriptions seen: {changes.texts('krema')})",
+        )
+        wins = wait_until(
+            lambda: len(_app_windows(SLOW_ID)) == 2 and _app_windows(SLOW_ID),
+            timeout=SLOW_DELAY_S + 10,
+            message="the new instance's window in KWin",
+        )
+    finally:
+        changes.close()
+    assert len({w.pid for w in wins}) == 2, f"one more window, in a separate process: {wins}"
     assert original.refresh() is not None, "the original window is kept"
-    assert lift >= 3, f"icon bounced on middle-click (max lift {lift}px)"
     krema.wait_for_item(SLOW_NAME)  # the two windows are grouped under the .desktop Name
     assert krema.item_names() == [SLOW_NAME]
+
+
+class LaunchFeedbackEndedEarly(AssertionError):
+    """The launch feedback ended while the new instance had no window yet."""
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=LaunchFeedbackEndedEarly,
+    reason=(
+        "krema bug: a middle-click new instance bounces for 500 ms only. main.qml sets manualLaunching on the "
+        "window item; with no startup task (none in a KWin 6 session: IsStartup never turns true) "
+        "DockItem.qml launchSafetyTimer clears it after 500 ms, so launching, the bounce and the 'Starting' "
+        "description end while the app is still starting (here 3 s before its window maps)"
+    ),
+)
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
+def test_mouse006_launch_bounce_lasts_until_the_new_window_maps(krema: Krema, apps: TestWindows) -> None:
+    _open_slow_original(krema, apps)
+    changes = DescriptionChanges()
+    try:
+        krema.click_item("Original", button="middle")
+
+        wait_until(
+            lambda: _starting_ended(changes),
+            timeout=SLOW_DELAY_S + 10,
+            message=lambda: f"launch feedback (bounce) to start and end (descriptions seen: {changes.texts('krema')})",
+        )
+        # krema ends the feedback when the task gains the window, which KWin
+        # has mapped by then: queried after the end event, it must be there.
+        wins = _app_windows(SLOW_ID)
+        if len(wins) != 2:
+            raise LaunchFeedbackEndedEarly(f"launch feedback ended before the new instance's window mapped: {wins}")
+    finally:
+        changes.close()
 
 
 # ------------------------------------------------------------------ MOUSE-007

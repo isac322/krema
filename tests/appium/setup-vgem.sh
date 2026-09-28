@@ -17,16 +17,34 @@
 # Sources come from the stable tree matching the running kernel's major.minor
 # (linux-X.Y.y); vgem's driver surface is small and stable, so the nearest
 # stable branch works. Falls back to master.
+#
+# Since 6.15 vgem registers a faux device; it is built back as the platform
+# device "vgem" it was before. KWin < 6.5 recognises vgem (and opens its
+# primary node, the only one gbm can allocate dumb buffers on) only on the
+# platform bus, and libdrm < 2.4.126 does not enumerate faux devices at all:
+# with a faux vgem those KWin versions composite with QPainter or fail to
+# allocate buffers on the render node.
 
 set -eu
 
+# A packaged vgem only helps if the kernel still registers it on the platform
+# bus (before 6.15). Otherwise it is replaced by the out-of-tree build below.
+vgem_on_faux() { [ -e /sys/bus/faux/devices/vgem ]; }
 if [ -d /sys/module/vgem ] || lsmod | grep -q '^vgem'; then
+    if vgem_on_faux; then
+        echo "the loaded vgem is a faux device; unload it first (rmmod vgem, nothing may hold /dev/dri)" >&2
+        exit 1
+    fi
     echo "[setup-vgem] vgem already loaded"
     exit 0
 fi
 if modprobe vgem 2>/dev/null; then
-    echo "[setup-vgem] loaded packaged vgem"
-    exit 0
+    if ! vgem_on_faux; then
+        echo "[setup-vgem] loaded packaged vgem"
+        exit 0
+    fi
+    rmmod vgem
+    echo "[setup-vgem] packaged vgem is a faux device: building the platform one"
 fi
 
 kdir=/lib/modules/$(uname -r)/build
@@ -50,6 +68,17 @@ fetch() {
     return 1
 }
 fetch || { echo "could not fetch vgem sources" >&2; exit 1; }
+
+if grep -q 'faux_device_create' "$work/vgem_drv.c"; then
+    sed -i \
+        -e 's|#include <linux/device/faux.h>|#include <linux/platform_device.h>|' \
+        -e 's|struct faux_device \*|struct platform_device *|g' \
+        -e 's|faux_device_create("vgem", NULL, NULL)|platform_device_register_simple("vgem", -1, NULL, 0)|' \
+        -e 's|if (!fdev)|if (IS_ERR_OR_NULL(fdev))|' \
+        -e 's|faux_device_destroy(|platform_device_unregister(|g' \
+        "$work/vgem_drv.c"
+    echo "[setup-vgem] registering vgem as a platform device"
+fi
 
 printf 'obj-m := vgem.o\nvgem-y := vgem_drv.o vgem_fence.o\n' >"$work/Makefile"
 make -C "$kdir" M="$work" modules

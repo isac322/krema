@@ -172,6 +172,7 @@ def test_prev004_delete_key_closes_focused_thumbnail_window(krema: Krema, apps: 
 
     invoke_shortcut("focus-dock")
     wait_until(lambda: krema.focused_item() == APP, message="dock item focused")
+    krema.wait_keyboard_focus()
     inp.key("Up")  # bottom dock: Up opens the preview in keyboard mode
     wait_until(krema.preview_visible, message="preview to open from the keyboard")
     wait_until(lambda: len(krema.thumbnails()) == 3, message="three thumbnails")
@@ -199,6 +200,7 @@ def test_prev004_closing_last_window_closes_preview_and_returns_to_dock(krema: K
 
     invoke_shortcut("focus-dock")
     wait_until(krema.focused_item, message="dock item focused")
+    krema.wait_keyboard_focus()
     inp.key("Up")
     wait_until(krema.preview_visible, message="preview to open from the keyboard")
     wait_until(lambda: pv.thumb_titles(krema) == ["Solo"], message="one thumbnail")

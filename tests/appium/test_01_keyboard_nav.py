@@ -19,9 +19,9 @@ from PIL import Image
 
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import Krema, Rect, has_state
-from krema_e2e.shortcuts import invoke_shortcut, set_shortcut_keys, shortcut_keys
-from krema_e2e.waits import wait_stable, wait_until
+from krema_e2e.krema import Krema, Rect, has_state, painted_rect
+from krema_e2e.shortcuts import FOCUS_DOCK_KEY_DROPPED, FOCUS_DOCK_KEY_DROPPED_REASON, invoke_shortcut, set_shortcut_keys, shortcut_keys
+from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
 # Three distinct app ids so every window is its own (ungrouped) dock item,
@@ -61,9 +61,15 @@ def wait_focused(krema: Krema, name: str) -> None:
     wait_until(lambda: focused_items(krema) == [name], message=f"only {name!r} to be focused (have {focused_items(krema)})")
 
 
-def wait_widest(krema: Krema, name: str) -> dict[str, Rect]:
-    """Wait for the zoom animation to settle and check ``name`` is the widest item."""
-    rects = wait_stable(lambda: {e.get_attribute("name"): Rect.of(e) for e in krema.items()})
+def item_rects(krema: Krema) -> dict[str, Rect]:
+    """Settled surface-local rects of the dock items by name."""
+    return wait_stable(lambda: {e.get_attribute("name"): Rect.of(e) for e in krema.items()})
+
+
+def wait_widest(krema: Krema, name: str, rest: dict[str, Rect]) -> dict[str, Rect]:
+    """Wait for the zoom animation to settle and check ``name`` is the widest
+    item. ``rest``: :func:`item_rects` before keyboard navigation zoomed any."""
+    rects = {n: painted_rect(r, rest[n]) for n, r in item_rects(krema).items()}
     widest = max(rects.values(), key=lambda r: r.width)
     assert rects[name].width == widest.width, rects
     others = [r.width for n, r in rects.items() if n != name]
@@ -104,7 +110,9 @@ def enter_preview(krema: Krema, target: str) -> None:
             return None
         return names.index(target) - names.index(focused[0]) + 1  # +1: truthy for 0 steps
 
-    for _ in range(wait_until(steps, message=f"a focused dock button and item {target!r}") - 1):
+    right = wait_until(steps, message=f"a focused dock button and item {target!r}") - 1
+    krema.wait_keyboard_focus()
+    for _ in range(right):
         inp.key("Right")
     wait_focused(krema, target)
     inp.key("Down")
@@ -119,19 +127,20 @@ def blueish_pixels(img: Image.Image, rect: Rect) -> int:
 
 
 # ---------------------------------------------------------------------- KBD-001
-def _assert_dock_keyboard_entry(krema: Krema, first: str) -> None:
+def _assert_dock_keyboard_entry(krema: Krema, first: str, rest: dict[str, Rect]) -> None:
     wait_focused(krema, first)
+    krema.wait_keyboard_focus()
     toolbar = krema.toolbar()
     assert has_state(toolbar, "focused"), "tool bar 'Krema Dock' lacks the focused state"
     for el in krema.items():
         assert has_state(el, "focusable"), el.get_attribute("name")
         assert has_state(el, "showing") and has_state(el, "visible"), el.get_attribute("name")
-    rects = wait_widest(krema, first)
+    rects = wait_widest(krema, first, rest)
 
     if kwin.can_capture():
         # Focus ring: a highlight-coloured border drawn only while the item
         # has keyboard focus. Same screen region with and without focus.
-        region = krema.screen_rect(krema.item(first))
+        region = krema.to_screen(rects[first])
         ring = blueish_pixels(Image.open(krema.screenshot("keyboard-focus")), region)
         inp.key("Escape")
         wait_until(lambda: focused_items(krema) == [], message="Escape to end keyboard navigation")
@@ -140,9 +149,11 @@ def _assert_dock_keyboard_entry(krema: Krema, first: str) -> None:
         assert ring > 200 and ring > 3 * plain, f"no focus ring on {first!r}: {ring} blue px focused vs {plain} unfocused"
 
 
+@pytest.mark.xfail(FOCUS_DOCK_KEY_DROPPED, strict=True, raises=WaitTimeout, reason=FOCUS_DOCK_KEY_DROPPED_REASON)
 def test_kbd001_meta_f5_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["First", "Second"])
     park_pointer()
+    rest = item_rects(krema)
     assert focused_items(krema) == []
 
     # KWin's default "Move Mouse to Focus" also owns Meta+F5 and wins; free it.
@@ -150,7 +161,7 @@ def test_kbd001_meta_f5_focuses_first_dock_item(krema: Krema, apps: TestWindows)
     set_shortcut_keys("MoveMouseToFocus", [], component="kwin")
     try:
         inp.key("Meta", "F5")
-        _assert_dock_keyboard_entry(krema, "First")
+        _assert_dock_keyboard_entry(krema, "First", rest)
     finally:
         set_shortcut_keys("MoveMouseToFocus", kwin_keys, component="kwin")
 
@@ -158,31 +169,34 @@ def test_kbd001_meta_f5_focuses_first_dock_item(krema: Krema, apps: TestWindows)
 def test_kbd001_focus_dock_shortcut_focuses_first_dock_item(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["First", "Second"])
     park_pointer()
+    rest = item_rects(krema)
     assert focused_items(krema) == []
 
     invoke_shortcut("focus-dock")
 
-    _assert_dock_keyboard_entry(krema, "First")
+    _assert_dock_keyboard_entry(krema, "First", rest)
 
 
 # ---------------------------------------------------------------------- KBD-002
 def test_kbd002_arrow_keys_move_focus_between_items(krema: Krema, apps: TestWindows) -> None:
     open_items(krema, apps, ["One", "Two", "Three"])
     park_pointer()
+    rest = item_rects(krema)
     invoke_shortcut("focus-dock")
     wait_focused(krema, "One")
+    krema.wait_keyboard_focus()
 
     inp.key("Right")
     wait_focused(krema, "Two")
-    wait_widest(krema, "Two")
+    wait_widest(krema, "Two", rest)
 
     inp.key("Right")
     wait_focused(krema, "Three")
-    wait_widest(krema, "Three")
+    wait_widest(krema, "Three", rest)
 
     inp.key("Left")
     wait_focused(krema, "Two")
-    wait_widest(krema, "Two")
+    wait_widest(krema, "Two", rest)
 
 
 # ---------------------------------------------------------------------- KBD-003
@@ -253,6 +267,7 @@ def test_kbd005_escape_exits_keyboard_navigation(krema: Krema, apps: TestWindows
     park_pointer()
     invoke_shortcut("focus-dock")
     wait_focused(krema, "Esc One")
+    krema.wait_keyboard_focus()
 
     inp.key("Escape")
 
@@ -414,6 +429,7 @@ def _keyboard_mode_keeps_dock_shown(krema: Krema, apps: TestWindows, visibility:
 
     wait_until(lambda: item_is_shown(krema, first), message="keyboard mode to slide the dock in")
     wait_focused(krema, first)
+    krema.wait_keyboard_focus()
     if kwin.can_capture():
         wait_stable(lambda: Rect.of(krema.item(first)))  # slide-in finished
         img = Image.open(krema.screenshot("keyboard-shown"))

@@ -38,7 +38,7 @@ from PIL import Image
 from krema_e2e import config as kcfg
 from krema_e2e import env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import TOOLBAR_XPATH, Krema, Rect, context_menu_entries, has_state
+from krema_e2e.krema import SETTINGS_STACK_XPATH, TOOLBAR_XPATH, Krema, Rect, context_menu_entries, has_state, painted_rect
 from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindows
@@ -83,7 +83,7 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
 
 def scroll_into_view(krema: Krema, xpath: str):
     """Wheel-scroll the settings page until ``xpath`` is fully visible."""
-    page = krema.wait_for(SETTINGS + "/filler/panel")
+    page = krema.wait_for(SETTINGS_STACK_XPATH)
     view = Rect.of(page)
     for _ in range(60):
         el = krema.wait_for(xpath)
@@ -149,6 +149,11 @@ def item_width(krema: Krema, name: str) -> int:
     return Rect.of(krema.item(name)).width
 
 
+def zoomed_width(krema: Krema, name: str, rest: Rect) -> int:
+    """Drawn width of item ``name`` whose unzoomed rect is ``rest``."""
+    return painted_rect(Rect.of(krema.item(name)), rest).width
+
+
 def hover_ready(k: Krema, name: str = "Alpha") -> None:
     """Glide onto dock item ``name`` and wait until the panel registers the
     hover (the item zooms beyond its icon size). The dock resolves clicks
@@ -156,8 +161,23 @@ def hover_ready(k: Krema, name: str = "Alpha") -> None:
     arrives before the hover was processed is ignored; a real user always
     hovers first."""
     icon = int(k.read_config().get("General", {}).get("IconSize", 48))
+    # wait_for_item: while krema builds a Settings window (Settings... then
+    # straight to another menu, SET-009) an AT-SPI query of the dock can
+    # briefly return no items at all.
+    item = k.screen_rect(k.wait_for_item(name))
+    px, py = kwin.cursor_pos()
+    if Rect(item.x - item.width, item.y - item.height, 3 * item.width, 3 * item.height).contains(px, py):
+        # The pointer is still on the item (a context menu chosen with the
+        # keyboard just closed), so the item is zoomed and, after
+        # PreviewHoverDelay, its preview is open; while the preview lives
+        # (also when the pointer rests on it, just above the dock) the item
+        # stays zoomed. With Qt < 6.9 a zoomed item's rect keeps the unzoomed
+        # size (painted_rect), so it cannot serve as ``rest``: move away until
+        # the preview is gone first.
+        k.move_away()
+    rest = wait_stable(lambda: Rect.of(k.wait_for_item(name)))
     k.hover_item(name)
-    wait_until(lambda: item_width(k, name) > icon, timeout=5, message=f"dock item {name} hovered (zoomed)")
+    wait_until(lambda: zoomed_width(k, name, rest) > icon, timeout=5, message=f"dock item {name} hovered (zoomed)")
 
 
 def open_menu(k: Krema, name: str = "Alpha") -> kwin.Window:
@@ -257,32 +277,56 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     assert has_state(krema.item("Alpha"), "showing")
 
 
+#: krema built against LayerShellQt < 6.4 (KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE)
+#: cannot resize its dock surface at runtime.
+RESIZE_DEADLOCK = pytest.mark.xfail(
+    env.LAYERSHELLQT_VERSION < (6, 4),
+    strict=True,
+    raises=WaitTimeout,
+    reason=(
+        "krema bug: on the KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE path (LayerShellQt < 6.4) "
+        "WaylandDockPlatform::setSize() calls QWindow::resize(QSize(0, h)) after DockView::updateSize() "
+        "set the width to the screen width, so the dock window ends up 0 px wide and Qt Quick stops "
+        "rendering it. The layer surface's set_size(0, h) is never committed (WAYLAND_DEBUG: no "
+        "wl_surface.commit after it), KWin sends no configure and the surface stays at its old size: "
+        "icon size and screen edge changes never reach the screen until krema restarts"
+    ),
+)
+
+
 # ------------------------------------------------------------------- SET-002
+@RESIZE_DEADLOCK
 @pytest.mark.kremarc({"PinnedLaunchers": [], "MaxZoomFactor": 1.6})
 def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(krema: Krema, apps: TestWindows) -> None:
     max_zoom = 1.6
     apps.open("Alpha")
     pid = krema.pid
 
-    def zoomed_width() -> int:
-        """Peak item width with the pointer on the item's centre.
+    def peak_width(rest: Rect) -> int:
+        """Peak item width with the pointer on the item's centre (``rest``:
+        the item's unzoomed rect).
 
         zoomCentre applies MaxZoomFactor only when the pointer is exactly on
         the centre; an offset scales the factor down. The item's centre moves
         as it zooms (and by more relative to its size at 48 px than at 64 px,
         which is what made the naive ratio noisy), so the pointer is
         re-centred until the rect stops moving."""
+
+        def centre() -> tuple[int, int]:
+            return krema.to_screen(painted_rect(Rect.of(krema.item("Alpha")), rest)).center
+
         krema.hover_item("Alpha")  # enter with a glide, not a teleport
         for _ in range(8):
-            inp.move(*krema.item_center("Alpha"))
-            if wait_stable(lambda: krema.item_center("Alpha"), duration=0.3) == inp.pointer_position():
+            inp.move(*centre())
+            if wait_stable(centre, duration=0.3) == inp.pointer_position():
                 break
-        return wait_stable(lambda: item_width(krema, "Alpha"))
+        return wait_stable(lambda: zoomed_width(krema, "Alpha", rest))
 
-    assert wait_stable(lambda: item_width(krema, "Alpha")) == 48
-    zoomed_before = zoomed_width()
+    rest = wait_stable(lambda: Rect.of(krema.item("Alpha")))
+    assert rest.width == 48
+    zoomed_before = peak_width(rest)
     krema.move_away()
-    wait_until(lambda: item_width(krema, "Alpha") == 48, message=lambda: f"zoom reset (width {item_width(krema, 'Alpha')})")
+    wait_until(lambda: zoomed_width(krema, "Alpha", rest) == 48, message=lambda: f"zoom reset (width {zoomed_width(krema, 'Alpha', rest)})")
 
     open_settings(krema)
     spin = krema.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
@@ -294,7 +338,7 @@ def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(kr
 
     assert config_value(krema, "IconSize") == "64"
     assert krema.pid == pid and krema.is_running(), "icon size change must not restart krema"
-    zoomed_after = zoomed_width()
+    zoomed_after = peak_width(wait_stable(lambda: Rect.of(krema.item("Alpha"))))
     # The item width is an integer, so the ratio is off by at most ~0.5/base;
     # a residual pointer offset of <=1 px lowers it by <0.03. 0.05 is safe.
     for base, zoomed in ((48, zoomed_before), (64, zoomed_after)):
@@ -398,6 +442,7 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
 
 
 # ------------------------------------------------------------------- SET-006
+@RESIZE_DEADLOCK
 def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindows) -> None:
     requires_capture()
     apps.open("Alpha")
@@ -531,7 +576,7 @@ def test_set008_monitor_mode_all_monitors_from_open_settings(krema: Krema, apps:
     # the just-created surface was occasionally dropped) and wait until that
     # dock reports the hover (its item zooms) before right-clicking.
     inp.move_path(inp.line((x, docks[1].client_y - 40), (x, y), 5), step_ms=40)
-    wait_until(lambda: second_alpha().width > second.width, timeout=5, message="second dock item hovered")
+    wait_until(lambda: painted_rect(second_alpha(), second).width > second.width, timeout=5, message="second dock item hovered")
     r = wait_stable(second_alpha)
     before = {w.internal_id for w in krema.windows()}
     inp.click(r.center[0], docks[1].client_y + r.center[1], button="right")

@@ -26,6 +26,11 @@
 #   KREMA_E2E_KWIN_BACKEND   auto (default), virtual or drm; see below
 #   KREMA_E2E_DOCKER_ARGS    extra `docker run` arguments, e.g. "--cpus=2" to
 #                            approximate a slow CI runner (default: none)
+#   KREMA_E2E_BINARY         absolute path of an installed krema inside the
+#                            image (e.g. /usr/bin/krema): skips the source
+#                            sync and krema build, runs the suite from the
+#                            read-only checkout (tests/distro/run-distro-e2e.sh)
+#   KREMA_E2E_DISTRO         target id exported to the tests (tests/distro)
 #
 # If the host has /dev/dri (e.g. after `modprobe vgem`), it is passed through
 # so KWin composites with OpenGL: needed for screenshots and PipeWire
@@ -87,14 +92,20 @@ if [ -t 0 ] && [ -t 1 ]; then
     tty_args=-it
 fi
 
+build_args="-v $volume:/build"
+if [ -n "${KREMA_E2E_BINARY:-}" ]; then
+    build_args=
+fi
+
 # shellcheck disable=SC2086
 docker run --rm --init $tty_args $platform_args \
     --shm-size=512m \
     -v "$repo:/src:ro" \
-    -v "$volume:/build" \
+    $build_args \
     -v "$artifacts:/artifacts" \
     -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     -e KREMA_E2E_SCREEN_WIDTH -e KREMA_E2E_SCREEN_HEIGHT -e KREMA_E2E_OUTPUT_COUNT \
     -e KREMA_E2E_KWIN_BACKEND -e KWIN_DRM_DEVICES \
+    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO \
     $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
     "$image" sh /src/tests/appium/entrypoint.sh "$@"

@@ -37,7 +37,7 @@ from PIL import Image, ImageChops
 
 from krema_e2e import config, dbus, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import SETTINGS_XPATH, Krema, Rect, context_menu_entries, has_state
+from krema_e2e.krema import PAGE_ROLE, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state
 from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
@@ -158,9 +158,9 @@ def test_ctx001_about_krema_is_the_fifth_entry(krema: Krema, apps: TestWindows) 
 
     win = wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from About Krema")
     assert win.pid == krema.pid
-    tab = krema.wait_for(SETTINGS_XPATH + "//page_tab[@name='About Krema']", timeout=15)
+    tab = krema.wait_for(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='About Krema']", timeout=15)
     assert has_state(tab, "showing")
-    assert krema.find(SETTINGS_XPATH + "//page_tab[@name='Appearance']") is None
+    assert krema.find(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='Appearance']") is None
     assert has_state(krema.wait_for(SETTINGS_XPATH + "//list_item[@name='About Krema']"), "checked")
 
 
@@ -249,26 +249,31 @@ def test_ctx004_new_instance_launches_another_window(krema: Krema, apps: TestWin
     before = app_windows()
     assert [w.pid for w in before] == [alpha.pid]
 
-    krema.open_context_menu("Alpha")
-    krema.choose_context_menu_entry("New Instance", UNPINNED_WINDOW)
+    # Launch feedback (bounce): the item reports "Starting" while launching.
+    # That lasts only until the new window maps, for the fixture often less
+    # than one page_source() poll, so the description changes are recorded
+    # as AT-SPI events from before the launch instead of polled.
+    changes = DescriptionChanges()
     spawned: list[int] = []
     try:
-        # Launch feedback (bounce): the item reports "Starting" while launching.
-        wait_until(
-            lambda: any("Starting" in d for d in item_descriptions(krema).values()),
-            timeout=5,
-            message="dock item to report the launch (bounce)",
-        )
+        krema.open_context_menu("Alpha")
+        krema.choose_context_menu_entry("New Instance", UNPINNED_WINDOW)
         after = wait_until(lambda: len(app_windows()) == 2 and app_windows(), timeout=15, message="a second window")
         spawned = [w.pid for w in after if w.pid != alpha.pid]
         assert len(spawned) == 1
         new = next(w for w in after if w.pid == spawned[0])
         assert new.app_id == APP and new.title == APP_NAME
+        wait_until(
+            lambda: any("Starting" in d for d in changes.texts()),
+            timeout=5,
+            message=lambda: f"dock item to report the launch (bounce) (descriptions seen: {changes.texts()})",
+        )
         # The two windows are grouped under the app's .desktop name.
         krema.wait_for_item(APP_NAME)
         wait_until(lambda: "2 windows" in description(krema, APP_NAME), timeout=5, message="grouped item")
         wait_until(lambda: "Starting" not in description(krema, APP_NAME), timeout=10, message="launch feedback to end")
     finally:
+        changes.close()
         for pid in spawned or [w.pid for w in app_windows() if w.pid != alpha.pid]:
             kill_pid(pid)
 
@@ -328,7 +333,7 @@ def test_ctx006_settings_entry_opens_the_settings_window(krema: Krema, apps: Tes
     pages = [e.get_attribute("name") for e in krema.find_all(SETTINGS_XPATH + "//list_item[@name!='']")]
     for page in ("Appearance", "Behavior", "Window Preview", "About Krema", "About KDE"):
         assert page in pages, f"{page!r} missing from settings pages {pages}"
-    krema.wait_for(SETTINGS_XPATH + "//page_tab[@name='Appearance']")
+    krema.wait_for(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='Appearance']")
     assert krema.find(SETTINGS_XPATH + "//label[@name='Icon size']") is not None
     slider = krema.find(SETTINGS_XPATH + "//slider[@name='Zoom factor']")
     assert slider is not None and has_state(slider, "focusable")

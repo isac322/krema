@@ -29,7 +29,7 @@ from PIL import Image
 
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import Krema, Rect
+from krema_e2e.krema import Krema, Rect, painted_rect
 from krema_e2e.waits import wait_stable, wait_until
 
 ICON = 48  # krema.kcfg IconSize default; IconSpacing default is 4
@@ -160,10 +160,8 @@ class Scene:
 
     # -- screenshots
     def shot(self, name: str) -> np.ndarray:
-        """RGB screenshot composited over opaque white: with no wallpaper the
-        desktop and the dock surface's empty parts are transparent (alpha 0)."""
-        img = Image.open(self.krema.screenshot(name)).convert("RGBA")
-        return np.asarray(Image.alpha_composite(Image.new("RGBA", img.size, (255, 255, 255, 255)), img).convert("RGB"))
+        """RGB screenshot (flattened onto black by kwin.screenshot)."""
+        return np.asarray(Image.open(self.krema.screenshot(name)).convert("RGB"))
 
     def stable_shot(self, name: str) -> np.ndarray:
         """Screenshot once the dock band stopped changing (icons loaded,
@@ -285,7 +283,9 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
     if not kwin.can_capture():
         pytest.fail("KWin cannot capture (QPainter compositing, no /dev/dri render node); DND-003 is a visual check")
     scene = Scene.capture(krema, [KWRITE, KFIND, TW, TW2])
-    source, target = TW, KWRITE  # dark terminal icon, dragged backwards onto the first slot
+    # Light text-editor icon, dragged backwards onto the first slot: it
+    # contrasts both with the black desktop (ghost) and the grey panel (source).
+    source, target = TW2, KWRITE
     start = scene.center(source)
     # Above the icon row but inside the dock's hover input region, so the
     # ghost (centred on the pointer) has desktop, not other icons, beneath it.
@@ -318,10 +318,10 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
         wait_until(feedback, timeout=5, message=lambda: f"drag feedback (indicator {sorted(expected)}): {seen}")
         # Zoom is off during the drag: the pointer is in the zoom zone right
         # above an item, yet every item keeps its base size.
-        rects = scene.item_rects()
+        rects = {n: painted_rect(r, scene.rects[n]) for n, r in scene.item_rects().items()}
         assert all(r.width == ICON for r in rects.values()), f"items zoomed during drag: {rects}"
 
-    order = [TW, KWRITE, KFIND, TW2]
+    order = [TW2, KWRITE, KFIND, TW]
     wait_until(lambda: krema.item_names() == order, message=lambda: f"AT-SPI order {order} (have {krema.item_names()})")
 
 

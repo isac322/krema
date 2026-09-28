@@ -9,6 +9,9 @@
 #   /build      named volume: krema build tree (incremental)
 #   /artifacts  host tests/appium/artifacts
 #
+# With KREMA_E2E_BINARY set (an installed krema, tests/distro), /work and
+# /build are not used: the suite runs from /src and tests that binary.
+#
 # Usage: entrypoint.sh [pytest args...]
 #        entrypoint.sh --shell        (debug shell after the krema build)
 #        entrypoint.sh --inner ...    (internal: pytest inside the session)
@@ -24,7 +27,7 @@ if [ "${1:-}" = "--inner" ]; then
     # is. With the DRM backend kwin runs without this variable (run.rb would
     # add --virtual), and Mesa on vkms would otherwise try zink/dri2 first.
     export LIBGL_ALWAYS_SOFTWARE=1
-    cd /work/tests/appium
+    cd "$KREMA_E2E_TESTS_DIR"
     python3 -m pytest -p no:cacheprovider --junitxml=/artifacts/junit.xml "$@" >>/artifacts/pytest.log 2>&1
     exit $?
 fi
@@ -44,29 +47,39 @@ chmod 700 "$XDG_RUNTIME_DIR"
 stamp() { date +%s.%N; }
 elapsed() { awk -v a="$1" -v b="$(stamp)" 'BEGIN { printf "%.1f", b - a }'; }
 
-mkdir -p /work /artifacts
-t0=$(stamp)
-rsync -a --delete \
-    --exclude '/.git/' --exclude '/build/' --exclude '/tests/appium/artifacts/' \
-    --exclude '__pycache__/' --exclude '.pytest_cache/' \
-    /src/ /work/
-echo "[e2e] source sync: $(elapsed "$t0")s"
+mkdir -p /artifacts
+if [ -n "${KREMA_E2E_BINARY:-}" ]; then
+    [ -x "$KREMA_E2E_BINARY" ] || { echo "KREMA_E2E_BINARY=$KREMA_E2E_BINARY is not an executable" >&2; exit 1; }
+    echo "[e2e] krema under test: $KREMA_E2E_BINARY${KREMA_E2E_DISTRO:+ ($KREMA_E2E_DISTRO)}"
+    # /src is read-only.
+    export PYTHONDONTWRITEBYTECODE=1
+    export KREMA_E2E_TESTS_DIR=/src/tests/appium
+else
+    mkdir -p /work
+    t0=$(stamp)
+    rsync -a --delete \
+        --exclude '/.git/' --exclude '/build/' --exclude '/tests/appium/artifacts/' \
+        --exclude '__pycache__/' --exclude '.pytest_cache/' \
+        /src/ /work/
+    echo "[e2e] source sync: $(elapsed "$t0")s"
 
-t0=$(stamp)
-if [ ! -f /build/build.ninja ]; then
-    cmake -S /work -B /build -G Ninja \
-        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-        -DBUILD_TESTING=OFF \
-        >/artifacts/cmake-configure.log 2>&1 || { cat /artifacts/cmake-configure.log; exit 1; }
-fi
-if ! cmake --build /build --target krema >/artifacts/krema-build.log 2>&1; then
-    tail -n 80 /artifacts/krema-build.log
-    exit 1
-fi
-echo "[e2e] krema build: $(elapsed "$t0")s"
+    t0=$(stamp)
+    if [ ! -f /build/build.ninja ]; then
+        cmake -S /work -B /build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DBUILD_TESTING=OFF \
+            >/artifacts/cmake-configure.log 2>&1 || { cat /artifacts/cmake-configure.log; exit 1; }
+    fi
+    if ! cmake --build /build --target krema >/artifacts/krema-build.log 2>&1; then
+        tail -n 80 /artifacts/krema-build.log
+        exit 1
+    fi
+    echo "[e2e] krema build: $(elapsed "$t0")s"
 
-KREMA_E2E_BINARY=$(find /build -type f -name krema -perm -u+x -path '*/bin/*' | head -n 1)
-[ -n "$KREMA_E2E_BINARY" ] || { echo "krema binary not found under /build" >&2; exit 1; }
+    KREMA_E2E_BINARY=$(find /build -type f -name krema -perm -u+x -path '*/bin/*' | head -n 1)
+    [ -n "$KREMA_E2E_BINARY" ] || { echo "krema binary not found under /build" >&2; exit 1; }
+    export KREMA_E2E_TESTS_DIR=/work/tests/appium
+fi
 export KREMA_E2E_BINARY
 
 if [ "${1:-}" = "--shell" ]; then
@@ -166,6 +179,15 @@ export KREMA_E2E_SCREEN_HEIGHT="$COMPOSITOR_HEIGHT"
 export TEST_WITHOUT_GLOBAL_SHORTCUTS=0
 export TEST_WITH_VIDEO_RECORDER=0
 export QT_FORCE_STDERR_LOGGING=1
+# Tier 3 installs krema from its distro package, so /usr/bin/krema's desktop
+# file is present and declares X-KDE-Wayland-Interfaces. Keep KWin's
+# permission checks enabled (run-permission-checks.patch makes the hard-coded
+# bypass overridable): KWin then honours the declaration and grants the
+# client privileged xdg-activation, like on a real session. A source-tree
+# krema has no matching desktop file and must keep the bypass.
+if [ -n "${KREMA_E2E_DISTRO:-}" ]; then
+    export KWIN_WAYLAND_NO_PERMISSION_CHECKS=0
+fi
 export LANGUAGE=C
 
 : >/artifacts/pytest.log

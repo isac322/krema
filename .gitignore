@@ -225,8 +225,9 @@ build/
 .claude/worktrees
 .omo/
 
-# Tier 3 VM QA cache and artifacts (tests/vm/run-vm-qa.sh)
-tests/vm/.cache/
-tests/vm/artifacts/
-# `*build-*` above would otherwise hide the package builder.
-!tests/vm/build-package.sh
+# Tier 3 distro E2E package cache (tests/distro/run-distro-e2e.sh); run
+# artifacts go to tests/appium/artifacts-distro-*/ (tests/appium/.gitignore).
+tests/distro/.cache/
+# `*build-*` above would otherwise hide the package builders.
+!tests/distro/build-package.sh
+!tests/distro/pkg/*-build.sh

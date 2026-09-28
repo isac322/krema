@@ -14,8 +14,21 @@ Meta+F5 key press never reaches krema unless that binding is cleared with
 
 from __future__ import annotations
 
-from . import dbus
+from . import dbus, env
 from .waits import wait_until
+
+#: kglobalacceld before 6.7 gives a contested key to the component that
+#: registered it first and drops it from the later one (GlobalShortcut::setKeys:
+#: "skipping because key ... is already taken"; kglobalacceld d62b708 keeps
+#: contested keys since 6.6.90). KWin registers MoveMouseToFocus = Meta+F5
+#: before krema starts, so there krema's Focus Dock is left without a key.
+FOCUS_DOCK_KEY_DROPPED: bool = env.KGLOBALACCELD_VERSION < (6, 7)
+FOCUS_DOCK_KEY_DROPPED_REASON = (
+    "krema bug: the default Focus Dock shortcut Meta+F5 collides with KWin's default MoveMouseToFocus "
+    "(Meta+F5). kglobalacceld < 6.7 drops a key another component already holds, so krema's focus-dock "
+    "action registers with no key at all (allShortcutInfos keys [0]) and stays unbound even after KWin's "
+    "binding is cleared: Meta+F5 never focuses the dock on Plasma < 6.7"
+)
 
 _SERVICE = "org.kde.kglobalaccel"
 _COMPONENT_IFACE = "org.kde.kglobalaccel.Component"

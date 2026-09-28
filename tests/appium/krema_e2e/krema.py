@@ -23,7 +23,7 @@ from selenium.common.exceptions import WebDriverException
 from . import config as kcfg
 from . import dbus, env, kwin
 from . import input as inp
-from .waits import wait_until
+from .waits import wait_stable, wait_until
 
 #: XPath of the dock tool bar and its items (see tests/e2e/README.md).
 TOOLBAR_XPATH = "//tool_bar[@name='Krema Dock']"
@@ -32,6 +32,16 @@ PREVIEW_XPATH = "//popup_menu"
 THUMBNAILS_XPATH = PREVIEW_XPATH + "/button"
 #: The Settings window's frame (ConfigWindow, accessible name "Settings").
 SETTINGS_XPATH = "/*/frame[@name='Settings']"
+#: AT-SPI role of a Kirigami/QQC2 Page: QQuickPage::accessibleRole() is
+#: PageTab before Qt 6.11 and Pane (AT-SPI "panel") since.
+PAGE_ROLE = "panel" if env.QT_VERSION >= (6, 11) else "page_tab"
+#: The Settings window's page stack (PageRow's StackView): the child of the
+#: window's content filler that holds the pages. Its own role differs across
+#: distros' Qt/Kirigami (panel on Debian 13 and Fedora, layered_pane on Ubuntu
+#: 25.04), so it is matched by its page children. Qt 6.11 makes every
+#: QQuickControl accessible, so ApplicationWindow's content control adds a
+#: filler level above the PageRow.
+SETTINGS_STACK_XPATH = SETTINGS_XPATH + ("/filler/filler/panel" if env.QT_VERSION >= (6, 11) else "/filler/*[page_tab]")
 
 #: Default kremarc for tests: nothing pinned, so the dock shows only what the
 #: test opens. Override per test via Krema(config=...).
@@ -55,6 +65,37 @@ class Rect(NamedTuple):
     def of(element: WebElement) -> "Rect":
         r = element.rect
         return Rect(int(r["x"]), int(r["y"]), int(r["width"]), int(r["height"]))
+
+
+#: Qt < 6.9 reports an item's AT-SPI extents as its transformed top-left
+#: corner with its untransformed size (qtdeclarative itemScreenRect used
+#: mapToScene(0, 0) + item size; 6.9 maps the whole rect with
+#: mapRectToScene). Dock items zoom through a Scale transform, so there a
+#: zoomed item keeps its base width and height and only its origin moves.
+EXTENTS_IGNORE_SCALE: bool = env.QT_VERSION < (6, 9)
+
+
+def painted_rect(rect: Rect, rest: Rect) -> Rect:
+    """Where a bottom-edge dock item is drawn, from its AT-SPI ``rect`` and
+    ``rest``, the same item's rect while unzoomed (both in the same
+    coordinates, surface-local or screen).
+
+    DockItem.qml scales the item about the centre of its bottom side. With
+    Qt >= 6.9 ``rect`` already is the scaled rect and is returned as is. With
+    older Qt (:data:`EXTENTS_IGNORE_SCALE`) the zoom factor comes from how far
+    the reported top-left corner rose above the resting one: scale s moves it
+    up by height * (s - 1) and left by width / 2 * (s - 1).
+    """
+    if not EXTENTS_IGNORE_SCALE:
+        return rect
+    assert (rect.width, rect.height) == (rest.width, rest.height), f"{rect} and rest rect {rest} differ in size"
+    grow = (rest.y - rect.y) / rest.height  # s - 1
+    # Both corners are rounded to whole pixels: allow 1 px plus the rounding
+    # of y carried over to x (width / 2 / height < 0.5).
+    shift = rest.x - rect.x
+    assert abs(shift - grow * rest.width / 2) <= 1.5, f"{rect} is not rest rect {rest} scaled about its bottom centre"
+    return Rect(rect.x, rect.y, round(rest.width * (1 + grow)), round(rest.height * (1 + grow)))
+
 
 
 class Krema:
@@ -221,6 +262,22 @@ class Krema:
         el = self.find(f"{ITEMS_XPATH}[contains(@states, 'focused')]")
         return el.get_attribute("name") if el is not None else None
 
+    def wait_keyboard_focus(self, surface: str = "dock") -> None:
+        """Wait until KWin gives krema's ``surface`` keyboard focus (its
+        window is KWin's active window).
+
+        Keyboard navigation marks a dock item focused in the AT-SPI tree as
+        soon as krema's QML enters it, before KWin has applied the layer
+        surface's exclusive keyboard interactivity (wl_keyboard.enter follows
+        with the next commit). A key sent in between goes to the previously
+        active window, so wait for this before the first key."""
+
+        def has_focus() -> bool:
+            w, r = kwin.active_window(), self.surface_rect(surface)
+            return w is not None and r is not None and w.pid == self.pid and Rect(w.client_x, w.client_y, w.client_width, w.client_height) == r
+
+        wait_until(has_focus, timeout=5, message=f"KWin keyboard focus on krema's {surface} surface")
+
     def preview_popup(self) -> WebElement | None:
         """The preview ``[popup menu]`` (exists while hidden, with 0x0 size)."""
         return self.find(PREVIEW_XPATH)
@@ -280,11 +337,18 @@ class Krema:
         """Screen coordinates of the centre of dock item ``name``."""
         return self.screen_rect(self.wait_for_item(name)).center
 
+    def settled_item_center(self, name: str) -> tuple[int, int]:
+        """``item_center`` once it stops moving. Adding or removing an item
+        animates the panel width (main.qml ``Behavior on width``) and shifts
+        its neighbours; pointer input aimed at a moving centre lands on the
+        wrong item."""
+        return wait_stable(lambda: self.item_center(name))
+
     # ------------------------------------------------------------------- input
     def hover_item(self, name: str, steps: int = 5, step_ms: int = 40) -> None:
         """Glide the pointer onto item ``name`` from just above the dock
         (gradual, so enter/hover handlers run like with a real mouse)."""
-        x, y = self.item_center(name)
+        x, y = self.settled_item_center(name)
         dock = self.surface_rect("dock") or Rect(0, env.SCREEN_HEIGHT - 1, env.SCREEN_WIDTH, 1)
         start = (x, max(0, dock.y - 40))
         inp.move(*start)
@@ -292,10 +356,10 @@ class Krema:
 
     def click_item(self, name: str, button: str = "left") -> None:
         """Real pointer click on the centre of dock item ``name``."""
-        inp.click(*self.item_center(name), button=button)
+        inp.click(*self.settled_item_center(name), button=button)
 
     def scroll_item(self, name: str, dy: int = 15) -> None:
-        inp.scroll(*self.item_center(name), dy=dy)
+        inp.scroll(*self.settled_item_center(name), dy=dy)
 
     def move_away(self, close_preview: bool = True) -> None:
         """Glide the pointer to the top centre, away from the dock.
@@ -353,6 +417,39 @@ def has_state(element: WebElement, state: str) -> bool:
     ``showing``, ``visible``, ``focusable``, ``sensitive``, ``active``...).
     Appium returns boolean attributes as the strings "true"/"false"."""
     return str(element.get_attribute(state)).lower() == "true"
+
+
+class DescriptionChanges:
+    """Collects AT-SPI ``object:property-change:accessible-description``
+    events in arrival order: every description an element takes on, including
+    states too short for a page_source() poll to see (a dock item's
+    "Starting" launch feedback). Pumped on the default GLib main context like
+    :class:`krema_e2e.preview.Announcements`."""
+
+    EVENT = "object:property-change:accessible-description"
+
+    def __init__(self) -> None:
+        import pyatspi  # noqa: PLC0415 - only this helper needs it
+
+        self._registry = pyatspi.Registry
+        self._events: list[tuple[str, str]] = []
+        self._registry.registerEventListener(self._on_event, self.EVENT)
+
+    def _on_event(self, event) -> None:  # noqa: ANN001 - pyatspi event
+        app = event.host_application.name if event.host_application is not None else ""
+        self._events.append((app, str(event.any_data)))
+
+    def texts(self, app: str | None = None) -> list[str]:
+        """Descriptions received so far (from application ``app``)."""
+        from gi.repository import GLib  # noqa: PLC0415
+
+        ctx = GLib.MainContext.default()
+        while ctx.iteration(False):
+            pass
+        return [text for a, text in self._events if app is None or a == app]
+
+    def close(self) -> None:
+        self._registry.deregisterEventListener(self._on_event, self.EVENT)
 
 
 def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool = False) -> list[str]:

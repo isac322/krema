@@ -5,7 +5,7 @@
 
 ## 현재 마일스톤
 
-M9 진행 예정 (Widget System + System Tray) — v0.8.0 릴리즈 완료
+M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 
 ## 완료된 항목
 
@@ -14,6 +14,7 @@ M9 진행 예정 (Widget System + System Tray) — v0.8.0 릴리즈 완료
 - [x] E2E 테스트 인프라 (10개 메커니즘 PoC)
 - [x] v0.7.0 릴리즈
 - [x] v0.8.0 릴리즈 (2026-09-28): M8 멀티 모니터/Per-Screen/Follow Active/가상 데스크톱 + 크로스 배포판 패키징 수정 포함
+- [x] v0.9.0 릴리즈 (2026-09-28): Parabolic hover zoom(Zoom style 옵션), 세로/상단 독 hover·tooltip 수정, 설정 persist 수정, Unity LauncherEntry 배지 복구
 - [x] M8a-M8d: 가상 데스크톱, 멀티 모니터, Per-Screen 설정, Follow Active
 - [x] 멀티 배포판 패키징 인프라 구축
   - COPR (Fedora 42/43/Rawhide): 6/6 빌드 성공

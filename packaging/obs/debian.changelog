@@ -1,3 +1,17 @@
+krema (0.9.0-1) unstable; urgency=medium
+
+  * New upstream release v0.9.0
+  * Parabolic hover zoom: magnified icons push neighbours aside and the dock
+    background grows (new "Zoom style" option; In place keeps old behaviour)
+  * Fixed hover and click on left, right and top docks
+  * Fixed full-surface blur at startup and 0% background opacity
+  * Fixed icon scale, badge mode and other settings not persisting
+  * Fixed clipped tooltips on vertical docks
+  * Fixed window preview appearing with previews disabled
+  * Restored Unity LauncherEntry badges and progress on Plasma 6.6+
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Mon, 28 Sep 2026 00:00:00 +0900
+
 krema (0.8.0-1) unstable; urgency=medium
 
   * New upstream release v0.8.0

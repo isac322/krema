@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-28
+
 ### Added
 
 - A "Zoom style" option in Appearance settings: Parabolic (default, neighbours move aside) or In place (the previous behaviour, where magnified icons overlapped)

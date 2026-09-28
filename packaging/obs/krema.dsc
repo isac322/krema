@@ -1,6 +1,6 @@
 Format: 1.0
 Source: krema
-Version: 0.8.0-1
+Version: 0.9.0-1
 Binary: krema
 Maintainer: Byeonghoon Yoo <bhyoo@bhyoo.com>
 Architecture: any
@@ -32,6 +32,6 @@ Build-Depends: debhelper-compat (= 13),
                plasma-workspace-dev,
                libkpipewire-dev,
                libwayland-dev (>= 1.22)
-DEBTRANSFORM-TAR: krema-0.8.0.tar.gz
+DEBTRANSFORM-TAR: krema-0.9.0.tar.gz
 Files:
- 00000000000000000000000000000000 0 krema-0.8.0.tar.gz
+ 00000000000000000000000000000000 0 krema-0.9.0.tar.gz

@@ -331,6 +331,19 @@ Item {
             tryCompare(item, "launching", false, 5000)
         }
 
+        function test_launchSignalBouncesLauncherUntilItsWindowMaps() {
+            // A pinned launcher with no startup task (a plain KWin session never
+            // reports one): the click alone must drive the feedback, past the
+            // 500 ms startup handoff, until the launcher row gives way to the app.
+            DockModel.tasksModel.addTask({ display: "Launcher", IsWindow: false, IsLauncher: true })
+            let item = items(makeDock(1))[0]
+            DockActions.taskLaunching(0)
+            verify(item.launching)
+            compare(item.accessibleDescription, "Pinned, Starting")
+            wait(1000)
+            verify(item.launching, "launch feedback dropped before the app's window mapped")
+        }
+
         function test_startupNotificationDrivesLaunchState() {
             addTasks(["A"])
             let item = items(makeDock(1))[0]

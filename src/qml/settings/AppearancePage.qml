@@ -75,6 +75,21 @@ FormCard.FormCardPage {
 
         FormCard.FormDelegateSeparator {}
 
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Zoom style")
+            description: i18n("How neighboring icons make room for the magnified icon")
+            Accessible.name: text
+            enabled: DockSettings.maxZoomFactor > 1.0
+            model: [
+                i18n("Parabolic - neighbors move aside"),
+                i18n("In place - icons overlap")
+            ]
+            currentIndex: DockSettings.zoomStyle
+            onActivated: function(index) { DockSettings.zoomStyle = index }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
         FormCard.FormSwitchDelegate {
             text: i18n("Icon size normalization")
             description: i18n("Automatically adjust icons with excess padding to appear visually consistent")

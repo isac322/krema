@@ -27,6 +27,13 @@
       <max>2.0</max>
     </entry>
 
+    <entry name="ZoomStyle" type="Int">
+      <label>How magnified icons make room (0=Parabolic, 1=InPlace)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+
     <entry name="IconNormalization" type="Bool">
       <label>Normalize icon sizes by removing internal padding</label>
       <default>true</default>

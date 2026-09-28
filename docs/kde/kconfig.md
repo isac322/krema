@@ -226,6 +226,7 @@ class DockSettings : public QObject {
 | `IconSize` | int | 48 | Icon size in pixels |
 | `IconSpacing` | int | 8 | Spacing between icons |
 | `MaxZoomFactor` | qreal | 2.0 | Maximum zoom magnification |
+| `ZoomStyle` | int | `0` | How magnified icons make room: 0 = Parabolic (neighbours pushed aside, background grows), 1 = InPlace (icons overlap) |
 | `CornerRadius` | int | 12 | Panel corner radius |
 | `Floating` | bool | true | Floating panel mode |
 | `VisibilityMode` | int | 0 | Dock visibility behavior |

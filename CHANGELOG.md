@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A "Zoom style" option in Appearance settings: Parabolic (default, neighbours move aside) or In place (the previous behaviour, where magnified icons overlapped)
+
+### Changed
+
+- Hover zoom now makes room macOS-style: magnified icons push their neighbours aside and the dock background grows, keeping the icon under the pointer; in the middle of the dock the background edges and far icons stay still, and near an end the dock grows smoothly toward it without shaking
+
 ### Fixed
 
 - Hovering and clicking dock icons worked for every icon on left and right docks (previously only the first icon responded), and zoomed icons on a top dock stayed hovered across their whole enlarged area

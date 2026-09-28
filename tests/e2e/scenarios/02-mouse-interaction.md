@@ -3,7 +3,7 @@
 ## Features
 - mouse-click-activate: Left-click on dock item activates/launches app; on a grouped app it cycles through the app's windows
 - mouse-new-instance: Middle-click launches new instance
-- mouse-hover-zoom: Parabolic zoom on mouse hover
+- mouse-hover-zoom: Parabolic zoom on mouse hover; magnified icons push neighbours aside, the dock background grows, and in the middle of the dock the background edges and far icons stay still
 - mouse-hover-tooltip: Tooltip shows app name on hover
 - mouse-wheel-cycle: Scroll wheel cycles windows of grouped app; it never launches a pinned app that isn't running
 - mouse-drag-reorder: Drag to reorder dock items
@@ -12,6 +12,8 @@
 ## Affected Files
 - src/qml/main.qml
 - src/qml/DockItem.qml
+- src/utils/zoomcalculator.h
+- src/config/krema.kcfg
 - src/shell/dockview.h
 - src/shell/dockview.cpp
 - src/models/dockactions.h
@@ -67,20 +69,27 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 
 ## TC MOUSE-003: Parabolic Zoom on Hover
 
-**Precondition:** Dock visible with multiple items.
+**Precondition:** Dock visible with multiple items. `ZoomStyle=0` (Parabolic, the default).
 **Steps:**
 1. `screenshot` — capture baseline dock state
-2. `mouse_move` to center of a middle dock item
-3. Wait 200ms for animation
-4. `screenshot` — capture zoomed state
+2. `accessibility_tree app_name="krema"` — record rest bounding boxes (position + size) of all dock items
+3. `mouse_move` to center of a middle dock item
+4. Wait 200ms for animation
+5. `screenshot` — capture zoomed state
+6. `accessibility_tree app_name="krema"` — record zoomed bounding boxes
+7. `mouse_move` horizontally across several middle items in small steps, taking a `screenshot` + `accessibility_tree` after each step
+8. `mouse_move` toward one dock end in small steps, then `mouse_move` away from the dock
 
 **Expected:**
-- Hovered item is visually larger (zoomed)
-- Adjacent items have intermediate zoom
-- Items further away remain at base size
-- Smooth parabolic curve visible
+- Hovered item is visually larger (zoomed) and stays under the pointer
+- Adjacent items have intermediate zoom; items far from the pointer remain at base size
+- Neighbouring items are pushed aside along the dock axis; the gaps between icons stay constant (equal to the rest spacing), so magnified icons never overlap
+- The dock background grows to contain the magnified icons
+- While the pointer sweeps across the middle of the dock, both background edges and the far icons stay still (no shaking or back-and-forth)
+- Toward a dock end, the background grows smoothly toward that end in one direction only
+- All items and the background return to the rest layout when the pointer leaves the dock
 
-**Verification:** screenshot comparison (zoomed vs baseline)
+**Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (item bounding boxes: shifted positions, grown sizes, no overlap)
 
 ---
 
@@ -101,6 +110,10 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - Only screenshot verification possible
 
 **Verification:** screenshot only (tooltip text matches app name)
+**Note:** Compute target coordinates from the rest layout before hovering. With
+zoom active the item under the pointer comes from its visual position, not its
+rest position, and neighbouring items have shifted outward — never reuse a
+shifted item's zoomed bounding box as a target.
 
 ---
 
@@ -191,3 +204,30 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 **Automated:** `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`)
 
 **Verification:** screenshot comparison (different window in foreground after each click)
+**Note:** Click coordinates must come from the rest layout (e.g., the first click
+in a sequence). Which item sits under the pointer comes from its visual
+position, and adjacent items have shifted outward — never reuse a shifted
+neighbour's zoomed position as a click target.
+
+---
+
+## TC MOUSE-009: In-Place Zoom Style
+
+**Precondition:** Dock visible with multiple items.
+**Steps:**
+1. Set `ZoomStyle=1` in `kremarc` (or choose "In place - icons overlap" in the "Zoom style" combo
+   in Appearance settings) and restart krema
+2. `accessibility_tree app_name="krema"` — record rest bounding boxes of all dock items
+3. `mouse_move` to center of a middle dock item
+4. Wait 200ms for animation
+5. `screenshot` — capture zoomed state
+6. `accessibility_tree app_name="krema"` — record zoomed bounding boxes
+7. `mouse_move` away from the dock; restore `ZoomStyle=0`
+
+**Expected:**
+- Hovered item and its neighbours grow via the same parabolic zoom curve
+- Icons scale in place: bounding-box centres do not move and the dock background does not grow
+- Magnified icons may overlap each other
+- All icons return to base size when the pointer leaves the dock
+
+**Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (bounding-box sizes grow while centres stay fixed)

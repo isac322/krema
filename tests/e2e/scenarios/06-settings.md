@@ -1,7 +1,7 @@
 # Settings UI
 
 ## Features
-- settings-appearance: Icon size, icon scale, zoom factor, spacing, opacity, background style
+- settings-appearance: Icon size, icon scale, zoom factor, zoom style, spacing, opacity, background style
 - settings-behavior: Visibility mode, dock position, monitor mode
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
@@ -69,7 +69,7 @@
 **Expected:**
 - Dock icons resize in real-time as slider moves
 - No restart required
-- Zoom proportions adjust accordingly
+- Zoom proportions adjust accordingly (the Parabolic zoom style keeps icons separated while scaling)
 
 **Verification:** screenshot comparison (icon size changed)
 
@@ -207,4 +207,30 @@
 - No Settings window remains after exit
 
 **Verification:** process exit status, `list_windows`
+
+---
+
+## TC SET-010: Zoom Style Combo
+
+**Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0.
+**Steps:**
+1. `find_ui_elements query="Zoom style" app_name="krema"` — locate the combo box
+2. Verify the combo offers exactly two entries, "Parabolic - neighbors move aside" and "In place - icons overlap", and is set to "Parabolic - neighbors move aside" by default
+3. `mouse_move` to a middle dock item, wait 200ms, `screenshot` — neighbours are pushed aside and the dock background grows
+4. Select "In place - icons overlap", wait 500ms
+5. `mouse_move` away and back to the middle dock item, wait 200ms
+6. `screenshot` + `accessibility_tree app_name="krema"` — icons magnify in place without moving; bounding-box centres unchanged, magnified icons may overlap
+7. `read_file ~/.config/kremarc` (or `accessibility_tree` after reopening) — verify `ZoomStyle=1` persisted
+8. Select "Parabolic - neighbors move aside", verify `ZoomStyle=0` persisted (or the key is removed as the default)
+9. Set "Zoom factor" slider to 1.0 — verify the combo becomes disabled
+10. Restore zoom factor > 1.0
+
+**Expected:**
+- Combo defaults to "Parabolic - neighbors move aside" and applies live without restart
+- "In place - icons overlap" restores in-place zoom: icons scale in place (positions unchanged, overlap allowed)
+- "Parabolic - neighbors move aside" pushes neighbours aside and grows the dock background
+- Setting persists to `kremarc` as `ZoomStyle` (0 = Parabolic, 1 = In place)
+- Combo is disabled while zoom factor is 1.0 (no zoom to lay out)
+
+**Verification:** find_ui_elements (combo entries/state/enabled), screenshot (Parabolic vs In place zoom), accessibility_tree (item bounding-box centres), kremarc (`ZoomStyle` key)
 

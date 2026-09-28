@@ -203,15 +203,18 @@ Item {
     // --- KDE state-driven launch tracking ---
     //
     // Launch animation lifecycle:
-    //   1. manualLaunching: click → IsStartup handoff bridge (a few ms)
+    //   1. manualLaunching: click → IsStartup handoff bridge (500ms)
     //   2. _isStartup: KDE startup notification drives bounce (until window or timeout)
-    //   3. _waitingForWindow: keeps bounce alive after KDE's 5s timeout for slow apps
+    //   3. _waitingForWindow: keeps bounce alive until the new window maps, after
+    //      KDE's 5s startup timeout for slow apps, or when no startup task ever
+    //      arrives. The latter is the norm for a new instance of a running app:
+    //      TasksModel filters out startup tasks of apps that already have a
+    //      window, and KWin creates no activation feedback for the active app.
     //
     // Bounce stops when any of:
     //   - ChildCount increases (new window created)
     //   - IsActive changes (single-instance app raised its existing window)
-    //   - noOpDetectionTimer fires (already-active app, no new window in 2s → no-op)
-    //   - launchSafetyTimer fires (IsStartup never arrived within 500ms)
+    //   - noOpDetectionTimer fires (already-active app, no new window in 5s → no-op)
     //   - maxLaunchTimer fires (30s absolute safety net)
 
     readonly property bool _isStartup: model.IsStartup ?? false
@@ -277,24 +280,38 @@ Item {
 
     // --- Timers ---
 
-    // 500ms: fallback for the edge case where IsStartup never fires
-    // (e.g. single-instance app silently ignores D-Bus activation)
+    // 500ms: no startup task took over the launch. Keep the feedback until the
+    // new window maps (_waitingForWindow, bounded by maxLaunchTimer). This is
+    // the regular path for a new instance of a running app, which never gets
+    // a startup task (see the lifecycle notes above). _waitingForWindow is set
+    // before manualLaunching is cleared so `launching` never drops in between.
     Timer {
         id: launchSafetyTimer
         interval: 500
         onTriggered: {
-            if (dockItem.manualLaunching) dockItem.manualLaunching = false
+            if (!dockItem.manualLaunching) return
+            if (dockItem._childCount === dockItem._childCountAtLaunch && !dockItem._noOpOverride) {
+                dockItem._waitingForWindow = true
+                maxLaunchTimer.restart()
+            }
+            dockItem.manualLaunching = false
         }
     }
 
-    // 2s: detects no-op for already-active apps. If no new window appeared
-    // within 2s after middle-click, override _isStartup to stop bounce.
+    // 5s: detects no-op for already-active apps (e.g. a single-instance app
+    // that ignores the new-instance request). Neither a startup task nor an
+    // activation change can signal the outcome, so stop the feedback if no new
+    // window appeared within KDE's default launch feedback timeout
+    // (klaunchrc [TaskbarButtonSettings] Timeout=5). Shorter would cut the
+    // feedback of a slow app that does open a new window.
     Timer {
         id: noOpDetectionTimer
-        interval: 2000
+        interval: 5000
         onTriggered: {
             if (dockItem._childCount === dockItem._childCountAtLaunch) {
                 dockItem._noOpOverride = true
+                dockItem._waitingForWindow = false
+                maxLaunchTimer.stop()
             }
         }
     }

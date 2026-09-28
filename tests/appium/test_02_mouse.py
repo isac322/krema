@@ -286,16 +286,6 @@ def test_mouse002_left_click_launches_pinned_app(krema: Krema) -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "krema bug: clicking a pinned launcher shows no launch bounce when the task model reports no startup "
-        "task. main.qml onTaskLaunching skips manualLaunching for launchers (comment: 'IsStartup fires within "
-        "~5ms'), so DockItem.launching depends solely on IsStartup; in a real KWin 6 session the launcher row is "
-        "replaced directly by the window row (krema.model: rows remove/insert only when the window maps, no "
-        "startup row, no 'Starting' description) and the icon lift stays 0 px for the whole 3 s launch"
-    ),
-)
 @pytest.mark.no_krema_autostart
 @pytest.mark.kremarc({"PinnedLaunchers": [config.launcher(SLOW_ID)], **QUIET_HOVER})
 def test_mouse002_pinned_launch_bounces(krema: Krema) -> None:

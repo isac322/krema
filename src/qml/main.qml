@@ -1109,11 +1109,12 @@ Item {
     }
 
     // Handle launch bounce trigger from C++ signal.
-    // Only sets manualLaunching for already-running apps (IsWindow): their
-    // delegate stays alive, so manualLaunching persists through the bounce.
-    // For launchers (first launch), we skip manualLaunching entirely:
-    // IsStartup fires within ~5ms and, being model data, survives the
-    // delegate recreation caused by hideActivatedLaunchers.
+    // manualLaunching is set for every launch, launchers included: a task
+    // manager without startup notifications (a plain KWin 6 session) never
+    // reports an IsStartup task, so the click itself must start the feedback.
+    // For a launcher, the delegate's feedback ends when the launcher row is
+    // replaced (hideActivatedLaunchers) by the startup task, which carries
+    // on via IsStartup, or by the app's window.
     Connections {
         target: DockActions
         function onTaskLaunching(index) {
@@ -1122,9 +1123,6 @@ Item {
 
             // Announce launch to screen reader (must call on root Item, not Connections)
             root.announceLaunch(item.displayName)
-
-            // Skip for launcher items — IsStartup will drive the bounce.
-            if (!item.model.IsWindow) return
 
             item.manualLaunching = true
         }

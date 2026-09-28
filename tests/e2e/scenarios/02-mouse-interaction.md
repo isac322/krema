@@ -65,7 +65,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - Indicator dot appears under the icon
 
 **Verification:** list_windows (new window), screenshot (indicator dot)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces, strict xfail for a krema bug)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces)
 
 ---
 

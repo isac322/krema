@@ -1,5 +1,5 @@
 {
-  "name": "Krema — Lightweight Dock for KDE Plasma 6",
+  "name": "Krema: Lightweight Dock for KDE Plasma 6",
   "short_name": "Krema",
   "description": "A lightweight, Wayland-native dock for KDE Plasma 6.",
   "id": "./",

@@ -1,12 +1,11 @@
-// Exhibit: feature clips on a stage, picked from a mini Krema dock, plus the
-// screenshots as a window-preview popup with a lightbox.
+// Exhibit: feature clips and screenshots on one stage, picked from a mini
+// Krema dock. Every .ex-clip figure in the stage is one picker item; its tile
+// is built here from data-label and the poster (video) or image (still).
 (() => {
   "use strict";
 
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   const reduced = () => motionQuery.matches;
-
-  // ---------------------------------------------------------------- Clips
 
   const initClips = () => {
     const ex = document.querySelector("[data-ex]");
@@ -23,21 +22,57 @@
     const TAP_DRIFT = 10; // px of finger travel that turns a tap into a scrub
     const SCROLL_IDLE = 400; // ms after the last row scroll before the zoom settles
 
+    // ---------- Model: one entry per figure, tile built from its data ----------
+
+    const buildTile = (fig, key, faceSrc) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "ex-tile";
+      tile.id = `ex-tab-${key}`;
+      tile.setAttribute("role", "tab");
+      tile.setAttribute("aria-controls", fig.id);
+      tile.setAttribute("aria-selected", "false");
+      tile.tabIndex = -1;
+      const face = document.createElement("span");
+      face.className = "ex-face";
+      if (faceSrc) {
+        const img = document.createElement("img");
+        img.alt = "";
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.src = faceSrc;
+        face.append(img);
+      }
+      const ind = document.createElement("span");
+      ind.className = "ex-ind";
+      ind.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      label.className = "ex-label";
+      label.textContent = fig.dataset.label || (fig.querySelector(".ex-name") || fig).textContent.trim();
+      tile.append(face, ind, label);
+      return tile;
+    };
+
     const clips = [];
-    for (const tile of dock.querySelectorAll(".ex-tile")) {
-      const fig = document.getElementById(tile.getAttribute("aria-controls") || "");
-      const video = fig && fig.querySelector("video");
-      if (!video) {
-        tile.remove();
-        if (fig) fig.remove();
+    for (const fig of stage.querySelectorAll(".ex-clip")) {
+      const video = fig.querySelector("video");
+      const still = video ? null : fig.querySelector(".ex-img");
+      const key = fig.dataset.clip || fig.id;
+      if ((!video && !still) || !fig.id || !key) {
+        fig.remove();
         continue;
       }
+      const tile = buildTile(fig, key, fig.dataset.face || (video ? video.getAttribute("poster") : still.getAttribute("src")));
+      fig.setAttribute("role", "tabpanel");
+      fig.setAttribute("aria-labelledby", tile.id);
+      dock.append(tile);
       clips.push({
         tile,
         fig,
         video,
+        still,
         face: tile.querySelector(".ex-face"),
-        sources: Array.from(video.querySelectorAll("source[data-src]")),
+        sources: video ? Array.from(video.querySelectorAll("source[data-src]")) : [],
         name: (fig.querySelector(".ex-name") || tile).textContent.trim(),
         line: (fig.querySelector(".ex-line") || {}).textContent || "",
         ready: false,
@@ -52,12 +87,14 @@
       ex.hidden = true;
       return;
     }
+    dock.setAttribute("role", "tablist");
+    dock.setAttribute("aria-label", "Clips and screenshots");
     const clipOf = (el) => clips.find((c) => c.tile === el) || null;
     const readyClips = () => clips.filter((c) => c.ready);
 
     let active = null;
     let wantPlay = !reduced(); // reduced motion: nothing starts on its own
-    let auto = !reduced(); // auto-advance until the user picks a clip
+    let auto = !reduced(); // auto-advance through the videos until the user picks an item
     let inView = !("IntersectionObserver" in window);
     let loops = 0;
     let m = null;
@@ -73,14 +110,14 @@
       if (!frame) frame = requestAnimationFrame(render);
     };
 
-    stage.hidden = false;
     dock.hidden = false;
-    ex.classList.add("is-pending"); // keeps the space, shows nothing until a clip checks out
+    toggle.hidden = false;
+    ex.classList.add("is-pending"); // keeps the space, shows nothing until an item checks out
 
     // ---------- Loading: only the stage clip ever gets a src ----------
 
     const load = (c) => {
-      if (c.loaded) return;
+      if (!c.video || c.loaded) return;
       c.loaded = true;
       for (const s of c.sources) s.src = s.dataset.src;
       c.video.load();
@@ -88,19 +125,21 @@
 
     // Detach the sources so the paused decoder and its buffers are released.
     const unload = (c) => {
-      if (!c.loaded) return;
+      if (!c.video || !c.loaded) return;
       c.loaded = false;
       c.video.pause();
       for (const s of c.sources) s.removeAttribute("src");
       c.video.load();
     };
 
+    // A still has nothing to play: the toggle stays in place but is disabled.
     const writeToggle = () => {
       toggle.setAttribute("aria-pressed", String(wantPlay));
+      toggle.disabled = !!active && !active.video;
     };
 
     const sync = () => {
-      if (!active) return;
+      if (!active || !active.video) return;
       const c = active;
       const v = c.video;
       if (wantPlay && inView && !document.hidden) {
@@ -147,7 +186,8 @@
         loops = 0;
         ex.classList.remove("is-pending");
         writeTiles();
-        if (prev) {
+        writeToggle();
+        if (prev && prev.video) {
           prev.video.pause();
           // Keep the outgoing frame for the crossfade, then free it.
           window.setTimeout(() => {
@@ -168,7 +208,15 @@
       return list[(i + step + list.length) % list.length];
     };
 
-    // The first clip in document order that has checked out goes on stage.
+    // Auto-advance rotates through the videos only; stills wait for a pick.
+    const nextVideo = (from) => {
+      const list = readyClips().filter((c) => c.video);
+      if (!list.length) return null;
+      const i = list.indexOf(from);
+      return list[(i + 1) % list.length];
+    };
+
+    // The first item in document order that has checked out goes on stage.
     const start = () => {
       if (active) return;
       const first = clips[0];
@@ -211,7 +259,7 @@
       schedule();
     };
 
-    // ---------- Probe: poster must load, one playable source must exist ----------
+    // ---------- Probe: the poster or image must load, a video needs one playable source ----------
 
     const imageOk = (url) =>
       new Promise((resolve) => {
@@ -232,6 +280,7 @@
         : Promise.resolve(null);
 
     const probe = async (c) => {
+      if (c.still) return (await imageOk(c.still.currentSrc || c.still.src)) ? markReady(c) : drop(c);
       if (!(await imageOk(c.video.poster))) return drop(c);
       const urls = c.sources
         .filter((s) => c.video.canPlayType(s.getAttribute("type") || "") !== "")
@@ -243,23 +292,25 @@
     };
 
     for (const c of clips) {
-      // A missing file surfaces as an error on the last candidate source.
-      const last = c.sources[c.sources.length - 1];
-      if (last) {
-        last.addEventListener("error", () => {
-          if (c.loaded && last.hasAttribute("src")) drop(c);
+      if (c.video) {
+        // A missing file surfaces as an error on the last candidate source.
+        const last = c.sources[c.sources.length - 1];
+        if (last) {
+          last.addEventListener("error", () => {
+            if (c.loaded && last.hasAttribute("src")) drop(c);
+          });
+        }
+        c.video.addEventListener("timeupdate", () => {
+          if (c !== active) return;
+          const t = c.video.currentTime;
+          if (t + 0.25 < c.lastT) loops += 1; // wrapped around: one more play done
+          c.lastT = t;
+          if (auto && loops >= LOOPS) {
+            const next = nextVideo(c);
+            if (next && next !== c) select(next);
+          }
         });
       }
-      c.video.addEventListener("timeupdate", () => {
-        if (c !== active) return;
-        const t = c.video.currentTime;
-        if (t + 0.25 < c.lastT) loops += 1; // wrapped around: one more play done
-        c.lastT = t;
-        if (auto && loops >= LOOPS) {
-          const next = neighbour(c, 1);
-          if (next && next !== c) select(next);
-        }
-      });
       probe(c);
     }
 
@@ -291,6 +342,66 @@
       sync();
     };
     if (motionQuery.addEventListener) motionQuery.addEventListener("change", onMotionChange);
+
+    // ---------- Stills: the stage image opens full size in a lightbox ----------
+
+    let dialog = null;
+    let opener = null;
+
+    const ensureDialog = () => {
+      if (dialog) return dialog;
+      if (typeof HTMLDialogElement !== "function") return null;
+      dialog = document.createElement("dialog");
+      dialog.className = "ex-dialog";
+      dialog.setAttribute("aria-label", "Screenshot");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "ex-close";
+      close.setAttribute("aria-label", "Close");
+      close.textContent = "\u00d7";
+      const img = document.createElement("img");
+      img.alt = "";
+      const cap = document.createElement("p");
+      cap.className = "ex-dcap";
+      dialog.append(close, img, cap);
+      (ex.closest("section") || document.body).append(dialog);
+
+      close.addEventListener("click", () => dialog.close());
+      // Backdrop click: the event targets the dialog itself but lands outside its box.
+      dialog.addEventListener("click", (e) => {
+        if (e.target !== dialog) return;
+        const r = dialog.getBoundingClientRect();
+        const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        if (!inside) dialog.close();
+      });
+      // Esc is handled natively (cancel -> close); every close path restores focus.
+      dialog.addEventListener("close", () => {
+        if (opener && document.contains(opener)) opener.focus();
+        opener = null;
+      });
+      return dialog;
+    };
+
+    stage.addEventListener("click", (e) => {
+      const link = e.target.closest(".ex-open");
+      const src = link && link.querySelector("img");
+      if (!src || !ensureDialog()) return;
+      e.preventDefault();
+      const img = dialog.querySelector("img");
+      const w = src.getAttribute("width");
+      const h = src.getAttribute("height");
+      if (w && h) {
+        img.width = +w;
+        img.height = +h;
+      }
+      img.src = link.getAttribute("href") || src.currentSrc || src.src;
+      img.alt = src.alt;
+      const line = link.closest("figure")?.querySelector(".ex-line");
+      dialog.querySelector(".ex-dcap").textContent = line ? line.textContent.trim() : "";
+      opener = link;
+      dialog.showModal();
+      dialog.querySelector(".ex-close").focus();
+    });
 
     // ---------- Picker: selection + keyboard ----------
 
@@ -331,6 +442,7 @@
         reach: REACH * pitch,
         left: dock.getBoundingClientRect().left + dock.clientLeft,
         scroll,
+        maxScroll: dock.scrollWidth - dock.clientWidth,
       };
       needMeasure = false;
     };
@@ -349,6 +461,13 @@
       else if (scrolling) x = dock.scrollLeft + dock.clientWidth / 2;
       else if (focusClip && focusClip.ready) x = focusClip.center;
       dock.classList.toggle("is-tracking", pointerX !== null || scrolling);
+      // A scrolling row fades out on whichever side still has tiles to reveal.
+      if (m.scroll) {
+        dock.classList.toggle("has-more-start", dock.scrollLeft > 2);
+        dock.classList.toggle("has-more-end", dock.scrollLeft < m.maxScroll - 2);
+      } else {
+        dock.classList.remove("has-more-start", "has-more-end");
+      }
       for (const c of clips) {
         const s = x === null || !c.ready || !m.reach ? 1 : zoomAt(Math.abs(x - c.center));
         if (Math.abs(s - c.s) < 0.0005) continue;
@@ -456,78 +575,5 @@
     if ("ResizeObserver" in window) new ResizeObserver(remeasure).observe(dock);
   };
 
-  // ---------------------------------------------------------------- Stills
-
-  const initStills = () => {
-    const root = document.querySelector("[data-pv]");
-    if (!root) return;
-
-    // Entrance: the popup scales out of the tile once, when it first shows.
-    if (!reduced() && "IntersectionObserver" in window) {
-      root.classList.add("pv-armed");
-      const io = new IntersectionObserver(
-        (entries) => {
-          if (!entries.some((e) => e.isIntersecting)) return;
-          io.disconnect();
-          // Let the armed (scaled-down) state paint before transitioning.
-          requestAnimationFrame(() => root.classList.add("is-open"));
-        },
-        { threshold: 0.25 }
-      );
-      io.observe(root);
-    }
-
-    // Lightbox.
-    const section = root.closest("section") || document;
-    const dialog = section.querySelector(".pv-dialog");
-    if (!dialog || typeof dialog.showModal !== "function") return;
-
-    const dImg = dialog.querySelector("img");
-    const dCap = dialog.querySelector(".pv-dcap");
-    const closeBtn = dialog.querySelector(".pv-close");
-    let opener = null;
-
-    const open = (btn) => {
-      const img = btn.querySelector("img");
-      if (!img || !dImg) return;
-      const cap = btn.closest("figure")?.querySelector(".pv-cap");
-      const w = img.getAttribute("width");
-      const h = img.getAttribute("height");
-      if (w && h) {
-        dImg.width = +w;
-        dImg.height = +h;
-      }
-      dImg.src = img.currentSrc || img.src;
-      dImg.alt = img.alt;
-      if (dCap) dCap.textContent = cap ? cap.textContent.trim() : "";
-      opener = btn;
-      dialog.showModal();
-      closeBtn?.focus();
-    };
-
-    root.addEventListener("click", (e) => {
-      const btn = e.target.closest(".pv-open");
-      if (btn && root.contains(btn)) open(btn);
-    });
-
-    closeBtn?.addEventListener("click", () => dialog.close());
-
-    // Backdrop click: the event targets the dialog itself but lands outside its box.
-    dialog.addEventListener("click", (e) => {
-      if (e.target !== dialog) return;
-      const r = dialog.getBoundingClientRect();
-      const inside =
-        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      if (!inside) dialog.close();
-    });
-
-    // Esc is handled natively (cancel -> close); every close path restores focus.
-    dialog.addEventListener("close", () => {
-      if (opener && document.contains(opener)) opener.focus();
-      opener = null;
-    });
-  };
-
   initClips();
-  initStills();
 })();

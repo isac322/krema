@@ -1,6 +1,6 @@
 # Headless Plasma session for Krema product clips (see ./NOTES.md).
-# Same environment as branding/screenshots/regen plus ffmpeg (for x11grab
-# recording) and mesa-demos (GL probing for compositor experiments).
+# Same environment as branding/screenshots/regen plus ffmpeg (x11grab
+# recording) and libfaketime (slowed session clock).
 #
 # Two ways to get Krema into the image:
 #   local (default)  build from a source tree passed as the named context `krema-src`:
@@ -16,12 +16,10 @@ RUN dnf -y --setopt=install_weak_deps=False install \
       dolphin konsole kate systemsettings okular gwenview kcalc elisa-player plasma-systemmonitor firefox \
       mesa-dri-drivers mesa-libEGL mesa-libgbm dbus-daemon dbus-tools \
       pipewire wireplumber xdg-desktop-portal-kde procps-ng python3 \
-      xorg-x11-server-Xvfb scrot xdotool ffmpeg mesa-demos && \
+      xorg-x11-server-Xvfb xdotool ffmpeg libfaketime && \
     dnf clean all && \
     useradd -m -s /bin/bash alex && echo 'PS1="[\u@fedora \W]\$ "' >> /home/alex/.bashrc
 RUN setcap -r /usr/sbin/kwin_wayland
-# libfaketime slows the whole session's clocks (see session.sh / NOTES.md).
-RUN dnf -y --setopt=install_weak_deps=False install libfaketime && dnf clean all
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 WORKDIR /home/alex
 

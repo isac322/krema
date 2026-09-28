@@ -21,6 +21,15 @@
   container-type: inline-size;
 }
 
+/* Narrow screens: the text column spans the page dock's width, so the next
+   section must start below the fold for the dock to show on the first screen. */
+@media (max-width: 59.99rem) {
+  .hero {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+}
+
 /* ---------- The lens (wordmark) ---------- */
 
 .lens {
@@ -186,8 +195,8 @@
   margin-top: 0.5rem;
 }
 
-/* Up to three buttons, primary first. Phones: primary spans the row, the
-   others share the next one; all stay at least a comfortable touch height. */
+/* Primary first. Phones: both buttons share one row and stay at least a
+   comfortable touch height. */
 .ctas > * { min-height: 44px; }
 
 @media (max-width: 29.99rem) {
@@ -195,13 +204,15 @@
     flex: 1 1 auto;
     justify-content: center;
   }
-  .ctas > :first-child { flex-basis: 100%; }
 }
 
-/* Only meaningful when the lens is live. */
+/* Only meaningful when the lens is live. Sits right under the wordmark it
+   refers to and fades out on the first sweep. */
 .hero-hint {
   display: none;
-  margin: 0;
+  align-items: center;
+  gap: 0.5em;
+  margin: -0.25rem 0 0;
   font-family: var(--mono, "Hack", "JetBrains Mono", ui-monospace, monospace);
   font-size: 0.8rem;
   letter-spacing: 0.08em;
@@ -209,7 +220,21 @@
   transition: opacity 600ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-.js .hero-hint { display: block; }
+.hero-hint::before {
+  content: "\2194";
+  font-family: var(--font, "Noto Sans", system-ui, sans-serif);
+  font-size: 1.1em;
+  color: var(--blue, #3daee9);
+  animation: hero-hint-nudge 1.6s var(--ease-out, ease-out) 1.2s 3;
+}
+
+@keyframes hero-hint-nudge {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-3px); }
+  65% { transform: translateX(3px); }
+}
+
+.js .hero-hint { display: flex; }
 .hero.is-touched .hero-hint { opacity: 0; }
 
 /* ---------- Wide screens: wordmark on top; tag + lede left, CTAs bottom-right ---------- */
@@ -220,21 +245,16 @@
     column-gap: 2.5rem;
   }
   .lens { grid-column: 1 / -1; grid-row: 1; }
-  .hero-tag { grid-column: 1 / -1; grid-row: 2; white-space: nowrap; }
-  .hero-lede { grid-column: 1; grid-row: 3; }
+  /* Directly under the wordmark, before the tag. */
+  .hero-hint { grid-column: 1 / -1; grid-row: 2; }
+  .hero-tag { grid-column: 1 / -1; grid-row: 3; white-space: nowrap; }
+  .hero-lede { grid-column: 1; grid-row: 4; }
   .ctas {
     grid-column: 2;
-    grid-row: 3;
+    grid-row: 4;
     align-self: end;
     justify-self: end;
     margin-top: 0;
-  }
-  /* Top-right of the wordmark row, where the x-height letters leave room. */
-  .hero-hint {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    align-self: start;
-    justify-self: end;
   }
 }
 
@@ -246,4 +266,5 @@
   .hero-hint {
     transition: none !important;
   }
+  .hero-hint::before { animation: none; }
 }

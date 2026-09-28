@@ -1,5 +1,5 @@
-/* Exhibit: feature clips on a stage picked from a mini dock, then the
-   screenshots as a Krema window-preview popup above its dock tile. */
+/* Exhibit: feature clips and screenshots share one stage, picked from a
+   mini dock. js/shots.js builds one tile per .ex-clip figure. */
 
 /* ---- Stage: a window playing the selected clip ---- */
 .ex {
@@ -39,7 +39,7 @@
     0 10px 24px -12px rgba(0, 0, 0, .5);
 }
 
-/* The stage only appears once JS has checked the clip files. */
+/* All items share one grid cell once JS runs; without JS they stack. */
 .ex-screen {
   display: grid;
 }
@@ -150,10 +150,44 @@
   border-radius: 20px;
   box-shadow: 0 16px 40px -22px rgba(0, 0, 0, .7);
   touch-action: pan-y pinch-zoom; /* horizontal drags scrub the zoom */
+  /* Twelve tiles outgrow even the 1080px stage, so the row scrolls at every
+     width; js/shots.js sets is-scroll and the has-more-* fades. */
+  --ex-fade: 28px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 14px;
+  scrollbar-width: none;
+}
+
+.ex-dock::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fade the edge that still hides tiles, so the row reads as scrollable. */
+.ex-dock.has-more-end {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--ex-fade)), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - var(--ex-fade)), transparent);
+}
+
+.ex-dock.has-more-start {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--ex-fade));
+  mask-image: linear-gradient(90deg, transparent, #000 var(--ex-fade));
+}
+
+.ex-dock.has-more-start.has-more-end {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--ex-fade), #000 calc(100% - var(--ex-fade)), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--ex-fade), #000 calc(100% - var(--ex-fade)), transparent);
 }
 
 .ex-dock.is-scroll {
   touch-action: manipulation; /* the row scrolls natively instead */
+}
+
+/* Tiles appear as their files check out, in any order. Snapping before the
+   first pick would pin whichever tile was ready first and drag the row to it. */
+.ex.is-pending .ex-dock {
+  scroll-snap-type: none;
 }
 
 .ex-tile {
@@ -163,6 +197,7 @@
   flex-direction: column;
   align-items: center;
   width: calc(var(--ex-tile) + 24px);
+  scroll-snap-align: center;
   padding: 0;
   margin: 0;
   color: var(--bone-dim);
@@ -287,187 +322,60 @@
   border: 0;
 }
 
-/* ---- Stills: compact preview popup below the clips ---- */
-.pv {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 22px;
-  margin-inline: auto;
-  max-width: 760px;
-  padding-inline: 16px;
-}
-
-.ex + .pv {
-  margin-top: clamp(3rem, 6vw, 4.5rem);
-}
-
-.ex[hidden] + .pv {
-  margin-top: clamp(1.5rem, 3vw, 2.75rem);
-}
-
-/* Every screenshot was omitted at deploy time. */
-.pv:not(:has(.pv-thumb)) {
-  display: none;
-}
-
-/* ---- Popup panel ---- */
-.pv-popup {
-  position: relative;
-  display: flex;
-  gap: 14px;
-  width: 100%;
-  padding: 14px;
-  background: var(--ink-2);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow:
-    0 1px 0 rgba(243, 240, 234, .04) inset,
-    0 24px 60px -20px rgba(0, 0, 0, .65),
-    0 8px 20px -10px rgba(0, 0, 0, .5);
-  transform-origin: 50% calc(100% + 58px); /* grows out of the tile below */
-}
-
-/* Notch pointing down at the tile. */
-.pv-popup::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -8px;
-  width: 14px;
-  height: 14px;
-  margin-left: -7px;
-  background: var(--ink-2);
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  border-bottom-right-radius: 3px;
-  transform: rotate(45deg);
-  pointer-events: none;
-}
-
-/* ---- Window-preview cards ---- */
-.pv-thumb {
-  flex: 1 1 0;
-  min-width: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 8px 10px;
-  background: var(--ink);
-  border-radius: 12px;
-  outline: 1px solid transparent;
-  outline-offset: 0;
-  transition:
-    transform 180ms var(--ease-out),
-    outline-color 180ms var(--ease-out),
-    box-shadow 180ms var(--ease-out);
-}
-
-.pv-thumb:hover,
-.pv-thumb:focus-within {
-  transform: translateY(-4px);
-  outline-color: var(--blue);
-  box-shadow: 0 12px 28px -14px var(--glow);
-}
-
-/* Title row: app glyph + window title, above the image. */
-.pv-cap {
-  order: -1;
-  position: relative;
-  min-width: 0;
-  padding-left: 24px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: .8125rem;
-  line-height: 16px;
-  color: var(--bone-dim);
-}
-
-.pv-cap::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 0;
-  width: 16px;
-  height: 16px;
-  background: url("../favicon.svg") center / contain no-repeat;
-}
-
-.pv-open {
+/* ---- Stills: a screenshot on the stage, in the clip's 2:1 frame ---- */
+.ex-open {
   display: block;
-  width: 100%;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  background: none;
+  border-radius: 0;
   color: inherit;
-  font: inherit;
-  border-radius: 10px;
 }
 
-.js .pv-open {
+.js .ex-open {
   cursor: zoom-in;
 }
 
-.pv-open img {
+.ex-open:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -4px;
+}
+
+.ex-img {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 10px;
+  aspect-ratio: 2 / 1; /* same frame as the clips, so switching never resizes the stage */
+  object-fit: contain;
   background: var(--night);
 }
 
-.pv-open:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 3px;
+.ex-toggle:disabled {
+  opacity: .35;
+  cursor: default;
 }
 
-/* ---- Dock tile under the popup ---- */
-.pv-tile {
-  position: relative;
-  width: 72px;
-  height: 72px;
-  flex: none;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .45));
+.ex-toggle:disabled:hover {
+  border-color: var(--line);
 }
 
-.pv-tile > svg,
-.pv-tile > img {
-  display: block;
-  width: 100%;
-  height: 100%;
+.ex-toggle[hidden] {
+  display: none;
 }
 
-.pv-dot {
-  position: absolute;
-  left: 50%;
-  bottom: -12px;
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 8px var(--glow);
+/* Without JS only the screenshots show; the clips need JS to load. */
+html:not(.js) .ex-clip:not(.ex-still) {
+  display: none;
 }
 
-/* ---- Entrance: popup scales out of the tile once (JS arms it) ---- */
-.pv.pv-armed .pv-popup {
-  opacity: 0;
-  transform: scale(.6);
+html:not(.js) .ex-screen {
+  gap: 1px;
+  background: var(--line);
 }
 
-.pv.pv-armed.is-open .pv-popup {
-  opacity: 1;
-  transform: none;
-  transition:
-    transform 320ms var(--ease-out),
-    opacity 320ms var(--ease-out);
+html:not(.js) .ex-stage:not(:has(.ex-still)) {
+  display: none;
 }
 
 /* ---- Lightbox ---- */
-.pv-dialog {
+.ex-dialog {
   width: min(96vw, 1680px);
   max-width: none;
   max-height: 94vh;
@@ -480,20 +388,20 @@
   overflow: hidden;
 }
 
-.pv-dialog[open] {
+.ex-dialog[open] {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  animation: pv-dialog-in 200ms var(--ease-out);
+  animation: ex-dialog-in 200ms var(--ease-out);
 }
 
-.pv-dialog::backdrop {
+.ex-dialog::backdrop {
   background: rgba(14, 20, 27, .8);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
-.pv-dialog img {
+.ex-dialog img {
   display: block;
   width: 100%;
   height: auto;
@@ -503,7 +411,7 @@
   border-radius: 10px;
 }
 
-.pv-dcap {
+.ex-dcap {
   margin: 0;
   padding-right: 52px;
   font-size: .9375rem;
@@ -511,7 +419,7 @@
   text-align: center;
 }
 
-.pv-close {
+.ex-close {
   position: absolute;
   top: 12px;
   right: 12px;
@@ -530,17 +438,21 @@
   transition: background-color 150ms var(--ease-out), border-color 150ms var(--ease-out);
 }
 
-.pv-close:hover {
+.ex-close:hover {
   background: var(--ink);
   border-color: var(--blue);
 }
 
-.pv-close:focus-visible {
+/* Focus lands here when the lightbox opens; keep the ring clear of the image. */
+.ex-close:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
+  background: var(--ink);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px var(--night);
 }
 
-@keyframes pv-dialog-in {
+@keyframes ex-dialog-in {
   from { opacity: 0; transform: scale(.98); }
   to   { opacity: 1; transform: none; }
 }
@@ -567,50 +479,32 @@
   }
 
   .ex-dock {
-    --ex-tile: 50px;
-    gap: 2px;
+    --ex-tile: 46px;
+    gap: 0;
     margin-top: 18px;
-    padding-inline: 10px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
+    padding-inline: 6px;
     scroll-snap-type: x mandatory;
-    scroll-padding-inline: 10px;
-    scrollbar-width: none;
-  }
-
-  .ex-dock::-webkit-scrollbar {
-    display: none;
+    scroll-padding-inline: 6px;
   }
 
   .ex-tile {
-    width: calc(var(--ex-tile) + 18px);
-    scroll-snap-align: center;
-  }
-}
-
-/* ---- Narrow: stack the previews ---- */
-@media (max-width: 759.98px) {
-  .pv-popup {
-    flex-direction: column;
-    padding: 10px;
-    gap: 10px;
+    width: calc(var(--ex-tile) + 22px); /* room for the longest label ("Appearance") */
   }
 
-  .pv-dialog {
+  .ex-dialog {
     width: 100vw;
     max-height: 100vh;
     padding: 12px 8px 10px;
     border-radius: 0;
   }
 
-  .pv-dialog img {
+  .ex-dialog img {
     max-height: calc(100vh - 6rem);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pv-thumb,
-  .pv-close,
+  .ex-close,
   .js .ex-clip,
   .js .ex-clip.is-on,
   .ex-toggle,
@@ -619,19 +513,7 @@
     transition: none;
   }
 
-  .pv-thumb:hover,
-  .pv-thumb:focus-within {
-    transform: none;
-  }
-
-  .pv.pv-armed .pv-popup,
-  .pv.pv-armed.is-open .pv-popup {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-
-  .pv-dialog[open] {
+  .ex-dialog[open] {
     animation: none;
   }
 }

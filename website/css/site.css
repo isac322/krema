@@ -1,4 +1,4 @@
-/* Krema landing page — shell styles. Palette: Night, Bone, Breeze Blue.
+/* Krema landing page: shell styles. Palette: Night, Bone, Breeze Blue.
    Design tokens live here only; module stylesheets (wordnav, hero, features,
    shots, pagedock) consume them. */
 
@@ -89,7 +89,7 @@ a {
   text-underline-offset: 0.2em;
   transition: color 0.15s, text-decoration-color 0.15s;
 }
-a:where(:not(.btn, .skip, .wn-home, .wn-l, .wn-star, .pd-tile, .pv-open)):hover { color: #7cc8f0; }
+a:where(:not(.btn, .skip, .wn-home, .wn-l, .wn-star, .pd-tile, .ex-open)):hover { color: #7cc8f0; }
 
 :focus-visible {
   outline: 2px solid var(--blue);
@@ -189,9 +189,6 @@ kbd {
 .star-chip svg,
 .btn .star-chip svg { width: 0.95em; height: 0.95em; color: var(--blue); flex: none; }
 .star-chip [data-stars-n] { display: inline-block; min-width: 3.6ch; }
-
-.btn-star .star-chip { margin-left: 0.15rem; }
-.btn-star:hover .star-chip { color: var(--bone); }
 
 .star-line {
   display: flex;
@@ -298,7 +295,7 @@ main > section > .section-title + * { margin-top: clamp(1.5rem, 3vw, 2.75rem); }
 /* Konsole title bar on terminal windows (the ones holding a real command). */
 .cmd:has(> pre) { flex-wrap: wrap; }
 .cmd:has(> pre)::before {
-  content: "krema — Konsole";
+  content: "krema · Konsole";
   flex: none;
   flex-basis: 100%;
   display: flex;

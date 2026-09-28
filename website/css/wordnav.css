@@ -151,14 +151,16 @@ html { scroll-padding-top: calc(var(--wordnav-h) + 8px); }
 .wn-star:hover .star-chip { color: var(--bone); }
 .wn-star:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-/* ---------- Pre-scroll state (JS only): the hero wordmark is the only wordmark ---------- */
+/* ---------- Pre-scroll state (JS only): the hero wordmark leads, the nav rests dimmed ---------- */
 
 .js .wordnav:not(.is-shown)::before { opacity: 0; }
 .js .wordnav:not(.is-shown) nav,
 .js .wordnav:not(.is-shown) .wn-home {
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s var(--ease-out), visibility 0s linear 0.3s;
+  opacity: 0.6;
+}
+.js .wordnav:not(.is-shown) nav:is(:hover, :focus-within),
+.js .wordnav:not(.is-shown) .wn-home:is(:hover, :focus-visible) {
+  opacity: 1;
 }
 
 /* ---------- Narrow screens ---------- */

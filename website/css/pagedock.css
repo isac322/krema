@@ -12,10 +12,12 @@
   --pd-floor: 18px; /* panel strip below the icons: running dots + active pill */
   --pd-radius: 22px;
   --pd-bottom: 8px;
+  /* Text scrolls under the panel; the surface stays translucent and blurred
+     so it never makes the words beneath illegible. */
   --pd-surface: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--ink-2) 78%, transparent),
-    color-mix(in srgb, var(--ink) 84%, transparent)
+    color-mix(in srgb, var(--ink-2) 55%, transparent),
+    color-mix(in srgb, var(--ink) 64%, transparent)
   );
   --pd-shadow: 0 18px 40px -16px rgb(0 0 0 / 0.75), 0 2px 10px rgb(0 0 0 / 0.35);
   --pd-speed: 160ms;
@@ -54,8 +56,8 @@
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .pd-bg {
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
   }
 }
 
@@ -274,18 +276,18 @@
 
 /* ---------- Small screens ---------- */
 
-@media (max-width: 600px) {
+@media (max-width: 759.98px) {
   .pagedock {
-    --pd-tile: 46px;
-    --pd-gap: 6px;
+    --pd-tile: 42px;
+    --pd-gap: 5px;
     --pd-pad-x: 8px;
-    --pd-pad-top: 7px;
-    --pd-floor: 16px;
-    --pd-radius: 19px;
+    --pd-pad-top: 6px;
+    --pd-floor: 15px;
+    --pd-radius: 18px;
     --pd-bottom: 6px;
   }
   .pd-sep { margin-inline: 2px; }
-  .pd-ind { bottom: -10px; }
+  .pd-ind { bottom: -9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

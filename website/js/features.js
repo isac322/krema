@@ -13,6 +13,19 @@
   const n = panels.length;
   if (!n) return;
   const bodies = panels.map((p) => p.querySelector('.fx-body'));
+
+  // Each panel is a labelled region whose body it expands (wide) or always
+  // shows (narrow); aria-expanded mirrors the visual state.
+  panels.forEach((p, i) => {
+    p.setAttribute('role', 'region');
+    const b = bodies[i];
+    if (!b) return;
+    if (!b.id) b.id = `${p.getAttribute('aria-labelledby') || 'fx-' + i}-body`;
+    p.setAttribute('aria-controls', b.id);
+  });
+  const writeExpanded = (i, on) => {
+    panels[i].setAttribute('aria-expanded', String(on));
+  };
   let openW = -1;
   let lastRowH = -1;
 
@@ -80,6 +93,7 @@
       if (o !== open[i]) {
         open[i] = o;
         panels[i].classList.toggle('is-open', o);
+        writeExpanded(i, o);
       }
     }
   }
@@ -170,6 +184,7 @@
       p.style.removeProperty('--fx-o');
       p.classList.remove('is-open', 'is-active');
       open[i] = false;
+      writeExpanded(i, !wide); // narrow: every body is shown
       lastGrow[i] = lastS[i] = lastO[i] = -1;
     }
     active = -1;
@@ -284,6 +299,7 @@
   if (calmMq.addEventListener) calmMq.addEventListener('change', onCalm);
   else calmMq.addListener(onCalm);
 
+  for (let i = 0; i < n; i++) writeExpanded(i, !wide);
   root.setAttribute('data-fx-live', '');
   measure();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);

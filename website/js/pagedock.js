@@ -94,7 +94,6 @@
   let docMax = 0;
 
   const overlapping = new Set();
-  let footVisible = false;
   let hidden = false;
   let tipLabel = "";
   let tipOn = false;
@@ -232,7 +231,7 @@
   const writeHidden = () => {
     if (lastY >= 0) nearEdge = lastY >= window.innerHeight - EDGE || (nearEdge && lastY >= m.top - 16);
     const reveal = nearEdge || focusInside || pointerInside;
-    const next = (overlapping.size > 0 || footVisible) && !reveal;
+    const next = overlapping.size > 0 && !reveal;
     if (next !== hidden) {
       hidden = next;
       nav.classList.toggle("is-hidden", hidden);
@@ -256,8 +255,11 @@
     dodgeIO = new IntersectionObserver(
       (entries) => {
         for (const en of entries) {
-          const r = en.intersectionRect;
-          const hit = en.isIntersecting && r.height > 0 && r.right > m.left - 8 && r.left < m.right + 8;
+          // An element can first touch the band edge-on (zero-height
+          // intersection); the observer will not report it again as it moves
+          // further in, so touching counts. Horizontal test uses its full box.
+          const r = en.boundingClientRect;
+          const hit = en.isIntersecting && r.right > m.left - 8 && r.left < m.right + 8;
           if (hit) overlapping.add(en.target);
           else overlapping.delete(en.target);
         }
@@ -608,14 +610,6 @@
       seenIO.observe(sec);
     }
 
-    const foot = document.querySelector(".foot");
-    if (foot) {
-      new IntersectionObserver((entries) => {
-        footVisible = entries[entries.length - 1].isIntersecting;
-        hideDirty = true;
-        schedule();
-      }).observe(foot);
-    }
   }
 
   const remeasure = () => {

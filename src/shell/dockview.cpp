@@ -8,6 +8,7 @@
 #include "krema.h"
 #include "models/taskiconprovider.h"
 #include "utils/surfacegeometry.h"
+#include "utils/zoomcalculator.h"
 
 #include <QDBusConnection>
 #include <QLoggingCategory>
@@ -205,6 +206,53 @@ DockPlatform *DockView::platform() const
 DockVisibilityController *DockView::visibilityController() const
 {
     return m_visibilityController;
+}
+
+QVariantMap DockView::zoomLayout(int count,
+                                 qreal restStart,
+                                 qreal iconSize,
+                                 qreal spacing,
+                                 qreal restBackgroundStart,
+                                 qreal restBackgroundEnd,
+                                 qreal maxZoomFactor,
+                                 int style,
+                                 bool active,
+                                 qreal cursor,
+                                 qreal minEdge,
+                                 qreal maxEdge) const
+{
+    // Unknown values fall back to the default, Parabolic.
+    const ZoomStyle zoomStyle = style == static_cast<int>(ZoomStyle::InPlace) ? ZoomStyle::InPlace : ZoomStyle::Parabolic;
+    const DockZoomLayout layout = computeDockZoom(count,
+                                                  restStart,
+                                                  iconSize,
+                                                  spacing,
+                                                  restBackgroundStart,
+                                                  restBackgroundEnd,
+                                                  maxZoomFactor,
+                                                  zoomStyle,
+                                                  active,
+                                                  cursor,
+                                                  minEdge,
+                                                  maxEdge);
+
+    QVariantList scales;
+    scales.reserve(static_cast<qsizetype>(layout.scales.size()));
+    for (double scale : layout.scales) {
+        scales.append(scale);
+    }
+    QVariantList offsets;
+    offsets.reserve(static_cast<qsizetype>(layout.offsets.size()));
+    for (double offset : layout.offsets) {
+        offsets.append(offset);
+    }
+
+    return {
+        {QStringLiteral("scales"), scales},
+        {QStringLiteral("offsets"), offsets},
+        {QStringLiteral("leadingGrowth"), layout.leadingGrowth},
+        {QStringLiteral("trailingGrowth"), layout.trailingGrowth},
+    };
 }
 
 void DockView::updateSize()

@@ -188,27 +188,17 @@ Item {
     // Configuration from DockView
     property int iconSize: 48
     property real maxZoomFactor: 1.6
-    property real panelMouseX: -1
-    property bool panelMouseInside: false
     property int spacing: 4
+    // Rest centre on the primary axis in dockPanel coordinates (never moves with zoom)
     property real itemCenterX: 0
 
-    // Gaussian sigma factor for the zoom curve (sigma = iconSize * factor).
-    // Controls how many neighboring icons are visibly affected by zoom.
-    // Recommended range: 0.8 (tight) – 1.8 (wide). Default 1.2 ≈ macOS Dock.
-    property real zoomSigmaFactor: 1.2
-    readonly property real zoomSigma: iconSize * zoomSigmaFactor
-
-    // Computed zoom factor for this item
-    readonly property real zoomFactor: {
-        if (!panelMouseInside || panelMouseX < 0) {
-            return 1.0
-        }
-
-        let distance = Math.abs(panelMouseX - itemCenterX)
-        let sigma2 = zoomSigma * zoomSigma
-        return 1.0 + (maxZoomFactor - 1.0) * Math.exp(-(distance * distance) / sigma2)
-    }
+    // Hover-zoom inputs computed by DockView.zoomLayout() in main.qml:
+    // zoomScale is this item's magnification, zoomOffset the primary-axis
+    // shift of the icon centre from its rest centre (always 0 for InPlace).
+    property real zoomScale: 1.0
+    property real zoomOffset: 0.0
+    // ZoomStyle (krema.kcfg): 0 = Parabolic, 1 = InPlace.
+    property int zoomStyle: 0
 
     // --- KDE state-driven launch tracking ---
     //
@@ -336,20 +326,22 @@ Item {
         }
     }
 
-    // Animated scale
+    // Rendered zoom state. Parabolic tracks the layout directly (its zoom-in/out
+    // is smoothed by main.qml's zoomAmount, so nothing retargets per mouse move);
+    // InPlace eases each icon's scale towards its target instead.
     property real currentScale: 1.0
+    readonly property real currentOffset: zoomOffset
     property bool _zoomAnimReady: false
 
     Behavior on currentScale {
-        enabled: dockItem._zoomAnimReady
+        enabled: dockItem._zoomAnimReady && dockItem.zoomStyle === 1
         NumberAnimation {
             duration: Kirigami.Units.shortDuration
             easing.type: Easing.OutCubic
         }
     }
 
-    // Update currentScale when zoomFactor changes
-    onZoomFactorChanged: currentScale = zoomFactor
+    onZoomScaleChanged: currentScale = zoomScale
 
     // When item position shifts due to model reorganization (e.g. hideActivatedLaunchers
     // merges a launcher with its window, causing other delegates to shift), suppress
@@ -359,20 +351,20 @@ Item {
     onItemCenterXChanged: {
         if (_zoomAnimReady) {
             _zoomAnimReady = false
-            currentScale = zoomFactor
+            currentScale = zoomScale
             Qt.callLater(function() { _zoomAnimReady = true })
         }
     }
 
     // On delegate creation: apply zoom instantly (no animation) to avoid glitch
     // when Repeater recreates delegates due to model changes.
-    // Qt.callLater() defers _zoomAnimReady until AFTER Row layout has set the
-    // delegate's x position, ensuring itemCenterX and zoomFactor are correct.
+    // Qt.callLater() defers _zoomAnimReady until AFTER the Flow layout has set
+    // the delegate's x position, ensuring itemCenterX and zoom targets are correct.
     Component.onCompleted: {
         _prevChildCount = _childCount
-        currentScale = zoomFactor  // best guess pre-layout
+        currentScale = zoomScale    // best guess pre-layout
         Qt.callLater(function() {
-            currentScale = zoomFactor  // correct value after layout
+            currentScale = zoomScale  // correct value after layout
             _zoomAnimReady = true
         })
 
@@ -395,25 +387,33 @@ Item {
         ? iconSize
         : (iconSize + _indicatorSpace)
 
-    // Scaled transform: grow away from the dock edge
-    transform: Scale {
-        origin.x: {
-            switch (DockView.edge) {
-            case 2: return 0           // Left: grow right
-            case 3: return width       // Right: grow left
-            default: return width / 2
+    // Scaled transform: grow away from the dock edge, then shift along the
+    // primary axis to the zoomed centre. Transforms apply in list order, so the
+    // translation happens after scaling and is not itself scaled.
+    transform: [
+        Scale {
+            origin.x: {
+                switch (DockView.edge) {
+                case 2: return 0           // Left: grow right
+                case 3: return width       // Right: grow left
+                default: return width / 2
+                }
             }
-        }
-        origin.y: {
-            switch (DockView.edge) {
-            case 0: return 0           // Top: grow down
-            case 1: return height      // Bottom: grow up
-            default: return height / 2
+            origin.y: {
+                switch (DockView.edge) {
+                case 0: return 0           // Top: grow down
+                case 1: return height      // Bottom: grow up
+                default: return height / 2
+                }
             }
+            xScale: currentScale
+            yScale: currentScale
+        },
+        Translate {
+            x: DockView.isVertical ? 0 : dockItem.currentOffset
+            y: DockView.isVertical ? dockItem.currentOffset : 0
         }
-        xScale: currentScale
-        yScale: currentScale
-    }
+    ]
 
     // Keyboard focus ring
     Rectangle {

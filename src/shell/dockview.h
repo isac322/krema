@@ -7,6 +7,7 @@
 #include "style/backgroundstyle.h"
 
 #include <QQuickView>
+#include <QVariant>
 
 #include <memory>
 
@@ -87,6 +88,25 @@ public:
     [[nodiscard]] DockPlatform *platform() const;
     [[nodiscard]] DockVisibilityController *visibilityController() const;
     [[nodiscard]] TaskIconProvider *iconProvider() const;
+
+    /// Dock zoom layout for QML (see krema::computeDockZoom).
+    /// @p style is a krema::ZoomStyle int (0=Parabolic, 1=InPlace);
+    /// unknown values fall back to Parabolic. minEdge/maxEdge bound the grown
+    /// background (pass -Infinity/Infinity for no bound).
+    /// Returns keys: scales, offsets (QVariantList of double), leadingGrowth
+    /// and trailingGrowth (double).
+    Q_INVOKABLE QVariantMap zoomLayout(int count,
+                                       qreal restStart,
+                                       qreal iconSize,
+                                       qreal spacing,
+                                       qreal restBackgroundStart,
+                                       qreal restBackgroundEnd,
+                                       qreal maxZoomFactor,
+                                       int style,
+                                       bool active,
+                                       qreal cursor,
+                                       qreal minEdge,
+                                       qreal maxEdge) const;
 
 public Q_SLOTS:
     void applyBackgroundStyle();

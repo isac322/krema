@@ -309,8 +309,26 @@ Item {
             verify(its[1].launching)
             verify(!its[0].launching)
             compare(its[1].accessibleDescription, "Starting")
-            // No IsStartup acknowledgement arrives: the 500 ms safety net ends the bounce.
-            tryCompare(its[1], "launching", false, 3000)
+            // No startup task arrives (TasksModel filters them for apps with a
+            // window): the feedback outlives the 500 ms handoff bridge...
+            wait(800)
+            verify(its[1].launching)
+            // ...and ends when the new window joins the group.
+            DockModel.tasksModel.setTaskData(1, "ChildCount", 2)
+            tryCompare(its[1], "launching", false)
+        }
+
+        function test_launchSignalOnActiveAppEndsWithoutNewWindow() {
+            addTasks(["A"], { IsActive: true })
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            DockActions.taskLaunching(0)
+            verify(item.launching)
+            // A single-instance app ignoring the request opens no window: the
+            // no-op detection ends the feedback after the launch feedback timeout.
+            wait(3000)
+            verify(item.launching)
+            tryCompare(item, "launching", false, 5000)
         }
 
         function test_startupNotificationDrivesLaunchState() {

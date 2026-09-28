@@ -366,6 +366,12 @@ Item {
             _zoomActive = false
             return
         }
+        // Hit-test only a pointer the dock has. After the pointer left for the
+        // preview, onExited keeps mouseX/mouseY as the zoom anchor; icons that
+        // move under that stale position (re-centring for a new task row) must
+        // not re-hover an item, or its preview reopens with the pointer away.
+        if (!dockMouseArea.containsMouse)
+            return
 
         // Rough secondary-axis check: outside the dockRow + zoom extension on
         // the side icons grow toward (away from the screen edge) → reset zoom.

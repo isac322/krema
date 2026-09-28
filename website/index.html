@@ -41,11 +41,13 @@
 <link rel="stylesheet" href="css/shots.css">
 <link rel="stylesheet" href="css/pagedock.css">
 <link rel="stylesheet" href="css/panel.css">
+<link rel="stylesheet" href="css/star.css">
 <script src="js/site.js" defer></script>
 <script src="js/wordnav.js" defer></script>
 <script src="js/hero.js" defer></script>
 <script src="js/features.js" defer></script>
 <script src="js/shots.js" defer></script>
+<script src="js/star.js" defer></script>
 <script src="js/pagedock.js" defer></script>
 <script src="js/panel.js" defer></script>
 
@@ -117,6 +119,7 @@
       <a class="btn btn-primary" href="#add"><svg aria-hidden="true"><use href="#i-down"/></svg>Install</a>
       <a class="btn btn-ghost" href="#exhibit"><svg aria-hidden="true"><use href="#i-play"/></svg>Watch the clips</a>
     </div>
+    <p class="star-proof-chip" hidden><a data-dodge data-star-link href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-star"/></svg><span data-star-hero-n></span></a></p>
   </section>
 
   <section id="roots" class="roots" aria-labelledby="roots-title">
@@ -573,7 +576,20 @@ just run</code></pre><button type="button" class="copy" hidden><svg aria-hidden=
         <p class="step-fine">Packages need Plasma&nbsp;6.0 or newer and are built for x86_64 and aarch64 (Slowroll: x86_64 only).</p>
       </li>
     </ol>
-    <p class="star-line"><svg aria-hidden="true"><use href="#i-star"/></svg><span>If you use Krema, a <a data-dodge href="https://github.com/isac322/krema">star on GitHub</a> helps other Plasma users find it.</span></p>
+    <div class="star-proof" data-star-proof>
+      <div class="star-proof-top">
+        <span class="star-faces" data-star-faces></span>
+        <p class="star-proof-line" data-star-line>Loading the latest stargazers&hellip;</p>
+      </div>
+      <div class="star-goal" role="img" data-star-goal aria-label="Star goal progress">
+        <span class="star-goal-fill" data-star-fill></span>
+      </div>
+      <p class="star-goal-line" data-star-goal-n></p>
+      <div class="star-proof-cta" data-dodge>
+        <a class="star-btn" data-star-link href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-star"/></svg>Star Krema</a>
+        <p class="star-proof-fine">A star is a vote: it tells GitHub to show Krema to Plasma users still looking for a Latte Dock successor.</p>
+      </div>
+    </div>
     <p class="status" role="status" aria-live="polite"></p>
   </section>
 </main>
@@ -599,6 +615,15 @@ just run</code></pre><button type="button" class="copy" hidden><svg aria-hidden=
   </div>
 </footer>
 
+<div class="star-banner" data-star-banner data-dodge hidden>
+  <p class="star-banner-t"><svg aria-hidden="true"><use href="#i-star"/></svg><span><strong>You copied the install command.</strong> One more click: star Krema so other Plasma users find it.</span></p>
+  <div class="star-banner-btns">
+    <a class="star-btn" data-star-link href="https://github.com/isac322/krema"><svg aria-hidden="true"><use href="#i-star"/></svg>Star Krema</a>
+    <button type="button" class="star-quiet" data-star-later>Not now, I&rsquo;ll keep it our little secret</button>
+    <button type="button" class="star-close" data-star-close aria-label="Dismiss star banner">&times;</button>
+  </div>
+</div>
+
 <nav class="pagedock" aria-label="Page dock" data-pagedock>
   <ol class="pd-tiles">
     <li><a class="pd-tile" href="#top" data-section="top" aria-label="Krema"><span class="pd-face pd-face--home"><svg viewBox="0 0 256 256" aria-hidden="true"><rect x="8" y="8" width="240" height="240" rx="56" fill="#18110D"/><rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="2"/><rect x="34" y="32" width="40" height="192" rx="20" fill="#F4ECE0"/><rect x="86" y="88" width="80" height="80" rx="21.6" fill="#D69A5E"/><rect x="174" y="32" width="48" height="48" rx="12.96" fill="#D69A5E" opacity="0.62"/><rect x="174" y="176" width="48" height="48" rx="12.96" fill="#D69A5E" opacity="0.62"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
@@ -607,7 +632,7 @@ just run</code></pre><button type="button" class="copy" hidden><svg aria-hidden=
     <li><a class="pd-tile" href="#mechanics" data-section="mechanics" aria-label="Mechanics: try the settings"><span class="pd-face pd-face--everything"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8"/></g><rect x="13" y="13" width="7" height="7" rx="1.8" fill="#D69A5E"/></svg></span><span class="pd-ind" aria-hidden="true"></span></a></li>
     <li><a class="pd-tile" href="#add" data-section="add" aria-label="Add Krema to your desktop"><span class="pd-face pd-face--add"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v9.5M8 9.5l4 4 4-4"/><path d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></g></svg><span class="pd-badge" aria-hidden="true">6</span></span><span class="pd-ind" aria-hidden="true"></span></a></li>
     <li class="pd-sep" aria-hidden="true"></li>
-    <li><a class="pd-tile" href="https://github.com/isac322/krema" data-external aria-label="GitHub (opens repository)"><span class="pd-face pd-face--gh"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-github"/></svg></span></a></li>
+    <li><a class="pd-tile" href="https://github.com/isac322/krema" data-external data-star-link aria-label="Star Krema on GitHub (opens repository)"><span class="pd-face pd-face--star"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-star"/></svg><span class="pd-badge" data-stars hidden><span data-stars-n></span></span></span></a></li>
   </ol>
   <span class="pd-tip" aria-hidden="true"></span>
 </nav>

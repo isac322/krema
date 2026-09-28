@@ -190,16 +190,6 @@ kbd {
 .btn .star-chip svg { width: 0.95em; height: 0.95em; color: var(--blue); flex: none; }
 .star-chip [data-stars-n] { display: inline-block; min-width: 3.6ch; }
 
-.star-line {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin-top: clamp(2.5rem, 5vw, 3.5rem);
-  color: var(--muted);
-  font-size: 0.975rem;
-}
-.star-line svg { width: 1rem; height: 1rem; flex: none; color: var(--blue); }
-
 /* ---------- Generic layout ---------- */
 
 main > section {
@@ -342,8 +332,6 @@ main > section > .section-title + * { margin-top: clamp(1.5rem, 3vw, 2.75rem); }
 .copy:hover { background: #453428; }
 .copy.is-done { color: var(--night); background: var(--blue); }
 .copy.is-failed { color: var(--bone); border-color: #ed4c5c; }
-
-.install .star-line { margin-top: clamp(1.5rem, 4vw, 2.5rem); }
 
 .status {
   position: absolute;

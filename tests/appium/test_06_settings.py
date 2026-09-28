@@ -82,13 +82,20 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
 
 
 def scroll_into_view(krema: Krema, xpath: str):
-    """Wheel-scroll the settings page until ``xpath`` is fully visible."""
+    """Wheel-scroll the settings page until ``xpath`` is fully visible and at rest."""
     page = krema.wait_for(SETTINGS_STACK_XPATH)
     view = Rect.of(page)
+
+    def in_view(el, r: Rect) -> bool:
+        return has_state(el, "showing") and bool(r.width) and r.y >= view.y and r.y + r.height <= view.y + view.height
+
     for _ in range(60):
         el = krema.wait_for(xpath)
         r = Rect.of(el)
-        if has_state(el, "showing") and r.width and r.y >= view.y and r.y + r.height <= view.y + view.height:
+        # The page animates each wheel step: an element can report an
+        # in-view rect mid-animation and still move ~60px, so a click on
+        # that rect lands on the row above it. Only return once it settled.
+        if in_view(el, r) and in_view(el, r := wait_stable(lambda: Rect.of(el), duration=0.3)):
             return el
         below = r.width == 0 or r.y + r.height > view.y + view.height
         # Wheel over the page centre; the left margin did not reliably scroll.

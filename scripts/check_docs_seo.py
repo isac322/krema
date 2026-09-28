@@ -32,13 +32,6 @@ REQUIRED_TERMS: list[tuple[str, list[str]]] = [
         ],
     ),
     (
-        "CLAUDE.md",
-        [
-            "kde plasma dock",
-            "latte dock alternative",
-        ],
-    ),
-    (
         "src/com.bhyoo.krema.metainfo.xml",
         [
             "dock",

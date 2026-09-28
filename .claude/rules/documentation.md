@@ -124,7 +124,7 @@ GitHub release pages are indexed by search engines — treat them as SEO and val
 
 All official documents are written in **English**:
 - README.md, CHANGELOG.md, release notes, metainfo.xml, .desktop files
-- Code comments and commit messages (already enforced in CLAUDE.md)
+- Code comments and commit messages (already enforced in AGENTS.md)
 
 ## SEO Rules
 

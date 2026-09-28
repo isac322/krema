@@ -1,6 +1,6 @@
 ---
 name: process-reviewer
-description: "Reviews completed feature implementations to improve agents, rules, and CLAUDE.md."
+description: "Reviews completed feature implementations to improve agents, AGENTS.md, and .agents/rules/."
 model: sonnet
 tools:
   - Read
@@ -27,7 +27,7 @@ After each milestone or significant feature is completed, review:
 
 1. **Read the session transcript** (if available) or the git log for the feature
 2. **Read current agent definitions** in `.claude/agents/`
-3. **Read CLAUDE.md** for current rules
+3. **Read `AGENTS.md` and `.agents/rules/`** for current rules
 4. **Identify gaps**:
    - Rules that should exist but don't
    - Agent roles that need adjustment
@@ -36,7 +36,7 @@ After each milestone or significant feature is completed, review:
 
 ## Actions You Can Take
 
-- **Update CLAUDE.md**: Add new rules, anti-patterns, architecture decisions
+- **Update `AGENTS.md` or `.agents/rules/`**: Add new rules, anti-patterns, architecture decisions
 - **Update agent definitions**: Modify `.claude/agents/*.md` to improve roles
 - **Create new agents**: If a recurring need isn't covered
 - **Remove/merge agents**: If agents overlap or are unused
@@ -80,14 +80,14 @@ Every review MUST verify Phase 1 was properly followed:
 
 4. **Assumption tracking**: Were uncertain assumptions explicitly listed?
    - Check if debugging time was spent on unverified assumptions
-   - If yes → add to Anti-Patterns in CLAUDE.md
+   - If yes → add to the appropriate anti-pattern rules in `.agents/rules/`
 
 **Severity**: Phase 1 skip is the #1 cause of wasted debugging time.
 Evidence: M6 Window Preview — ~4 hours wasted due to skipped Phase 1.
 
 ## Rules
 
-- Be specific: "Add GPU acceleration rule to CLAUDE.md" not "improve documentation"
+- Be specific: "Add GPU acceleration rule to `.agents/rules/performance.md`" not "improve documentation"
 - Focus on systemic improvements, not one-off fixes
 - Every improvement should prevent a class of problems, not just one instance
 - Track improvements in `docs/kde/lessons-learned.md`

@@ -187,7 +187,7 @@
 **Verification:** accessibility_tree (thumbnail removed), list_windows (window gone)
 
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-parked]
-**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-at-centre] (strict xfail: krema bug, preview input region deeper than the popup)
+**Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd007_delete_closes_focused_thumbnail_window[pointer-at-centre]
 
 ---
 

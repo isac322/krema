@@ -32,7 +32,7 @@ Item {
 
     // Surface-level hover detection: keep preview visible when mouse is anywhere
     // on this surface. The C++ input region (updateInputRegion) already constrains
-    // which events reach this surface to the popup area + margins, so detecting
+    // which events reach this surface to the visible popup rectangle, so detecting
     // hover at the surface root is equivalent to detecting hover on the popup.
     // This is more reliable than a popup-child MouseArea because it doesn't depend
     // on popup geometry, which can shift during layout.

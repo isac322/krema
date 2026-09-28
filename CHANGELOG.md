@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The default Focus Dock shortcut moved from Meta+F5 to Meta+Alt+D: Meta+F5 belongs to KWin's "Center Pointer in Focused Window", so it never reached the dock and was left unbound on Plasma older than 6.7. Setups still on the old default switched automatically
+
+### Fixed
+
+- Always Visible mode reserved screen space, so maximized windows ended above the dock instead of extending underneath it
+- "Follow active screen" with the "Mouse position" trigger moved the dock: pushing the pointer against the dock edge of another monitor brought the dock there
+- Changing the icon size or screen edge resized and moved the dock immediately on distributions with LayerShellQt older than 6.4 (e.g. Debian 13, Ubuntu 25.04) instead of only after a restart
+- Clicking a dock icon worked when the icon had just appeared or moved under a resting pointer; the click was previously ignored or went to the wrong icon
+- Clicking a pinned app bounced its icon until the app's window appeared, including on sessions without startup notifications
+- Launching a new instance of a running app (middle click or New Instance) kept the launch bounce going until the new window appeared, instead of stopping after half a second
+- Pressing Escape while dragging a dock icon cancelled the drag and kept the original order
+- Leaving dock keyboard navigation with Escape returned keyboard focus to the previously active window, so typing worked right away and "Dodge active window" hid the dock again
+- Moving the mouse anywhere on screen ended dock keyboard navigation, not only when the pointer moved over the dock
+- The window preview no longer captured the mouse in the invisible area around it, which had ended thumbnail keyboard navigation (e.g. after closing a window with Delete) and blocked clicks beneath the preview
+- A window's hover preview no longer reopened or stayed open after the pointer left the dock through the preview while the dock re-centred for a newly opened window
+
 ## [0.9.0] - 2026-09-28
 
 ### Added

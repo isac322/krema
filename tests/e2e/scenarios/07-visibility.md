@@ -40,7 +40,7 @@
 **Verification:** screenshot (dock visible in all states)
 
 **Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window
-**Automated (strict xfail, krema bug — no exclusive zone reserved):** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
+**Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
 
 ---
 

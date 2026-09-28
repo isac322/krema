@@ -78,6 +78,15 @@ def settings_window(krema: Krema) -> kwin.Window | None:
     return next((w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None)
 
 
+def work_area() -> Rect:
+    """KWin's placement area of the active output: the screen minus exclusive zones."""
+    a = kwin.evaluate(
+        "const a = workspace.clientArea(KWin.PlacementArea, workspace.activeScreen, workspace.currentDesktop);"
+        "report([a.x, a.y, a.width, a.height]);"
+    )
+    return Rect(*(round(v) for v in a))
+
+
 def capture(krema: Krema, name: str) -> Image.Image:
     assert kwin.can_capture(), f"KWin compositing is {kwin.compositing_type()}: pixel oracle needs a DRM render node"
     return Image.open(krema.screenshot(name)).convert("RGB")
@@ -118,12 +127,18 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     menu = krema.open_context_menu("Alpha")
 
     # A krema-owned popup (QMenu: not a normal window, not in the taskbar list)
-    # anchored at the right-click point, fully on screen.
+    # anchored at the right-click point, fully on screen. KWin keeps xdg popups
+    # inside the work area (Workspace::clientArea(PlacementArea)), which
+    # excludes the dock's own exclusive zone, so for a click on the reserved
+    # panel strip the menu slides to just above the panel (as Plasma panel
+    # menus do): the anchor is the click point clamped into the work area.
     assert menu.pid == krema.pid
     assert not menu.normal_window
     area = Rect(*menu.client_geometry)
     grown = Rect(area.x - 2, area.y - 2, area.width + 4, area.height + 4)
-    assert grown.contains(*click), f"menu {area} not at click point {click}"
+    work = work_area()
+    anchor = (click[0], min(click[1], work.y + work.height - 1))
+    assert grown.contains(*anchor), f"menu {area} not at click point {click} (work area {work})"
     assert area.x >= 0 and area.y >= 0
     assert area.x + area.width <= env.SCREEN_WIDTH and area.y + area.height <= env.SCREEN_HEIGHT
 

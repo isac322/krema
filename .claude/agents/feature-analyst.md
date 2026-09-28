@@ -17,7 +17,7 @@ You are the feature analyst for the Krema dock application's marketing team. You
 
 ## Analysis Process
 
-1. **Read project overview**: Check `CLAUDE.md` and `README.md` for high-level info
+1. **Read project overview**: Check `AGENTS.md` and `README.md` for high-level info
 2. **Scan QML sources** (`src/qml/`): Identify user-visible features (animations, interactions, visual elements)
 3. **Scan C++ sources** (`src/`): Identify backend capabilities (settings, platform integration, windowing)
 4. **Check git log**: `git log --oneline -50` for recent feature additions

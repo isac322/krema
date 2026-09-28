@@ -339,6 +339,8 @@ ShaderEffect {
 | **C++ 래핑** | DockModel에서 SmartLauncher 래핑하여 role 추가 | 안정적 API, 캐싱 가능 | 구현 복잡도 높음 |
 | **D-Bus 직접 구현** | `com.canonical.Unity.LauncherEntry` 모니터링 | 완전한 제어 | 많은 보일러플레이트 |
 
+> **2026-09 업데이트:** 첫 번째 방식은 Plasma 6.6에서 깨졌다 (모듈이 task manager applet 플러그인으로 들어가 외부 프로세스에서 import 불가). Krema는 세 번째 방식(`LauncherEntryTracker`, C++)으로 구현했다. `notification-badge-approaches.md` 참조.
+
 ### 4.2 Plasma Task Manager의 SmartLauncherItem 사용 패턴
 
 ```qml

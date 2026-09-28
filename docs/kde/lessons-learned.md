@@ -222,3 +222,38 @@ Each view is also positioned on its target screen before creation, and `handleSc
 
 **Not fixed here:** Kirigami's `ScrollablePage` (`src/controls/ScrollablePage.qml:276-277` on master) logs `TypeError: Cannot read property 'flickable' of null` whenever a page is destroyed. This already happens on every normal Settings close. It is upstream.
 
+## 11. The layer-shell namespace is the window type in KWin (2026-09, issue #16)
+
+**Symptom:** Show Desktop (Meta+D) hid the Krema dock, while Plasma panels stayed.
+
+**Cause:** The dock used the namespace `"krema-dock"`. KWin derives a layer surface's window type only from its namespace (`layershellv1window.cpp` `scopeToType`); anything outside its short list (`dock`, `desktop`, `notification`, `tooltip`, ...) becomes `WindowType::Normal`. `Workspace::setShowingDesktop()` hides every window whose `breaksShowingDesktop()` is true, which includes every normal window. Observed in KWin `--virtual`: `dock=false hiddenByShowDesktop=true` with `"krema-dock"`, `dock=true hiddenByShowDesktop=false` with `"dock"`.
+
+**Fix:** The dock surface uses the namespace `"dock"`. `krema_showdesktop_tests` (tests/kwin) toggles Show Desktop over D-Bus and reads KWin's verdict through a test-only scripted effect.
+
+**Key lessons:**
+- The namespace is not a free-form label on KWin: pick it from KWin's type table for the surface's role.
+- Scripted KWin effects only load when `animationsSupported()`; the software-rendered virtual backend needs `KWIN_EFFECTS_FORCE_ANIMATIONS=1`.
+
+## 12. The overflow reserve must fit what opens on that side, per orientation (2026-09, found auditing PR #15)
+
+**Symptom:** On left/right docks the launcher tooltip was cut off after ~28px. KWin `--virtual`, left dock: surface 108x768, tooltip at x=80 with width 171 ("System Settings Launcher a"), so 80..251 lay mostly outside the surface.
+
+**Cause:** `surfaceHeight()` reserves `max(zoomOverflow, tooltipReserve)` in the axis perpendicular to the dock edge. `tooltipReserve` was 36px, enough for the tooltip's height above/below a horizontal panel, but vertical docks open the tooltip beside the panel, where its width (not height) must fit. The compositor clips everything outside the layer surface.
+
+**Fix:** QML publishes `DockView.sideTooltipReserve` (gap + a font-derived max tooltip width of 15 gridUnits; longer names elide). Vertical docks use it as the tooltip reserve; horizontal docks keep 36px. The input region still follows the panel rect, so the wider transparent surface does not take clicks from windows beside the dock. `krema_tooltip_tests` (tests/kwin) checks the tooltip lies inside the surface on all four edges.
+
+**Key lessons:**
+- A perpendicular reserve sized for one orientation is wrong for the other: size it from what actually opens on that side.
+- Growing the surface is safe only because the input region is set from the panel rect, never from the surface size.
+
+## 13. A private Plasma QML module disappeared; Qt.createComponent failed silently (2026-09)
+
+**Symptom:** On Fedora 44 (Plasma 6.7.5) app badges and progress bars sent over the Unity LauncherEntry API never showed on dock icons.
+
+**Cause:** `DockItem.qml` created `SmartLauncherItem` with `Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem")`. plasma-desktop 6.6 (commit `4bff79ad`, "Port to plasma_add_applet") compiled that module into the task manager applet plugin, so `qt6/qml/org/kde/plasma/private/taskmanager` no longer exists. The component was never Ready, and the `status` check skipped creation without a log line.
+
+**Fix:** `LauncherEntryTracker` (C++) receives `com.canonical.Unity.LauncherEntry.Update` itself, following the upstream backend semantics; see `notification-badge-approaches.md`. `krema_launcher_entry_tests` sends real D-Bus signals and checks the dock item's badge and progress bar.
+
+**Key lessons:**
+- A private module is not a dependency Krema can keep: when the protocol underneath is public (here a D-Bus signal), implement the protocol.
+- A silent fallback (`if (comp.status === Component.Ready)`) hides a missing feature. Cover each feature with a test that observes the visible result.

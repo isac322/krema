@@ -72,6 +72,16 @@
     <color type="primary" scheme_preference="dark">#1B2B3C</color>
   </branding>
   <releases>
+    <release version="0.9.0" date="2026-09-28">
+      <description>
+        <p>macOS-style parabolic hover zoom where magnified icons push their neighbours aside, with an option to keep the previous in-place zoom. Hover and tooltips now work correctly on left, right and top docks, settings such as icon scale and badge mode persist across restarts, and app badges and progress bars show again on Plasma 6.6 and later.</p>
+      </description>
+    </release>
+    <release version="0.8.0" date="2026-09-28">
+      <description>
+        <p>Multi-monitor support with Primary Only, All Screens and Follow Active Screen modes, per-screen dock overrides, and virtual desktop filtering. The dock now follows the Plasma primary output, stays visible during Show Desktop, cycles through grouped app windows on click, and no longer crashes when changing monitor mode.</p>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-03-28">
       <description>
         <p>Task progress bars on dock icons, configurable badge display modes (Number, Dot, Off), attention animation auto-stop with adjustable duration, manual notification clearing via context menu, and Do Not Disturb integration. Fixed notification badge clearing on focus and dodge mode resumption after settings close.</p>

@@ -114,30 +114,56 @@ NotificationManager::Settings::badgeBlacklistedApplications()
 - **Discord (Linux native)**: does NOT use Unity API — uses SNI NeedsAttention
 - **Electron apps in general**: behavior varies; most do not implement it on Linux
 
-### Warning: Private API
+### Warning: Private API (broke in Plasma 6.6)
 
-`org.kde.plasma.private.taskmanager` is a **private** KDE module. Using it from Krema
-couples Krema to Plasma internals. Acceptable if Krema is Plasma-only (it is), but
-the API may break between Plasma versions without notice.
+`org.kde.plasma.private.taskmanager` was a **private** KDE module, and it did break:
 
-### QML Usage in Krema
+| plasma-desktop | Where `SmartLauncherItem` lives | QML URI |
+|---|---|---|
+| 6.0 – 6.5 | QML plugin under `qt6/qml/org/kde/plasma/private/taskmanager/` (`add_library` in 6.0, `ecm_add_qml_module` by 6.4) | `org.kde.plasma.private.taskmanager` |
+| 6.6+ | compiled into `qt6/plugins/plasma/applets/org.kde.plasma.taskmanager.so` (`plasma_add_applet`, upstream commit `4bff79ad`, 2025-12-08) | `plasma.applet.org.kde.plasma.taskmanager` |
+
+Verified in plasma-desktop tags v6.0.0/v6.4.0/v6.5.0/v6.6.0/v6.7.5 (`applets/taskmanager/CMakeLists.txt`,
+`qml/Task.qml`) and on Fedora 44 (plasma-desktop 6.7.5): `/usr/lib64/qt6/qml/org/kde/plasma/private/`
+has no `taskmanager` directory. The 6.6+ module is only registered when libplasma loads the
+applet, so a separate process such as Krema cannot import it under either URI;
+`Qt.createComponent()` silently returns a non-Ready component.
+
+### Krema's Implementation: `LauncherEntryTracker` (C++)
+
+Since the Plasma 6.6 breakage Krema no longer uses `SmartLauncherItem`.
+`src/models/launcherentrytracker.{h,cpp}` ports the upstream backend semantics
+(`applets/taskmanager/smartlauncherbackend.cpp`, `smartlauncheritem.cpp`, v6.7.5):
+
+- `QDBusConnection::sessionBus().connect({}, {}, "com.canonical.Unity.LauncherEntry", "Update", ...)`
+  receives `Update(s appUri, a{sv} properties)` from every sender and path.
+- Best effort `registerObject("/Unity")` + `registerService("com.canonical.Unity")`; if plasmashell
+  already owns the name, Krema only listens (signals are broadcast).
+- `appUri` (`application://foo.desktop`) → `KService::serviceByStorageId()` → storage ID;
+  unknown apps are ignored.
+- Properties: `count` (int64, ignored unless 0 ≤ count < INT_MAX), `count-visible`, `progress`
+  (0..1 fraction → whole percent, NaN/Inf → 0, clamped to 0..100), `progress-visible`, `urgent`.
+  Partial updates keep the other fields.
+- `QDBusServiceWatcher` on the latest sender's unique name: when it leaves the bus the entry resets.
+- Dock launcher URL → storage ID like `SmartLauncher::Item::setLauncherUrl()`: `applications:` →
+  `KService::serviceByMenuId()`, local `.desktop` file → `serviceByStorageId(fileName)`, then
+  `taskmanagerrulesrc` `[Unity Launcher Mapping]`.
+- `count`/`countVisible` are hidden by `NotificationManager::Settings::badgesInTaskManager()` and
+  `badgeBlacklistedApplications()` (live settings, re-read on `settingsChanged`). Unlike Plasma,
+  Do Not Disturb does not hide counts: Krema keeps badges in DND and only suppresses the attention
+  animation. Progress and urgency are never gated.
+- Upstream's backend also creates a `NotificationManager::JobsModel`, but no version maps jobs to
+  launcher progress; Krema does not create one.
+
+QML (`DockItem.qml`) reads it like `NotificationTracker`, with the `revision` property as the
+reactive dependency and `model.LauncherUrlWithoutIcon` as the key:
 
 ```qml
-// In DockItem.qml
-property QtObject smartLauncherItem: null
-
-Component.onCompleted: {
-    const component = Qt.createComponent("org.kde.plasma.private.taskmanager", "SmartLauncherItem");
-    if (component.status === Component.Ready) {
-        const sli = component.createObject(root);
-        // LauncherUrlWithoutIcon from TaskManager model role
-        sli.launcherUrl = Qt.binding(() => model.LauncherUrlWithoutIcon);
-        smartLauncherItem = sli;
-    }
+readonly property url _launcherUrl: model.LauncherUrlWithoutIcon ?? ""
+readonly property int _launcherCount: {
+    let _rev = LauncherEntryTracker.revision  // reactive dependency
+    return LauncherEntryTracker.count(_launcherUrl)
 }
-
-readonly property int badgeCount: smartLauncherItem?.countVisible ? smartLauncherItem.count : 0
-readonly property bool isUrgent: (smartLauncherItem?.urgent ?? false) || model.IsDemandingAttention
 ```
 
 ---
@@ -432,10 +458,11 @@ No other changes needed — `registerObject(path, "org.kde.NotificationWatcher",
 already passes the interface name; adding Q_CLASSINFO ensures the introspection
 matches what plasmashell expects.
 
-### 3. Add SmartLauncherItem Integration
+### 3. Unity LauncherEntry Integration (done)
 
-`SmartLauncherItem` is the primary badge source for Slack and other Unity API apps.
-It is already used by Plasma's own task manager — safe to add to Krema.
+Unity API apps (Slack and others) are handled by Krema's own `LauncherEntryTracker`;
+see "Krema's Implementation" above. Do not reintroduce `SmartLauncherItem`: its module
+is not importable outside plasmashell since Plasma 6.6.
 
 ---
 
@@ -445,8 +472,8 @@ It is already used by Plasma's own task manager — safe to add to Krema.
 |------|---------|
 | `/usr/share/plasma/plasmoids/org.kde.plasma.taskmanager/contents/ui/Task.qml` | Plasma reference — attention state line 656, badge lines 369-370 |
 | `/usr/share/plasma/plasmoids/org.kde.plasma.taskmanager/contents/ui/TaskBadgeOverlay.qml` | Badge overlay — SmartLauncherItem countVisible/count |
-| `/usr/lib/qt6/qml/org/kde/plasma/private/taskmanager/taskmanagerplugin.qmltypes` | SmartLauncherItem API (properties/signals) |
-| `/usr/lib/qt6/qml/org/kde/plasma/private/taskmanager/libtaskmanagerplugin.so` | Binary — Unity API strings, NotificationManager::Settings symbols |
+| `applets/taskmanager/smartlauncherbackend.cpp`, `smartlauncheritem.cpp` (plasma-desktop source, v6.7.5) | Unity LauncherEntry semantics that `LauncherEntryTracker` follows |
+| `/usr/lib/qt6/qml/org/kde/plasma/private/taskmanager/` (Plasma ≤ 6.5 only) | Former SmartLauncherItem QML plugin; gone since 6.6 |
 | `/usr/include/notificationmanager/notifications.h` | Notifications proxy model — roles, methods |
 | `/usr/include/notificationmanager/settings.h` | Settings — badgesInTaskManager(), badgeBlacklistedApplications() |
 | `/usr/lib/libnotificationmanager.so.6.5.5` | Binary — WatchedNotificationsModel::Private symbols |

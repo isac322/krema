@@ -19,4 +19,4 @@ Record a bug-fix lesson in docs/kde/lessons-learned.md:
    - **Files**: {affected files if known}
    ```
 
-4. If the lesson reveals a pattern that should be an anti-pattern rule, suggest adding it to CLAUDE.md
+4. If the lesson reveals a pattern that should be an anti-pattern rule, suggest adding it to the appropriate `.agents/rules/` file

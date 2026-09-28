@@ -14,6 +14,7 @@ namespace krema
 {
 
 class DockModel;
+class LauncherEntryTracker;
 class MultiDockManager;
 class NotificationTracker;
 
@@ -27,12 +28,17 @@ public:
 
     int run();
 
+    /// Saves @p settings to disk whenever one of its user-facing entries
+    /// changes. PinnedLaunchers is saved by its own handler in run().
+    static void connectSettingsAutoSave(KremaSettings *settings, QObject *context);
+
 private:
     void registerGlobalShortcuts();
 
     std::unique_ptr<KremaSettings> m_settings;
     std::unique_ptr<DockModel> m_dockModel;
     std::unique_ptr<NotificationTracker> m_notificationTracker;
+    std::unique_ptr<LauncherEntryTracker> m_launcherEntryTracker;
     std::unique_ptr<MultiDockManager> m_dockManager;
     KActionCollection *m_actionCollection = nullptr;
 };

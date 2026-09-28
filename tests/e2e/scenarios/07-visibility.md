@@ -7,6 +7,7 @@
 - vis-smart-hide: Dock hides when active window overlaps its area
 - vis-keyboard-lock: Keyboard navigation prevents auto-hide
 - vis-screen-edge-trigger: Mouse at screen edge triggers dock show
+- vis-show-desktop: Show Desktop (Meta+D) hides app windows but not the dock
 
 ## Affected Files
 - src/shell/dockvisibilitycontroller.h
@@ -139,3 +140,20 @@ cannot be verified in kwin-mcp due to D-08.
 - After keyboard nav ends, normal auto-hide behavior resumes
 
 **Verification:** screenshot (visible during keyboard, hidden after escape + timeout)
+
+---
+
+## TC VIS-007: Show Desktop Keeps the Dock
+
+**Precondition:** Visibility mode set to AlwaysVisible. One app window open (e.g., kcalc).
+**Steps:**
+1. `screenshot` — verify dock and app window visible
+2. `dbus_call org.kde.KWin /KWin org.kde.KWin.showDesktop true` (same path as Meta+D)
+3. Wait 500ms
+4. `screenshot` — verify app window hidden, dock still visible
+5. `dbus_call org.kde.KWin /KWin org.kde.KWin.showDesktop false`
+
+**Expected:**
+- KWin treats the dock surface as a Dock (layer-shell namespace `dock`), so Show Desktop leaves it on screen like a Plasma panel (#16)
+
+**Verification:** screenshot (dock visible while the desktop is shown). Automated: `krema_showdesktop_tests` (tests/kwin).

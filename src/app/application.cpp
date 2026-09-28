@@ -6,6 +6,7 @@
 #include "krema.h"
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
+#include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
@@ -44,6 +45,51 @@ Application::Application(int &argc, char **argv)
 }
 
 Application::~Application() = default;
+
+void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *context)
+{
+    auto saveSettings = [settings]() {
+        settings->save();
+    };
+    connect(settings, &KremaSettings::IconSizeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::IconSpacingChanged, context, saveSettings);
+    connect(settings, &KremaSettings::MaxZoomFactorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ZoomStyleChanged, context, saveSettings);
+    connect(settings, &KremaSettings::CornerRadiusChanged, context, saveSettings);
+    connect(settings, &KremaSettings::FloatingChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BackgroundOpacityChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BackgroundStyleChanged, context, saveSettings);
+    connect(settings, &KremaSettings::TintColorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::VisibilityModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::EdgeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShowDelayChanged, context, saveSettings);
+    connect(settings, &KremaSettings::HideDelayChanged, context, saveSettings);
+    connect(settings, &KremaSettings::PreviewEnabledChanged, context, saveSettings);
+    connect(settings, &KremaSettings::PreviewThumbnailSizeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::PreviewHoverDelayChanged, context, saveSettings);
+    connect(settings, &KremaSettings::PreviewHideDelayChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowEnabledChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowLightXChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowLightYChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowLightZChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowLightRadiusChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowColorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowIntensityChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ShadowElevationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::IconNormalizationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::AttentionAnimationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::VirtualDesktopModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::OtherDesktopOpacityChanged, context, saveSettings);
+    connect(settings, &KremaSettings::MonitorModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::FollowActiveTriggerChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ScreenTransitionChanged, context, saveSettings);
+    connect(settings, &KremaSettings::IconScaleChanged, context, saveSettings);
+    connect(settings, &KremaSettings::AttentionAnimationDurationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgeDisplayModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::UseSystemColorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::UseAccentColorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::DodgeActiveOnlyChanged, context, saveSettings);
+}
 
 int Application::run()
 {
@@ -87,8 +133,9 @@ int Application::run()
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
 
-    // Create notification tracker (before QML loading)
+    // Create notification trackers (before QML loading)
     m_notificationTracker = std::make_unique<NotificationTracker>();
+    m_launcherEntryTracker = std::make_unique<LauncherEntryTracker>();
 
     // Register global QML singletons (must be before any QML loading)
     // Use qmlRegisterSingletonType (not qmlRegisterSingletonInstance) so multiple
@@ -107,6 +154,11 @@ int Application::run()
     qmlRegisterSingletonType<NotificationTracker>("com.bhyoo.krema", 1, 0, "NotificationTracker", [tracker](QQmlEngine *, QJSEngine *) -> QObject * {
         QQmlEngine::setObjectOwnership(tracker, QQmlEngine::CppOwnership);
         return tracker;
+    });
+    auto *launcherEntries = m_launcherEntryTracker.get();
+    qmlRegisterSingletonType<LauncherEntryTracker>("com.bhyoo.krema", 1, 0, "LauncherEntryTracker", [launcherEntries](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(launcherEntries, QQmlEngine::CppOwnership);
+        return launcherEntries;
     });
 
     // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode).
@@ -134,40 +186,7 @@ int Application::run()
 
     // Auto-save on any setting change
     auto *s = m_settings.get();
-    auto saveSettings = [this]() {
-        m_settings->save();
-    };
-    connect(s, &KremaSettings::IconSizeChanged, this, saveSettings);
-    connect(s, &KremaSettings::IconSpacingChanged, this, saveSettings);
-    connect(s, &KremaSettings::MaxZoomFactorChanged, this, saveSettings);
-    connect(s, &KremaSettings::CornerRadiusChanged, this, saveSettings);
-    connect(s, &KremaSettings::FloatingChanged, this, saveSettings);
-    connect(s, &KremaSettings::BackgroundOpacityChanged, this, saveSettings);
-    connect(s, &KremaSettings::BackgroundStyleChanged, this, saveSettings);
-    connect(s, &KremaSettings::TintColorChanged, this, saveSettings);
-    connect(s, &KremaSettings::VisibilityModeChanged, this, saveSettings);
-    connect(s, &KremaSettings::EdgeChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShowDelayChanged, this, saveSettings);
-    connect(s, &KremaSettings::HideDelayChanged, this, saveSettings);
-    connect(s, &KremaSettings::PreviewEnabledChanged, this, saveSettings);
-    connect(s, &KremaSettings::PreviewThumbnailSizeChanged, this, saveSettings);
-    connect(s, &KremaSettings::PreviewHoverDelayChanged, this, saveSettings);
-    connect(s, &KremaSettings::PreviewHideDelayChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowEnabledChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowLightXChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowLightYChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowLightZChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowLightRadiusChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowColorChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowIntensityChanged, this, saveSettings);
-    connect(s, &KremaSettings::ShadowElevationChanged, this, saveSettings);
-    connect(s, &KremaSettings::IconNormalizationChanged, this, saveSettings);
-    connect(s, &KremaSettings::AttentionAnimationChanged, this, saveSettings);
-    connect(s, &KremaSettings::VirtualDesktopModeChanged, this, saveSettings);
-    connect(s, &KremaSettings::OtherDesktopOpacityChanged, this, saveSettings);
-    connect(s, &KremaSettings::MonitorModeChanged, this, saveSettings);
-    connect(s, &KremaSettings::FollowActiveTriggerChanged, this, saveSettings);
-    connect(s, &KremaSettings::ScreenTransitionChanged, this, saveSettings);
+    connectSettingsAutoSave(s, this);
 
     // Virtual desktop mode change
     connect(s, &KremaSettings::VirtualDesktopModeChanged, this, [this]() {

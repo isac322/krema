@@ -47,7 +47,7 @@
 - `[tool bar] "Krema Dock"` has `focused` state
 - First dock item `[button]` has both `focusable` and `focused` states
 - Dock items have `showing` and `visible` states (dock slid in)
-- Parabolic zoom applied: focused item has larger bounding box than others
+- Parabolic zoom applied: focused item has a larger bounding box than others, and neighbouring items move aside per the configured zoom style
 - `screenshot` shows blue focus ring on first item
 
 **Verification:** accessibility_tree (button `focused` state), screenshot (focus ring visible)
@@ -69,7 +69,7 @@
 - After step 1: second button has `focused`, first does not
 - After step 3: third button has `focused`
 - After step 5: second button regains `focused`
-- Parabolic zoom center shifts with focus (focused item has largest bounding box)
+- Parabolic zoom glides with focus: focused item has the largest bounding box, neighbours on its sides move apart per the configured zoom style, and the dock background widens to contain them
 
 **Verification:** accessibility_tree (`focused` state shifts between buttons)
 

@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Id": "kremashowdesktopprobe",
+        "Name": "Krema Show Desktop probe",
+        "Description": "Test-only: logs how KWin classifies each window when Show Desktop toggles",
+        "EnabledByDefault": false,
+        "License": "GPL"
+    },
+    "X-KDE-Ordering": 60,
+    "X-Plasma-API": "javascript"
+}

@@ -403,7 +403,7 @@ op->start();
 3. **DPI differences**: Each screen can have different `devicePixelRatio()` — Krema's zoom/sizing must scale per-screen
 4. **closeOnDismissed=false**: Already set in Krema. When output removed, compositor dismisses but window object survives for reassignment.
 5. **Virtual siblings**: `QScreen::virtualSiblings()` returns all screens in the same virtual desktop
-6. **Null screen check**: Always check `screen()` — can be nullptr on virtual compositors (CLAUDE.md anti-pattern)
+6. **Null screen check**: Always check `screen()` — can be nullptr on virtual compositors (anti-pattern rule in `.agents/rules/wayland-surfaces.md`)
 7. **Surface recreation after setScreen**: `hide()` + `show()` is required — compositor must create a new layer-shell surface on the new output
 8. **Initialization order**: `setScreen()` must be called BEFORE `show()` for the first showing
 9. **QQuickView subclass**: `DockView` inherits from `QQuickView` which inherits from `QWindow`. `setScreen()` is available directly.

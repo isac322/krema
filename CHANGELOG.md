@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Krema now ships its own app icon, shown in the application launcher, task switcher, Discover, and window title bars
+
+## [0.9.0] - 2026-09-28
+
+### Added
+
+- A "Zoom style" option in Appearance settings: Parabolic (default, neighbours move aside) or In place (the previous behaviour, where magnified icons overlapped)
+
+### Changed
+
+- Hover zoom now makes room macOS-style: magnified icons push their neighbours aside and the dock background grows, keeping the icon under the pointer; in the middle of the dock the background edges and far icons stay still, and near an end the dock grows smoothly toward it without shaking
+
+### Fixed
+
+- Hovering and clicking dock icons worked for every icon on left and right docks (previously only the first icon responded), and zoomed icons on a top dock stayed hovered across their whole enlarged area
+- Fixed the whole dock surface being blurred at startup; blur now covers only the visible panel from launch
+- Setting the background opacity to 0% made the dock background fully transparent and removed the blur, instead of silently saving 10%
+- Icon scale, attention animation duration, badge display mode, "Use system color", "Use accent color" and "Only dodge active window" now persist across restarts instead of reverting to their defaults
+- Fixed tooltips on left and right docks being cut off after a few characters; they now show the full app name, and very long names end with an ellipsis
+- Fixed the window preview popping up when a window opened while a dock icon was hovered (for example right after clicking a launcher), even with "Enable window preview" turned off
+- App badge counts and progress bars sent through the Unity LauncherEntry API (for example download progress or unread counts) show on dock icons again on Plasma 6.6 and later, where they had stopped appearing; these badges also stay visible during Do Not Disturb, like Krema's other badges
+
+## [0.8.0] - 2026-09-28
+
+### Added
+
+- Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
+- Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
+- Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite
+- Virtual desktop filtering: show windows from current desktop only, or all desktops with dimmed icons for other desktops
+- Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
+- Compile-time LayerShellQt API detection for cross-distribution compatibility
+- OBS build targets for Fedora 44 and openSUSE Leap 16.0
+- Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
+- Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
+
 ### Fixed
 
 - Build compatibility with LayerShellQt < 6.4 (Ubuntu 25.04, Debian 13)
@@ -26,20 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - "Toggle Dock", "Focus Dock" and the Meta+number shortcuts now act on the visible dock in "Follow active screen" mode instead of the hidden primary-screen dock
 - On Debian 13 and Ubuntu 25.04 (kirigami-addons 1.7), choosing "Settings..." again now brings the open Settings window forward instead of opening another one, and the dock stays visible while Settings is open (#24)
 - Krema builds again against LayerShellQt < 6.6 (Debian 13, Ubuntu 25.04), which lacks `Window::setScreen`, and on those versions the dock and its window previews now appear on their intended output (the Plasma primary output, or each screen in "All monitors" mode) instead of all landing on the first output
+- Show Desktop (Meta+D) no longer hides the dock; KWin now treats Krema as a dock, like Plasma panels (#16)
 - Krema no longer crashes on Debian 13 and Ubuntu 25.04 when you quit it while the Settings window is still opening or open (#27)
-
-### Added
-
-- Krema now ships its own app icon, shown in the application launcher, task switcher, Discover, and window title bars
-- Multi-monitor support with three modes: Primary Only, All Screens, and Follow Active Screen
-- Per-screen settings override: each monitor can have independent icon size, edge, visibility mode, background, and pinned launchers
-- Follow Active Screen mode with three trigger types: mouse position, active window focus, and composite
-- Virtual desktop filtering: show windows from current desktop only, or all desktops with dimmed icons for other desktops
-- Fedora (COPR), openSUSE (OBS), Debian, and Ubuntu packaging support
-- Compile-time LayerShellQt API detection for cross-distribution compatibility
-- OBS build targets for Fedora 44 and openSUSE Leap 16.0
-- Docker GUI runtime smoke images for installing externally built distro packages on isolated KWin virtual displays
-- Docker GUI smoke screenshots and Krema process readiness checks for package runtime validation
+- Window previews now appear next to the hovered icon when the dock is on a monitor that does not start at the top-left corner of the desktop, instead of being pushed to that monitor's far edge
+- Left-clicking an app with two or more open windows now brings up the window you used last, and each further click switches to the app's next window; previously the click did nothing. Scrolling over such an app from another app also starts at its last-used window instead of its first one (#10)
 
 ## [0.7.0] - 2026-03-28
 

@@ -42,11 +42,7 @@ declare -A BASE_IMAGES=(
 # Known blind spot (documented, deliberate): Qt.createComponent("<module>", ...)
 # dynamic loads are not derived. org.kde.kirigamiaddons.formcard is loaded
 # this way (SettingsDialog.qml) but is also statically imported under
-# settings/, so it stays covered. The one dynamic load whose module is NOT
-# also statically imported is org.kde.plasma.private.taskmanager (DockItem.qml,
-# SmartLauncherItem badge tracking) — a private Plasma module that is optional
-# at runtime (Component.Ready-guarded) and not shipped by every distro/Plasma
-# version, so enforcing it would make the gate fail on supported targets.
+# settings/, so it stays covered.
 derive_imports() {
     grep -rhoE '^[[:space:]]*import[[:space:]]+[A-Za-z0-9_.]+' "${repo_root}/src/qml" \
         | awk '{print $2}' \

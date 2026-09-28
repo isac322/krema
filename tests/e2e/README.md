@@ -173,6 +173,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/models/dockactions.*` | 02, 04, 05 |
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
+| `src/models/launcherentrytracker.*` | 01 |
 | `src/qml/settings/*` | 06 |
 | `src/config/krema.kcfg` | 06 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |

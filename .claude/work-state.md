@@ -1,11 +1,11 @@
 # Work State
 
 > 세션 간 작업 상태 전달 파일. 각 세션 종료 시 갱신.
-> CLAUDE.md에서 @-import로 로딩됨. 세션 시작 시 1회 로딩 (세션 중 수정해도 현재 세션에는 미반영).
+> Manual handoff note — updated during releases; not auto-imported.
 
 ## 현재 마일스톤
 
-M8 완료 → M9 준비 (Widget System + System Tray)
+M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 
 ## 완료된 항목
 
@@ -13,6 +13,8 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - [x] 접근성 5단계 구현 + 키보드 내비게이션
 - [x] E2E 테스트 인프라 (10개 메커니즘 PoC)
 - [x] v0.7.0 릴리즈
+- [x] v0.8.0 릴리즈 (2026-09-28): M8 멀티 모니터/Per-Screen/Follow Active/가상 데스크톱 + 크로스 배포판 패키징 수정 포함
+- [x] v0.9.0 릴리즈 (2026-09-28): Parabolic hover zoom(Zoom style 옵션), 세로/상단 독 hover·tooltip 수정, 설정 persist 수정, Unity LauncherEntry 배지 복구
 - [x] M8a-M8d: 가상 데스크톱, 멀티 모니터, Per-Screen 설정, Follow Active
 - [x] 멀티 배포판 패키징 인프라 구축
   - COPR (Fedora 42/43/Rawhide): 6/6 빌드 성공
@@ -26,6 +28,10 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 - [x] /release 스킬에 멀티 배포판 배포 파이프라인 추가
 - [x] README 배포판 배지 + 설치 가이드 업데이트
 - [x] SettingsWindow 리팩터링: 폴링 루프 → configViewItem 직접 참조
+- [x] macOS식 hover zoom — `ZoomStyle` 설정으로 2가지 스타일 제공: Parabolic (기본값: 확대된 아이콘이 이웃을 밀어내고 독 배경이 커지며, 포인터 아래 아이콘은 포인터 아래에 유지; 독 중앙에서는 배경 가장자리와 먼 아이콘이 정지, 끝 쪽으로 갈수록 그 끝 방향으로만 부드럽게 성장), In place (예전 동작, 제자리 확대·겹침 허용)
+  - 계산: `krema::computeDockZoom` (src/utils/zoomcalculator.h), QML은 `DockView.zoomLayout()` 결과만 사용; Parabolic 출력은 커서의 직접 함수라 별도 스무딩 애니메이션 불필요
+  - 이전 anchored 모델의 흔들림 제거: 슬롯마다 커서를 고정(pin)하던 방식 대신 배경 성장분을 양쪽으로 연속적으로 분배
+  - 화면을 거의 채우는 독: 이동/성장은 남는 공간으로 제한, 시각 배율은 유지(초과분은 겹침)
 - [x] Docker GUI runtime smoke infrastructure
   - 외부 OBS/osc 산출물을 distro별 컨테이너에 설치 후 host KWin virtual Wayland socket에 연결해 실행
   - 대상: openSUSE Tumbleweed/Slowroll/Leap 16.0, Fedora 42/43/44/Rawhide, Debian 13, Ubuntu 25.04/25.10/26.04
@@ -49,6 +55,7 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 
 - AllScreens/FollowActive: 실제 듀얼 모니터에서 검증 필요
 - QML fade/slide 전환 애니메이션 미구현 (현재 instant show/hide)
+- 화면 폭이 독과 거의 같을 때 양 끝 아이콘은 확대 시 화면 밖으로 몇 px 나감 (기존 in-place 모드와 동일)
 - Per-screen 설정 UI 페이지 미구현 (백엔드만 완료)
 - PipeWire 글로벌 스트림 캡 미구현
 - 현재 OBS 원격 DEB artifacts는 `libkirigami2-6`, `kpipewire` Depends 때문에 Debian 13/Ubuntu 25.04/25.10/26.04에 설치 불가; 수정된 `packaging/obs/debian.control`로 재빌드 필요. 임시 repack 검증에서는 Debian 13/Ubuntu 25.04/25.10/26.04 4개 전부 GUI smoke 통과
@@ -57,8 +64,8 @@ M8 완료 → M9 준비 (Widget System + System Tray)
 
 ## 다음 작업
 
-- M8 전체 릴리즈 검토 (v0.8.0)
 - M9: Widget System + System Tray
+- M8b 잔여: PipeWire 글로벌 스트림 캡, 앱 목록 필터 정책 토글(all apps vs per-screen)
 - 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
 - Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
 - PR #32 머지 후 첫 Pages 배포 → GitHub Pages 인증서 발급 확인 → HTTPS 강제 (DNS·repo 설정은 homelab #355로 적용 완료)

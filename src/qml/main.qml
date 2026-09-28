@@ -90,7 +90,7 @@ Item {
         }
         hoveredName = dockRepeater.itemAt(hoveredIndex)?.displayName ?? ""
 
-        // Reuse zoom logic: set panelMouseX to the focused item's center
+        // Reuse zoom logic: move the zoom cursor to the focused item's rest center
         let item = dockRepeater.itemAt(hoveredIndex)
         if (item) {
             dockPanel.mouseX = item.itemCenterX
@@ -209,10 +209,7 @@ Item {
                 if (isWindow) {
                     let item = dockRepeater.itemAt(hoveredIndex)
                     if (item) {
-                        let globalPos = item.mapToGlobal(0, 0)
-                        let pos = DockView.isVertical ? globalPos.y : globalPos.x
-                        let ext = DockView.isVertical ? item.height : item.width
-                        PreviewController.showPreview(hoveredIndex, pos, ext)
+                        showPreviewForItem(hoveredIndex, item)
                         PreviewController.startPreviewKeyboardNav()
                         announcePreviewThumbnail()
                     }
@@ -323,13 +320,43 @@ Item {
             tooltipItem.show = false
             tooltipTimer.stop()
             let item = dockRepeater.itemAt(hoveredIndex)
-            if (item) {
-                let globalPos = item.mapToGlobal(0, 0)
-                let pos = DockView.isVertical ? globalPos.y : globalPos.x
-                let ext = DockView.isVertical ? item.height : item.width
-                PreviewController.showPreview(hoveredIndex, pos, ext)
-            }
+            if (item) showPreviewForItem(hoveredIndex, item)
         }
+    }
+
+    // Show the preview popup centred on the item's VISUAL (zoomed, pushed)
+    // centre; mapToGlobal includes the item's transforms. The extent passed is
+    // the base icon extent so the popup anchors symmetrically around the icon.
+    function showPreviewForItem(index, item) {
+        let centre = item.mapToGlobal(item.width / 2, item.height / 2)
+        let ext = DockView.isVertical ? item.height : item.width
+        let pos = (DockView.isVertical ? centre.y : centre.x) - ext / 2
+        PreviewController.showPreview(index, pos, ext)
+    }
+
+    // Scaled extent of an item on the SECONDARY axis, in dockPanel coords.
+    // dockPanel.mouseY is the secondary-axis cursor (y for horizontal docks,
+    // x for vertical docks). Icons grow away from the screen edge — the Scale
+    // transform origin pins the edge-facing side (DockItem.qml):
+    // Bottom: bottom fixed, grows up; Top: top fixed, grows down;
+    // Left: left fixed, grows right; Right: right fixed, grows left.
+    // Returns {near, far} in ascending secondary-axis coordinates.
+    function _secondarySpan(item, scale) {
+        let restNear, extent
+        if (DockView.isVertical) {
+            restNear = dockRow.x + item.x
+            extent = item.width
+        } else {
+            restNear = dockRow.y + item.y
+            extent = item.height
+        }
+        // Edge 1 = Bottom, 3 = Right: far side pinned to the screen edge.
+        let farPinned = DockView.edge === 1 || DockView.edge === 3
+        if (farPinned) {
+            let far = restNear + extent
+            return { near: far - extent * scale, far: far }
+        }
+        return { near: restNear, far: restNear + extent * scale }
     }
 
     function updateHoveredItem() {
@@ -340,18 +367,68 @@ Item {
             return
         }
 
-        // Rough vertical check: outside the dockRow + zoom extension → reset zoom
-        let rowTop = dockRow.y
-        let rowBottom = dockRow.y + dockRow.height
+        // Rough secondary-axis check: outside the dockRow + zoom extension on
+        // the side icons grow toward (away from the screen edge) → reset zoom.
         let maxExt = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
-        if (dockPanel.mouseY < rowTop - maxExt || dockPanel.mouseY > rowBottom) {
+        let rowNear, rowFar
+        if (DockView.isVertical) {
+            rowNear = dockRow.x
+            rowFar = dockRow.x + dockRow.width
+        } else {
+            rowNear = dockRow.y
+            rowFar = dockRow.y + dockRow.height
+        }
+        // Edge 1 = Bottom, 3 = Right: far side pinned; icons grow toward "near".
+        // Edge 0 = Top, 2 = Left: near side pinned; icons grow toward "far".
+        if (DockView.edge === 0 || DockView.edge === 2) {
+            rowFar += maxExt
+        } else {
+            rowNear -= maxExt
+        }
+        if (dockPanel.mouseY < rowNear || dockPanel.mouseY > rowFar) {
             hoveredIndex = -1
             hoveredName = ""
             _zoomActive = false
             return
         }
 
-        // Find the closest icon whose SCALED 2D bounds contain the mouse.
+        if (dockPanel.zoomStyle !== 1) {
+            // Parabolic: the item whose VISIBLE slot contains the cursor on the
+            // primary axis — rest centre + current offset, current scale — so
+            // tooltip and click follow what is on screen, including while
+            // zoomAmount eases in or out.
+            let slot = -1
+            let bestDist = Infinity
+            for (let i = 0; i < dockRepeater.count; i++) {
+                let it = dockRepeater.itemAt(i)
+                if (!it) continue
+                let dist = Math.abs(dockPanel.mouseX - (it.itemCenterX + it.currentOffset))
+                let half = DockSettings.iconSize * it.currentScale / 2 + DockSettings.iconSpacing / 2
+                if (dist <= half && dist < bestDist) { slot = i; bestDist = dist }
+            }
+            let slotItem = slot >= 0 ? dockRepeater.itemAt(slot) : null
+            let hit = false
+            if (slotItem) {
+                // Secondary axis: scaled extent honours the edge-pinned Scale origin
+                let span = _secondarySpan(slotItem, slotItem.currentScale)
+                hit = dockPanel.mouseY >= span.near && dockPanel.mouseY <= span.far
+            }
+            if (hit) {
+                _zoomActive = true  // Activate zoom; stays until mouse leaves panel
+                if (hoveredIndex !== slot) {
+                    hoveredIndex = slot
+                    hoveredName = slotItem.displayName
+                    tooltipTimer.restart()
+                }
+            } else {
+                // _zoomActive kept, same hysteresis as in-place mode below.
+                hoveredIndex = -1
+                hoveredName = ""
+            }
+            return
+        }
+
+        // In-place mode: find the closest icon whose SCALED 2D bounds contain the mouse.
         // Uses Schmitt-trigger hysteresis: the currently-hovered icon has a wider
         // effective claim radius (exit threshold), so small mouse movements toward
         // a neighbor don't immediately switch the selection. This prevents
@@ -365,19 +442,22 @@ Item {
             let item = dockRepeater.itemAt(i)
             if (!item) continue
 
-            // Horizontal: normalized distance (0 = center, 1 = edge of scaled icon)
+            // Primary axis: normalized distance (0 = center, 1 = edge of scaled
+            // icon). Primary extent is item.width (horizontal) / item.height
+            // (vertical); itemCenterX is already axis-aware.
             let dist = Math.abs(dockPanel.mouseX - item.itemCenterX)
-            let scaledHalfWidth = (item.width * item.currentScale) / 2
+            let scaledHalfWidth = ((DockView.isVertical ? item.height : item.width)
+                                   * item.currentScale) / 2
             let normDist = dist / scaledHalfWidth
 
             // Hysteresis: currently-hovered icon uses wider exit threshold
             let maxNorm = (i === hoveredIndex) ? (1.0 + hysteresisFactor) : 1.0
             if (normDist >= maxNorm) continue
 
-            // Vertical check: Scale origin.y = height → bottom fixed, grows upward
-            let itemBottom = dockRow.y + item.y + item.height
-            let itemTop = itemBottom - item.height * item.currentScale
-            if (dockPanel.mouseY < itemTop || dockPanel.mouseY > itemBottom) continue
+            // Secondary-axis check: scaled extent honours the edge-pinned
+            // Scale origin (grows away from the screen edge)
+            let span = _secondarySpan(item, item.currentScale)
+            if (dockPanel.mouseY < span.near || dockPanel.mouseY > span.far) continue
 
             // Comparison: currently-hovered icon gets distance bonus (sticky)
             let effectiveDist = (i === hoveredIndex) ? normDist * (1.0 - hysteresisFactor) : normDist
@@ -394,9 +474,9 @@ Item {
         } else {
             hoveredIndex = -1
             hoveredName = ""
-            // _zoomActive intentionally NOT reset here for horizontal gap hysteresis.
+            // _zoomActive intentionally NOT reset here for primary-axis gap hysteresis.
             // When mouse crosses tiny gaps between icons, zoom stays active to prevent
-            // flickering. Zoom deactivates only when mouse leaves the vertical zone
+            // flickering. Zoom deactivates only when mouse leaves the depth zone
             // (rough check above) or the panel zone entirely (mouseX becomes -1).
         }
     }
@@ -585,9 +665,9 @@ Item {
         Accessible.ignored: true
 
         // Shader uniforms (names must match outer_shadow.frag UBO fields)
-        property real panelWidth: dockPanel.width
-        property real panelHeight: dockPanel.height
-        property real cornerRadius: dockPanel.radius
+        property real panelWidth: dockBackground.width
+        property real panelHeight: dockBackground.height
+        property real cornerRadius: dockBackground.radius
         property real elevation: DockSettings.shadowElevation
         property real lightX: DockSettings.shadowLightX
         property real lightY: DockSettings.shadowLightY
@@ -611,16 +691,17 @@ Item {
             return Math.min(Math.max(physicalMargin, softnessMargin) + 10, 200)
         }
 
-        // Centered on panel, expanded by margin on each side
-        x: dockPanel.x - _margin
-        y: dockPanel.y - _margin
-        width: dockPanel.width + _margin * 2
-        height: dockPanel.height + _margin * 2
+        // Centered on the visible background, expanded by margin on each side
+        x: dockPanel.x + dockBackground.x - _margin
+        y: dockPanel.y + dockBackground.y - _margin
+        width: dockBackground.width + _margin * 2
+        height: dockBackground.height + _margin * 2
 
         fragmentShader: "qrc:/qml/shaders/outer_shadow.frag.qsb"
     }
 
-    // The visible dock panel (positioned per edge, fits content)
+    // The dock panel: rest-size container (positioned per edge, fits content).
+    // The visible background is dockBackground, which also covers zoom growth.
     Rectangle {
         id: dockPanel
 
@@ -631,10 +712,7 @@ Item {
         height: DockView.isVertical
             ? Math.max(dockRow.implicitHeight + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
             : (DockSettings.iconSize + Kirigami.Units.largeSpacing * 2)
-        radius: DockSettings.cornerRadius
-        color: DockView.backgroundStyleType === 3
-               ? "transparent"
-               : DockView.backgroundColor
+        color: "transparent"
 
         // Position: center on the non-edge axis, slide on the edge axis
         x: DockView.isVertical ? _panelEdgePos : (parent.width - width) / 2
@@ -656,26 +734,54 @@ Item {
             return 0
         }
 
-        // Acrylic overlay: tint + noise via GPU shader, composited over KWin blur.
-        // Shader handles rounded corners via SDF mask — no clip wrapper needed.
-        ShaderEffect {
-            anchors.fill: parent
-            z: 0
-            visible: DockView.backgroundStyleType === 3
-            property real tintR: DockView.backgroundColor.r
-            property real tintG: DockView.backgroundColor.g
-            property real tintB: DockView.backgroundColor.b
-            property real tintOpacity: DockView.backgroundColor.a
-            property real noiseStrength: 0.02
-            property real resX: width
-            property real resY: height
-            property real cornerRadius: dockPanel.radius
-            fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
+        // Visible background. Rests on the panel extent and grows by the
+        // zoom layout's edge-clamped growth on each side (Parabolic only;
+        // InPlace never grows it). Tracks the layout directly: the growth is
+        // already smoothed by dockPanel.zoomAmount.
+        Rectangle {
+            id: dockBackground
+            z: -1
+            readonly property real leadingGrowth: dockPanel.zoomLayout.leadingGrowth ?? 0
+            readonly property real trailingGrowth: dockPanel.zoomLayout.trailingGrowth ?? 0
+
+            x: DockView.isVertical ? 0 : -leadingGrowth
+            y: DockView.isVertical ? -leadingGrowth : 0
+            width: parent.width + (DockView.isVertical ? 0 : leadingGrowth + trailingGrowth)
+            height: parent.height + (DockView.isVertical ? leadingGrowth + trailingGrowth : 0)
+            radius: DockSettings.cornerRadius
+            color: DockView.backgroundStyleType === 3
+                   ? "transparent"
+                   : DockView.backgroundColor
+
+            onXChanged: dockPanel.reportPanelRect()
+            onYChanged: dockPanel.reportPanelRect()
+            onWidthChanged: dockPanel.reportPanelRect()
+            onHeightChanged: dockPanel.reportPanelRect()
+
+            // Acrylic overlay: tint + noise via GPU shader, composited over KWin blur.
+            // Shader handles rounded corners via SDF mask — no clip wrapper needed.
+            ShaderEffect {
+                anchors.fill: parent
+                visible: DockView.backgroundStyleType === 3
+                property real tintR: DockView.backgroundColor.r
+                property real tintG: DockView.backgroundColor.g
+                property real tintB: DockView.backgroundColor.b
+                property real tintOpacity: DockView.backgroundColor.a
+                property real noiseStrength: 0.02
+                property real resX: width
+                property real resY: height
+                property real cornerRadius: dockBackground.radius
+                fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
+            }
         }
 
         // Delay enabling animations until after initial layout to avoid startup flicker
         property bool animationsReady: false
-        Component.onCompleted: Qt.callLater(function() { animationsReady = true })
+        Component.onCompleted: {
+            // Guaranteed initial panel-rect report; coalesces with any already-queued call.
+            reportPanelRect()
+            Qt.callLater(function() { animationsReady = true })
+        }
 
         Behavior on width {
             enabled: dockPanel.animationsReady
@@ -725,11 +831,99 @@ Item {
         // Zoom is disabled during drag so all icons return to base scale.
         property bool mouseInside: mouseX >= 0 && root._zoomActive && !root._dragActive
 
-        // Report panel geometry to visibility controller for input region
-        onXChanged: DockVisibility.setPanelRect(x, y, width, height)
-        onWidthChanged: DockVisibility.setPanelRect(x, y, width, height)
-        onYChanged: DockVisibility.setPanelRect(x, y, width, height)
-        onHeightChanged: DockVisibility.setPanelRect(x, y, width, height)
+        // --- Hover zoom ---
+        // ZoomStyle (krema.kcfg): 0 = Parabolic (Gaussian magnification;
+        // neighbours move aside and the background grows), 1 = InPlace (icons
+        // scale over their neighbours, nothing moves).
+        readonly property int zoomStyle: DockSettings.zoomStyle
+
+        // Last valid primary-axis cursor. Kept when mouseX becomes -1 so the
+        // zoom-out animation collapses around the point the cursor left from.
+        property real zoomCursor: 0
+        onMouseXChanged: if (mouseX >= 0) zoomCursor = mouseX
+        Behavior on zoomCursor {
+            enabled: root.keyboardNavigating
+            NumberAnimation {
+                duration: Kirigami.Units.shortDuration
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        // Global zoom amount (0 = rest, 1 = full zoom). For Parabolic this is
+        // the only animated zoom quantity: it eases in when the pointer enters
+        // and out when it leaves, and icons/background track the layout
+        // directly. InPlace smooths per-item scales instead.
+        property real zoomAmount: mouseInside ? 1.0 : 0.0
+        Behavior on zoomAmount {
+            enabled: dockPanel.zoomStyle !== 1
+            NumberAnimation {
+                duration: Kirigami.Units.shortDuration
+                easing.type: Easing.OutCubic
+            }
+        }
+        // A drag snaps icons back to rest at once (drop targeting and the drop
+        // indicator use rest coordinates), whatever the animation is doing.
+        readonly property real _layoutZoomAmount: root._dragActive ? 0.0 : zoomAmount
+
+        // Scales/offsets/growth computed from REST geometry only (dockRow
+        // position and settings), so zoom never feeds back into layout.
+        // Parabolic output is a direct function of the cursor and zoomAmount.
+        readonly property real _restStart: DockView.isVertical ? dockRow.y : dockRow.x
+        // Surface bounds in this panel's primary-axis frame: the grown dock
+        // background may not cross them.
+        readonly property real _minZoomEdge: DockView.isVertical ? -y : -x
+        readonly property real _maxZoomEdge: DockView.isVertical
+            ? root.height - y
+            : root.width - x
+        readonly property var zoomLayout: DockView.zoomLayout(
+            dockRepeater.count, _restStart,
+            DockSettings.iconSize, DockSettings.iconSpacing,
+            0, DockView.isVertical ? height : width,
+            zoomStyle === 1
+                ? DockSettings.maxZoomFactor
+                : 1.0 + (DockSettings.maxZoomFactor - 1.0) * _layoutZoomAmount,
+            zoomStyle,
+            zoomStyle === 1 ? mouseInside : _layoutZoomAmount > 0,
+            zoomCursor, _minZoomEdge, _maxZoomEdge)
+        // Parabolic icons keep moving under a still pointer (zoom-in/out via
+        // zoomAmount, edge clamping), so the icon under it can change without a
+        // mouse move: re-run the hit test, coalesced to once per event-loop turn.
+        function scheduleHoverUpdate() {
+            if (zoomStyle !== 1 && mouseX >= 0 && !root._dragActive && !root.keyboardNavigating)
+                Qt.callLater(root.updateHoveredItem)
+        }
+
+        // Report the visible background rect (surface frame) for input region + blur.
+        // Deferred via Qt.callLater: multiple geometry signals fire per pointer
+        // motion in push mode, and callLater coalesces them into a single call
+        // per event-loop turn, avoiding Wayland input-region + KWin blur-region
+        // rebuild churn.
+        function reportPanelRect() {
+            Qt.callLater(dockPanel._reportPanelRectNow)
+        }
+        function _reportPanelRectNow() {
+            // Outward-round to integers: the C++ side truncates each component,
+            // so floor/ceil avoids losing up to ~2px off the trailing edge.
+            // Clamp the primary axis to the surface: the edge-clamped zoom layout can
+            // overshoot by float error. The secondary axis is left alone because the
+            // hide/show slide legitimately moves the panel past the surface edge.
+            let left = Math.floor(x + dockBackground.x)
+            let top = Math.floor(y + dockBackground.y)
+            let right = Math.ceil(x + dockBackground.x + dockBackground.width)
+            let bottom = Math.ceil(y + dockBackground.y + dockBackground.height)
+            if (DockView.isVertical) {
+                top = Math.max(0, top)
+                bottom = Math.min(root.height, bottom)
+            } else {
+                left = Math.max(0, left)
+                right = Math.min(root.width, right)
+            }
+            DockVisibility.setPanelRect(left, top, right - left, bottom - top)
+        }
+        onXChanged: reportPanelRect()
+        onYChanged: reportPanelRect()
+        onWidthChanged: reportPanelRect()
+        onHeightChanged: reportPanelRect()
 
         // Main icon layout (Flow switches between horizontal/vertical)
         Flow {
@@ -785,11 +979,14 @@ Item {
                     isKeyboardFocused: root.keyboardNavigating && root.hoveredIndex === index
                     iconSize: DockSettings.iconSize
                     maxZoomFactor: DockSettings.maxZoomFactor
-                    panelMouseX: dockPanel.mouseX
-                    panelMouseInside: dockPanel.mouseInside
                     spacing: DockSettings.iconSpacing
+                    zoomScale: dockPanel.zoomLayout.scales?.[index] ?? 1.0
+                    zoomOffset: dockPanel.zoomLayout.offsets?.[index] ?? 0.0
+                    zoomStyle: dockPanel.zoomStyle
+                    onCurrentOffsetChanged: dockPanel.scheduleHoverUpdate()
+                    onCurrentScaleChanged: dockPanel.scheduleHoverUpdate()
 
-                    // Compute this item's center on the primary axis relative to the panel.
+                    // Compute this item's rest center on the primary axis relative to the panel.
                     // For vertical docks, the primary axis is Y (remapped to mouseX).
                     itemCenterX: DockView.isVertical
                         ? (y + height / 2 + dockRow.y)
@@ -974,12 +1171,7 @@ Item {
             if (isWindow && DockSettings.previewEnabled) {
                 // Window task → show preview popup
                 let item = dockRepeater.itemAt(root.hoveredIndex)
-                if (item) {
-                    let globalPos = item.mapToGlobal(0, 0)
-                    let pos = DockView.isVertical ? globalPos.y : globalPos.x
-                    let ext = DockView.isVertical ? item.height : item.width
-                    PreviewController.showPreview(root.hoveredIndex, pos, ext)
-                }
+                if (item) root.showPreviewForItem(root.hoveredIndex, item)
             } else {
                 // Launcher-only → show text tooltip
                 tooltipItem.show = true
@@ -987,14 +1179,27 @@ Item {
         }
     }
 
+    // Vertical docks open the tooltip beside the panel, inside a fixed surface
+    // reserve. Publish that reserve (gap + max tooltip width) so DockView sizes
+    // the surface to fit; the input region stays on the panel.
+    Binding {
+        target: DockView
+        property: "sideTooltipReserve"
+        value: Math.ceil(Kirigami.Units.largeSpacing + tooltipItem.maxSideWidth)
+    }
+
     Rectangle {
         id: tooltipItem
+        objectName: "dockTooltip"
         Accessible.ignored: true
         property bool show: false
         visible: show && root.hoveredName.length > 0
 
         // Reset when hover changes
         onVisibleChanged: if (!visible) show = false
+
+        // Longer names elide on vertical docks instead of clipping at the surface edge
+        readonly property real maxSideWidth: Kirigami.Units.gridUnit * 15
 
         // Position on the opposite side of the dock edge
         x: {
@@ -1005,7 +1210,8 @@ Item {
             let sp = Kirigami.Units.largeSpacing
             if (DockView.edge === 2) return dockPanel.x + dockPanel.width + sp  // Left → right
             if (DockView.edge === 3) return dockPanel.x - width - sp            // Right → left
-            return dockPanel.x + dockRow.x + item.x + item.width / 2 - width / 2
+            // Visual centre: rest centre plus the animated zoom offset (Scale keeps the centre)
+            return dockPanel.x + dockRow.x + item.x + item.width / 2 + item.currentOffset - width / 2
         }
         y: {
             if (root.hoveredIndex < 0 || root.hoveredIndex >= dockRepeater.count)
@@ -1015,13 +1221,13 @@ Item {
             let sp = Kirigami.Units.largeSpacing
             if (DockView.edge === 0) return dockPanel.y + dockPanel.height + sp  // Top → below
             if (DockView.edge === 1) return dockPanel.y - height - sp            // Bottom → above
-            return dockPanel.y + dockRow.y + item.y + item.height / 2 - height / 2
+            return dockPanel.y + dockRow.y + item.y + item.height / 2 + item.currentOffset - height / 2
         }
 
         Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip
         Kirigami.Theme.inherit: false
 
-        width: tooltipLabel.implicitWidth + Kirigami.Units.largeSpacing * 2
+        width: tooltipLabel.width + Kirigami.Units.largeSpacing * 2
         height: tooltipLabel.implicitHeight + Kirigami.Units.largeSpacing
         radius: Kirigami.Units.smallSpacing
         color: Kirigami.Theme.backgroundColor
@@ -1030,6 +1236,10 @@ Item {
         QQC2.Label {
             id: tooltipLabel
             anchors.centerIn: parent
+            width: DockView.isVertical
+                ? Math.min(implicitWidth, tooltipItem.maxSideWidth - Kirigami.Units.largeSpacing * 2)
+                : implicitWidth
+            elide: Text.ElideRight
             text: root.hoveredName
             Accessible.ignored: true
         }
@@ -1056,24 +1266,11 @@ Item {
 
     // Auto-trigger preview when a hovered launcher's window appears.
     // Reacts to TasksModel row insertion — more responsive than polling.
+    // _tryAutoPreview() honours the "Enable window preview" setting.
     Connections {
         target: DockModel.tasksModel
         function onRowsInserted() {
-            if (root.hoveredIndex < 0) return
-            if (PreviewController.visible) return
-            let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
-            let isWindow = DockModel.tasksModel.data(
-                idx, TaskManager.AbstractTasksModel.IsWindow)
-            if (isWindow) {
-                tooltipItem.show = false
-                let item = dockRepeater.itemAt(root.hoveredIndex)
-                if (item) {
-                    let globalPos = item.mapToGlobal(0, 0)
-                    let pos = DockView.isVertical ? globalPos.y : globalPos.x
-                    let ext = DockView.isVertical ? item.height : item.width
-                    PreviewController.showPreview(root.hoveredIndex, pos, ext)
-                }
-            }
+            root._tryAutoPreview()
         }
     }
 

@@ -8,6 +8,7 @@
 #include "krema.h"
 #include "models/taskiconprovider.h"
 #include "utils/surfacegeometry.h"
+#include "utils/zoomcalculator.h"
 
 #include <QDBusConnection>
 #include <QLoggingCategory>
@@ -148,6 +149,23 @@ bool DockView::isVertical() const
     return m_edge == DockPlatform::Edge::Left || m_edge == DockPlatform::Edge::Right;
 }
 
+int DockView::sideTooltipReserve() const
+{
+    return m_sideTooltipReserve;
+}
+
+void DockView::setSideTooltipReserve(int reserve)
+{
+    if (m_sideTooltipReserve == reserve) {
+        return;
+    }
+    m_sideTooltipReserve = reserve;
+    if (isVertical()) {
+        updateSize();
+    }
+    Q_EMIT sideTooltipReserveChanged();
+}
+
 void DockView::setEdge(DockPlatform::Edge edge)
 {
     if (m_edge == edge) {
@@ -190,11 +208,61 @@ DockVisibilityController *DockView::visibilityController() const
     return m_visibilityController;
 }
 
+QVariantMap DockView::zoomLayout(int count,
+                                 qreal restStart,
+                                 qreal iconSize,
+                                 qreal spacing,
+                                 qreal restBackgroundStart,
+                                 qreal restBackgroundEnd,
+                                 qreal maxZoomFactor,
+                                 int style,
+                                 bool active,
+                                 qreal cursor,
+                                 qreal minEdge,
+                                 qreal maxEdge) const
+{
+    // Unknown values fall back to the default, Parabolic.
+    const ZoomStyle zoomStyle = style == static_cast<int>(ZoomStyle::InPlace) ? ZoomStyle::InPlace : ZoomStyle::Parabolic;
+    const DockZoomLayout layout = computeDockZoom(count,
+                                                  restStart,
+                                                  iconSize,
+                                                  spacing,
+                                                  restBackgroundStart,
+                                                  restBackgroundEnd,
+                                                  maxZoomFactor,
+                                                  zoomStyle,
+                                                  active,
+                                                  cursor,
+                                                  minEdge,
+                                                  maxEdge);
+
+    QVariantList scales;
+    scales.reserve(static_cast<qsizetype>(layout.scales.size()));
+    for (double scale : layout.scales) {
+        scales.append(scale);
+    }
+    QVariantList offsets;
+    offsets.reserve(static_cast<qsizetype>(layout.offsets.size()));
+    for (double offset : layout.offsets) {
+        offsets.append(offset);
+    }
+
+    return {
+        {QStringLiteral("scales"), scales},
+        {QStringLiteral("offsets"), offsets},
+        {QStringLiteral("leadingGrowth"), layout.leadingGrowth},
+        {QStringLiteral("trailingGrowth"), layout.trailingGrowth},
+    };
+}
+
 void DockView::updateSize()
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
     const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
-    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, s_tooltipReserve, floatingPadding());
+    // Horizontal docks open the tooltip above/below the panel (fits s_tooltipReserve);
+    // vertical docks open it beside the panel, so the reserve must fit its full width.
+    const int tooltipReserve = isVertical() ? std::max(s_tooltipReserve, m_sideTooltipReserve) : s_tooltipReserve;
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding());
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {
@@ -334,7 +402,14 @@ void DockView::applyBackgroundStyle()
         }
     }
 
-    applyBackgroundToWindow(this, type, region);
+    // An empty region means "whole surface" to KWin, which would blur the entire
+    // (mostly transparent) layer-shell surface. Until QML reports the panel rect,
+    // keep compositor effects off; panelRectChanged re-applies them.
+    if (region.isEmpty() && styleUsesBlur(type)) {
+        removeBackgroundFromWindow(this);
+    } else {
+        applyBackgroundToWindow(this, type, region);
+    }
     Q_EMIT backgroundColorChanged();
     Q_EMIT backgroundStyleTypeChanged();
 }

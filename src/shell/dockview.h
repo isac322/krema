@@ -7,6 +7,7 @@
 #include "style/backgroundstyle.h"
 
 #include <QQuickView>
+#include <QVariant>
 
 #include <memory>
 
@@ -43,6 +44,7 @@ class DockView : public QQuickView
     Q_PROPERTY(int iconCacheVersion READ iconCacheVersion NOTIFY iconCacheVersionChanged)
     Q_PROPERTY(int edge READ edge NOTIFY edgeChanged)
     Q_PROPERTY(bool isVertical READ isVertical NOTIFY edgeChanged)
+    Q_PROPERTY(int sideTooltipReserve READ sideTooltipReserve WRITE setSideTooltipReserve NOTIFY sideTooltipReserveChanged)
 
 public:
     explicit DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settings, QWindow *parent = nullptr);
@@ -62,6 +64,12 @@ public:
     [[nodiscard]] int iconCacheVersion() const;
     [[nodiscard]] int edge() const;
     [[nodiscard]] bool isVertical() const;
+    [[nodiscard]] int sideTooltipReserve() const;
+
+    /// Space the in-scene tooltip needs beside a vertical panel (gap + max tooltip width).
+    /// Published by QML from the tooltip's font-derived max width; vertical docks size
+    /// their perpendicular surface reserve to fit it so the tooltip is never clipped.
+    void setSideTooltipReserve(int reserve);
 
     /// Update the dock edge and recalculate surface size.
     void setEdge(DockPlatform::Edge edge);
@@ -81,6 +89,25 @@ public:
     [[nodiscard]] DockVisibilityController *visibilityController() const;
     [[nodiscard]] TaskIconProvider *iconProvider() const;
 
+    /// Dock zoom layout for QML (see krema::computeDockZoom).
+    /// @p style is a krema::ZoomStyle int (0=Parabolic, 1=InPlace);
+    /// unknown values fall back to Parabolic. minEdge/maxEdge bound the grown
+    /// background (pass -Infinity/Infinity for no bound).
+    /// Returns keys: scales, offsets (QVariantList of double), leadingGrowth
+    /// and trailingGrowth (double).
+    Q_INVOKABLE QVariantMap zoomLayout(int count,
+                                       qreal restStart,
+                                       qreal iconSize,
+                                       qreal spacing,
+                                       qreal restBackgroundStart,
+                                       qreal restBackgroundEnd,
+                                       qreal maxZoomFactor,
+                                       int style,
+                                       bool active,
+                                       qreal cursor,
+                                       qreal minEdge,
+                                       qreal maxEdge) const;
+
 public Q_SLOTS:
     void applyBackgroundStyle();
     void bumpIconCacheVersion();
@@ -91,6 +118,7 @@ Q_SIGNALS:
     void floatingPaddingChanged();
     void iconCacheVersionChanged();
     void edgeChanged();
+    void sideTooltipReserveChanged();
 
 private:
     /// Extra height above the panel needed for zoomed icons.
@@ -109,11 +137,13 @@ private:
     DockVisibilityController *m_visibilityController = nullptr;
     TaskIconProvider *m_iconProvider = nullptr;
     int m_iconCacheVersion = 0;
+    int m_sideTooltipReserve = 0;
     DockPlatform::Edge m_edge = DockPlatform::Edge::Bottom;
     QMetaObject::Connection m_screenGeometryConnection;
 
     static constexpr int s_padding = 8;
     static constexpr int s_floatingMargin = 8;
+    /// Minimum tooltip reserve; covers the tooltip height above/below a horizontal panel.
     static constexpr int s_tooltipReserve = 36;
 };
 

@@ -51,7 +51,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 ## Features
 
 ### Core Dock
-- **Parabolic Zoom** — macOS-style icon magnification on hover
+- **Parabolic Zoom** — macOS-style magnification on hover that pushes neighbouring icons aside, with an optional in-place style
 - **Icon Size Normalization** — Auto-detects icon padding and scales for uniform appearance
 - **Indicator Dots** — Visual markers for running applications
 - **Pin/Unpin** — Keep favorite apps in the dock

@@ -25,7 +25,8 @@ class DockActions : public QObject
 public:
     explicit DockActions(DockModel *model, QObject *parent = nullptr);
 
-    /// Activate the task at @p index. If it's a launcher, launch it.
+    /// Activate the task at @p index. If it's a launcher, launch it. If it's a
+    /// group of windows, cycle to the group's next window.
     Q_INVOKABLE void activate(int index);
 
     /// Request a new instance of the app at @p index.

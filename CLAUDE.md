@@ -1,5 +1,6 @@
 @.claude/work-state.md
 @.claude/rules/token-efficiency.md
+@AGENTS.md
 
 # Krema Development Rules
 

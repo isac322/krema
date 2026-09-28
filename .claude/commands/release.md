@@ -8,7 +8,7 @@ Usage:
 
 ## Step 1: Pre-flight Checks
 
-Abort with a clear message if any check fails.
+Abort with a clear message if any check fails. Which distro versions get packaged follows the Distribution Support Policy in `AGENTS.md` — never drop a target because it is EOL.
 
 1. **Clean working tree**: `git status` — no uncommitted tracked changes (untracked OK)
 2. **On master branch**: `git branch --show-current`
@@ -282,8 +282,12 @@ Skip if `OBS_READY=no` from Step 1.
 The `_service` file points to `master` with `@PARENT_TAG@` versioning, so it automatically picks up the new version tag. The spec and debian.changelog were already updated in Step 3 and included in the tagged release commit. Just upload and trigger.
 
 ```bash
+# osc runs via `uvx --from osc osc` if not installed
 osc checkout home:isac322/krema
-cp packaging/obs/* home:isac322/krema/
+# Package files only — project.config, project.meta.xml, apply-project-config.sh
+# configure the OBS project itself (via apply-project-config.sh) and must NOT be
+# uploaded into the package sources.
+cp packaging/obs/{_service,krema.spec,krema.dsc,debian.changelog,debian.control,debian.rules,debian.copyright} home:isac322/krema/
 cd home:isac322/krema && osc addremove && osc commit -m "Update to v<version>" && cd -
 rm -rf home:isac322
 ```
@@ -298,12 +302,14 @@ Skip if `COPR_READY=no` from Step 1.
 copr-cli edit-package-scm isac322/krema \
   --name krema \
   --clone-url https://github.com/isac322/krema.git \
-  --committish "v<version>" \
+  --commit "v<version>" \
   --subdir packaging/obs \
   --spec krema.spec
 
 copr-cli build-package isac322/krema --name krema
 ```
+
+Note: COPR deletes EOL Fedora chroots itself (platform-forced removal, see `AGENTS.md`) — an EOL Fedora release is then still built by OBS only. Do not remove the OBS target or the README row for that release.
 
 ## Step 9: Launchpad PPA Deployment
 
@@ -311,7 +317,7 @@ Skip if `PPA_READY=no` from Step 1.
 
 ### 9a. Determine active Ubuntu series
 
-Do NOT hardcode series names — they become obsolete. Query active series dynamically:
+Do NOT hardcode series names — they become obsolete. Query active series dynamically. Launchpad rejects uploads to Obsolete series (platform-forced removal, see `AGENTS.md`), which is why only active series are selected:
 ```bash
 curl -s "https://api.launchpad.net/devel/ubuntu/series" \
   | python3 -c "

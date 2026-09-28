@@ -13,28 +13,39 @@ cd "$(dirname "$0")/../.."
 OUT=website/media
 mkdir -p "$OUT"
 
-LIMIT=$((1450 * 1024))    # per-file budget in bytes
+LIMIT=$((1800 * 1024))    # per-file budget in bytes
 # Output widths to try, largest first (raw is 2560x1280 = 2x of 1280x640).
 WIDTHS=(2560 1920 1600)
-VP9_CRF=(28 31 34 37 40)
-X264_CRF=(20 22 24 26 28 30)
+# Low CRFs first: the Roast Contours wallpaper is thin caramel lines on a
+# near-black ground, which bands and shimmers at high CRF. VP9_CRFS and
+# X264_CRFS override the ladders (e.g. to skip rungs a fast probe ruled out).
+read -ra VP9_CRF <<<"${VP9_CRFS:-22 25 28 31 34 37}"
+read -ra X264_CRF <<<"${X264_CRFS:-16 18 20 22 24 26 28}"
 
 # clip  start(s)  duration(s): the recording minus its start-up and stop
 # margins, so every clip starts and ends in the same resting state (seamless
-# loop). Re-check with a contact sheet after regenerating.
+# loop). Values for the GPU-session raws (rock5bp, real time): about 5.5 s of
+# each raw is the recorder starting (ffmpeg probes its input before writing),
+# then 0.5 s of rest before the first motion. Found from frame differences
+# (first/last motion, 0.5 s before, 0.8 s after; previews and groups from the
+# pointer's resting area, their windows never stop changing); re-check after
+# regenerating. middle and pin are Xvfb-session clips.
 declare -A START DUR
-START[zoom]=0.6;      DUR[zoom]=10.6
-START[launch]=0.4;    DUR[launch]=8.9
-START[attention]=0.4; DUR[attention]=6.8
-START[wheel]=0.4;     DUR[wheel]=8.2
-START[middle]=0.4;    DUR[middle]=8.9
-START[reorder]=0.4;   DUR[reorder]=11.2
-START[pin]=0.4;       DUR[pin]=8.0
-START[settings]=0.4;  DUR[settings]=10.2
-START[styles]=0.4;    DUR[styles]=20.4
-START[autohide]=0.4;  DUR[autohide]=9.4
-START[dodge]=0.4;     DUR[dodge]=11.8
-START[keyboard]=0.4;  DUR[keyboard]=6.3
+START[zoom]=5.65;      DUR[zoom]=8.02
+START[launch]=5.57;    DUR[launch]=7.49
+START[attention]=6.21; DUR[attention]=6.68
+START[wheel]=5.68;     DUR[wheel]=7.37
+START[middle]=0.4;     DUR[middle]=8.9
+START[reorder]=5.63;   DUR[reorder]=8.88
+START[pin]=0.4;        DUR[pin]=8.0
+START[settings]=5.51;  DUR[settings]=9.21
+START[styles]=5.58;    DUR[styles]=17.07
+START[autohide]=5.82;  DUR[autohide]=5.75
+START[dodge]=5.72;     DUR[dodge]=8.09
+START[keyboard]=5.78;  DUR[keyboard]=6.13
+START[previews]=5.56;  DUR[previews]=8.74
+START[groups]=5.7;     DUR[groups]=9.4
+START[progress]=5.74;  DUR[progress]=5.62
 
 color=(-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv)
 size() { stat -f %z "$1" 2>/dev/null || stat -c %s "$1"; }
@@ -70,7 +81,7 @@ encode() {
 }
 
 clips=("$@")
-[ ${#clips[@]} -gt 0 ] || clips=(zoom launch attention wheel middle reorder pin settings styles autohide dodge keyboard)
+[ ${#clips[@]} -gt 0 ] || clips=(zoom launch attention wheel middle reorder pin settings styles autohide dodge keyboard previews groups progress)
 for c in "${clips[@]}"; do
     [ -f "$RAW/$c.mkv" ] || { echo "skip $c (no $RAW/$c.mkv)"; continue; }
     encode "$c"

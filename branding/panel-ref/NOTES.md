@@ -63,9 +63,13 @@ Krema defaults, measured: dock 428×64 (8 icons of 48, spacing 4, padding 8),
 radius 12, `rgb(41 43 48 / .6)`, 8 px from the bottom. Icons of inactive
 windows and launchers at 80% opacity. Icon normalization scales the Breeze
 icons by 1.04–1.175. Running dots 3 px (active 4 px), 4 px under the icon.
-Zoom: Gaussian, σ = 1.2 × icon size, max 1.6, scale from the item's bottom
-centre, neighbours do not move, bigger icons draw on top. Tooltip 8 px
-above the dock, shows the window title for running apps.
+Zoom in these captures: Gaussian, σ = 1.2 × icon size, max 1.6, scale from
+the item's bottom centre, neighbours do not move (the in-place zoom Krema had
+before PR #43). Tooltip 8 px above the dock, shows the window title for
+running apps. The site now models the Parabolic default from PR #43
+(`src/utils/zoomcalculator.h` `computeDockZoom`): neighbours move aside and
+the background grows. `krema-hover-konsole-*.png` therefore no longer matches
+the site's zoomed state; recapture it with a build that includes PR #43.
 
 ## HTML vs capture
 
@@ -86,6 +90,7 @@ visitor's local time.
 
 ## Licences
 
-Breeze icons: LGPL-3.0-or-later (KDE). Dolphin icon: LGPL-3.0-only. Next
-wallpaper: Krystian Zajdel, CC BY-SA 4.0. Noto Sans: OFL-1.1. See
+Breeze icons: LGPL-3.0-or-later (KDE). Dolphin icon: LGPL-3.0-only. The Next
+wallpaper in these captures: Krystian Zajdel, CC BY-SA 4.0 (the site now uses
+Roast Contours, `branding/wallpaper/`). Noto Sans: OFL-1.1. See
 `website/media/breeze/NOTICE.txt`.

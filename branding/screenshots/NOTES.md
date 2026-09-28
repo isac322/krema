@@ -10,12 +10,14 @@ Real captures of Krema running in a headless KDE Plasma 6 session. Nothing in th
 
 All files are 8-bit RGB PNGs optimized with `nix shell nixpkgs#oxipng -c oxipng -o 4 --strip safe`.
 
+The current PNGs come from the GPU session in `branding/clips/` (`stills.sh`, KWin on a Mali GPU at 1920×1080, scale 1, Krema from `origin/master`, Roast Contours wallpaper), with the same composition as below. That build has no brand app icon, so the settings window shows a generic "S" icon in the dock. The `regen/` pipeline below is the older Xvfb variant.
+
 ## Environment
 
 - Container: `fedora:44` (linux/arm64, running under OrbStack on macOS)
 - Krema: built from this repository's working tree (branch `feat/brand-identity`, base commit `33b0cfb` plus uncommitted brand-identity changes), version string 0.7.0. The build installs the hicolor `com.bhyoo.krema` app icon and sets it as the window icon. The `copr` target installs `krema` from COPR `isac322/krema` instead.
 - KDE: KWin 6.7.5, plasma-workspace 6.7.5, Breeze (Fedora defaults: Breeze Light apps, Breeze icons, Noto Sans)
-- Wallpaper: Plasma's stock `Next` wallpaper ("Waterfall" by Krystian Zajdel, from `plasma-workspace-wallpapers`), set through the plasmashell scripting API. The default Plasma panel is removed so Krema is the only dock.
+- Wallpaper: Roast Contours (`branding/wallpaper/roast-contours.png`) for the current PNGs; `regen/capture.sh` still sets Plasma's stock `Next`. The default Plasma panel is removed so Krema is the only dock.
 - Resolution: 1920×1080 at scale 1
 - Krema config (`~/.config/kremarc`): `IconSize=56`; `PinnedLaunchers` = Dolphin, Firefox, Konsole, Kate, Okular, Gwenview, Elisa, KCalc, System Monitor, System Settings. Everything else uses defaults.
 - User `alex`, hostname `fedora`, so no root warnings or container IDs show up in the apps.

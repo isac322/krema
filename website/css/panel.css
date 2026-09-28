@@ -32,7 +32,7 @@ main > section.roots > .section-title + .roots-lede { margin-top: 0.9rem; }
   --k: 1;
   --sh: 320;
   position: relative;
-  height: 320px;
+  height: 322px; /* scene + the 1px border on both sides, so no scene row is clipped */
   margin-top: clamp(1.5rem, 4vw, 2.5rem);
   overflow: hidden;
   border: 1px solid var(--line-strong);
@@ -43,15 +43,15 @@ main > section.roots > .section-title + .roots-lede { margin-top: 0.9rem; }
   isolation: isolate;
   contain: layout paint;
 }
-.cmp.is-scaled { height: calc(var(--sh) * var(--k) * 1px); }
+.cmp.is-scaled { height: calc(var(--sh) * var(--k) * 1px + 2px); }
 
 .cmp-scene {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  /* Plasma's "Next" wallpaper (dark variant), bottom 1280x480 of a 16:9 screen,
+  /* "Roast Contours" (branding/wallpaper/), bottom band of a 16:9 screen,
      anchored to the bottom edge like the real screen. */
-  background: #10307a url("../media/roots-wall.webp") 50% 100% / cover no-repeat;
+  background: #18110d url("../media/roots-wall.webp") 50% 100% / cover no-repeat;
   background-image: image-set(url("../media/roots-wall-1x.webp") 1x, url("../media/roots-wall.webp") 2x);
   font-family: "Krema Noto Sans", "Noto Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -184,8 +184,7 @@ main > section.roots > .section-title + .roots-lede { margin-top: 0.9rem; }
   position: relative;
   width: 48px;
   height: 56px;
-  transform-origin: 50% 100%;
-  transition: scale 0.1s cubic-bezier(0.33, 1, 0.68, 1);
+  transform-origin: 50% 100%; /* scale grows away from the screen edge; js/panel.js sets translate + scale */
 }
 /* Krema's icon normalization crops each icon's transparent padding; --n is
    the resulting scale per icon, measured from the capture. Icons of windows
@@ -311,5 +310,5 @@ main > section.roots > .section-title + .roots-lede { margin-top: 0.9rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kd-item, .kd-tip, .kd-tip.is-on, .pp-tip.is-on { transition: none; }
+  .kd-tip, .kd-tip.is-on, .pp-tip.is-on { transition: none; }
 }

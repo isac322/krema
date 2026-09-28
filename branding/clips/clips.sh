@@ -1,25 +1,44 @@
 #!/bin/bash
-# Runs inside the container after session.sh prints READY.
+# Runs inside the container after session.sh (or session-gpu.sh) prints READY.
 #   usage: clips.sh setup            start plasmashell + Krema with the demo config
 #          clips.sh CLIP...          record clips (see CLIPS below)
-#          clips.sh all              setup + every clip, in order
-# Raw recordings (lossless Ut Video, the bottom 1280x640 logical px of the
-# screen = 2560x1280 physical px at 60 fps) go to /out/raw; encode.sh on the
-# host trims and encodes them.
+#          clips.sh all              setup + every clip of this session, in order
+# Raw recordings (lossless, the bottom 1280x640 logical px of the screen =
+# 2560x1280 physical px) go to /out/raw; encode.sh on the host trims and
+# encodes them.
+#
+# Two sessions (see NOTES.md):
+#   session.sh      KWin X11-windowed on Xvfb, QPainter compositing. Recorded
+#                   with ffmpeg x11grab. No screencasts, so no window previews.
+#   session-gpu.sh  KWin virtual backend, OpenGL on a DRM render node (GPU=1 in
+#                   session.env). Recorded from a KWin screencast (sessiontool +
+#                   GStreamer pipewiresrc). Needed for previews and groups.
+# Both take input from xdotool (Xvfb, or Xwayland's XTEST -> libei -> KWin).
 #
 # Coordinates in this file are logical px (1280x720 screen); p() converts to
-# the physical X11 pixels that xdotool and x11grab use.
+# the X11 pixels that xdotool uses.
 set -eu
 . /tmp/session.env
-export DISPLAY=:99
+[ -n "${GPU:-}" ] || export DISPLAY=:99
 cd "$HOME"
-HERE=$(cd "$(dirname "$0")" && pwd)
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RAW=/out/raw
 mkdir -p "$RAW"
+# X11 px per logical px for xdotool: SCALE on Xvfb. On Xwayland, KWin maps
+# XTEST's absolute motion (via libei) onto logical px, whatever size X reports.
 S=$SCALE
+[ -z "${GPU:-}" ] || S=1
 CROP_Y=$((H - 640))       # the recorded band: logical (0, CROP_Y) 1280x640
 
-CLIPS="zoom launch attention progress wheel middle reorder pin settings styles autohide dodge keyboard"
+if [ -n "${GPU:-}" ]; then
+    CLIPS="zoom attention wheel reorder dodge autohide keyboard styles settings launch previews groups progress"
+else
+    CLIPS="zoom launch attention wheel middle reorder pin settings styles autohide dodge keyboard"
+fi
+# Wallpaper: branding/wallpaper/roast-contours.png, mounted at /wallpaper by
+# thumbs.sh; Plasma's "Next" where it is missing (Xvfb session).
+WALLPAPER=file:///usr/share/wallpapers/Next/
+[ -f /wallpaper/roast-contours.png ] && WALLPAPER=file:///wallpaper/roast-contours.png
 
 # Dock geometry (IconSize=72, IconSpacing=4, launchers below): icon i
 # (0-based) is centred at x = ICON_X0 + ICON_STEP*i, y = ICON_Y. Measured from
@@ -34,9 +53,15 @@ p() { echo $(($1 * S)); }
 move() { xdotool mousemove "$(p "$1")" "$(p "$2")"; }
 
 # Pointer glide in logical px: glide X1 Y1 X2 Y2 SECONDS. Smoothstep easing at
-# 120 Hz, run as one xdotool command chain so the pacing comes from xdotool's
-# own sleep, which runs on the session's slowed clock.
+# 120 Hz. The GPU session (real time) uses glide.py, which paces every step on
+# its own deadline. The Xvfb session runs one xdotool command chain, so the
+# pacing comes from xdotool's sleep on the session's slowed clock; that chain
+# runs about 5 % long (each call adds to the step time).
 glide() {
+    if [ -n "${GPU:-}" ]; then
+        python3 "$HERE/glide.py" "$(p "$1")" "$(p "$2")" "$(p "$3")" "$(p "$4")" "$5" 2>/dev/null
+        return
+    fi
     xdotool $(awk -v a="$1" -v b="$2" -v c="$3" -v d="$4" -v t="$5" -v s="$S" 'BEGIN {
         n = int(t * 120 + 0.5); if (n < 1) n = 1
         for (i = 1; i <= n; i++) { u = i / n; u = u * u * (3 - 2 * u)
@@ -77,10 +102,55 @@ wait_class() {    # wait_class CLASS N: wait until N windows of CLASS exist
     echo "timeout waiting for $1" >&2
 }
 
+# GPU session: a KWin screencast of the recorded band (the pointer embedded),
+# read by record.py (GStreamer) and piped as I420 Matroska through a FIFO into
+# jellyfin-ffmpeg, which encodes it on the RK3588 VPU (h264_rkmpp, constant
+# QP 10: a near-lossless intermediate) so the CPU stays free for rendering.
+# record.py drops KWin's frame limiter, keeps frames at least 15 ms apart
+# with KWin's timestamps, and enlarges the FIFO to 1 MiB (see record.py); it
+# prints the capture rate and the number of missed frames when it stops. KWin
+# only sends a frame when the band changes; keepalive-time resends the last
+# one every 100 ms so still stretches keep their length. The file is variable
+# frame rate; encode.sh resamples it to 60 fps.
+# With libmali (CAPTURE_GL set) KWin fills linear DMA-BUFs by a GPU blit and
+# GStreamer's GL elements convert and read them back on their own thread
+# (--gl). memfd buffers make KWin read back inside its render loop, which caps
+# the stream near 37 fps on Mali and flips it upside down.
+# stream_start X Y W H: start a region stream, set SERIAL.
+stream_start() {
+    local i
+    rm -f /tmp/stream.out
+    sessiontool region "$1" "$2" "$3" "$4" "$SCALE" >/tmp/stream.out 2>&1 &
+    STREAM=$!
+    for i in $(seq 100); do
+        SERIAL=$(sed -n 's/^serial //p' /tmp/stream.out)
+        [ -n "$SERIAL" ] && return 0
+        sleep 0.1
+    done
+    echo "screencast stream failed: $(cat /tmp/stream.out)" >&2
+    return 1
+}
 rec_start() {
     local i
     CLIP=$1
     rm -f "/tmp/$CLIP.mkv"
+    if [ -n "${GPU:-}" ]; then
+        stream_start 0 "$CROP_Y" 1280 640
+        rm -f /tmp/rec.fifo
+        mkfifo /tmp/rec.fifo
+        $JF_FFMPEG -nostdin -hide_banner -loglevel warning -blocksize 1048576 -f matroska -i /tmp/rec.fifo \
+            -c:v h264_rkmpp -rc_mode CQP -qp_init 10 -g 120 -fps_mode passthrough -y "/tmp/$CLIP.mkv" >/tmp/enc.log 2>&1 &
+        ENC=$!
+        env $CAPTURE_GL python3 "$HERE/record.py" "$SERIAL" /tmp/rec.fifo ${CAPTURE_GL:+--gl} >/tmp/gst.log 2>&1 &
+        REC=$!
+        for i in $(seq 100); do
+            kill -0 "$REC" 2>/dev/null && kill -0 "$ENC" 2>/dev/null || { cat /tmp/gst.log /tmp/enc.log >&2; return 1; }
+            [ "$(stat -c %s "/tmp/$CLIP.mkv" 2>/dev/null || echo 0)" -gt 0 ] && break
+            sleep 0.1
+        done
+        sleep 0.3
+        return
+    fi
     # x11grab paces itself on the (slowed) session clock and stamps frames with
     # it; the band below the top 80 logical px is recorded at physical size.
     # 120 fps: KWin repaints at 60 Hz on its own phase, so a 60 Hz grab beats
@@ -99,6 +169,12 @@ rec_start() {
 rec_stop() {
     kill -INT "$REC"
     wait "$REC" || true
+    if [ -n "${GPU:-}" ]; then
+        wait "$ENC" || cat /tmp/enc.log >&2   # ends at the Matroska EOF from record.py's EOS
+        grep -h 'record.py:' /tmp/gst.log >&2 || true
+        kill "$STREAM" 2>/dev/null || true
+        wait "$STREAM" 2>/dev/null || true
+    fi
     cp "/tmp/$CLIP.mkv" "$RAW/$CLIP.mkv"
     rm -f "/tmp/$CLIP.mkv"
     echo "recorded $CLIP"
@@ -111,9 +187,9 @@ kremarc() {   # kremarc KEY=VALUE...: write the demo config plus overrides
         echo "[General]"
         echo "IconSize=72"
         echo "AttentionAnimationDuration=3"
-        # KWin cannot offer screencasts here (QPainter compositing), so hover
-        # previews would only show placeholder icons; the dock shows text
-        # tooltips instead.
+        # Text tooltips by default: on session.sh KWin cannot offer
+        # screencasts (QPainter compositing), so previews would only show
+        # placeholder icons. The GPU clips previews and groups turn them on.
         echo "PreviewEnabled=false"
         echo "PinnedLaunchers=${pinned%,}"
         printf '%s\n' "$@"
@@ -156,7 +232,8 @@ EOF
 # KWin window rules: new windows of these apps open at fixed spots inside the
 # recorded band, unmaximized, so no window jumps after it maps. (A rule, not a
 # KWin script: scripts run before KWin's own placement, which then moves the
-# window.)  rule CLASS X Y W H
+# window.)  rule CLASS X Y W H [SIZERULE]: SIZERULE 3 = apply once (default),
+# 2 = force (Firefox resizes itself to the screen after it maps otherwise).
 rule() {
     cat <<EOF
 
@@ -167,17 +244,19 @@ wmclassmatch=2
 position=$2,$3
 positionrule=3
 size=$4,$5
-sizerule=3
+sizerule=${6:-3}
 maximizehoriz=false
 maximizehorizrule=2
 maximizevert=false
 maximizevertrule=2
+fullscreen=false
+fullscreenrule=2
 EOF
 }
 window_rules() {
     {
         printf '[General]\ncount=3\nrules=firefox,konsole,kate\n'
-        rule firefox 330 110 620 440
+        rule firefox 330 110 620 440 2
         rule konsole 360 180 560 360
         rule kate 330 110 620 440
     } >~/.config/kwinrulesrc
@@ -194,9 +273,9 @@ setup() {
     plasmashell --no-respawn >/tmp/plasmashell.log 2>&1 &
     for _ in $(seq 60); do busctl --user status org.kde.plasmashell >/dev/null 2>&1 && break; sleep 1; done
     sleep 8
-    # Drop the default panel so Krema is the only dock; use Plasma's "Next" wallpaper.
+    # Drop the default panel so Krema is the only dock; set the wallpaper.
     busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s \
-      'panels().forEach(function(p){p.remove()}); desktops().forEach(function(d){d.wallpaperPlugin="org.kde.image"; d.currentConfigGroup=["Wallpaper","org.kde.image","General"]; d.writeConfig("Image","file:///usr/share/wallpapers/Next/")});' >/dev/null
+      "panels().forEach(function(p){p.remove()}); desktops().forEach(function(d){d.wallpaperPlugin='org.kde.image'; d.currentConfigGroup=['Wallpaper','org.kde.image','General']; d.writeConfig('Image','$WALLPAPER'); d.writeConfig('FillMode', 2)});" >/dev/null
     demo_files
     start_krema
     move 640 300
@@ -204,8 +283,25 @@ setup() {
     echo SETUP-DONE
 }
 
-geometry() {
-    ffmpeg -loglevel error -f x11grab -video_size "$(p 1280)x$(p "$H")" -i :99 -frames:v 1 -y /out/geometry.png
+geometry() {   # a still of the whole screen in /out/geometry.png
+    if [ -n "${GPU:-}" ]; then
+        stream_start 0 0 "$W" "$H"
+        # The first frame of a new stream is complete; later ones come only on
+        # damage. With libmali the frame comes as a DMA-BUF (memfd frames
+        # are upside down on GLES, see rec_start).
+        if [ -n "${CAPTURE_GL:-}" ]; then
+            env $CAPTURE_GL gst-launch-1.0 -q pipewiresrc target-object="$SERIAL" num-buffers=1 ! \
+                "video/x-raw(memory:DMABuf),format=DMA_DRM,drm-format=AR24" ! glupload ! glcolorconvert ! \
+                "video/x-raw(memory:GLMemory),format=RGBA" ! gldownload ! videoconvert ! video/x-raw,format=RGB ! \
+                pngenc ! filesink location=/out/geometry.png
+        else
+            gst-launch-1.0 -q pipewiresrc target-object="$SERIAL" num-buffers=1 ! video/x-raw ! videoconvert ! \
+                pngenc ! filesink location=/out/geometry.png
+        fi
+        kill "$STREAM"; wait "$STREAM" 2>/dev/null || true
+    else
+        ffmpeg -loglevel error -f x11grab -video_size "$(p 1280)x$(p "$H")" -i :99 -frames:v 1 -y /out/geometry.png
+    fi
     echo "wrote /out/geometry.png"
 }
 
@@ -252,9 +348,12 @@ clip_zoom() {
 #    Firefox's cold start is long enough for a few bounces even on the slowed
 #    clock; its profile (see firefox_profile) opens the offline start page.
 #    The window is closed at the end so the loop ends where it began.
+# In the GPU session the app is Kate: Firefox resizes itself to nearly the
+# whole screen there despite the forced-size rule.
 clip_launch() {
-    local x
-    x=$(icon_x $FIREFOX)
+    local x app=firefox i=$FIREFOX
+    [ -z "${GPU:-}" ] || { app=kate; i=$KATE; }
+    x=$(icon_x "$i")
     move 300 440
     rec_start launch
     sleep 0.4
@@ -263,12 +362,12 @@ clip_launch() {
     xdotool click 1
     sleep 0.1
     glide "$x" "$ICON_Y" 300 440 0.8
-    wait_class firefox 1
+    wait_class "$app" 1
     sleep 2.5
-    close_class firefox
+    close_class "$app"
     sleep 1.2
     rec_stop
-    pkill -x firefox 2>/dev/null || true   # its background processes outlive the window
+    pkill -x "$app" 2>/dev/null || true   # Firefox's background processes outlive the window
 }
 
 # Files for the Dolphin windows and the pin clip.
@@ -389,7 +488,13 @@ clip_reorder() {
     sleep 0.3
     drag "$a" "$ICON_Y" "$b" "$ICON_Y" 1.2
     sleep 0.8
-    drag "$(icon_x $((KATE + 2)))" "$ICON_Y" "$(( a - 10 ))" "$ICON_Y" 1.2
+    # The pointer rests on Kate in its new slot: press there (no warp; the
+    # push-aside zoom moves icons under a warped pointer) and drag it back.
+    xdotool mousedown 1
+    sleep 0.5
+    glide "$b" "$ICON_Y" "$(( a - 10 ))" "$ICON_Y" 1.2
+    sleep 0.3
+    xdotool mouseup 1
     sleep 0.3
     glide "$(( a - 10 ))" "$ICON_Y" 1000 300 1.0
     sleep 0.5
@@ -456,9 +561,12 @@ clip_settings() {
 #     Transparent -> Panel Inherit with the combo box in the settings window;
 #     the dock repaints right away. The page is scrolled to the Background
 #     group (wheel over the scroll bar, not over a control) before recording.
-# Combo box, and the rows of its popup list (it opens above the box).
-STYLE_X=744 STYLE_Y=468 ITEM_X=680
-declare -A STYLE_ROW=([panel]=321 [transparent]=357 [tinted]=393 [acrylic]=429)
+# Combo box, and the rows of its popup list (it opens below the box). Measured
+# with the page scrolled STYLE_SCROLL wheel steps (Krema 0.9 Appearance page).
+# Transparent hides the Opacity and accent rows; at this scroll position the
+# page is still long enough not to scroll back, so the combo never moves.
+STYLE_X=744 STYLE_Y=329 ITEM_X=600 STYLE_SCROLL=12
+declare -A STYLE_ROW=([panel]=367 [transparent]=403 [tinted]=438 [acrylic]=474)
 pick_style() {   # pick_style NAME: open the combo box and click the entry
     local y=${STYLE_ROW[$1]}
     xdotool click 1; sleep 0.6
@@ -471,7 +579,7 @@ clip_styles() {
     local i
     open_settings
     move 970 400
-    for i in $(seq 8); do xdotool click 5; sleep 0.15; done
+    for i in $(seq "$STYLE_SCROLL"); do xdotool click 5; sleep 0.15; done
     sleep 1
     move 1150 300
     rec_start styles
@@ -561,6 +669,148 @@ clip_keyboard() {
     xdotool key Escape
     sleep 1.0
     rec_stop
+}
+
+# ---- GPU session only (session-gpu.sh): live PipeWire window thumbnails ----
+
+# Konsole windows with moving content, so the thumbnails visibly update.
+# konsole_run X Y W H CMD...: open one and place it (the new window is active).
+konsole_run() {
+    local n g="{x: $1, y: $2, width: $3, height: $4}"
+    shift 4
+    n=$(count_class konsole)
+    konsole --separate --hide-menubar --hide-tabbar -e "$@" >/dev/null 2>&1 &
+    wait_class konsole $((n + 1))
+    sleep 1.5
+    kwin_js "const w = workspace.activeWindow; if (w && w.resourceClass.indexOf('konsole') >= 0) w.frameGeometry = $g;"
+    sleep 0.5
+}
+TOP=(top -d 0.4)
+CLOCK=(bash -c 'while :; do printf "\e[1;3%dm%s\e[0m  build step %d ok\n" $((RANDOM % 6 + 1)) "$(date +%T.%N)" $RANDOM; sleep 0.06; done')
+LOG=(bash -c 'while :; do for f in /usr/share/applications/*.desktop; do printf "\e[32mcompiling\e[0m %s\n" "${f##*/}"; sleep 0.09; done; done')
+
+# Preview popup geometry (logical px), measured from a still with the popup
+# open (`clips.sh geometry`). Thumbnails are PreviewThumbnailSize=200 wide.
+# THUMB_X[i]: centre of thumbnail i; THUMB_Y: its centre; CLOSE_DX/DY: the
+# close button relative to that centre.
+THUMB_Y=${THUMB_Y:-468}
+THUMB_X1=${THUMB_X1:-504}   # single-window popup
+THUMB_X=(${THUMB_XS:-291 504 715})
+CLOSE_DX=${CLOSE_DX:-83} CLOSE_DY=${CLOSE_DY:-50}
+
+# 14. Previews: hover the running Konsole -> the popup opens with a live
+#     thumbnail of the window (top refreshing); move onto the thumbnail and
+#     back out.
+clip_previews() {
+    local x
+    kremarc PreviewEnabled=true
+    start_krema
+    konsole_run 360 150 560 360 "${TOP[@]}"
+    x=$(icon_x $KONSOLE)
+    move 1000 300
+    sleep 1
+    rec_start previews
+    sleep 0.5
+    glide 1000 300 "$x" "$ICON_Y" 1.0
+    sleep 2.4
+    glide "$x" "$ICON_Y" "$THUMB_X1" "$THUMB_Y" 0.6
+    sleep 2.0
+    glide "$THUMB_X1" "$THUMB_Y" 1000 300 0.9
+    sleep 1.2
+    rec_stop
+    close_class konsole
+    sleep 1
+}
+
+# 15. Groups: three Konsole windows -> the popup shows three live thumbnails.
+#     A click on the middle one brings its window to the front; the popup
+#     opens again and a click on the third brings that one back on top, which
+#     restores the starting stack (3 over 2 over 1), so the loop ends where it
+#     began. The terminals update slowly (top every 1 s, one line every
+#     0.5 s): fast-scrolling text does not fit the size budget.
+GROUP_TOP=(top -d 1)
+GROUP_CLOCK=(bash -c 'while :; do printf "\e[1;3%dm%s\e[0m  build step %d ok\n" $((RANDOM % 6 + 1)) "$(date +%T)" $RANDOM; sleep 0.5; done')
+GROUP_LOG=(bash -c 'while :; do for f in /usr/share/applications/*.desktop; do printf "\e[32mcompiling\e[0m %s\n" "${f##*/}"; sleep 0.5; done; done')
+clip_groups() {
+    local x
+    kremarc PreviewEnabled=true
+    start_krema
+    konsole_run 120 120 520 330 "${GROUP_CLOCK[@]}"
+    konsole_run 380 150 520 330 "${GROUP_LOG[@]}"
+    konsole_run 640 180 520 330 "${GROUP_TOP[@]}"
+    x=$(icon_x $KONSOLE)
+    move 1100 200
+    sleep 1
+    rec_start groups
+    sleep 0.4
+    glide 1100 200 "$x" "$ICON_Y" 0.8
+    sleep 1.3
+    glide "$x" "$ICON_Y" "${THUMB_X[1]}" "$THUMB_Y" 0.5
+    sleep 0.3
+    xdotool click 1
+    sleep 0.8
+    glide "${THUMB_X[1]}" "$THUMB_Y" "$x" "$ICON_Y" 0.4
+    sleep 1.5   # the reopened popup restarts its streams: placeholders first
+    glide "$x" "$ICON_Y" "${THUMB_X[2]}" "$THUMB_Y" 0.5
+    sleep 0.3
+    xdotool click 1
+    sleep 0.7
+    glide "${THUMB_X[2]}" "$THUMB_Y" 1100 200 0.7
+    sleep 0.7
+    rec_stop
+    close_class konsole
+    sleep 1
+}
+
+# 16. Progress: Dolphin (pinned, not running) reports a transfer through the
+#     Unity LauncherEntry API: a count badge (3 files left, counting down) and
+#     a progress bar filling from 0 to 100 %; both clear when it is done.
+#     unity.py paces the ramps itself: one long-lived process, no per-step
+#     spawns.
+clip_progress() {
+    kremarc
+    start_krema
+    move 640 60   # pointer outside the recorded band
+    exec 5> >(python3 "$HERE/unity.py" org.kde.dolphin.desktop)
+    echo "progress-visible=false" >&5
+    sleep 1   # python + dbus start-up
+    rec_start progress
+    sleep 0.6
+    echo "count=3 count-visible=true progress=0 progress-visible=true ramp=0:0.333:1.2" >&5
+    echo "count=2 ramp=0.333:0.667:1.2" >&5
+    echo "count=1 ramp=0.667:1:1.2" >&5
+    sleep 4.4
+    echo "count=0 count-visible=false progress-visible=false" >&5
+    sleep 1.4
+    rec_stop
+    exec 5>&-
+}
+
+# Timing probe (not a clip; `clips.sh timing`): a 4.0 s pointer glide, then a
+# 4.0 s progress ramp, with wall-clock markers in /out/raw/timing.log. Compare
+# the marker intervals with the motion in /out/raw/timing.mkv.
+clip_timing() {
+    local log=$RAW/timing.log
+    kremarc
+    start_krema
+    move 100 400
+    exec 5> >(python3 "$HERE/unity.py" org.kde.dolphin.desktop 2>>"$log")
+    echo "progress-visible=false" >&5
+    sleep 1
+    : >"$log"
+    rec_start timing
+    sleep 1
+    echo "glide-start $(date +%s.%N)" >>"$log"
+    python3 "$HERE/glide.py" "$(p 100)" "$(p 400)" "$(p 1180)" "$(p 400)" 4.0 2>>"$log"
+    echo "glide-end $(date +%s.%N)" >>"$log"
+    sleep 1
+    echo "count=3 count-visible=true progress=0 progress-visible=true ramp=0:1:4" >&5
+    sleep 5
+    echo "count-visible=false progress-visible=false" >&5
+    sleep 1
+    rec_stop
+    exec 5>&-
+    cat "$log"
 }
 
 [ $# -gt 0 ] || { echo "usage: $0 setup|all|geometry|$CLIPS"; exit 2; }

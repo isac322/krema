@@ -302,7 +302,7 @@ void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
     // moved focus: forget the remembered window so the release of keyboard
     // interactivity (a drag may still hold it) does not steal focus back.
     if (!active && !restoreFocus) {
-        m_returnTask = QPersistentModelIndex();
+        m_returnWindowIds.clear();
     }
 
     if (active) {
@@ -333,20 +333,44 @@ void DockVisibilityController::restoreReturnTask()
     // layer surface when it gains focus and never hands focus back. The dock
     // would stay the active window, keeping keys away from the user's window
     // and hiding the active window from DodgeActiveOnly (SmartHide).
-    if (!m_tasksModel || !m_returnTask.isValid()) {
+    if (!m_tasksModel || m_returnWindowIds.isEmpty()) {
         return;
     }
     // The user moved focus to another window meanwhile: leave it there.
     const QModelIndex current = m_tasksModel->activeTask();
-    if (current.isValid() && current != m_returnTask) {
+    if (current.isValid() && current.data(TaskManager::AbstractTasksModel::WinIdList).toList() != m_returnWindowIds) {
         return;
     }
-    // Don't undo a minimize done while the dock held focus.
-    if (m_returnTask.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
+    const QModelIndex task = findTask(m_returnWindowIds);
+    // Closed meanwhile, or minimized while the dock held focus: don't undo that.
+    if (!task.isValid() || task.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
         return;
     }
-    qCDebug(lcVisibility) << "Returning focus to" << m_returnTask.data(Qt::DisplayRole).toString();
-    m_tasksModel->requestActivate(m_returnTask);
+    qCDebug(lcVisibility) << "Returning focus to" << task.data(Qt::DisplayRole).toString();
+    m_tasksModel->requestActivate(task);
+}
+
+QModelIndex DockVisibilityController::findTask(const QVariantList &windowIds) const
+{
+    // Look the task up by window ids at restore time: a model index taken when
+    // the dock grabbed focus does not survive a reorder (TasksModel::move() +
+    // syncLaunchers() reset the launcher rows the window task is merged into).
+    const auto matches = [&windowIds](const QModelIndex &index) {
+        return index.data(TaskManager::AbstractTasksModel::WinIdList).toList() == windowIds;
+    };
+    for (int row = 0; row < m_tasksModel->rowCount(); ++row) {
+        const QModelIndex task = m_tasksModel->index(row, 0);
+        if (matches(task)) {
+            return task;
+        }
+        for (int child = 0; child < m_tasksModel->rowCount(task); ++child) {
+            const QModelIndex window = m_tasksModel->index(child, 0, task);
+            if (matches(window)) {
+                return window;
+            }
+        }
+    }
+    return {};
 }
 
 void DockVisibilityController::setDragActive(bool active)
@@ -374,14 +398,14 @@ void DockVisibilityController::applyKeyboardInteractivity()
         // KWin activates the dock surface once it becomes keyboard-interactive
         // (keyboard navigation or a drag) and never hands focus back.
         if (m_tasksModel) {
-            m_returnTask = m_tasksModel->activeTask();
+            m_returnWindowIds = m_tasksModel->activeTask().data(TaskManager::AbstractTasksModel::WinIdList).toList();
         }
     }
     m_interactivityActive = interactive;
     m_platform->setKeyboardInteractivity(interactive);
     if (!interactive) {
         restoreReturnTask();
-        m_returnTask = QPersistentModelIndex();
+        m_returnWindowIds.clear();
     }
 }
 

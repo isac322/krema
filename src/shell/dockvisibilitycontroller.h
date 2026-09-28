@@ -7,7 +7,8 @@
 #include "platform/kwinpointermotionwatcher.h"
 
 #include <QObject>
-#include <QPersistentModelIndex>
+#include <QModelIndex>
+#include <QVariantList>
 #include <QTimer>
 
 namespace TaskManager
@@ -128,6 +129,9 @@ private:
     /// (keyboard navigation or internal drag) was first acquired.
     void restoreReturnTask();
 
+    /// Task (top-level or grouped child) whose window ids equal @p windowIds.
+    [[nodiscard]] QModelIndex findTask(const QVariantList &windowIds) const;
+
     /// Apply layer-shell keyboard interactivity: exclusive while keyboard
     /// navigating or dragging, none otherwise. Remembers the active window
     /// on acquisition and hands focus back on full release.
@@ -172,8 +176,9 @@ private:
     // Keyboard navigation active: dock stays visible while keyboard-navigating
     bool m_keyboardActive = false;
 
-    // Window that was active when keyboard interactivity was acquired (focus returns here)
-    QPersistentModelIndex m_returnTask;
+    // Window ids of the task that was active when keyboard interactivity was
+    // acquired (focus returns there)
+    QVariantList m_returnWindowIds;
     // Reports pointer motion outside the dock surface while keyboard-navigating
     KWinPointerMotionWatcher m_pointerMotionWatcher;
 

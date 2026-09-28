@@ -46,7 +46,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - If kcalc was minimized, it un-minimizes
 
 **Verification:** screenshot (kcalc in foreground), list_windows (kcalc present)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app, tests/appium/test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer (strict xfail for a krema bug)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app, tests/appium/test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer
 
 ---
 

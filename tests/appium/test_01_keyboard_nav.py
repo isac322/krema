@@ -33,8 +33,7 @@ TOP = {"Edge": config.EDGE_TOP}
 #: Screen centre (the scenario's "mouse_move x=400 y=300" target area).
 CENTRE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
 #: Neutral pointer spot: right edge, mid-height. Off the dock, its edge
-#: trigger strip and the preview's input region (which is centred on the
-#: dock item and much deeper than the visible popup, see KBD-007 xfail).
+#: trigger strip and the preview popup.
 PARK = (env.SCREEN_WIDTH - 10, env.SCREEN_HEIGHT // 2)
 
 
@@ -314,21 +313,12 @@ def test_kbd006_left_right_move_between_thumbnails(krema: Krema, apps: TestWindo
 
 
 # ---------------------------------------------------------------------- KBD-007
-PREVIEW_REGION_BUG = (
-    "krema bug: with a top dock the preview input region is the full 400 px surface depth under the "
-    "popup (PreviewController::updateInputRegion, regionY=0/regionH=surfaceH), far larger than the "
-    "visible popup. A pointer resting there gets wl_pointer.enter when KWin re-picks pointer focus "
-    "after the window closes; PreviewPopup's HoverHandler then calls endPreviewKeyboardNav(), so no "
-    "thumbnail keeps the focused state (krema log: 'setPreviewHovered: true' right after Delete)"
-)
-
-
 @pytest.mark.kremarc({**TOP, "PinnedLaunchers": []})
 @pytest.mark.parametrize(
     "pointer",
     [
         pytest.param(PARK, id="pointer-parked"),
-        pytest.param(CENTRE, id="pointer-at-centre", marks=pytest.mark.xfail(strict=True, reason=PREVIEW_REGION_BUG)),
+        pytest.param(CENTRE, id="pointer-at-centre"),
     ],
 )
 def test_kbd007_delete_closes_focused_thumbnail_window(krema: Krema, apps: TestWindows, pointer: tuple[int, int]) -> None:

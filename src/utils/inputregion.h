@@ -44,4 +44,21 @@ struct DockScreenRectParams {
 /// Compute the dock panel rectangle in screen coordinates.
 QRect computeDockScreenRect(const DockScreenRectParams &p);
 
+struct PreviewInputRegionParams {
+    int surfaceWidth;
+    int surfaceHeight;
+    qreal contentX; // popup x along a horizontal dock (surface-local)
+    qreal contentY; // popup y along a vertical dock (surface-local)
+    qreal contentWidth;
+    qreal contentHeight;
+    int edge; // 0=Top, 1=Bottom, 2=Left, 3=Right
+};
+
+/// Compute the input region mask for the visible preview popup.
+/// The region is exactly the popup rectangle as placed by PreviewPopup.qml
+/// (flush with the dock-side surface edge, centred along the dock axis), so
+/// the transparent rest of the preview surface never takes pointer focus.
+/// Never returns an empty region (an empty mask would accept ALL input).
+QRegion computePreviewInputRegion(const PreviewInputRegionParams &p);
+
 } // namespace krema

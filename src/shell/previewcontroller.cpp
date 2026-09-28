@@ -7,6 +7,7 @@
 #include "dockvisibilitycontroller.h"
 #include "krema.h"
 #include "models/dockmodel.h"
+#include "utils/inputregion.h"
 
 #include <LayerShellQt/Window>
 
@@ -586,49 +587,19 @@ void PreviewController::updateInputRegion()
         return;
     }
 
-    constexpr int margin = 40;
-    const auto edge = m_dockView->platform()->edge();
-    const bool vertical = (edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right);
-
-    if (vertical) {
-        // Vertical: input region around contentY area
-        const int surfaceW = m_previewView->width();
-        const int w = static_cast<int>(m_contentWidth);
-
-        int regionX;
-        if (edge == DockPlatform::Edge::Left) {
-            // Preview on right side of dock: content at left edge of surface
-            regionX = 0;
-        } else {
-            // Preview on left side of dock: content at right edge of surface
-            regionX = qMax(0, surfaceW - w - 60);
-        }
-        int regionW = surfaceW - regionX;
-
-        const int y = qMax(0, static_cast<int>(m_contentY) - margin);
-        const int bottom = qMin(m_previewView->height(), static_cast<int>(m_contentY + m_contentHeight) + margin);
-        QRegion region(regionX, y, regionW, bottom - y);
-        m_previewView->setMask(region);
-    } else {
-        // Horizontal: input region around contentX area
-        const int surfaceH = m_previewView->height();
-        const int h = static_cast<int>(m_contentHeight);
-
-        int regionY;
-        if (edge == DockPlatform::Edge::Top) {
-            // Preview below dock: content at top edge of surface
-            regionY = 0;
-        } else {
-            // Preview above dock: content at bottom edge of surface
-            regionY = qMax(0, surfaceH - h - 60);
-        }
-        int regionH = surfaceH - regionY;
-
-        const int x = qMax(0, static_cast<int>(m_contentX) - margin);
-        const int right = qMin(m_previewView->width(), static_cast<int>(m_contentX + m_contentWidth) + margin);
-        QRegion region(x, regionY, right - x, regionH);
-        m_previewView->setMask(region);
-    }
+    // Input region = the visible popup only. The surface is 400 px deep and
+    // spans the whole dock axis; any transparent part in the region would take
+    // pointer focus (e.g. when KWin re-picks focus after a window closes) and
+    // the surface HoverHandler would then end preview keyboard navigation.
+    PreviewInputRegionParams params{};
+    params.surfaceWidth = m_previewView->width();
+    params.surfaceHeight = m_previewView->height();
+    params.contentX = m_contentX;
+    params.contentY = m_contentY;
+    params.contentWidth = m_contentWidth;
+    params.contentHeight = m_contentHeight;
+    params.edge = static_cast<int>(m_dockView->platform()->edge());
+    m_previewView->setMask(computePreviewInputRegion(params));
 }
 
 } // namespace krema

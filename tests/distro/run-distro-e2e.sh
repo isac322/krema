@@ -98,7 +98,7 @@ prebuild_log=
 shard_state=
 
 start_prebuild() {
-    prebuild_log="$(mktemp -t krema-distro-prebuild)"
+    prebuild_log="$(mktemp -t krema-distro-prebuild.XXXXXX)"
     # The packages build context is deliberately absent: it is only consumed
     # by the last stage, and pkg_dir may not exist yet.
     docker buildx build --target swas-build "${platform_args[@]}" \
@@ -209,7 +209,7 @@ done
 # stdout/stderr is prefixed so the shards' lines stay distinguishable.
 rm -rf "$KREMA_E2E_ARTIFACTS"
 mkdir -p "$KREMA_E2E_ARTIFACTS"
-shard_dir="$(mktemp -d -t krema-e2e-shards)"
+shard_dir="$(mktemp -d -t krema-e2e-shards.XXXXXX)"
 shard_state="$shard_dir"
 
 for (( i = 0; i < shards; i++ )); do

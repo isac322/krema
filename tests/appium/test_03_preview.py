@@ -157,12 +157,13 @@ def test_prev003_clicking_a_thumbnail_activates_that_window(krema: Krema, apps: 
     wait_until(gamma.is_active, message="newest window to be active")
     krema.move_away()
 
-    pv.open_by_hover(krema, APP)
+    popup = pv.open_by_hover(krema, APP)
     wait_until(lambda: len(pv.thumb_titles(krema)) == 3, message="three thumbnails")
     second = pv.thumb_titles(krema)[1]
     target = {"Alpha": alpha, "Beta": beta, "Gamma": gamma}[second]
     assert not target.is_active()
 
+    pv.wait_on_screen(krema, popup)
     pv.glide_into(krema, _thumb_center(krema, second))
     assert krema.preview_visible(), "preview closed while moving the pointer into it"
     inp.click()
@@ -184,10 +185,11 @@ def test_prev004_close_button_closes_that_window(krema: Krema, apps: TestWindows
     _open_group(apps, ["Alpha", "Beta", "Gamma"])
     krema.wait_for_item(APP)
     krema.move_away()
-    pv.open_by_hover(krema, APP)
+    popup = pv.open_by_hover(krema, APP)
     wait_until(lambda: len(krema.thumbnails()) == 3, message="three thumbnails")
 
     close = pv.screen_rect(krema, krema.wait_for(pv.close_xpath("Beta")))
+    pv.wait_on_screen(krema, popup)
     pv.glide_into(krema, close.center)
     assert krema.preview_visible(), "preview closed while moving the pointer into it"
     inp.click()
@@ -250,7 +252,8 @@ def test_prev005_preview_closes_when_pointer_leaves(krema: Krema, apps: TestWind
     _open_group(apps, ["Alpha", "Beta"])
     krema.wait_for_item(APP)
     krema.move_away()
-    pv.open_by_hover(krema, APP)
+    popup = pv.open_by_hover(krema, APP)
+    pv.wait_on_screen(krema, popup)
     pv.glide_into(krema, _thumb_center(krema, pv.thumb_titles(krema)[0]))
     assert krema.preview_visible()
 
@@ -268,7 +271,8 @@ def test_prev005_close_on_leave_is_delayed(krema: Krema, apps: TestWindows) -> N
     _open_group(apps, ["Alpha", "Beta"])
     krema.wait_for_item(APP)
     krema.move_away()
-    pv.open_by_hover(krema, APP)
+    popup = pv.open_by_hover(krema, APP)
+    pv.wait_on_screen(krema, popup)
     pv.glide_into(krema, _thumb_center(krema, pv.thumb_titles(krema)[0]))
 
     t0 = time.monotonic()
@@ -293,6 +297,8 @@ def test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving(krem
     krema.wait_for_item("Alpha")
     krema.move_away()
     popup = pv.open_by_hover(krema, "Alpha")
+    # Only a popup on screen takes the pointer (see pv.wait_on_screen).
+    pv.wait_on_screen(krema, popup)
 
     # A fast flick from the item onto the preview: the first motion event
     # already lands on the preview, so the dock's last pointer position is

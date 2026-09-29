@@ -77,6 +77,56 @@ def glide_into(krema: Krema, target: tuple[int, int], steps: int = 6, step_ms: i
     inp.move_path(inp.line(start, target, steps), step_ms=step_ms)
 
 
+#: Brightest channel of a screenshot pixel that still counts as the empty
+#: desktop: kwin.screenshot() flattens KWin's transparent desktop onto black.
+DESKTOP_MAX_CHANNEL = 16
+
+
+def wait_on_screen(krema: Krema, popup: WebElement, timeout: float = 5.0) -> None:
+    """Wait until KWin shows the open preview ``popup`` on screen.
+
+    Call it before moving the pointer onto a popup that has just opened.
+    ``krema.preview_visible()`` reads the AT-SPI tree, which reports the popup
+    as shown once krema's QML shows it. The popup's input region
+    (PreviewController::updateInputRegion, QWindow::setMask) is double-buffered
+    Wayland state: it applies with the preview surface's next commit, the one
+    that first puts the popup on screen. On the first open after a krema start,
+    that commit lands 100-190 ms after the AT-SPI change. A pointer that
+    arrives earlier gets no wl_pointer.enter on the preview, and KWin sends
+    none once the pointer is resting, so the preview never sees the hover and
+    closes after its hide delay. A user cannot aim at a popup before it is
+    drawn.
+
+    Oracle: the screenshot pixels inside the popup's rect that no other window
+    covers were the empty (black) desktop until the popup painted its opaque
+    Kirigami background over them. Needs screenshots (OpenGL KWin)."""
+    assert kwin.can_capture(), f"KWin compositing is {kwin.compositing_type()}: waiting for the popup on screen needs screenshots"
+    rect = screen_rect(krema, popup)
+    preview = krema.surface_rect("preview")
+    covers = [
+        Rect(w.x, w.y, w.width, w.height)
+        for w in kwin.windows()
+        if (w.client_x, w.client_y, w.client_width, w.client_height) != tuple(preview or ())
+    ]
+    # Inside the rounded corners and the 1 px border.
+    inset = 8
+    points = [
+        (x, y)
+        for x in range(rect.x + inset, rect.x + rect.width - inset, 2)
+        for y in range(rect.y + inset, rect.y + rect.height - inset, 2)
+        if not any(c.contains(x, y) for c in covers)
+    ]
+    assert len(points) >= 100, f"popup {rect} is covered by other windows {covers}: no desktop pixels left to check"
+    lit: list[float] = []
+
+    def shown() -> bool:
+        image = Image.open(krema.screenshot("preview-on-screen"))
+        lit[:] = [sum(1 for p in points if max(image.getpixel(p)) > DESKTOP_MAX_CHANNEL) / len(points)]
+        return lit[0] > 0.5
+
+    wait_until(shown, timeout=timeout, message=lambda: f"preview popup {rect} on screen (painted fraction {lit})")
+
+
 def dominant_fraction(image: Image.Image, rect: Rect, matches: Callable[[tuple[int, int, int]], bool]) -> float:
     """Fraction of pixels in ``rect`` for which ``matches(rgb)`` holds."""
     crop = image.convert("RGB").crop((rect.x, rect.y, rect.x + rect.width, rect.y + rect.height))

@@ -65,6 +65,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Tinted** — Custom color with adjustable opacity
 - **Acrylic / Frosted Glass** — Blur + noise texture effect
 - **Mica** — System accent color based, inspired by Windows 11 Mica
+- **Mica** — System accent color based, inspired by Windows 11 Mica
 - **Adaptive Opacity** — Switches to opaque when windows overlap the dock
 
 ### Window Previews

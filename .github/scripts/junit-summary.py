@@ -3,11 +3,13 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 """Render a JUnit XML report as GitHub step-summary Markdown.
 
-    junit-summary.py TITLE REPORT.xml [--forbid-skip REGEX]
+    junit-summary.py TITLE REPORT.xml... [--forbid-skip REGEX]
 
-Prints Markdown to stdout. Exits 1 if a skip message matches REGEX (so a
-lost capability, e.g. KWin falling back to QPainter, cannot pass silently).
-A missing report is reported, not an error: the test step already failed.
+Prints Markdown to stdout. Several reports get one section each under the
+title (e.g. one per shard). Exits 1 if a skip message matches REGEX in any
+file (so a lost capability, e.g. KWin falling back to QPainter, cannot pass
+silently). A missing report is reported, not an error: the test step
+already failed.
 """
 
 from __future__ import annotations
@@ -29,16 +31,34 @@ def cell(text: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("title")
-    ap.add_argument("report", type=Path)
+    ap.add_argument("reports", type=Path, nargs="+", metavar="report")
     ap.add_argument("--forbid-skip", type=re.compile)
     args = ap.parse_args()
 
     print(f"## {args.title}\n")
-    if not args.report.is_file():
-        print(f"No JUnit report at `{args.report}`.\n")
-        return 0
+    forbidden: list[str] = []
+    for report in args.reports:
+        if len(args.reports) > 1:
+            print(f"### `{report}`\n")
+        forbidden += summarize(report, args.forbid_skip)
+    if forbidden:
+        print(
+            f"Forbidden skips ({args.forbid_skip.pattern}): "
+            + ", ".join(f"`{n}`" for n in forbidden)
+            + "\n"
+        )
+        print(f"forbidden skips: {forbidden}", file=sys.stderr)
+        return 1
+    return 0
 
-    root = ET.parse(args.report).getroot()
+
+def summarize(report: Path, forbid_skip: re.Pattern[str] | None) -> list[str]:
+    """Render one report file; return the names of forbidden skips."""
+    if not report.is_file():
+        print(f"No JUnit report at `{report}`.\n")
+        return []
+
+    root = ET.parse(report).getroot()
     counts = {"passed": 0, "failed": 0, "skipped": 0}
     problems: list[tuple[str, str, str]] = []
     forbidden = []
@@ -55,7 +75,7 @@ def main() -> int:
             counts["skipped"] += 1
             message = skipped.get("message") or (skipped.text or "")
             problems.append(("⏭️ skipped", name, message))
-            if args.forbid_skip and args.forbid_skip.search(message):
+            if forbid_skip and forbid_skip.search(message):
                 forbidden.append(name)
         else:
             counts["passed"] += 1
@@ -66,11 +86,7 @@ def main() -> int:
         for result, name, message in problems:
             print(f"| {result} | `{cell(name)}` | {cell(message)} |")
         print()
-    if forbidden:
-        print(f"Forbidden skips ({args.forbid_skip.pattern}): " + ", ".join(f"`{n}`" for n in forbidden) + "\n")
-        print(f"forbidden skips: {forbidden}", file=sys.stderr)
-        return 1
-    return 0
+    return forbidden
 
 
 if __name__ == "__main__":

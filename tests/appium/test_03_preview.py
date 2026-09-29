@@ -11,6 +11,7 @@ events for ``Accessible.announce``.
 from __future__ import annotations
 
 import time
+import warnings
 
 import pytest
 from PIL import Image
@@ -56,16 +57,34 @@ def _assert_stays(predicate, duration: float, message: str) -> None:
 
 def _wait_thumbnail_color(krema: Krema, title: str, matches, shot: str) -> Image.Image:
     """Wait until the thumbnail of ``title`` shows the window's solid content
-    color over most of its image (the live PipeWire frame, not the icon)."""
+    color over most of its image (the live PipeWire frame, not the icon).
+
+    A stream whose buffers PipeWire delivered untyped never shows a frame
+    (pv.UNTYPED_BUFFER_WARNING; a PipeWire/KWin negotiation race, not krema).
+    Only when KPipeWire reported exactly that is the source window resized
+    once, which renegotiates the stream; the live content is still required."""
     last: list[float] = []
+    renegotiated = False
 
     def check() -> Image.Image | None:
+        nonlocal renegotiated
         rect = pv.thumbnail_image_rect(pv.screen_rect(krema, krema.wait_for(pv.thumb_xpath(title))))
         image = Image.open(krema.screenshot(shot))
         last[:] = [pv.dominant_fraction(image, rect, matches)]
-        return image if last[0] > 0.6 else None
+        if last[0] > 0.6:
+            return image
+        if not renegotiated and pv.dropped_untyped_buffers(krema):
+            warnings.warn(f"thumbnail {title!r}: KPipeWire dropped untyped buffers; renegotiating the screencast")
+            pv.renegotiate_screencast(title)
+            renegotiated = True
+        return None
 
-    return wait_until(check, timeout=15, interval=0.5, message=lambda: f"thumbnail {title!r} to show its live content (match fraction {last})")
+    return wait_until(
+        check,
+        timeout=15,
+        interval=0.5,
+        message=lambda: f"thumbnail {title!r} to show its live content (match fraction {last}, renegotiated: {renegotiated})",
+    )
 
 
 # ---------------------------------------------------------------- PREV-001

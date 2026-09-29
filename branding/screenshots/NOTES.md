@@ -57,7 +57,7 @@ nix shell nixpkgs#oxipng -c oxipng -o 4 --strip safe branding/screenshots/*.png
 
 ## Why Xvfb instead of `kwin_wayland --virtual` + ScreenShot2
 
-`tests/docker/run-smoke.sh` runs `kwin_wayland --virtual` and calls `org.kde.KWin.ScreenShot2.CaptureWorkspace`. That only works on a host with a DRM render node. Docker on macOS has no `/dev/dri`, so KWin falls back to QPainter compositing (`supportInformation`: `Compositing Type: QPainter`), and every ScreenShot2 call then fails with:
+The E2E harness (`tests/appium/run-e2e.sh`) runs `kwin_wayland --virtual` and calls `org.kde.KWin.ScreenShot2.CaptureWorkspace`. That only works on a host with a DRM render node. Docker on macOS has no `/dev/dri`, so KWin falls back to QPainter compositing (`supportInformation`: `Compositing Type: QPainter`), and every ScreenShot2 call then fails with:
 
 ```
 Call failed: Screenshot got cancelled

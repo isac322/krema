@@ -3,15 +3,12 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
 # Debian family build (debian, ubuntu) using packaging/obs/debian.* inside the
-# target's base container. Invoked by in-container.sh.
+# target's builder image. Invoked by in-container.sh after the build deps are
+# installed; dpkg-buildpackage re-checks Build-Depends with their versions.
 
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
-
-apt-get update
-apt-get install -y --no-install-recommends \
-    build-essential fakeroot devscripts equivs tar xz-utils
 
 # Unpack the source tarball and drop the OBS debian.* files in as debian/.
 src="/work/krema-${KREMA_VERSION}"
@@ -22,18 +19,16 @@ install -m644 /pkg/packaging/obs/debian.changelog "$src/debian/changelog"
 install -m644 /pkg/packaging/obs/debian.copyright "$src/debian/copyright"
 install -m755 /pkg/packaging/obs/debian.rules "$src/debian/rules"
 
-# Install Build-Depends via a generated metapackage (handles virtual packages
-# such as debhelper-compat and arch-qualified deps).
-mk-build-deps --install --remove \
-    --tool 'apt-get -y --no-install-recommends' "$src/debian/control"
-
 cd "$src"
+# The automatic dbgsym package stays on: dh_strip only adds the
+# .gnu_debuglink section to the shipped binary when it saves the debug
+# symbols, so noautodbgsym would change the tested binary.
 dpkg-buildpackage -b -us -uc
 
 # Artifacts land in the parent of the source tree (/work). Ship the binary
-# .deb plus the .ddeb dbgsym package where the distro produces one.
+# .deb only; the dbgsym package (krema-dbgsym_*.ddeb/.deb) is never installed.
 shopt -s nullglob
-artifacts=(/work/krema_*.deb /work/krema_*.ddeb)
+artifacts=(/work/krema_*.deb)
 if (( ${#artifacts[@]} == 0 )); then
     echo "error: dpkg-buildpackage finished but produced no .deb" >&2
     exit 70

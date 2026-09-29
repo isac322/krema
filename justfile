@@ -33,22 +33,8 @@ obs-build-rpm distro="openSUSE_Tumbleweed" arch="x86_64":
 obs-build-deb distro="Debian_13" arch="x86_64":
     osc build {{distro}} {{arch}} packaging/obs/debian.control
 
-docker-runtime-images target="all":
-    tests/docker/build-images.sh {{target}}
-
-docker-runtime-update-digests target="all":
-    tests/docker/update-digests.sh {{target}}
-
-docker-runtime-publish target="all":
-    tests/docker/publish-images.sh {{target}}
-
-docker-runtime-smoke target package_dir:
-    tests/docker/run-smoke.sh {{target}} {{package_dir}}
-
-
-# Clean-base regression gate: .deb Depends must cover every QML import in src/qml
-docker-deb-qml-gate target package_dir:
-    tests/docker/verify-deb-qml.sh {{target}} {{package_dir}}
+distro-update-digests target="all":
+    tests/distro/update-digests.sh {{target}}
 
 # Install .desktop file for development (KWin Wayland protocol access)
 dev-desktop:

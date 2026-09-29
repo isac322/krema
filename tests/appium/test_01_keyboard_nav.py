@@ -302,11 +302,24 @@ def test_kbd006_left_right_move_between_thumbnails(krema: Krema, apps: TestWindo
     wait_until(lambda: [thumbnail_title(n) for n in focused_thumbnails(krema)] == [second], message="second thumbnail focused")
 
     if kwin.can_capture():
-        img = Image.open(krema.screenshot("thumbnail-focus"))
         thumbs = {thumbnail_title(e.get_attribute("name")): e for e in krema.thumbnails()}
-        ring = blueish_pixels(img, krema.screen_rect(thumbs[second], surface="preview"))
-        plain = blueish_pixels(img, krema.screen_rect(thumbs[first], surface="preview"))
-        assert ring > 40 and ring > 4 * plain, f"no focus ring on {second!r}: {ring} vs {plain}"
+        ring_rect = krema.screen_rect(thumbs[second], surface="preview")
+        plain_rect = krema.screen_rect(thumbs[first], surface="preview")
+        counts: list[tuple[int, int]] = []
+
+        def ring_moved() -> bool:
+            # AT-SPI focus changes as soon as krema's GUI thread handles the
+            # key; the ring reaches KWin's output only with krema's next
+            # frame, so wait for a screenshot that shows the new focus.
+            img = Image.open(krema.screenshot("thumbnail-focus"))
+            ring, plain = blueish_pixels(img, ring_rect), blueish_pixels(img, plain_rect)
+            counts.append((ring, plain))
+            return ring > 40 and ring > 4 * plain
+
+        try:
+            wait_until(ring_moved, timeout=5, interval=0.2, message=lambda: f"focus ring on {second!r} (ring vs plain blue px per screenshot: {counts})")
+        finally:
+            env.artifact_path(f"{krema.name}/thumbnail-focus.txt").write_text("".join(f"{r} {p}\n" for r, p in counts))
 
     inp.key("Left")
     wait_until(lambda: [thumbnail_title(n) for n in focused_thumbnails(krema)] == [first], message="first thumbnail focused again")

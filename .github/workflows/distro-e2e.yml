@@ -1,21 +1,55 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
-# Tier-3 distro E2E (tests/distro/README.md): per target, build the krema
-# package from this tree with the repo's packaging, build an image with that
-# distro's KWin/Qt/KF plus the package installed through its package manager,
-# and run the Tier-2 AT-SPI suite against /usr/bin/krema.
+# Distro E2E (tests/distro/README.md): per target, build the krema package
+# from this tree with the repo's packaging, install it through the distro's
+# package manager into that distro's KWin/Qt/KF test runtime, and run the
+# AT-SPI E2E suite (tests/appium) against /usr/bin/krema. This is the only
+# CI run of that suite; e2e.yml builds and runs the CTest suites.
 #
-# Graphics: KWin's --virtual backend on an out-of-tree vgem (render node),
-# compositing with OpenGL through llvmpipe, as in e2e.yml's 2-output run.
-# Not e2e.yml's vkms + DRM backend: in a container KWin has no logind/seatd
-# and uses its noop session, whose openRestricted() only opens devices since
-# KWin 6.5 (debian-13, ubuntu-25.04/25.10 and leap-16.0 ship older KWin).
-# One output: the @pytest.mark.outputs(2) tests are left to e2e.yml and skip.
+# Images: run-distro-e2e.sh and build-package.sh pull the target's runtime
+# and builder images from ghcr.io/isac322/krema-ci (published by
+# ci-images.yml) and build them locally when a ref is missing (a pull
+# request changing an image input) or the pull fails, so the result never
+# depends on the registry. The package is still installed at job time, which
+# is what tests its Requires/Depends.
 #
-# No image layer cache: package and image build in a few minutes per target,
-# and twelve distro images would not fit the repository's 10 GB Actions
-# cache, which e2e.yml also uses.
+# Graphics: KWin's --virtual backend on an out-of-tree vgem (render node; the
+# Azure runner kernel ships none), compositing with OpenGL through llvmpipe.
+# The module for the runner's kernel comes from ghcr.io (ci-images.yml
+# builds it on the runner kernel); on a kernel it has not seen yet, it is
+# built here. fedora-43 additionally reruns the @pytest.mark.outputs(2)
+# tests with two virtual outputs; every other target skips them.
+#
+# ccache: the package build compiles through ccache (KREMA_CCACHE_DIR),
+# restored per target from the default branch's seed (ci-images.yml runs the
+# package build daily for that). Pull requests only restore: twelve
+# per-push entries would churn the repository's 10 GB Actions cache;
+# scheduled and dispatched runs save.
+#
+# Triggers: pull requests touching what this workflow builds or runs, a
+# weekly schedule to catch rolling-distro drift (arch,
+# opensuse-tumbleweed/slowroll, ...), and manual dispatch, which the release
+# procedure (.claude/commands/release.md) runs on master before tagging.
+# Path filter: the package is built with BUILD_TESTING=OFF from src/,
+# CMakeLists.txt and packaging/ (plus LICENSES/, which the packages ship);
+# the suite is tests/appium (not its Dockerfile, which only e2e.yml
+# builds, nor its CMakeLists.txt, read only with KREMA_E2E_TESTS=ON); the
+# harness is tests/distro. tests/unit, qml, kwin, integration and e2e
+# (scenario docs) and Markdown are never used here.
+#
+# The suite runs sharded in two (KREMA_E2E_SHARDS=2;
+# tests/distro/run-distro-e2e.sh), all shards' JUnit files feed the summary.
+# A thumbnail whose PipeWire buffer set arrives untyped (an upstream
+# PipeWire/KWin race that load makes likelier; see tests/appium/krema_e2e/
+# preview.py) is renegotiated once by the preview oracle and reported as a
+# pytest warning.
+#
+# The target list is resolved in a separate job because it comes from
+# tests/distro/targets.tsv and the dispatch input; a static matrix would
+# duplicate targets.tsv and still start a runner for every unselected
+# target. Measured cost of that job: 5-9 s from run start to matrix jobs
+# being created.
 
 name: Distro E2E
 
@@ -24,19 +58,23 @@ on:
     paths:
       - "src/**"
       - "packaging/**"
-      - "tests/**"
       - "CMakeLists.txt"
+      - "LICENSES/**"
+      - "tests/appium/**"
+      - "!tests/appium/Dockerfile"
+      - "!tests/appium/CMakeLists.txt"
+      - "tests/distro/**"
+      - "!**/*.md"
       - ".github/workflows/distro-e2e.yml"
-  push:
-    branches: [master]
+      - ".github/scripts/junit-summary.py"
+  schedule:
+    - cron: "41 2 * * 3"
   workflow_dispatch:
     inputs:
       targets:
-        description: "Targets (comma/space separated ids from tests/docker/targets.tsv or 'arch'), or 'all'"
+        description: "Targets (comma/space separated ids from tests/distro/targets.tsv or 'arch'), or 'all'"
         required: false
         default: all
-  release:
-    types: [published]
 
 permissions: {}
 
@@ -57,7 +95,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          sparse-checkout: tests/docker/targets.tsv
+          sparse-checkout: tests/distro/targets.tsv
           sparse-checkout-cone-mode: false
 
       - name: Resolve target list
@@ -65,7 +103,7 @@ jobs:
         env:
           REQUESTED: ${{ inputs.targets || 'all' }}
         run: |
-          known="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/docker/targets.tsv; echo arch)"
+          known="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/distro/targets.tsv; echo arch)"
           if [[ -z ${REQUESTED// } || $REQUESTED == all ]]; then
             selected="$known"
           else
@@ -84,6 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -96,22 +135,75 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build and load vgem (DRM render node)
+      # Public package: pulls also work anonymously, so a failed login (a
+      # fork's token) only costs the rate limit, never the run.
+      - name: Log in to ghcr.io
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<<"$GH_TOKEN"
+
+      - name: Load vgem (DRM render node)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
-          sudo tests/appium/setup-vgem.sh
+          ko="$RUNNER_TEMP/vgem/vgem.ko"
+          ref="$(tests/distro/image-ref.sh vgem)"
+          if docker pull -q "$ref" >/dev/null 2>&1; then
+            mkdir -p "$(dirname "$ko")"
+            cid="$(docker create "$ref" /vgem.ko)"
+            docker cp "$cid:/vgem.ko" "$ko"
+            docker rm -f "$cid" >/dev/null
+            echo "[vgem] module from $ref"
+          else
+            echo "::notice::$ref not in ghcr.io; building vgem for $(uname -r)"
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
+          fi
+          sudo VGEM_KO="$ko" tests/appium/setup-vgem.sh
+
+      - name: Resolve ccache key
+        id: ccache
+        run: |
+          tag="$(tests/distro/image-ref.sh builder "$TARGET")"
+          tag="${tag##*:}"
+          {
+            echo "prefix=ccache-distro-$tag-"
+            echo "target_prefix=ccache-distro-${tag%-*}-"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ${{ steps.ccache.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.ccache.outputs.prefix }}
+            ${{ steps.ccache.outputs.target_prefix }}
 
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
+        id: main
         env:
-          KREMA_E2E_KWIN_BACKEND: virtual
+          KREMA_E2E_SHARDS: "2"
+          KREMA_CCACHE_DIR: ${{ runner.temp }}/ccache
         run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
+
+      - name: Save ccache
+        # Pull requests only restore (see the header). Saving is an
+        # optimisation: it never fails the job.
+        if: always() && github.event_name != 'pull_request' && (steps.main.outcome == 'success' || steps.main.outcome == 'failure')
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ${{ steps.ccache.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: JUnit summary
         if: always()
         run: |
+          shopt -s nullglob
+          dir=tests/appium/artifacts-distro-"$TARGET"
+          reports=("$dir"/junit.xml "$dir"/shard-*/junit.xml)
           python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET" \
-            "tests/appium/artifacts-distro-$TARGET/junit.xml" \
+            "${reports[@]:-$dir/junit.xml}" \
             --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
@@ -119,4 +211,31 @@ jobs:
         with:
           name: distro-e2e-${{ matrix.target }}
           path: tests/appium/artifacts-distro-${{ matrix.target }}
+          if-no-files-found: ignore
+
+      - name: Run tests/distro/run-distro-e2e.sh (fedora-43, 2 outputs)
+        # --output-count 2 gives two side-by-side virtual outputs; -m outputs
+        # collects only the @pytest.mark.outputs(2) tests, so the
+        # single-output suite is not rerun and nothing shows as skipped.
+        # Reuses the package and image the main run built, and runs even when
+        # that run failed on a test.
+        if: always() && matrix.target == 'fedora-43' && (steps.main.outcome == 'success' || steps.main.outcome == 'failure')
+        env:
+          KREMA_E2E_OUTPUT_COUNT: "2"
+          KREMA_DISTRO_SKIP_IMAGE_BUILD: "1"
+          KREMA_E2E_ARTIFACTS: tests/appium/artifacts-distro-fedora-43-2out
+        run: tests/distro/run-distro-e2e.sh fedora-43 -m outputs -rs
+
+      - name: JUnit summary (fedora-43, 2 outputs)
+        if: always() && matrix.target == 'fedora-43'
+        run: |
+          python3 .github/scripts/junit-summary.py "Distro E2E: fedora-43 (2 outputs)" \
+            tests/appium/artifacts-distro-fedora-43-2out/junit.xml \
+            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.target == 'fedora-43'
+        with:
+          name: distro-e2e-fedora-43-2out
+          path: tests/appium/artifacts-distro-fedora-43-2out
           if-no-files-found: ignore

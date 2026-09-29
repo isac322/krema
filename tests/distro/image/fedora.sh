@@ -1,12 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
-# Fedora family of tests/distro/image/packages.sh (sourced; defines
-# family_runtime, family_build and family_krema). A separate file per family
-# keeps the other families' image layers cached when this one changes.
+# Fedora family of tests/distro/image/packages.sh (sourced; defines the
+# family_* functions it calls). A separate file per family keeps the other
+# families' image layers cached when this one changes.
 
 fedora_install() {
     dnf -y --setopt=install_weak_deps=False install "$@"
+}
+
+family_upgrade() {
+    dnf -y --setopt=install_weak_deps=False --refresh distro-sync
 }
 
 # rubygem(logger): selenium-webdriver-at-spi-run requires logger, a bundled
@@ -38,7 +42,44 @@ family_build() {
         plasma-wayland-protocols-devel libxkbcommon-devel
 }
 
+family_toolchain() {
+    fedora_install 'dnf-command(builddep)' rpm-build tar gzip findutils ccache \
+        || fedora_install dnf-plugins-core rpm-build tar gzip findutils ccache
+}
+
+family_builddeps() {
+    missing=$(rpm_missing_buildreqs)
+    if [ -z "$missing" ]; then
+        echo "packages.sh: every BuildRequires of krema.spec is installed"
+        return 0
+    fi
+    echo "packages.sh: missing BuildRequires:" $missing
+    # Weak deps and docs off like every other install here: builddep's
+    # defaults added ~100 packages / ~300 MB nothing builds with
+    # (mesa-vulkan-drivers, intel-mediasdk, gdb-minimal...) to the builder
+    # image every job pulls.
+    dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs builddep "$PACKAGING/obs/krema.spec"
+}
+
+family_clean() {
+    dnf clean all
+}
+
+# Download the package's declared runtime deps into the dnf package cache
+# (--downloadonly + keepcache) while the package builds; the krema install
+# then only runs the transaction. Nothing is installed here.
+family_depfetch() {
+    dnf -y --setopt=install_weak_deps=False --setopt=keepcache=True \
+        install --downloadonly "$@"
+}
+
 family_krema() {
-    fedora_install /pkgs/*.rpm
+    if ! fedora_install /pkgs/*.rpm; then
+        # The prefetched cache may hold metadata whose packages no longer
+        # exist (newer repo snapshot): refresh and retry once.
+        dnf -y clean all
+        fedora_install /pkgs/*.rpm
+    fi
+    # Shrink the committed diff: no cached packages or metadata.
     dnf clean all
 }

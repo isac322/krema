@@ -23,7 +23,6 @@
 #   KREMA_E2E_SCREEN_WIDTH, KREMA_E2E_SCREEN_HEIGHT   virtual output size
 #   KREMA_E2E_OUTPUT_COUNT   number of outputs (default 1); tests marked
 #                            @pytest.mark.outputs(n) need n
-#   KREMA_E2E_KWIN_BACKEND   auto (default), virtual or drm; see below
 #   KREMA_E2E_DOCKER_ARGS    extra `docker run` arguments, e.g. "--cpus=2" to
 #                            approximate a slow CI runner (default: none)
 #   KREMA_E2E_BINARY         absolute path of an installed krema inside the
@@ -31,15 +30,16 @@
 #                            sync and krema build, runs the suite from the
 #                            read-only checkout (tests/distro/run-distro-e2e.sh)
 #   KREMA_E2E_DISTRO         target id exported to the tests (tests/distro)
+#   KREMA_E2E_SHARD=<i>/<N>  select only every N-th collected test (shard i,
+#                            0-based; krema_e2e/pytest_plugin.py deselects the
+#                            rest). tests/distro/run-distro-e2e.sh sets it from
+#                            KREMA_E2E_SHARDS; the default build volume then
+#                            gets a -shard-<i> suffix.
 #
-# If the host has /dev/dri (e.g. after `modprobe vgem`), it is passed through
-# so KWin composites with OpenGL: needed for screenshots and PipeWire
-# window thumbnails. Without it KWin falls back to QPainter. With a render
-# node (vgem) kwin runs `--virtual` and KREMA_E2E_OUTPUT_COUNT maps to
-# --output-count; with only KMS cards (`modprobe vkms`, e.g. GitHub-hosted
-# runners) it drives one card with its DRM backend and the output count is
-# that card's number of connected connectors (a multi-output vkms device
-# comes from tests/appium/setup-vkms.sh). KWIN_DRM_DEVICES pins the card.
+# If the host has /dev/dri (e.g. after `sudo tests/appium/setup-vgem.sh`), it
+# is passed through so KWin composites with OpenGL on the vgem render node:
+# needed for screenshots and PipeWire window thumbnails. Without it KWin falls
+# back to QPainter. KREMA_E2E_OUTPUT_COUNT maps to kwin's --output-count.
 
 set -eu
 
@@ -54,6 +54,13 @@ platform_args=
 if [ -n "${KREMA_E2E_PLATFORM:-}" ]; then
     platform_args="--platform $KREMA_E2E_PLATFORM"
     volume=${KREMA_E2E_VOLUME:-krema-e2e-build-$(echo "$KREMA_E2E_PLATFORM" | tr '/' '-')}
+fi
+
+# Sharded runs share neither volume nor artifacts. An explicit
+# KREMA_E2E_VOLUME is already suffixed per shard by the caller; the default
+# is suffixed here so concurrent krema builds do not race on /build.
+if [ -n "${KREMA_E2E_SHARD:-}" ] && [ -z "${KREMA_E2E_VOLUME:-}" ]; then
+    volume="$volume-shard-${KREMA_E2E_SHARD%/*}"
 fi
 
 now() { date +%s; }
@@ -105,7 +112,6 @@ docker run --rm --init $tty_args $platform_args \
     -v "$artifacts:/artifacts" \
     -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     -e KREMA_E2E_SCREEN_WIDTH -e KREMA_E2E_SCREEN_HEIGHT -e KREMA_E2E_OUTPUT_COUNT \
-    -e KREMA_E2E_KWIN_BACKEND -e KWIN_DRM_DEVICES \
-    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO \
+    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD -e LP_NUM_THREADS \
     $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
     "$image" sh /src/tests/appium/entrypoint.sh "$@"

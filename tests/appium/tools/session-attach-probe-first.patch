@@ -1,0 +1,37 @@
+selenium-webdriver-at-spi.py: probe for the session's app before sleeping
+
+A new session for an already running process ("app": "<pid>") looks for
+that pid on the a11y registry in a loop that sleeps one second *before*
+every probe. Every session creation therefore takes at least one second and
+is quantised to whole seconds, even when the application registered on the
+bus long before. The E2E suite creates one session per krema start (82 per
+run): about 87 s of a ~320 s run was this sleep.
+
+Probe first and sleep 0.1 s between probes. The deadline (twice the
+implicit timeout), the error on timeout and the per-probe work are
+unchanged; a registry walk over a handful of applications every 100 ms does
+not load the bus.
+
+--- a/selenium-webdriver-at-spi.py
++++ b/selenium-webdriver-at-spi.py
+@@ -206,8 +206,7 @@ class Session:
+         def on_launched(context, info, platform_data):
+             self.pid = platform_data['pid']
+ 
+-            while datetime.now() < end_time:
+-                time.sleep(1) # do not overwhelm the bus with queries, wait a bit
++            while True:
+                 for desktop_index in range(pyatspi.Registry.getDesktopCount()):
+                     desktop = pyatspi.Registry.getDesktop(desktop_index)
+                     for app in desktop:
+@@ -220,8 +219,9 @@ class Session:
+                             continue
+                     if self.browsing_context:
+                         break
+-                if self.browsing_context:
++                if self.browsing_context or datetime.now() >= end_time:
+                     break
++                time.sleep(0.1) # do not overwhelm the bus with queries, wait a bit
+             if not self.browsing_context:
+                 raise RuntimeError('Failed to find application on a11y bus within time limit! It either crashed, or was too slow to start, or is stuck.')
+ 

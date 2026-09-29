@@ -12,14 +12,27 @@ so everything here is an absolute XPath.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Callable
 
 from PIL import Image
 from selenium.webdriver.remote.webelement import WebElement
 
 from . import input as inp
+from . import kwin
 from .krema import PREVIEW_XPATH, Krema, Rect, _xpath_str
 from .waits import wait_until
+
+#: KPipeWire's warning for a received frame whose buffer carries no usable
+#: data type (``spa_data.type == SPA_ID_INVALID``): the frame is dropped and
+#: the thumbnail keeps its fallback icon. It happens when the PipeWire daemon
+#: hands the consumer KWin's DMA-BUF buffer set before their type is resolved
+#: (pipewire.log: ``do_port_use_buffers() invalid memory type 8``, 8 being the
+#: allowed-types mask 1 << SPA_DATA_DmaBuf); every buffer of that set is
+#: affected, so each later frame is dropped too until the stream renegotiates.
+#: Seen under CPU contention (sharded runs) on Ubuntu 25.04 and 26.04.
+UNTYPED_BUFFER_WARNING = "invalid buffer type"
 
 #: Direct thumbnail buttons of the popup (their close buttons are nested
 #: one level deeper, so ``//popup_menu/button`` does not match them).
@@ -90,6 +103,25 @@ def is_blue(p: tuple[int, int, int]) -> bool:
 
 def is_green(p: tuple[int, int, int]) -> bool:
     return p[1] > 100 and p[0] < 80 and p[2] < 80
+
+
+def dropped_untyped_buffers(krema: Krema) -> bool:
+    """Whether KPipeWire in this krema dropped a frame for an untyped buffer
+    (:data:`UNTYPED_BUFFER_WARNING`)."""
+    return UNTYPED_BUFFER_WARNING in Path(krema.log_path).read_text(errors="replace")
+
+
+def renegotiate_screencast(title: str) -> None:
+    """Widen window ``title`` by 2 px through KWin. Its screencast's buffer
+    size follows the window, so the stream renegotiates and KWin allocates a
+    fresh buffer set, which recovers a stream stuck on untyped buffers."""
+    kwin.evaluate(
+        f"const w = workspace.windowList().find(w => w.caption === {json.dumps(title)});"
+        "const g = w.frameGeometry;"
+        "w.frameGeometry = {x: g.x, y: g.y, width: g.width + 2, height: g.height};"
+        "report(true);"
+    )
+
 
 
 class Announcements:

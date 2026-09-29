@@ -8,6 +8,10 @@
 #
 # Works unprivileged (plain `docker run`, no --privileged, no /dev/dri, no KVM)
 # on linux/amd64 and linux/arm64.
+#
+# `ctest-image` is a side stage of `base` with only ccache added: the
+# "Build & tests" job in .github/workflows/e2e.yml builds `--target
+# ctest-image` because it runs the CTest suites, not the AT-SPI suite.
 
 ARG BASE_IMAGE=fedora:43
 FROM ${BASE_IMAGE} AS base
@@ -24,7 +28,7 @@ RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
         pipewire wireplumber pipewire-utils \
         breeze-icon-theme hicolor-icon-theme plasma-breeze kf6-qqc2-desktop-style xkeyboard-config \
         google-noto-sans-fonts dejavu-sans-fonts dejavu-sans-mono-fonts \
-        kwrite kfind \
+        kwrite kfind konsole dolphin \
         extra-cmake-modules cmake ninja-build gcc-c++ pkgconf-pkg-config git \
         qt6-qtbase-devel qt6-qtbase-private-devel qt6-qtdeclarative-devel qt6-qtwayland-devel \
         qt6-qtshadertools-devel qt6-qtquickcontrols2 \
@@ -58,12 +62,12 @@ FROM base AS swas-build
 # KDE selenium-webdriver-at-spi. Not packaged in Fedora 43 -> build a pinned
 # commit (master 2026-06-29, "Fix focus action name with Qt 6.12").
 ARG SWAS_COMMIT=d45a21e8f1b3591dc921f0be85f1ecd834cbe413
-COPY tools/inputsynth-fixes.patch tools/run-output-count.patch tools/run-permission-checks.patch /src/
+COPY tools/inputsynth-fixes.patch tools/run-output-count.patch tools/run-permission-checks.patch tools/session-attach-probe-first.patch /src/
 RUN git init /src/swas && cd /src/swas \
     && git remote add origin https://invent.kde.org/sdk/selenium-webdriver-at-spi.git \
     && git fetch --depth 1 origin "${SWAS_COMMIT}" \
     && git checkout --detach FETCH_HEAD \
-    && git apply /src/inputsynth-fixes.patch /src/run-output-count.patch /src/run-permission-checks.patch \
+    && git apply /src/inputsynth-fixes.patch /src/run-output-count.patch /src/run-permission-checks.patch /src/session-attach-probe-first.patch \
     && cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF \
     && cmake --build build \
     && DESTDIR=/out cmake --install build
@@ -72,6 +76,15 @@ COPY tools/krema-test-window /src/krema-test-window
 RUN cmake -S /src/krema-test-window -B /src/krema-test-window/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
     && cmake --build /src/krema-test-window/build \
     && DESTDIR=/out cmake --install /src/krema-test-window/build
+
+# ctest-image: base plus ccache, without the AT-SPI stack below. A dedicated
+# stage keeps the ccache install out of base's big dnf layer (a one-package
+# addition would otherwise drop its gha cache entry) and out of the appium
+# image, which never compiles.
+FROM base AS ctest-image
+RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
+    dnf -y --setopt=install_weak_deps=False --setopt=keepcache=True install \
+        ccache
 
 FROM base
 COPY --from=swas-build /out/ /

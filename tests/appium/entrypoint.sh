@@ -23,9 +23,10 @@ set -eu
 # half streams to the console.
 if [ "${1:-}" = "--inner" ]; then
     shift
-    # Clients (krema, fixtures) render with llvmpipe whatever kwin's backend
-    # is. With the DRM backend kwin runs without this variable (run.rb would
-    # add --virtual), and Mesa on vkms would otherwise try zink/dri2 first.
+    # Proof that the session got as far as pytest: a KWin crash before this
+    # point cannot have affected any test (see the startup retry below).
+    : >"$KREMA_E2E_STATE/inner-started"
+    # Clients (krema, fixtures) render with llvmpipe, like kwin --virtual.
     export LIBGL_ALWAYS_SOFTWARE=1
     cd "$KREMA_E2E_TESTS_DIR"
     python3 -m pytest -p no:cacheprovider --junitxml=/artifacts/junit.xml "$@" >>/artifacts/pytest.log 2>&1
@@ -87,88 +88,35 @@ if [ "${1:-}" = "--shell" ]; then
 fi
 
 # PipeWire must be up before kwin starts, otherwise kwin's screencast
-# interface (used by KPipeWire previews) never connects.
-pipewire >/artifacts/pipewire.log 2>&1 &
-tries=0
-until [ -S "$XDG_RUNTIME_DIR/pipewire-0" ]; do
-    tries=$((tries + 1))
-    [ "$tries" -le 100 ] || { echo "pipewire did not start" >&2; cat /artifacts/pipewire.log >&2; exit 1; }
-    sleep 0.05
-done
-wireplumber >/artifacts/wireplumber.log 2>&1 &
+# interface (used by KPipeWire previews) never connects. Started per session
+# attempt, in that attempt's XDG_RUNTIME_DIR.
+start_pipewire() {
+    pipewire >>/artifacts/pipewire.log 2>&1 &
+    tries=0
+    until [ -S "$XDG_RUNTIME_DIR/pipewire-0" ]; do
+        tries=$((tries + 1))
+        [ "$tries" -le 100 ] || { echo "pipewire did not start" >&2; cat /artifacts/pipewire.log >&2; exit 1; }
+        sleep 0.05
+    done
+    wireplumber >>/artifacts/wireplumber.log 2>&1 &
+}
 
 # selenium-webdriver-at-spi-run: private dbus session -> nested
 # kwin_wayland --virtual -> at-spi bus -> flask webdriver on :4723 -> our
 # command. Everything below inherits WAYLAND_DISPLAY and KWIN_PID from it.
 export APPIUM_ARTIFACT_OUTPUT_PATH=/artifacts
 export USE_CUSTOM_BUS=1
-# KWin backend. `--virtual` (what run.rb passes when LIBGL_ALWAYS_SOFTWARE
-# is set) composites with OpenGL only on a device with a render node (vgem);
-# otherwise it falls back to QPainter (no screenshots, no screencast). On a
-# KMS-only card (vkms, e.g. GitHub's Azure kernels, which lack vgem) kwin's
-# DRM backend drives the card itself and composites with OpenGL through
-# Mesa's kms_swrast/llvmpipe. Override with KREMA_E2E_KWIN_BACKEND.
-kwin_backend=${KREMA_E2E_KWIN_BACKEND:-auto}
-if [ "$kwin_backend" = auto ]; then
-    kwin_backend=virtual
-    if ! ls /dev/dri/renderD* >/dev/null 2>&1 && ls /dev/dri/card* >/dev/null 2>&1; then
-        kwin_backend=drm
-    fi
-fi
-# Normalized before the backend case: drm uses it to pick a card, virtual to
-# set --output-count.
+# KWin always runs `--virtual` (what run.rb passes when LIBGL_ALWAYS_SOFTWARE
+# is set). It composites with OpenGL only on a device with a render node
+# (vgem, tests/appium/setup-vgem.sh); otherwise it falls back to QPainter (no
+# screenshots, no screencast).
+export LIBGL_ALWAYS_SOFTWARE=1
+# Opt-in multi-output session (tools/run-output-count.patch): outputs of
+# SCREEN_WIDTH x SCREEN_HEIGHT each, placed side by side left to right.
 export KREMA_E2E_OUTPUT_COUNT="${KREMA_E2E_OUTPUT_COUNT:-1}"
-case "$kwin_backend" in
-virtual)
-    export LIBGL_ALWAYS_SOFTWARE=1
-    # Opt-in multi-output session (tools/run-output-count.patch): --output-count
-    # is a virtual-backend option, forwarded only here. Outputs of
-    # SCREEN_WIDTH x SCREEN_HEIGHT each, placed side by side left to right.
-    if [ "$KREMA_E2E_OUTPUT_COUNT" -gt 1 ]; then
-        export COMPOSITOR_OUTPUT_COUNT="$KREMA_E2E_OUTPUT_COUNT"
-    fi
-    ;;
-drm)
-    # The output size is each connector's preferred mode (vkms: 1024x768);
-    # --width/--height/--output-count do not apply. More outputs come from
-    # more connectors on the card (host: tests/appium/setup-vkms.sh, the vkms
-    # configfs ABI on kernel >= 6.19).
-    if [ "${KREMA_E2E_SCREEN_WIDTH:-1024}x${KREMA_E2E_SCREEN_HEIGHT:-768}" != 1024x768 ]; then
-        echo "KREMA_E2E_KWIN_BACKEND=drm cannot change the 1024x768 output size" >&2
-        exit 1
-    fi
-    # Pick the card with exactly KREMA_E2E_OUTPUT_COUNT connected connectors.
-    # Prefer vkms: hosts may have other KMS cards (GitHub runners: hyperv_drm).
-    if [ -z "${KWIN_DRM_DEVICES:-}" ]; then
-        vkms_card=
-        other_card=
-        for card in /dev/dri/card*; do
-            n=0
-            for conn in "/sys/class/drm/${card##*/}"-*/status; do
-                [ -f "$conn" ] || continue
-                [ "$(cat "$conn")" = connected ] && n=$((n + 1))
-            done
-            [ "$n" -eq "$KREMA_E2E_OUTPUT_COUNT" ] || continue
-            case "$(readlink -f "/sys/class/drm/${card##*/}/device" 2>/dev/null)" in
-            */vkms|*/faux/*) [ -n "$vkms_card" ] || vkms_card=$card ;;
-            *) [ -n "$other_card" ] || other_card=$card ;;
-            esac
-        done
-        KWIN_DRM_DEVICES=${vkms_card:-$other_card}
-    fi
-    if [ -z "${KWIN_DRM_DEVICES:-}" ]; then
-        echo "no /dev/dri card with $KREMA_E2E_OUTPUT_COUNT connected output(s)" >&2
-        echo "with vkms the host can add one: sudo tests/appium/setup-vkms.sh $KREMA_E2E_OUTPUT_COUNT" >&2
-        exit 1
-    fi
-    export KWIN_DRM_DEVICES
-    ;;
-*)
-    echo "KREMA_E2E_KWIN_BACKEND must be auto, virtual or drm" >&2
-    exit 1
-    ;;
-esac
-echo "[e2e] kwin backend: $kwin_backend${KWIN_DRM_DEVICES:+ ($KWIN_DRM_DEVICES)}"
+if [ "$KREMA_E2E_OUTPUT_COUNT" -gt 1 ]; then
+    export COMPOSITOR_OUTPUT_COUNT="$KREMA_E2E_OUTPUT_COUNT"
+fi
 export COMPOSITOR_WIDTH="${KREMA_E2E_SCREEN_WIDTH:-1024}"
 export COMPOSITOR_HEIGHT="${KREMA_E2E_SCREEN_HEIGHT:-768}"
 export KREMA_E2E_SCREEN_WIDTH="$COMPOSITOR_WIDTH"
@@ -190,16 +138,103 @@ if [ -n "${KREMA_E2E_DISTRO:-}" ]; then
 fi
 export LANGUAGE=C
 
-: >/artifacts/pytest.log
+# run.rb only aborts when the nested kwin_wayland ends, without saying how,
+# and a crashing KWin may print nothing at all (seen on openSUSE). This shim
+# (first on run.rb's PATH) runs the real binary, reports its exit status or
+# signal on stderr (session.log) and records a signal death in the session
+# attempt's state dir for the startup retry below.
+kwin_bin=$(command -v kwin_wayland)
+mkdir -p /tmp/krema-e2e-bin
+cat >/tmp/krema-e2e-bin/kwin_wayland <<EOF
+#!/bin/sh
+$kwin_bin "\$@"
+rc=\$?
+if [ "\$rc" -gt 128 ]; then
+    echo "[e2e] kwin_wayland killed by signal \$((rc - 128))" >&2
+    echo "\$((rc - 128))" >"\$KREMA_E2E_STATE/kwin-signal"
+else
+    echo "[e2e] kwin_wayland exited with status \$rc" >&2
+fi
+exit "\$rc"
+EOF
+chmod +x /tmp/krema-e2e-bin/kwin_wayland
+export PATH="/tmp/krema-e2e-bin:$PATH"
+
+# Best effort, for upstream reports: when the host's core_pattern is a path
+# visible in the container (e.g. core_pattern=/tmp/cores/core.%e.%p with
+# KREMA_E2E_DOCKER_ARGS="-v /tmp/cores:/tmp/cores --ulimit core=-1") and the
+# image has gdb, write a backtrace of each core dumped during the current
+# attempt to /artifacts/<$1>backtrace-<core>.txt. %e is the crashing thread's
+# name (KWin's startup crash dumps core.QQmlThread.*), so cores are matched
+# by time and read against kwin_wayland.
+kwin_core_backtraces() {
+    pattern=$(cat /proc/sys/kernel/core_pattern 2>/dev/null) || return 0
+    case "$pattern" in /*) ;; *) return 0 ;; esac
+    if ! command -v gdb >/dev/null 2>&1; then
+        echo "[e2e] no gdb in the image: cores under $(dirname "$pattern") not analysed"
+        return 0
+    fi
+    prefix=$(basename "$pattern")
+    prefix=${prefix%%%*}
+    find "$(dirname "$pattern")" -maxdepth 1 -type f -name "$prefix*" -newer "$KREMA_E2E_STATE/started" 2>/dev/null |
+        while read -r core; do
+            out="/artifacts/$1backtrace-$(basename "$core").txt"
+            timeout 600 gdb -q -batch -ex 'set debuginfod enabled on' -ex 'set pagination off' \
+                -ex 'info threads' -ex 'thread apply all bt 40' "$kwin_bin" "$core" >"$out" 2>&1 || true
+            echo "[e2e] kwin_wayland core backtrace: $out"
+        done
+}
+
+# One session attempt ($1: attempt number, then the pytest arguments) with
+# its own state dir, XDG_RUNTIME_DIR and PipeWire; run.rb creates fresh XDG
+# config/data/cache/state homes itself. Sets rc.
+run_session() {
+    export KREMA_E2E_STATE="/tmp/krema-e2e-state-$1"
+    export XDG_RUNTIME_DIR="/tmp/runtime-root-$1"
+    shift
+    mkdir -p "$KREMA_E2E_STATE" "$XDG_RUNTIME_DIR"
+    chmod 700 "$XDG_RUNTIME_DIR"
+    : >"$KREMA_E2E_STATE/started"
+    start_pipewire
+    : >/artifacts/pytest.log
+    selenium-webdriver-at-spi-run sh /src/tests/appium/entrypoint.sh --inner "$@" >/artifacts/session.log 2>&1 &
+    session_pid=$!
+    # Stream pytest output live; --pid makes tail drain the file and exit
+    # once the session is gone.
+    tail -n +1 -s 0.2 -F --pid="$session_pid" /artifacts/pytest.log 2>/dev/null || true
+    set +e
+    wait "$session_pid"
+    rc=$?
+    set -e
+}
+
 t0=$(stamp)
-selenium-webdriver-at-spi-run sh /src/tests/appium/entrypoint.sh --inner "$@" >/artifacts/session.log 2>&1 &
-session_pid=$!
-# Stream pytest output live; --pid makes tail drain the file and exit once
-# the session is gone.
-tail -n +1 -s 0.2 -F --pid="$session_pid" /artifacts/pytest.log 2>/dev/null || true
-set +e
-wait "$session_pid"
-rc=$?
-set -e
+run_session 1 "$@"
+# KWin sometimes dies from SIGSEGV (in its QQmlThread) while the session is
+# still starting, before run.rb hands over to pytest: an upstream crash that
+# no test can have caused or observed. Only that case restarts the whole
+# session, once: the session failed, KWin died from a signal, and the inner
+# half never started (no pytest, no krema). A crash after pytest started, a
+# second startup crash, or any other failure fails as before.
+if [ "$rc" -ne 0 ] && [ -s "$KREMA_E2E_STATE/kwin-signal" ] && [ ! -e "$KREMA_E2E_STATE/inner-started" ]; then
+    echo "[e2e] kwin_wayland crashed during session startup (signal $(cat "$KREMA_E2E_STATE/kwin-signal")); restarting the session once"
+    grep -E '^KCrash:|^\[e2e\] kwin_wayland |Segmentation fault|core dumped' /artifacts/session.log || true
+    kwin_core_backtraces startup-crash-
+    # run.rb rewrites these logs: keep the crashed attempt's.
+    mkdir -p /artifacts/startup-crash
+    mv /artifacts/session.log /artifacts/appium_artifact_* /artifacts/startup-crash/ 2>/dev/null || true
+    # Nothing of the crashed attempt may leak into the next one (webdriver
+    # port, D-Bus, AT-SPI, PipeWire): kill every process but init and this
+    # shell.
+    for pid in $(ps -eo pid=); do
+        [ "$pid" -eq 1 ] || [ "$pid" -eq $$ ] || kill -KILL "$pid" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+    run_session 2 "$@"
+fi
+if [ "$rc" -ne 0 ]; then
+    grep '^\[e2e\] kwin_wayland ' /artifacts/session.log || true
+    [ ! -s "$KREMA_E2E_STATE/kwin-signal" ] || kwin_core_backtraces ""
+fi
 echo "[e2e] tests: $(elapsed "$t0")s (exit $rc)"
 exit "$rc"

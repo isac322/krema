@@ -3,14 +3,14 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
 # Build an installable Krema package for a Tier-3 distro E2E target inside a
-# clean container of that target's base image, using the repo's own packaging
+# container of that target's builder image, using the repo's own packaging
 # files. tests/distro/run-distro-e2e.sh calls it; it also works standalone.
 #
 #   tests/distro/build-package.sh <target-id> <outdir>
 #   tests/distro/build-package.sh all <outdir>
 #
-# <target-id> is a row in tests/docker/targets.tsv, or `arch` which builds
-# packaging/arch/PKGBUILD in an archlinux:latest container (amd64 image only).
+# <target-id> is a row in tests/distro/targets.tsv, or `arch` which builds
+# packaging/arch/PKGBUILD on archlinux:latest (amd64 image only).
 #
 # The package is built from the CURRENT source tree (the worktree minus VCS
 # and build-output directories), packed as krema-<version>.tar.gz with the
@@ -18,23 +18,36 @@
 # via packaging/obs/_service (tar_scm). The build inside the container needs
 # no network other than the distro package repositories.
 #
+# Builder image: `tests/distro/build-ci-image.sh --pull builder <target>`
+# (the local tag, else ghcr.io, else a local build; see
+# tests/distro/image-ref.sh). It already holds the packaging toolchain and
+# the build deps; in the container, pkg/in-container.sh fully upgrades
+# rolling targets, installs only the build deps a newer packaging/ adds
+# (offline check first), and builds with the compilers behind ccache.
+#
 # Output: <outdir>/<target-id>/ contains the produced .rpm / .deb /
-# .pkg.tar.zst binary package.
+# .pkg.tar.zst binary package. Timing lines: `[distro] <phase>: <s>s`.
 #
 # Environment:
 #   DOCKER_HOST            docker daemon to use (default: ambient socket)
 #   KREMA_DOCKER_PLATFORM  force container platform, e.g. linux/amd64
 #   KREMA_ARCH_IMAGE       arch base image (default: docker.io/archlinux:latest)
+#   KREMA_CCACHE_DIR       host ccache directory, created if missing (default
+#                          tests/distro/.cache/ccache/<target-id>); given back
+#                          to the invoking user after the build
+#   CCACHE_MAXSIZE         ccache size limit (default 500M)
+#   KREMA_CI_REGISTRY      see tests/distro/image-ref.sh
 
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/../.." && pwd)"
-targets_file="$repo_root/tests/docker/targets.tsv"
 packaging_dir="$repo_root/packaging"
+# shellcheck source=tests/distro/image-ref.sh
+. "$script_dir/image-ref.sh"
 
 usage() {
-    sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \?//' >&2
+    awk 'NR > 4 && /^#/ { sub(/^# ?/, ""); print; next } NR > 4 { exit }' "${BASH_SOURCE[0]}" >&2
     exit 64
 }
 
@@ -58,34 +71,6 @@ mkdir -p "$outdir_arg"
 outdir="$(cd -- "$outdir_arg" && pwd)"
 
 host_arch="$(uname -m)"
-
-# ---------------------------------------------------------------------------
-# Target table
-# ---------------------------------------------------------------------------
-
-# known_target <id> -> prints "family<TAB>image-ref"
-known_target() {
-    local id="$1"
-    if [[ "$id" == "arch" ]]; then
-        printf 'arch\t%s\n' "${KREMA_ARCH_IMAGE:-docker.io/archlinux:latest}"
-        return 0
-    fi
-    awk -F'\t' -v id="$id" '
-        /^[[:space:]]*#/ || NF < 4 { next }
-        $1 == id {
-            image = "docker.io/" $3
-            if ($4 != "" && $4 != "pending") image = image "@" $4
-            printf "%s\t%s\n", $2, image
-            found = 1
-        }
-        END { exit(found ? 0 : 1) }
-    ' "$targets_file"
-}
-
-all_targets() {
-    awk -F'\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' "$targets_file"
-    echo arch
-}
 
 # ---------------------------------------------------------------------------
 # Source tarball
@@ -147,21 +132,16 @@ make_source_tarball() {
 # Container run
 # ---------------------------------------------------------------------------
 
-# amd64_only_target <id>: targets whose distro repositories publish x86_64
-# packages only, so the build container must run linux/amd64 (Slowroll's OBS
-# matrix is amd64-only; the official archlinux image is amd64-only).
-amd64_only_target() {
-    [[ "$1" == "arch" || "$1" == "opensuse-slowroll" ]]
-}
-
-# run_build <target-id> <family> <image-ref> -> docker run of pkg/in-container.sh
+# run_build <target-id> <family> -> docker run of pkg/in-container.sh in the
+# target's builder image. Runs under `if`, so errexit is off: every step
+# checks its status.
 run_build() {
-    local id="$1" family="$2" image="$3"
+    local id="$1" family="$2"
     local platform="${KREMA_DOCKER_PLATFORM:-}"
 
-    if [[ -z "$platform" ]] && amd64_only_target "$id"; then
-        platform="linux/amd64"
-        if [[ "$host_arch" != "x86_64" ]] \
+    if [[ -z "$platform" ]]; then
+        platform="$(distro_platform "$id")"
+        if [[ "$platform" == linux/amd64 && "$host_arch" != "x86_64" ]] \
             && [[ ! -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ]] \
             && ! docker info --format '{{json .SecurityOptions}}' 2>/dev/null \
                 | grep -q rosetta; then
@@ -173,8 +153,14 @@ run_build() {
         fi
     fi
 
+    local image t0=$SECONDS
+    image="$(KREMA_DOCKER_PLATFORM="$platform" \
+        "$script_dir/build-ci-image.sh" --pull builder "$id")" || return $?
+    echo "[distro] builder-image: $((SECONDS - t0))s"
+
     local target_out="$outdir/$id"
-    mkdir -p "$target_out"
+    local ccache_dir="${KREMA_CCACHE_DIR:-$script_dir/.cache/ccache/$id}"
+    mkdir -p "$target_out" "$ccache_dir" || return $?
 
     local args=(
         run --rm --init
@@ -182,10 +168,14 @@ run_build() {
         -v "$packaging_dir:/pkg/packaging:ro"
         -v "$script_dir/pkg:/pkg/bin:ro"
         -v "$target_out:/out"
+        -v "$(cd -- "$ccache_dir" && pwd):/ccache"
         -e "TARGET_ID=$id"
         -e "FAMILY=$family"
         -e "KREMA_VERSION=$version"
+        -e "HOST_UID=$(id -u)"
+        -e "HOST_GID=$(id -g)"
     )
+    [[ -z "${CCACHE_MAXSIZE:-}" ]] || args+=(-e "CCACHE_MAXSIZE=$CCACHE_MAXSIZE")
     [[ -n "$platform" ]] && args+=(--platform "$platform")
     args+=("$image" "/pkg/bin/in-container.sh")
 
@@ -198,7 +188,7 @@ run_build() {
 
 targets=()
 if [[ "$target_filter" == "all" ]]; then
-    mapfile -t targets < <(all_targets)
+    mapfile -t targets < <(distro_targets)
 else
     targets=("$target_filter")
 fi
@@ -208,14 +198,13 @@ overall_start=$SECONDS
 
 for target in "${targets[@]}"; do
     echo "=== $target ==="
-    if ! target_row="$(known_target "$target")"; then
-        echo "error: unknown target '$target' (not in tests/docker/targets.tsv," \
+    if ! distro_target "$target"; then
+        echo "error: unknown target '$target' (not in tests/distro/targets.tsv," \
             "and not 'arch')" >&2
         results[$target]="unknown-target"
         continue
     fi
-    family="${target_row%%$'\t'*}"
-    image="${target_row#*$'\t'}"
+    family="$DISTRO_FAMILY"
 
     if ! version="$(package_version "$family")" || [[ -z "$version" ]]; then
         echo "error: cannot determine package version for family '$family'" >&2
@@ -228,10 +217,10 @@ for target in "${targets[@]}"; do
     trap 'rm -rf "$stage_dir"' EXIT
     chmod 755 "$stage_dir"
     make_source_tarball "$version" "$stage_dir"
-    echo "source: krema-$version.tar.gz  image: $image"
+    echo "source: krema-$version.tar.gz  base: $DISTRO_BASE_IMAGE"
 
     start=$SECONDS
-    if run_build "$target" "$family" "$image"; then
+    if run_build "$target" "$family"; then
         results[$target]="ok ($((SECONDS - start))s)"
     else
         results[$target]="FAILED (rc=$?)"
@@ -248,7 +237,7 @@ for target in "${targets[@]}"; do
 done
 echo "total: $((SECONDS - overall_start))s"
 
-find "$outdir" -type f \( -name '*.rpm' -o -name '*.deb' -o -name '*.ddeb' \
+find "$outdir" -type f \( -name '*.rpm' -o -name '*.deb' \
     -o -name '*.pkg.tar.zst' \) -printf '%10s  %p\n' 2>/dev/null | sort -k2
 
 exit "$status"

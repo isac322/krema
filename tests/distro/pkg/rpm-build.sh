@@ -21,7 +21,7 @@ if [[ "$FAMILY" == "fedora" ]]; then
     dnf -y builddep "$topdir/SPECS/krema.spec"
 elif [[ "$FAMILY" == "suse" ]]; then
     if [[ "$TARGET_ID" == "opensuse-slowroll" ]]; then
-        # Same repo swap as tests/docker/Dockerfile.runtime: the base image is
+        # Same repo swap as tests/distro/image/suse.sh: the base image is
         # opensuse/tumbleweed but Slowroll packages must resolve from the
         # official Slowroll repositories.
         zypper --non-interactive modifyrepo --all --disable || true

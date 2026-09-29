@@ -92,11 +92,11 @@ Environment:
 | `KREMA_DISTRO_SKIP_IMAGE_BUILD=1` | reuse the existing `krema-e2e-distro:<target>` image |
 | `KREMA_E2E_ARTIFACTS` | artifacts directory (default `tests/appium/artifacts-distro-<target>`) |
 | `KREMA_E2E_PLATFORM` | container platform; defaults to `linux/amd64` for `arch` and `opensuse-slowroll` |
-| other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, KWin backend, docker args) |
+| other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, docker args) |
 
 ## Targets
 
-Every row of `tests/docker/targets.tsv` (base images pinned by digest there),
+Every row of `tests/distro/targets.tsv` (base images pinned by digest there),
 plus `arch`:
 
 | Target | Family | Base image | Platforms |
@@ -123,7 +123,7 @@ distro release watcher (`.github/workflows/distro-release-watch.yml`,
 `scripts/check_distro_releases.py`) only compares the OBS/COPR/PPA channels
 with upstream releases and does not read `targets.tsv`: when one of its
 `distro-release` issues adds an OBS repository, add the matching row here too
-(lock the base image with `tests/docker/update-digests.sh`) so Tier 3 runs on it.
+(lock the base image with `tests/distro/update-digests.sh`) so Tier 3 runs on it.
 
 The pass criterion per target is Tier 2's result for the same suite. A
 difference that only one distro shows is root-caused: harness or image
@@ -136,28 +136,36 @@ reported and only then pinned with a `xfail(strict=True)` conditioned on
 `.github/workflows/distro-e2e.yml` runs every target as its own job on a
 GitHub-hosted `ubuntu-latest` (amd64) runner, so `arch` and
 `opensuse-slowroll` run natively there. It triggers on pull requests touching
-`src/`, `packaging/`, `tests/`, `CMakeLists.txt` or the workflow, on pushes to
-`master`, on published releases and on demand (`workflow_dispatch`, optional
-`targets` input: comma/space separated ids, default `all`). A newer push to a
-pull request cancels its running jobs; `fail-fast` is off, so one distro's
-failure does not hide another's.
+`src/`, `packaging/`, `tests/`, `CMakeLists.txt` or the workflow, weekly on
+a schedule (to catch drift in the rolling distros), and on demand
+(`workflow_dispatch`, optional `targets` input: comma/space separated ids,
+default `all`). The release procedure (`.claude/commands/release.md`)
+dispatches it on `master` and waits for it to pass before tagging. A newer
+push to a pull request cancels its running jobs; `fail-fast` is off, so one
+distro's failure does not hide another's.
 
 Each job builds and loads the platform-bus vgem with
 `tests/appium/setup-vgem.sh` (see Running) and runs
-`tests/distro/run-distro-e2e.sh <target> -rs` with
-`KREMA_E2E_KWIN_BACKEND=virtual`: `kwin_wayland --virtual` with one output,
-compositing with OpenGL through llvmpipe on the vgem device. It does not
-use the vkms + DRM backend of the Tier 2 job in `e2e.yml`: without logind or
-seatd in the container KWin opens devices through its noop session, which
-can only do so since KWin 6.5, and `debian-13`, `ubuntu-25.04`,
-`ubuntu-25.10` and `opensuse-leap-16.0` ship older KWin. The
-`@pytest.mark.outputs(2)` tests skip here; `e2e.yml` covers them. The job
-adds a JUnit summary to the step summary (a skip caused by QPainter
-compositing or a missing render node fails it) and uploads
+`tests/distro/run-distro-e2e.sh <target> -rs`: `kwin_wayland --virtual`
+with one output, compositing with OpenGL through llvmpipe on the vgem
+device. The job adds a JUnit summary to the step summary (a skip caused by
+QPainter compositing or a missing render node fails it) and uploads
 `tests/appium/artifacts-distro-<target>/` as `distro-e2e-<target>`.
 
+The `fedora-43` job then runs the `@pytest.mark.outputs(2)` tests again in
+a 2-output session, reusing the image it just built:
+
+```sh
+KREMA_E2E_OUTPUT_COUNT=2 KREMA_DISTRO_SKIP_IMAGE_BUILD=1 \
+KREMA_E2E_ARTIFACTS=tests/appium/artifacts-distro-fedora-43-2out \
+    tests/distro/run-distro-e2e.sh fedora-43 -m outputs -rs
+```
+
+with its own JUnit summary and the artifact `distro-e2e-fedora-43-2out`.
+
 Expected result: every target matches Tier 2 — `77 passed, 4 skipped,
-0 xfailed` (the 4 skips are the 2-output tests). The suite pins no krema bug
+0 xfailed` (the 4 skips are the 2-output tests, which the `fedora-43`
+2-output run covers). The suite pins no krema bug
 with an xfail, conditional or not. Differences in the distros' libraries are
 handled in the harness rather than in expectations: Qt's AT-SPI roles and
 extents (`PAGE_ROLE`, `SETTINGS_STACK_XPATH`, `painted_rect()` in

@@ -1,17 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
-# Tier-3 distro E2E (tests/distro/README.md): per target, build the krema
-# package from this tree with the repo's packaging, build an image with that
-# distro's KWin/Qt/KF plus the package installed through its package manager,
-# and run the Tier-2 AT-SPI suite against /usr/bin/krema.
+# Distro E2E (tests/distro/README.md): per target, build the krema package
+# from this tree with the repo's packaging, build an image with that distro's
+# KWin/Qt/KF plus the package installed through its package manager, and run
+# the AT-SPI E2E suite (tests/appium) against /usr/bin/krema. This is the only
+# CI run of that suite; e2e.yml builds and runs the CTest suites.
 #
-# Graphics: KWin's --virtual backend on an out-of-tree vgem (render node),
-# compositing with OpenGL through llvmpipe, as in e2e.yml's 2-output run.
-# Not e2e.yml's vkms + DRM backend: in a container KWin has no logind/seatd
-# and uses its noop session, whose openRestricted() only opens devices since
-# KWin 6.5 (debian-13, ubuntu-25.04/25.10 and leap-16.0 ship older KWin).
-# One output: the @pytest.mark.outputs(2) tests are left to e2e.yml and skip.
+# Graphics: KWin's --virtual backend on an out-of-tree vgem (render node; the
+# Azure runner kernel ships none), compositing with OpenGL through llvmpipe.
+# fedora-43 additionally reruns the @pytest.mark.outputs(2) tests with two
+# virtual outputs; every other target skips them.
+#
+# Triggers: pull requests touching the product, a weekly schedule to catch
+# rolling-distro drift (arch, opensuse-tumbleweed/slowroll, ...), and manual
+# dispatch, which the release procedure (.claude/commands/release.md) runs on
+# master before tagging.
 #
 # No image layer cache: package and image build in a few minutes per target,
 # and twelve distro images would not fit the repository's 10 GB Actions
@@ -27,16 +31,14 @@ on:
       - "tests/**"
       - "CMakeLists.txt"
       - ".github/workflows/distro-e2e.yml"
-  push:
-    branches: [master]
+  schedule:
+    - cron: "41 2 * * 3"
   workflow_dispatch:
     inputs:
       targets:
-        description: "Targets (comma/space separated ids from tests/docker/targets.tsv or 'arch'), or 'all'"
+        description: "Targets (comma/space separated ids from tests/distro/targets.tsv or 'arch'), or 'all'"
         required: false
         default: all
-  release:
-    types: [published]
 
 permissions: {}
 
@@ -57,7 +59,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          sparse-checkout: tests/docker/targets.tsv
+          sparse-checkout: tests/distro/targets.tsv
           sparse-checkout-cone-mode: false
 
       - name: Resolve target list
@@ -65,7 +67,7 @@ jobs:
         env:
           REQUESTED: ${{ inputs.targets || 'all' }}
         run: |
-          known="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/docker/targets.tsv; echo arch)"
+          known="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/distro/targets.tsv; echo arch)"
           if [[ -z ${REQUESTED// } || $REQUESTED == all ]]; then
             selected="$known"
           else
@@ -103,8 +105,7 @@ jobs:
           sudo tests/appium/setup-vgem.sh
 
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
-        env:
-          KREMA_E2E_KWIN_BACKEND: virtual
+        id: main
         run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
 
       - name: JUnit summary
@@ -119,4 +120,31 @@ jobs:
         with:
           name: distro-e2e-${{ matrix.target }}
           path: tests/appium/artifacts-distro-${{ matrix.target }}
+          if-no-files-found: ignore
+
+      - name: Run tests/distro/run-distro-e2e.sh (fedora-43, 2 outputs)
+        # --output-count 2 gives two side-by-side virtual outputs; -m outputs
+        # collects only the @pytest.mark.outputs(2) tests, so the
+        # single-output suite is not rerun and nothing shows as skipped.
+        # Reuses the package and image the main run built, and runs even when
+        # that run failed on a test.
+        if: always() && matrix.target == 'fedora-43' && (steps.main.outcome == 'success' || steps.main.outcome == 'failure')
+        env:
+          KREMA_E2E_OUTPUT_COUNT: "2"
+          KREMA_DISTRO_SKIP_IMAGE_BUILD: "1"
+          KREMA_E2E_ARTIFACTS: tests/appium/artifacts-distro-fedora-43-2out
+        run: tests/distro/run-distro-e2e.sh fedora-43 -m outputs -rs
+
+      - name: JUnit summary (fedora-43, 2 outputs)
+        if: always() && matrix.target == 'fedora-43'
+        run: |
+          python3 .github/scripts/junit-summary.py "Distro E2E: fedora-43 (2 outputs)" \
+            tests/appium/artifacts-distro-fedora-43-2out/junit.xml \
+            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.target == 'fedora-43'
+        with:
+          name: distro-e2e-fedora-43-2out
+          path: tests/appium/artifacts-distro-fedora-43-2out
           if-no-files-found: ignore

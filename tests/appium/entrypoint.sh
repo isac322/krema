@@ -23,9 +23,7 @@ set -eu
 # half streams to the console.
 if [ "${1:-}" = "--inner" ]; then
     shift
-    # Clients (krema, fixtures) render with llvmpipe whatever kwin's backend
-    # is. With the DRM backend kwin runs without this variable (run.rb would
-    # add --virtual), and Mesa on vkms would otherwise try zink/dri2 first.
+    # Clients (krema, fixtures) render with llvmpipe, like kwin --virtual.
     export LIBGL_ALWAYS_SOFTWARE=1
     cd "$KREMA_E2E_TESTS_DIR"
     python3 -m pytest -p no:cacheprovider --junitxml=/artifacts/junit.xml "$@" >>/artifacts/pytest.log 2>&1
@@ -102,73 +100,17 @@ wireplumber >/artifacts/wireplumber.log 2>&1 &
 # command. Everything below inherits WAYLAND_DISPLAY and KWIN_PID from it.
 export APPIUM_ARTIFACT_OUTPUT_PATH=/artifacts
 export USE_CUSTOM_BUS=1
-# KWin backend. `--virtual` (what run.rb passes when LIBGL_ALWAYS_SOFTWARE
-# is set) composites with OpenGL only on a device with a render node (vgem);
-# otherwise it falls back to QPainter (no screenshots, no screencast). On a
-# KMS-only card (vkms, e.g. GitHub's Azure kernels, which lack vgem) kwin's
-# DRM backend drives the card itself and composites with OpenGL through
-# Mesa's kms_swrast/llvmpipe. Override with KREMA_E2E_KWIN_BACKEND.
-kwin_backend=${KREMA_E2E_KWIN_BACKEND:-auto}
-if [ "$kwin_backend" = auto ]; then
-    kwin_backend=virtual
-    if ! ls /dev/dri/renderD* >/dev/null 2>&1 && ls /dev/dri/card* >/dev/null 2>&1; then
-        kwin_backend=drm
-    fi
-fi
-# Normalized before the backend case: drm uses it to pick a card, virtual to
-# set --output-count.
+# KWin always runs `--virtual` (what run.rb passes when LIBGL_ALWAYS_SOFTWARE
+# is set). It composites with OpenGL only on a device with a render node
+# (vgem, tests/appium/setup-vgem.sh); otherwise it falls back to QPainter (no
+# screenshots, no screencast).
+export LIBGL_ALWAYS_SOFTWARE=1
+# Opt-in multi-output session (tools/run-output-count.patch): outputs of
+# SCREEN_WIDTH x SCREEN_HEIGHT each, placed side by side left to right.
 export KREMA_E2E_OUTPUT_COUNT="${KREMA_E2E_OUTPUT_COUNT:-1}"
-case "$kwin_backend" in
-virtual)
-    export LIBGL_ALWAYS_SOFTWARE=1
-    # Opt-in multi-output session (tools/run-output-count.patch): --output-count
-    # is a virtual-backend option, forwarded only here. Outputs of
-    # SCREEN_WIDTH x SCREEN_HEIGHT each, placed side by side left to right.
-    if [ "$KREMA_E2E_OUTPUT_COUNT" -gt 1 ]; then
-        export COMPOSITOR_OUTPUT_COUNT="$KREMA_E2E_OUTPUT_COUNT"
-    fi
-    ;;
-drm)
-    # The output size is each connector's preferred mode (vkms: 1024x768);
-    # --width/--height/--output-count do not apply. More outputs come from
-    # more connectors on the card (host: tests/appium/setup-vkms.sh, the vkms
-    # configfs ABI on kernel >= 6.19).
-    if [ "${KREMA_E2E_SCREEN_WIDTH:-1024}x${KREMA_E2E_SCREEN_HEIGHT:-768}" != 1024x768 ]; then
-        echo "KREMA_E2E_KWIN_BACKEND=drm cannot change the 1024x768 output size" >&2
-        exit 1
-    fi
-    # Pick the card with exactly KREMA_E2E_OUTPUT_COUNT connected connectors.
-    # Prefer vkms: hosts may have other KMS cards (GitHub runners: hyperv_drm).
-    if [ -z "${KWIN_DRM_DEVICES:-}" ]; then
-        vkms_card=
-        other_card=
-        for card in /dev/dri/card*; do
-            n=0
-            for conn in "/sys/class/drm/${card##*/}"-*/status; do
-                [ -f "$conn" ] || continue
-                [ "$(cat "$conn")" = connected ] && n=$((n + 1))
-            done
-            [ "$n" -eq "$KREMA_E2E_OUTPUT_COUNT" ] || continue
-            case "$(readlink -f "/sys/class/drm/${card##*/}/device" 2>/dev/null)" in
-            */vkms|*/faux/*) [ -n "$vkms_card" ] || vkms_card=$card ;;
-            *) [ -n "$other_card" ] || other_card=$card ;;
-            esac
-        done
-        KWIN_DRM_DEVICES=${vkms_card:-$other_card}
-    fi
-    if [ -z "${KWIN_DRM_DEVICES:-}" ]; then
-        echo "no /dev/dri card with $KREMA_E2E_OUTPUT_COUNT connected output(s)" >&2
-        echo "with vkms the host can add one: sudo tests/appium/setup-vkms.sh $KREMA_E2E_OUTPUT_COUNT" >&2
-        exit 1
-    fi
-    export KWIN_DRM_DEVICES
-    ;;
-*)
-    echo "KREMA_E2E_KWIN_BACKEND must be auto, virtual or drm" >&2
-    exit 1
-    ;;
-esac
-echo "[e2e] kwin backend: $kwin_backend${KWIN_DRM_DEVICES:+ ($KWIN_DRM_DEVICES)}"
+if [ "$KREMA_E2E_OUTPUT_COUNT" -gt 1 ]; then
+    export COMPOSITOR_OUTPUT_COUNT="$KREMA_E2E_OUTPUT_COUNT"
+fi
 export COMPOSITOR_WIDTH="${KREMA_E2E_SCREEN_WIDTH:-1024}"
 export COMPOSITOR_HEIGHT="${KREMA_E2E_SCREEN_HEIGHT:-768}"
 export KREMA_E2E_SCREEN_WIDTH="$COMPOSITOR_WIDTH"

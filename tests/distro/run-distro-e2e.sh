@@ -9,7 +9,7 @@
 #   tests/distro/run-distro-e2e.sh <target> test_smoke.py -x   # pytest args
 #   tests/distro/run-distro-e2e.sh <target> --shell            # debug shell
 #
-# <target> is a row of tests/docker/targets.tsv or `arch`.
+# <target> is a row of tests/distro/targets.tsv or `arch`.
 #
 # 1. Builds the package with tests/distro/build-package.sh into
 #    tests/distro/.cache/packages/<target>/ unless one is already there.
@@ -56,8 +56,8 @@ else
             found = 1
         }
         END { exit(found ? 0 : 1) }
-    ' "$repo/tests/docker/targets.tsv")" || {
-        echo "error: unknown target '$target' (not in tests/docker/targets.tsv, and not 'arch')" >&2
+    ' "$here/targets.tsv")" || {
+        echo "error: unknown target '$target' (not in tests/distro/targets.tsv, and not 'arch')" >&2
         exit 64
     }
     family="${row%%$'\t'*}"

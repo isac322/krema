@@ -10,10 +10,9 @@
 #   target_id<TAB>family<TAB>base_image<TAB>base_digest<TAB>obs_repository<TAB>package_glob
 #
 # The base_digest column is the multi-arch manifest list digest even when
-# the runtime image is later built single-platform (for example Slowroll
-# is amd64-only). The single-platform constraint is enforced by the
-# publish workflow, not by the lockfile, so multiple target rows can share
-# the same base_image and therefore the same base_digest.
+# the target is later run single-platform (for example Slowroll is
+# amd64-only, see tests/distro/run-distro-e2e.sh), so multiple target rows
+# can share the same base_image and therefore the same base_digest.
 
 set -euo pipefail
 
@@ -23,7 +22,7 @@ docker_host="${DOCKER_HOST:-tcp://localhost:2375}"
 
 usage() {
     cat <<'EOF'
-Usage: tests/docker/update-digests.sh [target-id|all]
+Usage: tests/distro/update-digests.sh [target-id|all]
 
 Resolves the current sha256 manifest digest of each target's base_image
 via `docker buildx imagetools inspect` and rewrites targets.tsv in place.

@@ -52,7 +52,7 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - 외부 적용 완료: GitHub social preview, COPR 설명/설치 안내/AppStream, AUR keywords
 
 - [x] E2E 자동화 하니스 (tests/appium, tests/qml)
-  - `tests/appium/run-e2e.sh`: unprivileged Docker 컨테이너 안에서 `kwin_wayland --virtual` + AT-SPI + PipeWire 세션을 띄우고 real input(fake-input)으로 실제 독을 구동. pytest 스위트 `test_01..07` + `test_smoke.py`가 `tests/e2e/scenarios/`의 48개 TC 전부 커버 (오라클: AT-SPI, KWin window list, kremarc, ScreenShot2 스크린샷, AT-SPI 이벤트). 멀티모니터는 `KREMA_E2E_OUTPUT_COUNT=2`. 캡처가 필요한 테스트는 DRM render node 필요 (`modprobe vgem`; macOS는 Lima VM 사용, OrbStack/Docker Desktop VM에는 vgem/vkms 없음)
+  - `tests/appium/run-e2e.sh`: unprivileged Docker 컨테이너 안에서 `kwin_wayland --virtual` + AT-SPI + PipeWire 세션을 띄우고 real input(fake-input)으로 실제 독을 구동. pytest 스위트 `test_01..07` + `test_smoke.py`가 `tests/e2e/scenarios/`의 48개 TC 전부 커버 (오라클: AT-SPI, KWin window list, kremarc, ScreenShot2 스크린샷, AT-SPI 이벤트). 멀티모니터는 `KREMA_E2E_OUTPUT_COUNT=2`. 캡처가 필요한 테스트는 DRM render node 필요 (`modprobe vgem` 또는 `tests/appium/setup-vgem.sh`; macOS는 Lima VM 사용, OrbStack/Docker Desktop VM에는 vgem 없음). 로컬 개발 루프 전용 — CI는 `e2e.yml` `Build & tests`(전체 ctest, `e2e` 라벨 제외) + `distro-e2e.yml`
   - `tests/qml/` (Tier 1, ctest label `qml`): 실제 QML 파일을 offscreen + mock C++ 백엔드로 검증
   - 문서: `tests/appium/README.md` (Local setup, env vars, Coverage matrix, known bugs 없음 + 새 버그 strict xfail 고정 규칙), `tests/e2e/README.md` (자동화 반영 + kwin-mcp 한계 테이블 갱신), `docs/kde/lessons-learned.md` §13-14
   - Harness notes: 세션당 하나의 장수명 inputsynth가 KWin fake-input pointer device를 세션 전체에 등록해 둠 (`krema_e2e/input.py`의 `hold_pointer_capability`, `pytest_plugin.py`의 세션 fixture `_pointer_capability`). 호출마다 device를 만들면 KWin이 seat pointer capability를 잃고 Qt가 leave 없이 wl_pointer를 release → 느린 CI에서 stuck hover flake가 발생. `KREMA_E2E_DOCKER_ARGS`로 docker run 옵션 전달 가능 (예: `--cpus=2`로 CI 재현).
@@ -61,7 +61,7 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
   - `tests/distro/build-package.sh <target>`: repo의 packaging(spec/debian/PKGBUILD)으로 타겟 패키지 빌드 (캐시 `tests/distro/.cache/`)
   - `tests/distro/run-distro-e2e.sh <target>`: 타겟 배포판 이미지에 패키지를 패키지 매니저로 설치 후 Tier 2 AT-SPI 스위트(tests/appium)를 `/usr/bin/krema`에 대해 실행. KWin permission checks ON(`KWIN_WAYLAND_NO_PERMISSION_CHECKS=0`) — 설치된 `com.bhyoo.krema.desktop`의 `X-KDE-Wayland-Interfaces` 선언 검증
   - 로컬: Linux Docker 호스트 + platform-bus vgem (`sudo tests/appium/setup-vgem.sh`); macOS는 OrbStack에 DRM이 없어 캡처 테스트 불가 → vgem을 올린 Lima VM 사용 (검증도 그렇게 함)
-  - CI: `.github/workflows/distro-e2e.yml` (PR/push/release/workflow_dispatch, 타겟별 matrix job) — 이전 기준 https://github.com/isac322/krema/actions/runs/36421577648 attempts 1,2 모두 12/12 통과. xfail 버그 수정(`fix/e2e-xfail-bugs`) 이후 기대 결과: 12개 타겟 전부 Tier 2와 동일한 `77 passed, 4 skipped, 0 xfailed` (라이브러리 차이는 하니스에서 Qt AT-SPI 역할/extent로 흡수) (상세: `tests/distro/README.md`)
+  - CI: `.github/workflows/distro-e2e.yml` (PR paths/주간 schedule/workflow_dispatch, 타겟별 matrix job; `fedora-43`은 2-output 테스트도 실행; 릴리스 전 master에서 dispatch 후 통과 확인) — 이전 기준 https://github.com/isac322/krema/actions/runs/36421577648 attempts 1,2 모두 12/12 통과. xfail 버그 수정(`fix/e2e-xfail-bugs`) 이후 기대 결과: 12개 타겟 전부 Tier 2와 동일한 `77 passed, 4 skipped, 0 xfailed` (라이브러리 차이는 하니스에서 Qt AT-SPI 역할/extent로 흡수) (상세: `tests/distro/README.md`)
 
 - [x] E2E 스위트가 strict xfail로 고정했던 krema 버그 전부 수정 (`fix/e2e-xfail-bugs`; CI E2E 1-output `77 passed, 4 skipped`, 2-output `4 passed`, xfail 0):
   - KBD-007 프리뷰 input region = 보이는 팝업 (AlwaysVisible exclusive zone 대비 팝업 마진 포함), KBD-008 포인터 이동 시 키보드 모드 종료(KWin 스크립트 포인터 감시), KBD-009 키보드 내비/드래그 후 이전 윈도우로 포커스 복귀
@@ -79,15 +79,14 @@ M9 진행 예정 (Widget System + System Tray) — v0.9.0 릴리즈 완료
 - PipeWire 글로벌 스트림 캡 미구현
 - 현재 OBS 원격 DEB artifacts는 `libkirigami2-6`, `kpipewire` Depends 때문에 Debian 13/Ubuntu 25.04/25.10/26.04에 설치 불가; 수정된 `packaging/obs/debian.control`로 재빌드 필요. 임시 repack 검증에서는 Debian 13/Ubuntu 25.04/25.10/26.04 4개 전부 GUI smoke 통과
 - 현재 OBS 원격 openSUSE RPM artifacts는 `kf6-kirigami-addons`/`kpipewire`/`plasma-workspace`/`layer-shell-qt` Requires가 Tumbleweed/Leap 16.0/Slowroll 패키지명과 불일치; 수정된 `packaging/obs/krema.spec`로 재빌드 필요. 기존 artifact + `krema-suse-compat-provides` 조합으로는 Tumbleweed/Leap 16.0 GUI smoke 통과
-- Slowroll OBS artifact는 x86_64만 제공되며 현재 arm64 Docker 호스트는 binfmt에 `qemu-x86_64` 핸들러가 없어 amd64 컨테이너 실행이 `exec format error`로 막힘. Arch에서는 `yay -S qemu-user-static qemu-user-static-binfmt` 후 `systemctl restart systemd-binfmt`(또는 재로그인) 하면 `tests/docker/run-smoke.sh opensuse-slowroll <package-dir>`로 검증 가능. x86_64 컴팩트 RPM은 `/tmp/opencode/krema-fixed-artifacts/opensuse-slowroll/`에 준비됨 (`krema-0.7.0-18.1.x86_64.rpm`, `krema-suse-compat-provides-0.7.0-1.x86_64.rpm`)
+- Slowroll OBS artifact는 x86_64만 제공되며 현재 arm64 Docker 호스트는 binfmt에 `qemu-x86_64` 핸들러가 없어 amd64 컨테이너 실행이 `exec format error`로 막힘. Arch에서는 `yay -S qemu-user-static qemu-user-static-binfmt` 후 `systemctl restart systemd-binfmt`(또는 재로그인) 하면 `tests/distro/run-distro-e2e.sh opensuse-slowroll`로 로컬 검증 가능 (CI `distro-e2e.yml`은 amd64 러너에서 네이티브 실행). x86_64 컴팩트 RPM은 `/tmp/opencode/krema-fixed-artifacts/opensuse-slowroll/`에 준비됨 (`krema-0.7.0-18.1.x86_64.rpm`, `krema-suse-compat-provides-0.7.0-1.x86_64.rpm`)
 - 배포판 패키지 검증 중 발견: `krema --version`이 버전을 출력하지 않음 (명령행 파서 없음), 번역 도메인 미설정 (`KLocalizedString::setApplicationDomain` 없음 → `Domain is not set` 경고, i18n 미적용)
 
 ## 다음 작업
 
 - M9: Widget System + System Tray
 - M8b 잔여: PipeWire 글로벌 스트림 캡, 앱 목록 필터 정책 토글(all apps vs per-screen)
-- 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 `tests/docker/run-smoke.sh <target> <package-dir>`로 Debian/Ubuntu/openSUSE 전체 GUI smoke 재실행 (현재는 임시 repack/compat-provides 경로로만 통과)
-- Arch 호스트에 `qemu-user-static` + `qemu-user-static-binfmt` 설치 후 `tests/docker/run-smoke.sh opensuse-slowroll /tmp/opencode/krema-fixed-artifacts/opensuse-slowroll`로 Slowroll smoke 마지막 1개 검증
+- 수정된 `packaging/obs/debian.control`/`packaging/obs/krema.spec`로 OBS artifact 재빌드 후 Debian/Ubuntu/openSUSE 설치 재확인 (repo packaging 기준 설치 + GUI E2E는 `tests/distro/run-distro-e2e.sh <target>` / `distro-e2e.yml`이 담당; OBS 원격 artifact는 아직 임시 repack/compat-provides 경로로만 통과)
 - `distro-e2e.yml`은 기본 브랜치에 머지된 뒤에야 workflow_dispatch 가능
 - PR #32 머지 후 첫 Pages 배포 → GitHub Pages 인증서 발급 확인 → HTTPS 강제 (DNS·repo 설정은 homelab #355로 적용 완료)
 - 로그인 필요 채널 등록: OBS 프로젝트 title/description(`packaging/obs/project.meta.xml`), Launchpad PPA 설명/프로젝트 로고, KDE Store, AlternativeTo(Latte Dock 대안), Flathub 제출

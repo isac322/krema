@@ -9,7 +9,7 @@
 #   tests/distro/build-package.sh <target-id> <outdir>
 #   tests/distro/build-package.sh all <outdir>
 #
-# <target-id> is a row in tests/docker/targets.tsv, or `arch` which builds
+# <target-id> is a row in tests/distro/targets.tsv, or `arch` which builds
 # packaging/arch/PKGBUILD in an archlinux:latest container (amd64 image only).
 #
 # The package is built from the CURRENT source tree (the worktree minus VCS
@@ -30,7 +30,7 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/../.." && pwd)"
-targets_file="$repo_root/tests/docker/targets.tsv"
+targets_file="$script_dir/targets.tsv"
 packaging_dir="$repo_root/packaging"
 
 usage() {
@@ -209,7 +209,7 @@ overall_start=$SECONDS
 for target in "${targets[@]}"; do
     echo "=== $target ==="
     if ! target_row="$(known_target "$target")"; then
-        echo "error: unknown target '$target' (not in tests/docker/targets.tsv," \
+        echo "error: unknown target '$target' (not in tests/distro/targets.tsv," \
             "and not 'arch')" >&2
         results[$target]="unknown-target"
         continue

@@ -164,8 +164,24 @@ git commit -m "chore: release vx.y.z
 
 Co-Authored-By: Claude <model-name> <noreply@anthropic.com>"
 
+git push
+```
+
+Before tagging, run the distro E2E matrix on the pushed release commit. It no longer runs on every master push or on release, so this is the gate that proves the packaging still builds and runs on every supported distro:
+
+```bash
+gh workflow run distro-e2e.yml --ref master
+sleep 5   # let the run register
+run_id=$(gh run list --workflow distro-e2e.yml --branch master --event workflow_dispatch \
+  --commit "$(git rev-parse HEAD)" --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch "$run_id" --exit-status
+```
+
+Abort the release if it fails: fix on master (new commit, rerun the gate), never tag a commit whose distro E2E is red.
+
+```bash
 git tag vx.y.z
-git push && git push --tags
+git push --tags
 ```
 
 ## Step 5: GitHub Release

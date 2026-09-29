@@ -1,17 +1,15 @@
-# Docker GUI runtime targets derived from the supported OBS/package matrix.
+# Distro targets of tests/distro (package build + Tier 3 E2E), derived from
+# the supported OBS/package matrix.
 #
 # Columns:
 # target_id<TAB>family<TAB>base_image<TAB>base_digest<TAB>obs_repository<TAB>package_glob
 #
 # base_digest is the sha256 multi-arch manifest list digest of base_image,
-# locked via tests/docker/update-digests.sh. The literal value `pending` is
+# locked via tests/distro/update-digests.sh. The literal value `pending` is
 # used for rows that have not been locked yet. Single-platform targets (for
 # example opensuse-slowroll, which has amd64-only packages) still record the
-# multi-arch manifest digest; the platform constraint is applied at publish
-# time, not in the lockfile.
-#
-# The image contains the distro runtime and install tools only. Krema packages
-# are built externally (for example with osc) and mounted at smoke-test time.
+# multi-arch manifest digest; the platform is chosen by
+# tests/distro/run-distro-e2e.sh, not by the lockfile.
 opensuse-tumbleweed	suse	opensuse/tumbleweed:latest	sha256:0b5175be65a62f660359d97eda0f7e27187d16307b3dd55b18aeb41b97edcb9f	openSUSE_Tumbleweed	*.rpm
 opensuse-slowroll	suse	opensuse/tumbleweed:latest	sha256:0b5175be65a62f660359d97eda0f7e27187d16307b3dd55b18aeb41b97edcb9f	openSUSE_Slowroll	*.rpm
 opensuse-leap-16.0	suse	opensuse/leap:16.0	sha256:859560554b625c225fa767b76d61253d529b95d082c2d68579ad69168d5e3da7	openSUSE_Leap_16.0	*.rpm

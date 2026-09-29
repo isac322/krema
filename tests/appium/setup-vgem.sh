@@ -3,8 +3,8 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
 # Build and load a vgem kernel module out-of-tree for hosts whose kernel
-# ships no vgem (e.g. GitHub ubuntu-latest runners: Azure kernels package
-# vkms but not vgem). A vgem device provides a DRM render node, which makes
+# ships no vgem (e.g. GitHub ubuntu-latest runners' Azure kernels). A vgem
+# device provides a DRM render node, which makes
 # `kwin_wayland --virtual` composite with OpenGL (llvmpipe) instead of
 # QPainter, and enables `--output-count` for KREMA_E2E_OUTPUT_COUNT>1.
 #

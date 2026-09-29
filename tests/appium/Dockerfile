@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
         pipewire wireplumber pipewire-utils \
         breeze-icon-theme hicolor-icon-theme plasma-breeze kf6-qqc2-desktop-style xkeyboard-config \
         google-noto-sans-fonts dejavu-sans-fonts dejavu-sans-mono-fonts \
-        kwrite kfind \
+        kwrite kfind konsole dolphin \
         extra-cmake-modules cmake ninja-build gcc-c++ pkgconf-pkg-config git \
         qt6-qtbase-devel qt6-qtbase-private-devel qt6-qtdeclarative-devel qt6-qtwayland-devel \
         qt6-qtshadertools-devel qt6-qtquickcontrols2 \

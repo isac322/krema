@@ -1,8 +1,8 @@
 # Krema AT-SPI E2E tests
 
 Automated end-to-end tests for the real dock. Each test starts a fresh krema
-inside a private `kwin_wayland` session (the virtual or the DRM backend),
-drives it with real input (KWin fake-input), and asserts on observable
+inside a private `kwin_wayland --virtual` session, drives it with real input
+(KWin fake-input), and asserts on observable
 state: the AT-SPI tree (through
 KDE's [selenium-webdriver-at-spi]), KWin's window list, `kremarc`, and
 screenshots.
@@ -32,21 +32,14 @@ session with `n` outputs, placed left to right:
 KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs
 ```
 
-How the `n` outputs are produced depends on the KWin backend:
-
-* `virtual` — `--output-count n` creates `n` outputs of
-  `KREMA_E2E_SCREEN_WIDTH` x `KREMA_E2E_SCREEN_HEIGHT` each. Needs a DRM
-  render node to composite with OpenGL: `sudo modprobe vgem` on kernels
-  that ship it, otherwise `sudo tests/appium/setup-vgem.sh` builds and
-  loads vgem out-of-tree. On kernels >= 6.15, whose vgem is a faux device,
-  use `setup-vgem.sh` (after `rmmod vgem`) for Tier 3 targets with KWin <
-  6.5 (see `tests/distro/README.md`); it builds vgem as the platform device
-  those KWin versions expect.
-* `drm` — the output count is the card's number of connected connectors,
-  each 1024x768. `entrypoint.sh` picks the card matching
-  `KREMA_E2E_OUTPUT_COUNT` (preferring vkms; `KWIN_DRM_DEVICES` overrides).
-  `sudo modprobe vkms && sudo tests/appium/setup-vkms.sh 2` creates a
-  2-connector vkms card through the vkms configfs ABI (kernel >= 6.19).
+`--output-count n` creates `n` outputs of `KREMA_E2E_SCREEN_WIDTH` x
+`KREMA_E2E_SCREEN_HEIGHT` each. Screenshots and previews need a DRM render
+node (see "Screenshots and previews"): `sudo modprobe vgem` on kernels that
+ship it, otherwise `sudo tests/appium/setup-vgem.sh` builds and loads vgem
+out-of-tree. On kernels >= 6.15, whose vgem is a faux device, use
+`setup-vgem.sh` (after `rmmod vgem`) for Tier 3 targets with KWin < 6.5
+(see `tests/distro/README.md`); it builds vgem as the platform device those
+KWin versions expect.
 
 Tests whose output count differs from the session's are skipped with the
 reason, so a file with both kinds needs one run per output count.
@@ -63,10 +56,8 @@ What it does:
    `krema-e2e-build-<arch>` (`KREMA_E2E_VOLUME` overrides it; delete the
    volume for a clean build).
 3. Starts PipeWire, then `selenium-webdriver-at-spi-run`, which creates a
-   private D-Bus session, `kwin_wayland` (the `--virtual` or DRM backend,
-   picked by `entrypoint.sh`; `KREMA_E2E_KWIN_BACKEND` overrides), the
-   AT-SPI bus, and the WebDriver server on `:4723`, and finally runs pytest
-   inside that session.
+   private D-Bus session, `kwin_wayland --virtual`, the AT-SPI bus, and the
+   WebDriver server on `:4723`, and finally runs pytest inside that session.
 
 With CMake: `-DBUILD_TESTING=ON -DKREMA_E2E_TESTS=ON` registers the whole
 suite as the CTest test `krema_e2e` (label `e2e`), which calls
@@ -74,7 +65,7 @@ suite as the CTest test `krema_e2e` (label `e2e`), which calls
 
 ### Local setup
 
-**Linux.** Docker and a virtual DRM driver are the only requirements —
+**Linux.** Docker and the vgem virtual DRM driver are the only requirements —
 `run-e2e.sh` sees `/dev/dri` and passes it into the container:
 
 ```sh
@@ -83,7 +74,7 @@ tests/appium/run-e2e.sh
 ```
 
 **macOS.** Docker always runs in a VM (OrbStack, Docker Desktop, Lima), and
-none of those kernels ships `vgem`/`vkms`, so `/dev/dri` never appears.
+none of those kernels ships `vgem`, so `/dev/dri` never appears.
 Without a DRM render node KWin 6.7 falls back to QPainter compositing:
 ScreenShot2 answers every request with an error and `zkde_screencast`
 (KPipeWire preview thumbnails) is disabled — tests needing a screenshot
@@ -121,23 +112,26 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 | `KREMA_E2E_VOLUME` | `krema-e2e-build-<arch>` | named volume holding the incremental krema build; delete it for a clean build |
 | `KREMA_E2E_ARTIFACTS` | `tests/appium/artifacts` | output directory; emptied at the start of each run |
 | `KREMA_E2E_PLATFORM` | native | `--platform` for docker build/run, e.g. `linux/amd64` |
-| `KREMA_E2E_SCREEN_WIDTH`, `KREMA_E2E_SCREEN_HEIGHT` | 1024, 768 | size of each virtual output (px); not used on `drm` (the connector's mode is 1024x768) |
-| `KREMA_E2E_OUTPUT_COUNT` | 1 | number of outputs, laid out left to right; tests marked `@pytest.mark.outputs(n)` run only when the session has exactly `n`. On `drm` it selects the card with `n` connected connectors |
-| `KREMA_E2E_KWIN_BACKEND` | `auto` | `virtual` (needs a render node, e.g. vgem) or `drm` (drives a KMS card, e.g. vkms); see "Screenshots and previews" |
-| `KWIN_DRM_DEVICES` | auto | pin the DRM card KWin drives (e.g. `/dev/dri/card1`); auto-selects a vkms card with `KREMA_E2E_OUTPUT_COUNT` connected connectors |
+| `KREMA_E2E_SCREEN_WIDTH`, `KREMA_E2E_SCREEN_HEIGHT` | 1024, 768 | size of each virtual output (px) |
+| `KREMA_E2E_OUTPUT_COUNT` | 1 | number of outputs (`--output-count`), laid out left to right; tests marked `@pytest.mark.outputs(n)` run only when the session has exactly `n` |
 | `KREMA_E2E_DOCKER_ARGS` | unset | extra `docker run` arguments, e.g. `--cpus=2` to approximate a slower CI runner |
 
 ### CI
 
-The suite runs in CI through `.github/workflows/e2e.yml`. The main session
-runs KWin's DRM backend on vkms (`KREMA_E2E_KWIN_BACKEND=drm`, so a DRM
-regression fails instead of silently falling back to `--virtual`/QPainter).
-A second session then runs the `@pytest.mark.outputs(2)` tests (SET-008)
-with `KREMA_E2E_OUTPUT_COUNT=2` on `--virtual` — GitHub's Azure kernel has
-no vgem and a vkms too old for the configfs ABI, so `setup-vgem.sh` builds
-vgem out-of-tree to give `--virtual` a render node. Both runs add a JUnit
-summary to the step summary; artifacts upload as `e2e-artifacts` and
-`e2e-artifacts-2out`.
+`run-e2e.sh` is the local development loop; CI does not call it on a
+source-built krema. Two workflows cover the suite:
+
+* `.github/workflows/e2e.yml`, job `Build & tests`: in this directory's
+  image, builds every target with `BUILD_TESTING=ON` and runs the full
+  `ctest` (unit, integration, KWin, QML and desktop-entry tests) except the
+  `e2e` label.
+* `.github/workflows/distro-e2e.yml`: runs this suite against the packaged
+  krema on each of the 12 distro targets (`tests/distro/README.md`), on
+  `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`; GitHub's
+  Azure kernel ships no vgem). The `fedora-43` entry also runs the
+  `@pytest.mark.outputs(2)` tests (SET-008) with `KREMA_E2E_OUTPUT_COUNT=2`,
+  uploaded as `distro-e2e-fedora-43-2out`. Each run adds a JUnit summary to
+  the step summary.
 
 ### Artifacts (`tests/appium/artifacts/`, gitignored, recreated every run)
 
@@ -464,7 +458,7 @@ names are the entries in `src/config/krema.kcfg`.
   version-conditional expectations), and
   `artifact_path(name)`.
 
-## Screenshots and previews (need a DRM device)
+## Screenshots and previews (need a DRM render node)
 
 KWin 6.7 only composites with OpenGL when it can open a DRM device. Its
 virtual backend asks libdrm for a device with a render node
@@ -479,24 +473,18 @@ QPainter mode:
   so thumbnails show their fallback.
 
 `kwin.can_capture()` reports the mode, and the smoke screenshot test skips
-with the reason. To enable capture, give the container a DRM device.
-`run-e2e.sh` passes `/dev/dri` through automatically when the host has one,
-and `entrypoint.sh` picks the KWin backend from what it finds
-(`KREMA_E2E_KWIN_BACKEND=auto|virtual|drm` overrides):
+with the reason. To enable capture, give the container a vgem device:
+`run-e2e.sh` passes `/dev/dri` through automatically when the host has one.
 
-| `/dev/dri` in the container | KWin backend | Compositing |
-|---|---|---|
-| render node (`sudo modprobe vgem`, generic Ubuntu kernels) | `--virtual`, `--width`/`--height`/`--output-count` apply | OpenGL (llvmpipe) |
-| KMS card only (`sudo modprobe vkms`, e.g. GitHub runners' Azure kernel, which has no vgem) | DRM backend on that card (`KWIN_DRM_DEVICES`); one 1024x768 output per connected connector (the vkms default mode; `setup-vkms.sh n` adds a card with n) | OpenGL (Mesa kms_swrast/llvmpipe) |
-| none | `--virtual` | QPainter |
+| `/dev/dri` in the container | Compositing |
+|---|---|
+| vgem (`sudo modprobe vgem`, or `sudo tests/appium/setup-vgem.sh`) | OpenGL (llvmpipe) |
+| none | QPainter |
 
 ```sh
-sudo modprobe vgem        # or: sudo modprobe vkms
+sudo modprobe vgem        # or: sudo tests/appium/setup-vgem.sh
 tests/appium/run-e2e.sh
 ```
-
-Both OpenGL paths pass the smoke screenshot test and stream PipeWire window
-thumbnails. `.github/workflows/e2e.yml` uses vkms.
 
 The OrbStack VM on the development Mac has no DRM driver, so capture cannot
 be exercised there.

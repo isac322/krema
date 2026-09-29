@@ -112,6 +112,6 @@ docker run --rm --init $tty_args $platform_args \
     -v "$artifacts:/artifacts" \
     -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     -e KREMA_E2E_SCREEN_WIDTH -e KREMA_E2E_SCREEN_HEIGHT -e KREMA_E2E_OUTPUT_COUNT \
-    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD \
+    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD -e LP_NUM_THREADS \
     $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
     "$image" sh /src/tests/appium/entrypoint.sh "$@"

@@ -72,6 +72,28 @@ def dock_hidden(krema: Krema, name: str) -> bool:
     return not showing and r.y >= surface.height
 
 
+def _slide_samples(krema: Krema, name: str, surface: Rect, until_shown: bool) -> list[int]:
+    """Sample the item's y while the panel slides until it is fully shown (or
+    hidden), with one AT-SPI read per sample and the surface rect fetched by
+    the caller: every extra round trip per iteration lowers the sampling rate,
+    and a loaded runner could then miss the whole slide."""
+    samples: list[int] = []
+    deadline = time.monotonic() + SETTLE_TIMEOUT
+    while time.monotonic() < deadline:
+        state = _item_state(krema, name)
+        if state is None:
+            continue
+        showing, r = state
+        if until_shown:
+            done = showing and r.y >= 0 and r.y + r.height <= surface.height
+        else:
+            done = not showing and r.y >= surface.height
+        if done:
+            break
+        samples.append(r.y)
+    return samples
+
+
 def wait_shown(krema: Krema, name: str, timeout: float = SETTLE_TIMEOUT, why: str = "") -> None:
     wait_until(
         lambda: dock_shown(krema, name),
@@ -233,10 +255,7 @@ def test_vis002_auto_hide_hides_after_timeout_and_frees_the_screen(krema: Krema,
 
     # Pointer away: after the hide delay the panel slides out.
     inp.move(*CENTRE)
-    samples: list[int] = []
-    deadline = time.monotonic() + SETTLE_TIMEOUT
-    while time.monotonic() < deadline and not dock_hidden(krema, "Hider"):
-        samples.append(Rect.of(krema.item("Hider")).y)
+    samples = _slide_samples(krema, "Hider", surface, until_shown=False)
     assert dock_hidden(krema, "Hider"), f"dock did not hide within {SETTLE_TIMEOUT}s (y samples {samples})"
     hidden_y = Rect.of(krema.item("Hider")).y
     assert hidden_y >= surface.height
@@ -259,14 +278,13 @@ def test_vis003_auto_hide_shows_on_screen_edge_approach(krema: Krema, apps: Test
     inp.move(*CENTRE)
     wait_hidden(krema, "Edge", why=" at start with the pointer away")
     hidden_y = Rect.of(krema.item("Edge")).y
+    surface = krema.surface_rect("dock")
+    assert surface is not None
 
     # Real pointer approach from above down to the last pixel row: the
     # trigger strip at the bottom edge catches it and the dock slides in.
     inp.move_path(inp.line(CENTRE, EDGE, 10), step_ms=50)
-    samples: list[int] = []
-    deadline = time.monotonic() + SETTLE_TIMEOUT
-    while time.monotonic() < deadline and not dock_shown(krema, "Edge"):
-        samples.append(Rect.of(krema.item("Edge")).y)
+    samples = _slide_samples(krema, "Edge", surface, until_shown=True)
     assert dock_shown(krema, "Edge"), f"dock did not show on edge approach within {SETTLE_TIMEOUT}s (y samples {samples})"
     shown_y = Rect.of(krema.item("Edge")).y
     assert any(shown_y < y < hidden_y for y in samples), f"no intermediate slide positions between {hidden_y} and {shown_y}: {samples}"

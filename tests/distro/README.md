@@ -101,7 +101,7 @@ Environment:
 | `KREMA_DISTRO_SKIP_IMAGE_BUILD=1` | reuse the existing `krema-e2e-distro:<target>` image |
 | `KREMA_E2E_ARTIFACTS` | artifacts directory (default `tests/appium/artifacts-distro-<target>`) |
 | `KREMA_E2E_PLATFORM` | container platform; defaults to `linux/amd64` for `arch` and `opensuse-slowroll` |
-| `KREMA_E2E_SHARDS` | number of concurrent suite shards (default 1 = one `run-e2e.sh`) |
+| `KREMA_E2E_SHARDS` | number of concurrent suite shards (default 1 = one `run-e2e.sh`); with N > 1, `LP_NUM_THREADS` defaults to CPUs / N so the shards' llvmpipe renderers do not oversubscribe the CPUs |
 | other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, docker args) |
 
 ## Targets

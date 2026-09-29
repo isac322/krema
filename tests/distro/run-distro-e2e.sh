@@ -211,6 +211,11 @@ rm -rf "$KREMA_E2E_ARTIFACTS"
 mkdir -p "$KREMA_E2E_ARTIFACTS"
 shard_dir="$(mktemp -d -t krema-e2e-shards.XXXXXX)"
 shard_state="$shard_dir"
+# Split the CPUs between the shards' llvmpipe renderers (kwin and krema);
+# by default each would start one thread per CPU and oversubscribe them.
+threads=$(($(getconf _NPROCESSORS_ONLN) / shards))
+((threads >= 1)) || threads=1
+export LP_NUM_THREADS="${LP_NUM_THREADS:-$threads}"
 
 for (( i = 0; i < shards; i++ )); do
     (

@@ -22,7 +22,9 @@ Timings (src/shell/dockvisibilitycontroller.cpp, krema.kcfg): show dwell
 from __future__ import annotations
 
 import time
+from typing import Callable
 
+import pyatspi
 import pytest
 from PIL import Image, ImageChops, ImageStat
 
@@ -72,26 +74,43 @@ def dock_hidden(krema: Krema, name: str) -> bool:
     return not showing and r.y >= surface.height
 
 
-def _slide_samples(krema: Krema, name: str, surface: Rect, until_shown: bool) -> list[int]:
-    """Sample the item's y while the panel slides until it is fully shown (or
-    hidden), with one AT-SPI read per sample and the surface rect fetched by
-    the caller: every extra round trip per iteration lowers the sampling rate,
-    and a loaded runner could then miss the whole slide."""
-    samples: list[int] = []
-    deadline = time.monotonic() + SETTLE_TIMEOUT
+#: Pause between slide samples: Kirigami longDuration slides take 200 ms, so
+#: this still yields dozens of samples per slide without keeping krema's GUI
+#: thread busy answering AT-SPI calls.
+SLIDE_SAMPLE_INTERVAL = 0.005
+
+
+def _slide_samples(krema: Krema, name: str, surface: Rect, until_shown: bool, trigger: Callable[[], None]) -> list[int]:
+    """Run ``trigger`` (the pointer input that starts the slide), then sample
+    the item's y while the panel slides until it is fully shown (or hidden).
+    Reads the same AT-SPI extents and ``showing`` state as
+    :func:`_item_state`, but on an in-process accessible looked up before
+    ``trigger``: a webdriver lookup serializes krema's whole tree per call
+    and, on a loaded runner, takes longer than the whole slide. The samples
+    (with their times) go to ``slide-samples.txt`` in the test's artifacts."""
+    item = wait_until(lambda: krema.item_accessible(name), message=f"dock item {name!r} over AT-SPI")
+    component = item.queryComponent()
+    trigger()
+    samples: list[tuple[float, int]] = []
+    start = time.monotonic()
+    deadline = start + SETTLE_TIMEOUT
     while time.monotonic() < deadline:
-        state = _item_state(krema, name)
-        if state is None:
-            continue
-        showing, r = state
+        item.clear_cache()
+        showing = item.getState().contains(pyatspi.STATE_SHOWING)
+        r = component.getExtents(pyatspi.XY_SCREEN)
         if until_shown:
             done = showing and r.y >= 0 and r.y + r.height <= surface.height
         else:
             done = not showing and r.y >= surface.height
         if done:
             break
-        samples.append(r.y)
-    return samples
+        samples.append((time.monotonic() - start, r.y))
+        time.sleep(SLIDE_SAMPLE_INTERVAL)
+    env.artifact_path(f"{krema.name}/slide-samples.txt").write_text(
+        f"{'show' if until_shown else 'hide'}: {len(samples)} samples in {time.monotonic() - start:.3f}s until done\n"
+        + "".join(f"{t:.3f} {y}\n" for t, y in samples)
+    )
+    return [y for _t, y in samples]
 
 
 def wait_shown(krema: Krema, name: str, timeout: float = SETTLE_TIMEOUT, why: str = "") -> None:
@@ -254,8 +273,7 @@ def test_vis002_auto_hide_hides_after_timeout_and_frees_the_screen(krema: Krema,
     surface = krema.surface_rect("dock")
 
     # Pointer away: after the hide delay the panel slides out.
-    inp.move(*CENTRE)
-    samples = _slide_samples(krema, "Hider", surface, until_shown=False)
+    samples = _slide_samples(krema, "Hider", surface, until_shown=False, trigger=lambda: inp.move(*CENTRE))
     assert dock_hidden(krema, "Hider"), f"dock did not hide within {SETTLE_TIMEOUT}s (y samples {samples})"
     hidden_y = Rect.of(krema.item("Hider")).y
     assert hidden_y >= surface.height
@@ -283,8 +301,9 @@ def test_vis003_auto_hide_shows_on_screen_edge_approach(krema: Krema, apps: Test
 
     # Real pointer approach from above down to the last pixel row: the
     # trigger strip at the bottom edge catches it and the dock slides in.
-    inp.move_path(inp.line(CENTRE, EDGE, 10), step_ms=50)
-    samples = _slide_samples(krema, "Edge", surface, until_shown=True)
+    samples = _slide_samples(
+        krema, "Edge", surface, until_shown=True, trigger=lambda: inp.move_path(inp.line(CENTRE, EDGE, 10), step_ms=50)
+    )
     assert dock_shown(krema, "Edge"), f"dock did not show on edge approach within {SETTLE_TIMEOUT}s (y samples {samples})"
     shown_y = Rect.of(krema.item("Edge")).y
     assert any(shown_y < y < hidden_y for y in samples), f"no intermediate slide positions between {hidden_y} and {shown_y}: {samples}"

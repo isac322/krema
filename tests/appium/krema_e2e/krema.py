@@ -253,6 +253,25 @@ class Krema:
     def wait_for_item(self, name: str, timeout: float = 10.0) -> WebElement:
         return wait_until(lambda: self.item(name), timeout=timeout, message=lambda: f"dock item {name!r} (have {self.item_names()})")
 
+    def item_accessible(self, name: str) -> Any | None:
+        """Dock item ``name`` as an in-process pyatspi Accessible (the node
+        :meth:`item` finds through the webdriver), or None.
+
+        For tight sampling loops: once looked up, each read on it is one
+        D-Bus call to krema (~1 ms) instead of a webdriver request that
+        serializes krema's whole AT-SPI tree for the XPath. Call
+        ``clear_cache()`` on it before reading states (libatspi may cache
+        them)."""
+        import pyatspi  # noqa: PLC0415 - only in-process readers need it
+
+        app = next((a for a in pyatspi.Registry.getDesktop(0) if a is not None and a.get_process_id() == self.pid), None)
+        if app is None:
+            return None
+        toolbar = pyatspi.findDescendant(app, lambda n: n.getRoleName() == "tool bar" and n.name == "Krema Dock")
+        if toolbar is None:
+            return None
+        return next((c for c in toolbar if c is not None and c.getRoleName() == "button" and c.name == name), None)
+
     def wait_for_no_item(self, name: str, timeout: float = 10.0) -> None:
         wait_until(lambda: self.item(name) is None, timeout=timeout, message=f"dock item {name!r} to disappear")
 

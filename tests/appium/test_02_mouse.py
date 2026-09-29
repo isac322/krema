@@ -469,7 +469,11 @@ def test_mouse005_scroll_wheel_cycles_grouped_windows(krema: Krema, apps: TestWi
     titles = ["Alpha", "Beta", "Gamma"]
     wins = {t: apps.open(t, app_id=APP1) for t in titles}
     krema.wait_for_item(NAME1)
-    assert krema.item_names().count(NAME1) == 1
+    # The first read after the item appears can catch the tool bar while it
+    # is still regrouping the windows (seen as an empty item list): assert
+    # on the settled list.
+    names = wait_stable(krema.item_names)
+    assert names.count(NAME1) == 1, f"grouped windows not one dock item: {names}"
 
     def active_title() -> str | None:
         a = kwin.active_window()

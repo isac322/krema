@@ -168,11 +168,30 @@ not start `Build & tests`.
 |---|---|
 | `junit.xml` | JUnit report |
 | `pytest.log` | pytest output (also streamed to the console) |
-| `session.log` | KWin, D-Bus, AT-SPI and WebDriver stderr |
+| `session.log` | KWin, D-Bus, AT-SPI and WebDriver stderr, and how `kwin_wayland` ended (`[e2e] kwin_wayland exited with status N` / `killed by signal N`, also printed to the console when the session fails) |
 | `<test id>/krema-N.log` | krema stdout/stderr for the N-th start in that test |
 | `<test id>/failure.png`, `atspi-tree.xml`, `kwin-windows.json`, `kremarc` | written when a test fails |
+| `<test id>/slide-samples.txt` | VIS-002/VIS-003: time and y of every dock item sample taken while the panel slid |
+| `<test id>/thumbnail-focus.txt` | KBD-006: focus ring vs other thumbnail blue pixel counts, one line per screenshot until the ring was painted |
 | `test-windows.log` | fixture window output, including received key presses |
 | `krema-build.log`, `cmake-configure.log` | krema build |
+| `startup-crash/` | logs of a session whose KWin crashed before pytest started (see below) |
+| `[startup-crash-]backtrace-<core>.txt` | gdb backtrace of a KWin core, only when the host's `core_pattern` is a path mounted into the container and the image has gdb |
+
+**KWin startup crash.** `kwin_wayland` occasionally dies from SIGSEGV (in
+its `QQmlThread`) about a second into the session, before
+`selenium-webdriver-at-spi-run` hands over to pytest: an upstream crash,
+seen in about 1 of 100 CI sessions. `entrypoint.sh` then restarts the whole
+session exactly once (fresh `XDG_RUNTIME_DIR`, PipeWire, D-Bus, KWin and
+XDG homes) and says so on the console (`[e2e] kwin_wayland crashed during
+session startup (signal N); restarting the session once`). It does so only
+if all three hold: the session failed, KWin died from a signal, and the
+session's inner half, which runs pytest, never started, so no test ran and
+no krema was started. A crash after pytest started, a second startup crash,
+or any other failure fails the run as before. To get a backtrace (e.g. for
+an upstream report), run with `sudo sysctl kernel.core_pattern=/tmp/cores/core.%e.%p`,
+`KREMA_E2E_DOCKER_ARGS="-v /tmp/cores:/tmp/cores --ulimit core=-1"` and an
+image with gdb (symbols come from debuginfod when `DEBUGINFOD_URLS` is set in the container).
 
 ### Timings (this host: OrbStack on macOS arm64, 10 CPUs)
 

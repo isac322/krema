@@ -158,6 +158,28 @@
 }
 .pd-face--gh { --pd-icon: linear-gradient(165deg, #392A20, #1D1611 82%); }
 
+/* Interpolate these gradients in sRGB. A color-mix() stop makes a gradient
+   default to Oklab interpolation, which Firefox renders by expanding every
+   segment into ~128 stops on a slow shader path (it made the #mechanics demo
+   wallpaper stutter on phones). The declarations above stay as the fallback for
+   browsers without gradient interpolation syntax. Keep `in srgb` on any new
+   gradient that uses color-mix() or color(). */
+@supports (background-image: linear-gradient(in srgb, red, blue)) {
+  .pagedock {
+    --pd-surface: linear-gradient(
+      180deg in srgb,
+      color-mix(in srgb, var(--ink-2) 55%, transparent),
+      color-mix(in srgb, var(--ink) 64%, transparent)
+    );
+  }
+  .pd-face--everything {
+    --pd-icon: linear-gradient(165deg in srgb, color-mix(in srgb, var(--blue) 26%, var(--ink-2)), #32251C 82%);
+  }
+  .pd-face--add {
+    --pd-icon: linear-gradient(165deg in srgb, color-mix(in srgb, var(--blue) 78%, #BF8146), var(--blue-deep) 88%);
+  }
+}
+
 .pd-sep {
   align-self: center;
   width: 1px;

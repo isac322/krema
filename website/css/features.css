@@ -508,6 +508,24 @@ html:not(.js) .sw-titlebar { display: none; }
 .sp-wall::before { top: 30%; }
 .sp-wall::after { top: 55%; opacity: 0.5; transform: skewY(-4deg); }
 
+/* Interpolate the wallpaper in sRGB: a color-mix() stop otherwise defaults the
+   gradient to Oklab, which Firefox renders on a slow path and repaints every
+   frame the demo moves (see css/pagedock.css). Guarded by @supports because
+   var() defers validation: an unsupported `in srgb` would drop the whole
+   background instead of falling back to the rules above. */
+@supports (background-image: linear-gradient(in srgb, red, blue)) {
+  .sp-wall {
+    background:
+      radial-gradient(60% 90% at 12% 115%, var(--glow), transparent 70%),
+      radial-gradient(55% 80% at 92% -12% in srgb, color-mix(in srgb, var(--blue) 34%, transparent), transparent 72%),
+      linear-gradient(165deg, var(--ink-2), var(--night) 70%);
+  }
+  .sp-wall::before,
+  .sp-wall::after {
+    background: linear-gradient(90deg in srgb, transparent, color-mix(in srgb, var(--blue) 18%, transparent) 45%, transparent);
+  }
+}
+
 .sp-tray {
   position: absolute;
   top: 8px; right: 10px;

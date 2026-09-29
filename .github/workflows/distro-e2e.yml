@@ -24,6 +24,9 @@
 # cache, which e2e.yml also uses. Only the small vgem.ko is cached (per
 # kernel release). The suite runs sharded in two (KREMA_E2E_SHARDS=2;
 # tests/distro/run-distro-e2e.sh), all shards' JUnit files feed the summary.
+# ubuntu-25.04 (KWin/KPipeWire 6.3) stays unsharded: with two concurrent
+# sessions its live preview thumbnail (test_prev006) failed to show the
+# window's content in 2 of 4 runs, against 1 of the last ~40 unsharded runs.
 
 name: Distro E2E
 
@@ -126,14 +129,17 @@ jobs:
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
         id: main
         env:
-          KREMA_E2E_SHARDS: "2"
+          KREMA_E2E_SHARDS: ${{ matrix.target == 'ubuntu-25.04' && '1' || '2' }}
         run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
 
       - name: JUnit summary
         if: always()
         run: |
+          shopt -s nullglob
+          dir=tests/appium/artifacts-distro-"$TARGET"
+          reports=("$dir"/junit.xml "$dir"/shard-*/junit.xml)
           python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET" \
-            tests/appium/artifacts-distro-"$TARGET"/shard-*/junit.xml \
+            "${reports[@]:-$dir/junit.xml}" \
             --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7

@@ -160,11 +160,12 @@ the script's hash, so a hit skips the headers install and the out-of-tree
 build. It then runs `tests/distro/run-distro-e2e.sh <target> -rs` with
 `KREMA_E2E_SHARDS=2`: two concurrent `kwin_wayland --virtual` sessions
 compositing with OpenGL through llvmpipe on the vgem device, each running
-every second collected test. The job adds a JUnit summary of both
-`shard-*/junit.xml` files to the step summary (a skip caused by QPainter
+every second collected test. `ubuntu-25.04` (KWin/KPipeWire 6.3) runs
+unsharded: under two concurrent sessions its live preview thumbnail
+(`test_prev006`) failed intermittently. The job adds a JUnit summary of every
+`junit.xml` (one per shard) to the step summary (a skip caused by QPainter
 compositing or a missing render node fails it) and uploads
-`tests/appium/artifacts-distro-<target>/` (both shard directories) as
-`distro-e2e-<target>`.
+`tests/appium/artifacts-distro-<target>/` as `distro-e2e-<target>`.
 
 The `fedora-43` job then runs the `@pytest.mark.outputs(2)` tests again in
 a 2-output session, reusing the image it just built:

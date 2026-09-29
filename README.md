@@ -35,7 +35,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Your dock is back** — Krema picks up where Latte Dock left off, purpose-built for Plasma 6
 - **A dock that speaks Plasma** — Uses KDE's own frameworks (Kirigami, KConfig, KColorScheme, KGlobalAccel) and respects your theme, shortcuts, and desktop conventions
 - **Lightweight by design** — GPU-accelerated rendering via QRhi, Wayland-native via Layer Shell, lazy resource allocation
-- **Make it yours** — 7 background styles including acrylic frosted glass and Mica, configurable zoom, spacing, and position
+- **Make it yours** — 4 background styles including acrylic frosted glass, configurable zoom, spacing, and position
 
 ## Screenshots
 
@@ -60,11 +60,9 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 
 ### Visual Styles
 - **Panel-Inherit** — Match your Plasma panel style automatically
-- **Semi-Transparent** — Subtle translucency over your desktop
 - **Transparent** — Fully transparent dock background
 - **Tinted** — Custom color with adjustable opacity
 - **Acrylic / Frosted Glass** — Blur + noise texture effect
-- **Mica** — System accent color based, inspired by Windows 11 Mica
 - **Adaptive Opacity** — Switches to opaque when windows overlap the dock
 
 ### Window Previews

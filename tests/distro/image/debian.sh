@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
-# Debian/Ubuntu family of tests/distro/image/packages.sh (sourced; defines
-# family_runtime, family_build and family_krema). A separate file per family
-# keeps the other families' image layers cached when this one changes.
+# Debian/Ubuntu family of tests/distro/image/packages.sh (sourced; defines the
+# family_* functions it calls). A separate file per family keeps the other
+# families' image layers cached when this one changes. No target of this
+# family is rolling, so there is no family_upgrade.
+
+export DEBIAN_FRONTEND=noninteractive
 
 debian_install() {
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+    apt-get install -y --no-install-recommends "$@"
 }
 
 # Packages that only some releases have (split or renamed across Debian 13 and
@@ -58,8 +61,49 @@ family_build() {
         libwayland-dev plasma-wayland-protocols libxkbcommon-dev
 }
 
-family_krema() {
+family_toolchain() {
     apt-get update
-    debian_install /pkgs/*.deb
+    debian_install build-essential dpkg-dev fakeroot devscripts equivs tar xz-utils ccache
+}
+
+# dpkg-checkbuilddeps is offline and applies the version constraints;
+# dpkg-buildpackage runs the same check before building. Missing deps are
+# installed through a generated metapackage (handles virtual packages such as
+# debhelper-compat and arch-qualified deps).
+family_builddeps() {
+    control="$PACKAGING/obs/debian.control"
+    if dpkg-checkbuilddeps "$control"; then
+        echo "packages.sh: every Build-Depends of debian.control is installed"
+        return 0
+    fi
+    apt-get update
+    tmp=$(mktemp -d)
+    (cd "$tmp" && mk-build-deps --install --remove \
+        --tool 'apt-get -y --no-install-recommends' "$control")
+    rm -rf "$tmp"
+}
+
+family_clean() {
+    rm -rf /var/lib/apt/lists/*
+}
+
+# Download the package's declared runtime deps into the apt archive cache
+# while the package builds; the krema install then only runs the
+# transaction. Nothing is installed here. apt-get update refreshes the
+# lists the runtime image cleaned.
+family_depfetch() {
+    apt-get update
+    debian_install --download-only "$@"
+}
+
+family_krema() {
+    if ! debian_install /pkgs/*.deb; then
+        # Stale lists (or a depfetch from an older snapshot) can reference
+        # versions the archive no longer has: refresh and retry once.
+        apt-get update
+        debian_install /pkgs/*.deb
+    fi
+    # Shrink the committed diff: no .deb files or lists.
+    apt-get clean
     rm -rf /var/lib/apt/lists/*
 }

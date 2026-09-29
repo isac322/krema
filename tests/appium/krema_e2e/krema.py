@@ -350,8 +350,8 @@ class Krema:
         x, y = self.settled_item_center(name)
         dock = self.surface_rect("dock") or Rect(0, env.SCREEN_HEIGHT - 1, env.SCREEN_WIDTH, 1)
         start = (x, max(0, dock.y - 40))
-        inp.move(*start)
-        inp.move_path(inp.line(start, (x, y), steps), step_ms)
+        # Teleport to ``start`` and glide down in one inputsynth run.
+        inp.move_path([start, *inp.line(start, (x, y), steps)], step_ms)
 
     def click_item(self, name: str, button: str = "left") -> None:
         """Real pointer click on the centre of dock item ``name``."""

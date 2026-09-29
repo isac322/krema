@@ -9,6 +9,11 @@ from typing import Callable, TypeVar
 
 T = TypeVar("T")
 
+#: Poll interval for predicates that only ask KWin (one scripting round trip,
+#: a few ms): window mapped/unmapped. AT-SPI predicates cost tens of ms per
+#: poll and keep the default.
+KWIN_POLL_INTERVAL = 0.02
+
 
 class WaitTimeout(AssertionError):
     """A wait_until() condition did not become truthy in time.
@@ -60,12 +65,15 @@ def wait_stable(
     """Wait until ``getter()`` returns the same value for ``duration`` seconds.
 
     For settling animations (zoom, show/hide) before measuring geometry.
+    Samples are at most ``interval`` apart (plus the getter's own time); the
+    last pause is shortened so the sample that completes ``duration`` is
+    taken as soon as the window has elapsed.
     """
     deadline = time.monotonic() + timeout
     value = getter()
     since = time.monotonic()
     while time.monotonic() < deadline:
-        time.sleep(interval)
+        time.sleep(min(interval, max(0.0, duration - (time.monotonic() - since))))
         current = getter()
         if current != value:
             value = current

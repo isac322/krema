@@ -3,7 +3,8 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
 # RPM family build (fedora, suse) using packaging/obs/krema.spec inside the
-# target's base container. Invoked by in-container.sh.
+# target's builder image. Invoked by in-container.sh after the build deps are
+# installed; rpmbuild re-checks every BuildRequires with its version.
 
 set -euo pipefail
 
@@ -15,42 +16,15 @@ mkdir -p "$topdir"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 cp "$spec" "$topdir/SPECS/krema.spec"
 cp "$tarball" "$topdir/SOURCES/krema-${KREMA_VERSION}.tar.gz"
 
-if [[ "$FAMILY" == "fedora" ]]; then
-    dnf -y install 'dnf-command(builddep)' rpm-build tar gzip findutils \
-        || dnf -y install dnf-plugins-core rpm-build tar gzip findutils
-    dnf -y builddep "$topdir/SPECS/krema.spec"
-elif [[ "$FAMILY" == "suse" ]]; then
-    if [[ "$TARGET_ID" == "opensuse-slowroll" ]]; then
-        # Same repo swap as tests/distro/image/suse.sh: the base image is
-        # opensuse/tumbleweed but Slowroll packages must resolve from the
-        # official Slowroll repositories.
-        zypper --non-interactive modifyrepo --all --disable || true
-        zypper --non-interactive addrepo --refresh \
-            https://download.opensuse.org/slowroll/repo/oss/ slowroll-oss
-        zypper --non-interactive addrepo --refresh \
-            https://download.opensuse.org/update/slowroll/repo/oss/ \
-            slowroll-update
-        zypper --non-interactive --gpg-auto-import-keys refresh
-    else
-        zypper --non-interactive refresh
-    fi
-
-    # zypper has no builddep: resolve the spec's BuildRequires as capabilities.
-    # `rpmspec -P` evaluates %if suse_version so the correct ninja/ninja-build
-    # alternative is picked. Version constraints are stripped; zypper takes
-    # the distro's current version and cmake still enforces minimums.
-    zypper --non-interactive install --no-recommends \
-        rpm-build tar gzip findutils grep sed gawk
-    mapfile -t buildreqs < <(
-        rpmspec -P "$topdir/SPECS/krema.spec" \
-            | sed -n 's/^BuildRequires:[[:space:]]*//p' \
-            | cut -d' ' -f1 \
-            | grep -v '^$'
-    )
-    zypper --non-interactive install --no-recommends "${buildreqs[@]}"
-fi
-
-rpmbuild -bb --define "_topdir $topdir" "$topdir/SPECS/krema.spec"
+# debuginfo/debugsource stay enabled: find-debuginfo is what strips the
+# binary in the shipped rpm (eu-strip + .gnu_debuglink, and .gnu_debugdata on
+# Fedora), so disabling it would change the tested binary. Only the payload
+# compression is lowered (Fedora defaults to zstd level 19, the slowest part
+# of packaging the large debuginfo rpm): it changes how the files are
+# compressed inside the .rpm, not the installed files or the dependency
+# metadata the E2E suite exercises.
+rpmbuild -bb --define "_topdir $topdir" --define '_binary_payload w3.zstdio' \
+    "$topdir/SPECS/krema.spec"
 
 # Ship the binary rpm(s): krema-<version>-*.rpm, excluding debuginfo/debugsource
 # (krema-debug*) and .src.rpm.

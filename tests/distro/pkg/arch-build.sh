@@ -2,41 +2,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
-# Arch build using packaging/arch/PKGBUILD inside an archlinux container, with
+# Arch build using packaging/arch/PKGBUILD inside the arch builder image, with
 # the source redirected from the GitHub release tarball to the local tarball.
-# Invoked by in-container.sh.
+# Invoked by in-container.sh after the upgrade and the depends/makedepends
+# install (as root: sudo's setuid does not work under qemu-user emulation, so
+# `makepkg -s` is not an option); makepkg re-checks them.
 
 set -euo pipefail
 
-# pacman's ALPM sandbox relies on seccomp filters and filesystem isolation
-# that qemu-user cannot emulate (EINVAL); fall back to disabling them when the
-# first sync fails. Harmless in a throwaway build container.
-if ! pacman -Sy --noconfirm; then
-    sed -i -e '/^\[options\]/a DisableSandboxSyscalls' \
-           -e '/^\[options\]/a DisableSandboxFilesystem' /etc/pacman.conf
-    pacman -Sy --noconfirm
-fi
-pacman -S --noconfirm --needed base-devel tar gzip
-
-# Install every depends/makedepends entry of the PKGBUILD as root, then run
-# makepkg without -s. sudo's setuid does not work under qemu-user emulation,
-# so a root pre-install is both simpler and more reliable than `makepkg -s`.
-# Dep names come straight from the PKGBUILD arrays; '>=' constraints are
-# stripped (current rolling packages satisfy them).
-mapfile -t deps < <(
-    bash -c '
-        source /pkg/packaging/arch/PKGBUILD
-        for d in "${depends[@]}" "${makedepends[@]}"; do
-            printf "%s\n" "${d%%[<>=]*}"
-        done
-    ' | sort -u
-)
-pacman -S --noconfirm --needed "${deps[@]}"
-
-# makepkg refuses to run as root; build as an unprivileged user.
-useradd -m -s /bin/bash builder
+# makepkg refuses to run as root; build as the image's unprivileged user.
+id -u builder >/dev/null 2>&1 || useradd -m -s /bin/bash builder
 chown -R builder:builder /work
+[[ -z "${CCACHE_DIR:-}" ]] || chown -R builder:builder "$CCACHE_DIR"
 
+# su without --login keeps the environment (CCACHE_*, CMAKE_*_LAUNCHER).
 su builder -c "
 set -euo pipefail
 cd /work
@@ -59,7 +38,8 @@ makepkg --noconfirm
 "
 
 shopt -s nullglob
-# Ship the binary package only; krema-debug-* is the automatic debug split.
+# Ship the binary package only; krema-debug-* is the automatic debug split
+# (kept on: it is what adds .gnu_debuglink to the shipped binary).
 artifacts=(/work/krema-[0-9]*.pkg.tar.zst)
 if (( ${#artifacts[@]} == 0 )); then
     echo "error: makepkg finished but produced no package" >&2

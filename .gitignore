@@ -229,4 +229,5 @@ build/
 tests/distro/.cache/
 # `*build-*` above would otherwise hide the package builders.
 !tests/distro/build-package.sh
+!tests/distro/build-ci-image.sh
 !tests/distro/pkg/*-build.sh

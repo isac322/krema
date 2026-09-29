@@ -1,0 +1,294 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+#
+# CI images: publishes the prebuilt images the test workflows pull, all in
+# the one package ghcr.io/isac322/krema-ci (refs from
+# tests/distro/image-ref.sh; tests/distro/README.md explains their content):
+#
+#   runtime-<target>-<hash>  distro-e2e.yml test harness (no krema in it)
+#   builder-<target>-<hash>  build-package.sh packaging toolchain + build deps
+#   ctest-fedora-43-<hash>   e2e.yml "Build & tests" (tests/appium/Dockerfile)
+#   vgem-<kernel>-<hash>     FROM scratch, /vgem.ko built on the runner kernel
+#
+# Consumers never depend on this workflow for correctness: a ref missing
+# from ghcr.io (a pull request changing an image input, a new runner
+# kernel, no registry access) is built locally by the same
+# tests/distro/build-ci-image.sh. Publishing only saves them that time.
+#
+# When a ref is (re)built and pushed:
+#   * missing in ghcr.io (a push to master changed an image input: new hash);
+#   * every daily schedule run, for every distro target and the ctest image.
+#     Stable distros pin their base digest but still ship Qt/KF/Plasma
+#     updates, and the package installed at test time resolves krema's
+#     dependencies from the live repositories: with krema linking Qt private
+#     API, a runtime/builder pair older than those repositories risks a Qt
+#     version skew. The rolling targets additionally run a full upgrade at
+#     job time, which a daily image keeps small;
+#   * workflow_dispatch with `force`.
+# runtime and builder of one target share one hash and are always rebuilt
+# and pushed together, so a package is never built against an older Qt
+# (krema uses Qt private API) than the runtime it is installed into.
+#
+# ccache seeding: each target job then runs the real package build once
+# (tests/distro/build-package.sh, reusing the builder it just built or
+# pulled) and saves the ccache dir with actions/cache. Caches saved by a
+# pull request are visible only to that pull request; these runs on the
+# default branch are what every pull request's distro-e2e.yml job restores
+# from. Doing it here costs one ~1-2 min package build per target per day;
+# seeding from distro-e2e.yml on every push to master would run all twelve
+# ~8 min suites per merge. Build & tests seeds its own ccache (e2e.yml runs
+# on pushes to master), since that job is the build.
+#
+# Only this workflow has `packages: write`. It publishes to the upstream
+# package, so it does nothing in forks.
+#
+# Bootstrapping before this file is on master: add a temporary
+# `push: branches: [<branch>]` trigger; nothing below depends on the ref
+# being master (caches seeded from another branch are just not visible to
+# pull requests against master).
+
+name: CI images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "tests/distro/**"
+      - "!tests/distro/**/*.md"
+      - "tests/appium/Dockerfile"
+      - "tests/appium/tools/**"
+      - "tests/appium/setup-vgem.sh"
+      - ".github/workflows/ci-images.yml"
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Images to publish: distro target ids (tests/distro/targets.tsv or 'arch'), 'ctest', 'vgem' (comma/space separated), or 'all'"
+        required: false
+        default: all
+      force:
+        description: "Rebuild and push even when the ref already exists"
+        type: boolean
+        required: false
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ci-images-${{ github.ref }}
+  # Never cancel a publish half-way; a newer push queues behind it.
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve images
+    if: github.repository == 'isac322/krema'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      ctest: ${{ steps.resolve.outputs.ctest }}
+      vgem: ${{ steps.resolve.outputs.vgem }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/distro/targets.tsv
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve image list
+        id: resolve
+        env:
+          REQUESTED: ${{ inputs.targets || 'all' }}
+        run: |
+          distro="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/distro/targets.tsv; echo arch)"
+          if [[ -z ${REQUESTED// } || $REQUESTED == all ]]; then
+            selected="$distro"$'\n'ctest$'\n'vgem
+          else
+            selected="$(tr -s ', ' '\n' <<<"$REQUESTED" | sed '/^$/d')"
+            for t in $selected; do
+              grep -qxF -- "$t" <<<"$distro"$'\n'ctest$'\n'vgem || {
+                echo "::error::unknown image '$t' (known: $(tr '\n' ' ' <<<"$distro") ctest vgem)"; exit 1; }
+            done
+          fi
+          targets="$(grep -vxE 'ctest|vgem' <<<"$selected" || true)"
+          matrix="$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' <<<"$targets")"
+          {
+            echo "matrix=$matrix"
+            echo "ctest=$(grep -qx ctest <<<"$selected" && echo true || echo false)"
+            echo "vgem=$(grep -qx vgem <<<"$selected" && echo true || echo false)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  distro:
+    name: Distro images (${{ matrix.target }})
+    needs: resolve
+    if: needs.resolve.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Log in to ghcr.io
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<<"$GH_TOKEN"
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          runtime="$(tests/distro/image-ref.sh runtime "$TARGET")"
+          builder="$(tests/distro/image-ref.sh builder "$TARGET")"
+          exists() { docker manifest inspect "$1" >/dev/null 2>&1; }
+          if [[ $FORCE == true ]]; then reason="forced"
+          elif ! exists "$runtime" || ! exists "$builder"; then reason="missing in ghcr.io"
+          elif [[ $EVENT == schedule ]]; then reason="daily refresh"
+          else reason=
+          fi
+          builder_tag="${builder##*:}"
+          {
+            echo "runtime=$runtime"
+            echo "builder=$builder"
+            echo "build=$([[ -n $reason ]] && echo true || echo false)"
+            # ccache keys: exact builder, then any builder of this target.
+            echo "ccache_prefix=ccache-distro-$builder_tag-"
+            echo "ccache_target_prefix=ccache-distro-${builder_tag%-*}-"
+          } >>"$GITHUB_OUTPUT"
+          echo "$TARGET: ${reason:-up to date, not rebuilt}"
+
+      - name: Build and push runtime + builder
+        if: steps.decide.outputs.build == 'true'
+        env:
+          RUNTIME: ${{ steps.decide.outputs.runtime }}
+          BUILDER: ${{ steps.decide.outputs.builder }}
+        run: |
+          t0=$SECONDS
+          tests/distro/build-ci-image.sh runtime "$TARGET" >/dev/null
+          echo "[ci-images] runtime built: $((SECONDS - t0))s"
+          t0=$SECONDS
+          tests/distro/build-ci-image.sh builder "$TARGET" >/dev/null
+          echo "[ci-images] builder built: $((SECONDS - t0))s"
+          t0=$SECONDS
+          docker push -q "$RUNTIME"
+          docker push -q "$BUILDER"
+          echo "[ci-images] pushed: $((SECONDS - t0))s"
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ${{ steps.decide.outputs.ccache_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.decide.outputs.ccache_prefix }}
+            ${{ steps.decide.outputs.ccache_target_prefix }}
+
+      - name: Seed ccache (package build)
+        env:
+          KREMA_CCACHE_DIR: ${{ runner.temp }}/ccache
+        run: |
+          t0=$SECONDS
+          tests/distro/build-package.sh "$TARGET" "$RUNNER_TEMP/packages"
+          echo "[ci-images] package build: $((SECONDS - t0))s"
+
+      - name: Save ccache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ${{ steps.decide.outputs.ccache_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+
+  ctest:
+    name: ctest image
+    needs: resolve
+    if: needs.resolve.outputs.ctest == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Log in to ghcr.io
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<<"$GH_TOKEN"
+
+      - name: Build and push if due
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          ref="$(tests/distro/image-ref.sh ctest)"
+          if [[ $FORCE == true ]]; then reason="forced"
+          elif ! docker manifest inspect "$ref" >/dev/null 2>&1; then reason="missing in ghcr.io"
+          elif [[ $EVENT == schedule ]]; then reason="daily refresh"
+          else echo "$ref: up to date, not rebuilt"; exit 0
+          fi
+          echo "$ref: $reason"
+          t0=$SECONDS
+          tests/distro/build-ci-image.sh ctest >/dev/null
+          echo "[ci-images] ctest built: $((SECONDS - t0))s"
+          docker push -q "$ref"
+
+  vgem:
+    name: vgem module
+    needs: resolve
+    if: needs.resolve.outputs.vgem == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Log in to ghcr.io
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<<"$GH_TOKEN"
+
+      # The module only loads on the exact kernel it was built for, so the
+      # ref is keyed on this runner's `uname -r`. Runners on another kernel
+      # (image rollouts) miss it and build locally until the next run here.
+      - name: Build and push if missing
+        env:
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          ref="$(tests/distro/image-ref.sh vgem)"
+          if [[ $FORCE != true ]] && docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "$ref: up to date, not rebuilt"; exit 0
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
+          ctx="$RUNNER_TEMP/vgem"
+          sudo VGEM_KO="$ctx/vgem.ko" tests/appium/setup-vgem.sh
+          if [[ ! -f $ctx/vgem.ko ]]; then
+            # setup-vgem.sh loaded a packaged platform-bus vgem: this kernel
+            # needs no out-of-tree module.
+            echo "::notice::$(uname -r) ships a usable vgem; nothing to publish"
+            exit 0
+          fi
+          printf 'FROM scratch\nCOPY vgem.ko /vgem.ko\n' |
+            docker build -q --label "org.opencontainers.image.source=$SOURCE" -t "$ref" -f - "$ctx"
+          docker push -q "$ref"

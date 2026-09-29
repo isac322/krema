@@ -20,7 +20,7 @@ import subprocess
 from dataclasses import dataclass, field
 
 from . import env, kwin
-from .waits import wait_until
+from .waits import KWIN_POLL_INTERVAL, wait_until
 
 
 @dataclass
@@ -98,30 +98,54 @@ class TestWindows:
         tw.window = wait_until(
             lambda: next((w for w in kwin.windows() if w.pid == proc.pid and w.title == title), None),
             timeout=timeout,
+            interval=KWIN_POLL_INTERVAL,
             message=f"test window {title!r} to be mapped by KWin",
         )
         return tw
 
     def close(self, tw: TestWindow, timeout: float = 10.0) -> None:
         """SIGTERM the window's process and wait until KWin drops it."""
-        if tw.process.poll() is None:
-            tw.process.send_signal(signal.SIGTERM)
+        self._close([tw], timeout)
+
+    def close_all(self) -> None:
+        """Close every window still open, all at once: signal all of them
+        before waiting, so their shutdowns overlap."""
+        try:
+            self._close(list(self._open), 10.0)
+        except Exception:  # noqa: BLE001 - best-effort teardown
+            for tw in self._open:
+                tw.process.kill()
+        self._open.clear()
+
+    def _close(self, tws: list[TestWindow], timeout: float) -> None:
+        if not tws:
+            return
+        mapped = {w.pid for w in kwin.windows() if w.normal_window}
+        for tw in tws:
+            if tw.process.poll() is None:
+                # A window closed from outside (krema's Close, the preview's
+                # close button) is already gone from KWin, but its process
+                # can stay stuck in Qt shutdown (main and Wayland event
+                # threads blocked on futexes), where the fixture's SIGTERM
+                # -> QCoreApplication::quit has no effect. It has nothing
+                # left to close, so it is only reaped.
+                tw.process.send_signal(signal.SIGTERM if tw.pid in mapped else signal.SIGKILL)
+        for tw in tws:
             try:
                 tw.process.wait(timeout)
             except subprocess.TimeoutExpired:
                 tw.process.kill()
                 tw.process.wait(5)
-        wait_until(lambda: tw.refresh() is None, timeout=timeout, message=f"window {tw.title!r} to disappear")
-        if tw in self._open:
-            self._open.remove(tw)
-
-    def close_all(self) -> None:
-        for tw in list(self._open):
-            try:
-                self.close(tw)
-            except Exception:  # noqa: BLE001 - best-effort teardown
-                tw.process.kill()
-        self._open.clear()
+        pids = {tw.pid for tw in tws}
+        wait_until(
+            lambda: not any(w.pid in pids and w.normal_window for w in kwin.windows()),
+            timeout=timeout,
+            interval=KWIN_POLL_INTERVAL,
+            message=lambda: f"windows {[tw.title for tw in tws]!r} to disappear",
+        )
+        for tw in tws:
+            if tw in self._open:
+                self._open.remove(tw)
 
     @property
     def open_windows(self) -> list[TestWindow]:

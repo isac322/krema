@@ -13,17 +13,47 @@
 #
 # The AT-SPI E2E suite (tests/appium) runs in distro-e2e.yml, against the
 # packaged krema on every supported distro including fedora-43.
+#
+# Image: the ctest ref of tests/distro/image-ref.sh, pulled from
+# ghcr.io/isac322/krema-ci (published by ci-images.yml); when it is not
+# there (a pull request changing tests/appium/Dockerfile) or the pull fails,
+# tests/distro/build-ci-image.sh builds it locally.
+#
+# ccache: persisted with actions/cache, keyed on the image ref and the
+# sources. Caches saved by a pull request are visible only to that pull
+# request, so pushes to master and a daily schedule (after ci-images.yml's
+# daily rebuild of the image, whose updated toolchain/headers miss the old
+# cache) run this job on the default branch to seed
+# the cache every pull request restores from.
+#
+# Path filter: the build is src/ and CMakeLists.txt, BUILD_TESTING=ON adds
+# tests/ (tests/CMakeLists.txt), which adds tests/appium only with
+# KREMA_E2E_TESTS=ON (off here). Of tests/appium only the Dockerfile (the
+# image) is used; tests/distro contributes the two image scripts; tests/e2e
+# holds scenario docs. packaging/ is not built here.
 
 name: Build & tests
 
 on:
   pull_request:
-    paths:
+    paths: &paths
       - "src/**"
-      - "packaging/**"
-      - "tests/**"
       - "CMakeLists.txt"
+      - "tests/**"
+      - "!tests/appium/**"
+      - "tests/appium/Dockerfile"
+      - "!tests/distro/**"
+      - "tests/distro/image-ref.sh"
+      - "tests/distro/build-ci-image.sh"
+      - "!tests/e2e/**"
+      - "!**/*.md"
       - ".github/workflows/e2e.yml"
+      - ".github/scripts/junit-summary.py"
+  push:
+    branches: [master]
+    paths: *paths
+  schedule:
+    - cron: "37 5 * * *"
   workflow_dispatch:
 
 permissions: {}
@@ -32,51 +62,59 @@ concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  KREMA_E2E_IMAGE: krema-e2e:ci
-
 jobs:
   build-and-test:
     name: Build & tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v4
+      # Public package: pulls also work anonymously, so a failed login (a
+      # fork's token) only costs the rate limit, never the run.
+      - name: Log in to ghcr.io
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<<"$GH_TOKEN"
 
-      - name: Build test image
-        uses: docker/build-push-action@v7
-        with:
-          context: tests/appium
-          tags: ${{ env.KREMA_E2E_IMAGE }}
-          target: ctest-image
-          load: true
-          cache-from: type=gha,scope=krema-e2e-image
-          cache-to: type=gha,scope=krema-e2e-image,mode=max
+      - name: Test image (ghcr.io, else local build)
+        id: image
+        run: |
+          t0=$SECONDS
+          ref="$(tests/distro/build-ci-image.sh --pull ctest)"
+          echo "[e2e] image $ref: $((SECONDS - t0))s"
+          {
+            echo "ref=$ref"
+            echo "tag=${ref##*:}"
+          } >>"$GITHUB_OUTPUT"
 
       - name: ccache cache
         uses: actions/cache@v4
         with:
           path: .ccache
-          # Image identity (dnf package set/toolchain) + source hash in the
-          # key; restore-keys falls back to any ccache dir for this OS/image.
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/appium/Dockerfile') }}-${{ hashFiles('src/**', 'tests/**', 'CMakeLists.txt') }}
+          # Image identity (package set/toolchain) + source hash in the key;
+          # restore-keys falls back to the newest dir for this image, then
+          # to any.
+          key: ccache-${{ runner.arch }}-${{ steps.image.outputs.tag }}-${{ hashFiles('src/**', 'tests/**', 'CMakeLists.txt') }}
           restore-keys: |
-            ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/appium/Dockerfile') }}-
-            ccache-${{ runner.os }}-${{ runner.arch }}-
+            ccache-${{ runner.arch }}-${{ steps.image.outputs.tag }}-
+            ccache-${{ runner.arch }}-
 
       - name: Build and run ctest
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
         run: |
           mkdir -p test-results .ccache
           docker run --rm -v "$PWD:/src:ro" -v "$PWD/test-results:/results" \
             -v "$PWD/.ccache:/ccache" \
             -e HOST_UID="$(id -u)" -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=500M \
-            "$KREMA_E2E_IMAGE" sh -euc '
+            "$IMAGE" sh -euc '
               umask 022  # container runs as root; keep cache/results readable by the runner
               trap "chown -R $HOST_UID /results /ccache" EXIT
               # Writable copy without .git: configuring a git checkout

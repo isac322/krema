@@ -120,24 +120,44 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 ### CI
 
 `run-e2e.sh` is the local development loop; CI does not call it on a
-source-built krema. Two workflows cover the suite:
+source-built krema. Three workflows are involved:
 
-* `.github/workflows/e2e.yml`, job `Build & tests`: builds the
-  `ctest-image` stage of this directory's Dockerfile (the `base` package set
-  plus ccache, without the AT-SPI stack), builds every target with
-  `BUILD_TESTING=ON` through ccache (persisted across runs in an
-  `actions/cache` `.ccache/` dir, `CCACHE_MAXSIZE=500M`), and runs the full
-  `ctest` (unit, integration, KWin, QML and desktop-entry tests) except the
-  `e2e` label, in parallel with `-j$(nproc)`.
+* `.github/workflows/ci-images.yml` publishes the prebuilt images the other
+  two pull, all in the package `ghcr.io/isac322/krema-ci`, tagged by
+  `tests/distro/image-ref.sh` with a hash of the files that define each
+  image: the `ctest-image` stage of this directory's Dockerfile, each distro
+  target's runtime and builder images (`tests/distro/README.md`), and a
+  `FROM scratch` image holding `vgem.ko` built by `setup-vgem.sh` on the
+  runner kernel. It runs on pushes to `master` that change an image input,
+  daily (every distro target and the ctest image are rebuilt and re-pushed)
+  and on demand, and seeds each distro target's package-build ccache on the
+  default branch. A ref missing from ghcr.io, e.g. in a pull request that
+  changes an image input, is built locally by
+  `tests/distro/build-ci-image.sh` instead, so no result depends on the
+  registry.
+* `.github/workflows/e2e.yml`, job `Build & tests`: pulls the ctest image
+  (the `base` package set plus ccache, without the AT-SPI stack), builds
+  every target with `BUILD_TESTING=ON` through ccache (persisted across runs
+  in an `actions/cache` `.ccache/` dir, `CCACHE_MAXSIZE=500M`, seeded by runs
+  on `master`), and runs the full `ctest` (unit, integration, KWin, QML and
+  desktop-entry tests) except the `e2e` label, in parallel with
+  `-j$(nproc)`.
 * `.github/workflows/distro-e2e.yml`: runs this suite against the packaged
   krema on each of the 12 distro targets (`tests/distro/README.md`), on
-  `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`; GitHub's
-  Azure kernel ships no vgem, so the built module is cached per kernel
-  release). The suite runs sharded in two containers (`KREMA_E2E_SHARDS=2`,
-  `KREMA_E2E_SHARD` above). The `fedora-43` entry also runs the
-  `@pytest.mark.outputs(2)` tests (SET-008) with `KREMA_E2E_OUTPUT_COUNT=2`,
-  uploaded as `distro-e2e-fedora-43-2out`. Each run adds a JUnit summary to
-  the step summary.
+  `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`;
+  GitHub's Azure kernel ships no vgem, so the module for the runner kernel
+  comes from ghcr.io, or is built in the job on a kernel ci-images.yml has
+  not seen). The suite runs sharded in two containers
+  (`KREMA_E2E_SHARDS=2`, `KREMA_E2E_SHARD` above). The `fedora-43` entry
+  also runs the `@pytest.mark.outputs(2)` tests (SET-008) with
+  `KREMA_E2E_OUTPUT_COUNT=2`, uploaded as `distro-e2e-fedora-43-2out`. Each
+  run adds a JUnit summary to the step summary.
+
+Changes that only touch `tests/qml`, `tests/unit`, `tests/kwin`,
+`tests/integration` or Markdown do not start `distro-e2e.yml`; changes that
+only touch this directory's tests and harness (anything but the
+Dockerfile), `tests/distro` (except its two image scripts) or Markdown do
+not start `Build & tests`.
 
 ### Artifacts (`tests/appium/artifacts/`, gitignored, recreated every run)
 

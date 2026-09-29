@@ -1,0 +1,229 @@
+selenium-webdriver-at-spi.py: build the XPath tree with pipelined D-Bus calls
+
+Every XPath lookup (find element(s), page source) serialises the session
+application's whole AT-SPI tree to XML. _createNode2 reads each node through
+libatspi with about eight synchronous D-Bus round trips (role, role name,
+name, description, accessible id, states, child count, child at index), so a
+lookup costs ~1 ms per node: ~12 ms for the dock, 150-380 ms while krema's
+Settings window (180-380 nodes) is open. It was half of the suite's time.
+
+Qt's org.a11y.atspi.Cache.GetItems always returns an empty list, so no
+single call returns the tree. _createTree sends each node's calls (GetRole,
+the Name, Description and AccessibleId properties, GetState, GetChildren)
+asynchronously on its own connection to the accessibility bus and requests a
+node's children as soon as its GetChildren reply arrives, so all calls are in
+flight at once and only the toolkit's own processing time remains. The XML
+is the same as _createNode2's: role names from atspi_role_get_name(), state
+names through pyatspi, AccessibleId omitted when the toolkit has none,
+children in index order with null children skipped. Anything it cannot
+reproduce exactly (a toolkit other than Qt, the desktop root, an error reply,
+a child on another bus, a role outside libatspi's table) falls back to
+_createNode2 for the whole tree.
+
+diff --git a/selenium-webdriver-at-spi.py b/selenium-webdriver-at-spi.py
+index 23075e5..3329092 100644
+--- a/selenium-webdriver-at-spi.py
++++ b/selenium-webdriver-at-spi.py
+@@ -2,6 +2,7 @@
+ # SPDX-FileCopyrightText: 2021-2023 Harald Sitter <sitter@kde.org>
+ 
+ import base64
++import functools
+ import json
+ import logging
+ import os
+@@ -9,6 +10,7 @@ import signal
+ import subprocess
+ import sys
+ import tempfile
++import threading
+ import time
+ import traceback
+ import uuid
+@@ -28,7 +30,7 @@ import logging
+ logging.getLogger("werkzeug").disabled = True
+ gi.require_version('Gdk', '3.0')
+ gi.require_version('Gtk', '3.0')
+-from gi.repository import Gdk, Gio, GLib, Gtk
++from gi.repository import Atspi, Gdk, Gio, GLib, Gtk
+ 
+ # Exposes AT-SPI as a webdriver. This is written in python because C sucks and pyatspi is a first class binding so
+ # we lose nothing but gain the reduced sucking of python.
+@@ -122,6 +124,150 @@ def _createNode2(accessible, parentElement, indexInParents=[]):
+         return e
+ 
+ 
++_ATSPI_ACCESSIBLE = 'org.a11y.atspi.Accessible'
++_ATSPI_NULL_PATH = '/org/a11y/atspi/null'
++_DBUS_PROPERTIES = 'org.freedesktop.DBus.Properties'
++# One node's calls (key, interface, method, parameters, reply type): what _createNode2 reads through libatspi, with
++# GetChildren in place of ChildCount + GetChildAtIndex (Qt answers both from the same childCount()/child(i)).
++_NODE_CALLS = (
++    ('role', _ATSPI_ACCESSIBLE, 'GetRole', None, GLib.VariantType('(u)')),
++    ('name', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'Name')), GLib.VariantType('(v)')),
++    ('description', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'Description')), GLib.VariantType('(v)')),
++    ('id', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'AccessibleId')), GLib.VariantType('(v)')),
++    ('states', _ATSPI_ACCESSIBLE, 'GetState', None, GLib.VariantType('(au)')),
++    ('children', _ATSPI_ACCESSIBLE, 'GetChildren', None, GLib.VariantType('(a(so))')),
++)
++_a11y_bus = None
++_a11y_bus_lock = threading.Lock()
++
++
++def _a11y_connection():
++    # Own connection to the accessibility bus (the one libatspi uses), for asynchronous calls.
++    global _a11y_bus
++    with _a11y_bus_lock:
++        if _a11y_bus is None or _a11y_bus.is_closed():
++            address = os.environ.get('AT_SPI_BUS_ADDRESS')
++            if not address:
++                session_bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
++                address = session_bus.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.a11y.Bus', 'GetAddress', None,
++                                                GLib.VariantType('(s)'), Gio.DBusCallFlags.NONE, -1, None).unpack()[0]
++            _a11y_bus = Gio.DBusConnection.new_for_address_sync(
++                address,
++                Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
++                None, None)
++        return _a11y_bus
++
++
++class _PipelineUnsupported(Exception):
++    pass
++
++
++def _createTree(accessible):
++    # Same XML as _createNode2(accessible, None), but the D-Bus calls for every node are sent asynchronously and are
++    # all in flight at once, instead of ~8 synchronous round trips per node one after the other. (Qt's
++    # org.a11y.atspi.Cache.GetItems returns no items, so no single call returns the whole tree.) Whatever this cannot
++    # reproduce exactly (another toolkit, the desktop root, a node that vanished or answers with an error, a role
++    # outside libatspi's table) is built the synchronous way.
++    try:
++        return _createTreePipelined(accessible)
++    except _PipelineUnsupported:
++        return _createNode2(accessible, None)
++
++
++def _createTreePipelined(accessible):
++    if not accessible or accessible.toolkitName != "Qt":
++        raise _PipelineUnsupported()
++    bus_name = accessible.app.bus_name
++    connection = _a11y_connection()
++    context = GLib.MainContext.new()
++    nodes = {}  # object path -> {key: reply value}
++    pending = 0
++    failed = False
++
++    def reply(conn, result, path, key):
++        nonlocal pending, failed
++        pending -= 1
++        try:
++            value = conn.call_finish(result).get_child_value(0)
++            if key in ('name', 'description', 'id'):
++                value = value.get_variant()
++                if value.get_type_string() != 's':
++                    raise _PipelineUnsupported()
++                value = value.get_string()
++            elif key == 'role':
++                value = value.get_uint32()
++            else:
++                value = value.unpack()
++        except GLib.Error:
++            if key != 'id':
++                failed = True
++                return
++            value = None  # libatspi's accessibleId when the toolkit has none (Qt < 6.6)
++        except Exception:  # an exception in a GLib callback would only be printed
++            failed = True
++            return
++        nodes[path][key] = value
++        if key == 'children':
++            for child_bus, child_path in value:
++                if child_path == _ATSPI_NULL_PATH:
++                    continue  # _createNode2 skips a null child
++                if child_bus != bus_name or child_path in nodes:
++                    failed = True  # another application's object; an object under two parents
++                    return
++                request(child_path)
++
++    def request(path):
++        nonlocal pending
++        nodes[path] = {}
++        for key, interface, method, parameters, reply_type in _NODE_CALLS:
++            connection.call(bus_name, path, interface, method, parameters, reply_type, Gio.DBusCallFlags.NONE, 4000,
++                            None, reply, path, key)
++            pending += 1  # the reply is dispatched by context.iteration() below, never before this
++
++    context.push_thread_default()
++    try:
++        request(accessible.path)
++        while pending > 0:
++            context.iteration(True)
++    finally:
++        context.pop_thread_default()
++    if failed:
++        raise _PipelineUnsupported()
++
++    def element(path, indexInParents):
++        node = nodes[path]
++        role = node['role']
++        if role >= Atspi.ROLE_COUNT or role == Atspi.Role.EXTENDED or len(node['states']) != 2:
++            raise _PipelineUnsupported()  # libatspi would ask the toolkit for the role name / reject the state set
++        roleName = _role_name(role)
++        e = etree.Element(roleName.replace(" ", "_") if roleName else "accessible")
++        e.set("name", node['name'])
++        e.set("role", str(role))
++        e.set("description", node['description'])
++        if node['id'] != None:
++            e.set("accessibility-id", node['id'])
++        e.set("path", ' '.join(str(x) for x in indexInParents))
++        # pyatspi's StateSet.getStates() lists the 64 state bits (GetState: low word, high word) in bit order.
++        bits = node['states'][0] | (node['states'][1] << 32)
++        e.set("states", ', '.join(_state_name(i) for i in range(64) if bits & (1 << i)))
++        for i, (_child_bus, child_path) in enumerate(node['children']):
++            if child_path != _ATSPI_NULL_PATH:
++                e.append(element(child_path, indexInParents + [i]))
++        return e
++
++    return element(accessible.path, [])
++
++
++@functools.cache
++def _role_name(role):
++    return Atspi.role_get_name(Atspi.Role(role))
++
++
++@functools.cache
++def _state_name(state):
++    return pyatspi.stateToString(Atspi.StateType(state))
++
++
+ def errorFromMessage(error, message):
+     return jsonify({'value': {'error': error, 'message': message}})
+ 
+@@ -303,7 +449,7 @@ def session_source(session_id):
+     if not session:
+         return json.dumps({'value': {'error': 'no such window'}}), 404, {'content-type': 'application/json'}
+ 
+-    doc = _createNode2(session.browsing_context, None)
++    doc = _createTree(session.browsing_context)
+     return json.dumps({'value': etree.tostring(doc, pretty_print=False).decode("utf-8")}), 200, {'content-type': 'application/xml'}
+ 
+ 
+@@ -314,7 +460,7 @@ def session_source_raw(session_id):
+     if not session:
+         return json.dumps({'value': {'error': 'no such window'}}), 404, {'content-type': 'application/json'}
+ 
+-    doc = _createNode2(session.browsing_context, None)
++    doc = _createTree(session.browsing_context)
+     return etree.tostring(doc, pretty_print=True).decode("utf-8"), 200, {'content-type': 'application/xml'}
+ 
+ def check_requires_button_compat():
+@@ -329,7 +475,7 @@ def locator(session, strategy, selector, start, findAll = False):
+ 
+     while datetime.now() < end_time:
+         if strategy == 'xpath':
+-            doc = _createNode2(start, None)
++            doc = _createTree(start)
+             for c in doc.xpath(selector):
+                 path = [int(x) for x in c.get('path').split()]
+                 # path is relative to the app root, not our start item!

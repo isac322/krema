@@ -175,6 +175,7 @@ not start `Build & tests`.
 | `<test id>/thumbnail-focus.txt` | KBD-006: focus ring vs other thumbnail blue pixel counts, one line per screenshot until the ring was painted |
 | `test-windows.log` | fixture window output, including received key presses |
 | `krema-build.log`, `cmake-configure.log` | krema build |
+| `kactivitymanagerd.log` | activity manager output, only when the image has it (Tier 3; see below) |
 | `startup-crash/` | logs of a session whose KWin crashed before pytest started (see below) |
 | `[startup-crash-]backtrace-<core>.txt` | gdb backtrace of a KWin core, only when the host's `core_pattern` is a path mounted into the container and the image has gdb |
 
@@ -192,6 +193,15 @@ or any other failure fails the run as before. To get a backtrace (e.g. for
 an upstream report), run with `sudo sysctl kernel.core_pattern=/tmp/cores/core.%e.%p`,
 `KREMA_E2E_DOCKER_ARGS="-v /tmp/cores:/tmp/cores --ulimit core=-1"` and an
 image with gdb (symbols come from debuginfod when `DEBUGINFOD_URLS` is set in the container).
+
+**Activity manager.** When the image has kactivitymanagerd (Tier 3:
+krema's `plasma-workspace` dependency pulls it in), `entrypoint.sh` starts
+it inside the kwin session before pytest and waits for
+`org.kde.ActivityManager` on the bus, as Plasma starts it as a session
+service. Left to D-Bus activation, it would start from the bus's
+environment, which has no `WAYLAND_DISPLAY`: it tried xcb and aborted
+(SIGABRT) on every krema start (about 100 times per CI run), and the CI
+runner's apport processed each core dump.
 
 ### Timings (this host: OrbStack on macOS arm64, 10 CPUs)
 
@@ -375,6 +385,25 @@ AT-SPI lookup (XPath tags are role names with `_`: `tool_bar`, `button`,
 | `has_state(element, state) -> bool` (module function) | `focused`, `showing`, `visible`, `focusable`, `sensitive`, `active`, ... |
 | Constants | `TOOLBAR_XPATH`, `ITEMS_XPATH`, `PREVIEW_XPATH`, `THUMBNAILS_XPATH`, `SETTINGS_XPATH`, `DEFAULT_CONFIG`; `PAGE_ROLE` (a Settings page is `page_tab` before Qt 6.11, `panel` since) and `SETTINGS_STACK_XPATH` (the Settings page stack, matched by its page children because its own role varies by distro; Qt 6.11 adds a `filler` level), both from `env.QT_VERSION` (runtime `qVersion()`) |
 
+Lookup cost. Every XPath lookup (`find`, `find_all`, `wait_for`, every
+`item*`/`preview*`/`surface_rect` helper) makes selenium-webdriver-at-spi
+serialise krema's whole AT-SPI tree to XML and evaluate the XPath on it.
+Upstream reads each node with about eight synchronous D-Bus round trips
+(~1 ms per node). The image patches it (`tools/pipelined-tree.patch`) to
+send each node's calls (`GetRole`, the `Name`, `Description` and
+`AccessibleId` properties, `GetState`, `GetChildren`) asynchronously, all
+in flight at once. The XML is the same element for element, so XPaths
+match the same nodes (checked on the dock, the open preview, every Settings
+page and an open Settings combo box). Qt's `Cache.GetItems` returns no
+items, so no single call returns the tree. Anything the patch cannot
+reproduce exactly (an error reply, another application's child, a role
+outside libatspi's table) falls back to the upstream walk. On the host of
+"Timings" above, building the tree takes 2.6 ms instead of 12 ms for the dock
+(11 nodes) and 28 ms instead of 191 ms with the Settings window open (180
+nodes). The cost still grows with the tree: pages visited in the Settings
+window stay in it (up to ~380 nodes). A lookup that matches nothing still
+rebuilds the tree until the 50 ms implicit wait has elapsed.
+
 Geometry. On Wayland, AT-SPI rects (`element.rect`, `Rect.of(element)`) are
 relative to the element's surface. The surface's screen position comes from
 KWin: the krema window whose client size equals the surface's AT-SPI frame.
@@ -433,10 +462,15 @@ works too, e.g. `org.kde.kwrite` to pose as KWrite (kwrite and kfind
 | `key(*names, hold_ms=0)` | Combo to the focused surface or KWin's shortcut handling: `key("Escape")`, `key("Meta", "Alt", "d")`, `key("ctrl", "a")`. Names: single characters, `meta`/`super`, `ctrl`, `alt`, `shift`, `return`/`enter`, `escape`, `tab`, `space`, `backspace`, `delete`, arrows, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`. |
 | `type_text(text)` | Character by character. |
 | `pointer_position()`, `run_actions(action_sets)`, `key_value(name)` | Last position set by this module, raw W3C action chains, and the name-to-W3C key map. |
+| `background_actions(action_sets)` | Context manager: runs a raw chain in the background while the body runs; leaving the body ends the chain's pause marked `"interruptible": True`, then waits for the chain to finish. |
 
 The image patches upstream inputsynth (`tools/inputsynth-fixes.patch`) so that
-every `pointerMove` is absolute, which multi-move chains and drags need, and
-so that W3C `Meta` sends Super, which KDE calls Meta.
+every `pointerMove` is absolute, which multi-move chains and drags need, so
+that W3C `Meta` sends Super, which KDE calls Meta, and so that SIGUSR1 ends
+a pause marked `"interruptible": true` (the one in progress, or the next).
+A button pressed by one inputsynth process cannot be released by another,
+so a mid-drag check (`test_05_drag.py`) holds the button in such a pause of
+the drag's own chain and ends it as soon as its checks are done.
 
 Every inputsynth process registers its own fake-input device, and KWin
 advertises `wl_seat` pointer capability only while some pointer device
@@ -537,6 +571,15 @@ tests/appium/run-e2e.sh
 The OrbStack VM on the development Mac has no DRM driver, so capture cannot
 be exercised there.
 
+Tests that move the pointer onto a preview popup right after opening it call
+`preview.wait_on_screen(krema, popup)` first (PREV-003, PREV-004 close
+button, PREV-005), so they need capture as well. AT-SPI reports the popup
+as shown as soon as krema's QML shows it, but its input region reaches KWin
+only with the preview surface's next commit, the same commit that first
+draws it (see Investigations 4). The oracle: screenshot pixels inside the
+popup's rect that no other KWin window covers are the empty, black desktop
+until the popup paints its opaque background over them.
+
 ## Investigations
 
 Each result below was reproduced in this harness (KWin 6.7.5, Qt 6.10, KF 6.30).
@@ -612,8 +655,31 @@ How to use the menu anyway, as implemented in `Krema`:
   Choosing "Settings..." opened "Settings — Krema", whose AT-SPI frame
   (`name="Settings"`) matches the KWin client geometry.
 
+### 4. Does the preview take the pointer as soon as AT-SPI shows it? No, only once it is on screen.
+
+`PreviewController::doShow()` sets the popup's input region through
+`updateInputRegion()` → `QWindow::setMask()`
+(`src/shell/previewcontroller.cpp`). Qt's Wayland backend sends
+`wl_surface.set_input_region` without a commit. The region is
+double-buffered state, so it applies with the preview surface's next
+commit: the first frame that draws the popup. On the first open after a
+krema start that commit came 100-190 ms after `set_input_region`
+(`WAYLAND_DEBUG=client`). AT-SPI showed the popup at once. A pointer
+flicked onto the popup in between received no `wl_pointer.enter`. KWin did
+not send one when the region later appeared under the resting pointer, so
+the dock's 200 ms hide timer closed the preview
+(`Hide timer fired, previewHovered: false`). Flicks 10-40 ms after AT-SPI
+showed the popup closed it in 12 of 22 runs; flicks 200 ms or more after
+never did. A user cannot aim at a popup before it is drawn, so tests wait for
+it on screen (`preview.wait_on_screen`).
+
 ## Proposed application changes
 
-None are open. The Focus Dock default in `src/app/application.cpp`
-(`focusDockAction`) is Meta+Alt+D, clear of KWin's "Move Mouse to Focus"
-(Meta+F5).
+One is open. Committing the preview surface right after each `setMask` in
+`PreviewController::updateInputRegion` (`wl_surface_commit` on the surface
+from `QPlatformNativeInterface`, which needs `Qt6::GuiPrivate`) would apply
+the input region together with AT-SPI visibility (Investigations 4). It is
+not applied; the suite waits for the drawn popup instead.
+
+The Focus Dock default in `src/app/application.cpp` (`focusDockAction`) is
+Meta+Alt+D, clear of KWin's "Move Mouse to Focus" (Meta+F5).

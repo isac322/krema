@@ -22,9 +22,12 @@ capability between calls and clients drop their ``wl_pointer``.
 from __future__ import annotations
 
 import json
+import signal
 import subprocess
 import tempfile
-from typing import Iterable, Sequence
+import time
+from contextlib import contextmanager
+from typing import Iterable, Iterator, Sequence
 
 from selenium.webdriver.common.keys import Keys
 
@@ -87,6 +90,38 @@ def run_actions(action_sets: Sequence[dict], timeout: float = 30.0) -> None:
         proc = subprocess.run([INPUTSYNTH, f.name], capture_output=True, text=True, timeout=timeout)
     if proc.returncode != 0:
         raise RuntimeError(f"inputsynth failed ({proc.returncode}): {proc.stderr[-2000:]}")
+
+
+@contextmanager
+def background_actions(action_sets: Sequence[dict], timeout: float = 30.0) -> Iterator[None]:
+    """Run raw W3C action sets like :func:`run_actions`, in the background
+    while the body runs. Leaving the body (also by an exception) sends the
+    chain SIGUSR1 and waits for it to finish: the signal ends the chain's
+    pause marked ``"interruptible": True`` (the one in progress, or the next
+    one if the chain has not reached it yet; tools/inputsynth-fixes.patch).
+    So a chain can hold a button in such a pause exactly as long as the body
+    needs, with the pause's duration as the upper bound."""
+    deadline = time.monotonic() + timeout
+    with (
+        tempfile.NamedTemporaryFile("w", suffix=".json") as f,
+        tempfile.TemporaryFile("w+") as err,
+    ):
+        json.dump({"actions": list(action_sets)}, f)
+        f.flush()
+        proc = subprocess.Popen([INPUTSYNTH, f.name], stdout=subprocess.DEVNULL, stderr=err, text=True)
+        try:
+            yield
+        finally:
+            proc.send_signal(signal.SIGUSR1)  # no-op once it has exited
+            try:
+                proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise
+            if proc.returncode != 0:
+                err.seek(0)
+                raise RuntimeError(f"inputsynth failed ({proc.returncode}): {err.read()[-2000:]}")
 
 
 def _pointer_set(actions: list[dict]) -> dict:

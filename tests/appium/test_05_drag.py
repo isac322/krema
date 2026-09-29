@@ -8,8 +8,9 @@ item for 300 ms (dragHoldTimer) and the pointer then moves more than 10 px.
 Every drag here is ONE inputsynth action chain: a button pressed by one
 inputsynth process is never released by the next one (the release does not
 reach krema and the drag stays active), so a mid-drag check runs the chain in
-a background thread with a long in-chain pause and inspects the screen and
-the AT-SPI tree during that pause.
+the background with an interruptible in-chain pause and inspects the screen
+and the AT-SPI tree during that pause; the pause ends (and the chain goes on
+to the drop) as soon as the check is done.
 
 The drag ghost, the drop indicator and the dimmed source are
 ``Accessible.ignored`` QML items, so those checks are pixel checks on KWin
@@ -18,7 +19,6 @@ screenshots (needs the OpenGL compositor, i.e. a DRM render node).
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator, Sequence
@@ -36,7 +36,7 @@ from krema_e2e.windows import TestWindow, TestWindows
 ICON = 48  # krema.kcfg IconSize default; IconSpacing default is 4
 HOLD_MS = 450  # > main.qml dragHoldTimer (300 ms)
 STEP_MS = 40
-PAUSE_MS = 8000  # in-chain pause long enough for screenshots + AT-SPI reads
+PAUSE_MS = 8000  # upper bound of the mid-drag pause; the body's end cuts it short
 
 KWRITE, KFIND = "KWrite", "KFind"
 TW, TW2 = env.TEST_APP_NAME, env.TEST_APP2_NAME  # icons: utilities-terminal (dark), accessories-text-editor
@@ -65,21 +65,21 @@ def _move(x: int, y: int) -> dict:
     return {"type": "pointerMove", "x": int(x), "y": int(y), "duration": 0, "origin": "viewport"}
 
 
-def _pause(ms: int) -> dict:
-    return {"type": "pause", "duration": int(ms)}
+def _pause(ms: int, interruptible: bool = False) -> dict:
+    return {"type": "pause", "duration": int(ms), "interruptible": interruptible}
 
 
 def drag_actions(start: tuple[int, int], legs: Sequence[tuple[int, int] | int], steps: int = 8) -> list[dict]:
     """Hover ``start``, press, hold HOLD_MS, then for each leg glide to the
-    point in ``steps`` motion events or (for an int) pause that many ms, and
-    release at the last point."""
+    point in ``steps`` motion events or (for an int) pause up to that many ms
+    (until :func:`dragging`'s body ends), and release at the last point."""
     x, y = start
     actions = [_move(x, y - 30), _pause(100), _move(x, y), _pause(150)]
     actions += [{"type": "pointerDown", "button": 0}, _pause(HOLD_MS)]
     pos = start
     for leg in legs:
         if isinstance(leg, int):
-            actions.append(_pause(leg))
+            actions.append(_pause(leg, interruptible=True))
             continue
         for p in inp.line(pos, leg, steps):
             actions += [_move(*p), _pause(STEP_MS)]
@@ -92,29 +92,25 @@ def _end(start: tuple[int, int], legs: Sequence[tuple[int, int] | int]) -> tuple
     return next((leg for leg in reversed(legs) if not isinstance(leg, int)), start)
 
 
-def _run(actions: list[dict]) -> None:
-    inp.run_actions([{"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": actions}], timeout=60)
+def _pointer(actions: list[dict]) -> list[dict]:
+    return [{"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": actions}]
 
 
 def drag(start: tuple[int, int], legs: Sequence[tuple[int, int] | int]) -> None:
     """A complete drag, in the foreground."""
-    _run(drag_actions(start, legs))
+    inp.run_actions(_pointer(drag_actions(start, legs)), timeout=60)
     inp.move(*_end(start, legs))  # keep krema_e2e.input's pointer bookkeeping in sync
 
 
 @contextmanager
 def dragging(start: tuple[int, int], legs: Sequence[tuple[int, int] | int]) -> Iterator[None]:
     """Run a drag chain in the background; the body runs while it is in
-    flight (sync on kwin.cursor_pos()). Always waits for the release."""
-    pool = ThreadPoolExecutor(max_workers=1)
-    future = pool.submit(_run, drag_actions(start, legs))
+    flight (sync on kwin.cursor_pos()). The chain's pause ends when the body
+    does; always waits for the release."""
     try:
-        yield
+        with inp.background_actions(_pointer(drag_actions(start, legs)), timeout=60):
+            yield
     finally:
-        try:
-            future.result(timeout=90)
-        finally:
-            pool.shutdown(wait=True)
         inp.move(*_end(start, legs))
 
 

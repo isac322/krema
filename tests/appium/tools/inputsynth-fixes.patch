@@ -1,4 +1,4 @@
-inputsynth: absolute pointer moves and W3C Meta = Super
+inputsynth: absolute pointer moves, W3C Meta = Super, interruptible pauses
 
 1. Upstream adds every mouse move to the previous *target* and stores the raw
    move value, so the 2nd+ move of one action chain lands in the wrong place.
@@ -10,10 +10,34 @@ inputsynth: absolute pointer moves and W3C Meta = Super
    shift level, so "Meta+F5" is sent as Shift+<META>+F5 and never matches a
    Meta+F5 KGlobalAccel shortcut. Map it to Super_L (<LWIN>, KEY_LEFTMETA),
    which is what KDE calls Meta.
+3. A pause action with "interruptible": true ends early when the process
+   gets SIGUSR1 (the signal ends the interruptible pause in progress, or the
+   next one; other pauses ignore it). A mid-drag check holds the button in a
+   pause of the drag's own chain (a later process cannot release it) while it
+   inspects the screen; the test releases it as soon as it is done instead of
+   always sitting out a worst-case fixed pause.
 
---- a/inputsynth/interaction.cpp	2026-09-27 20:58:26.523181210 +0900
-+++ b/inputsynth/interaction.cpp	2026-09-27 20:58:26.564933738 +0900
-@@ -335,7 +335,7 @@
+diff --git a/inputsynth/interaction.cpp b/inputsynth/interaction.cpp
+index 5e7dd9d..0049ab9 100644
+--- a/inputsynth/interaction.cpp
++++ b/inputsynth/interaction.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "interaction.h"
+ 
++#include <algorithm>
+ #include <ranges>
+ #include <span>
+ 
+@@ -16,6 +17,7 @@
+ #include <QDBusMessage>
+ #include <QDBusMetaType>
+ #include <QDBusReply>
++#include <QDeadlineTimer>
+ #include <QDebug>
+ #include <QGuiApplication>
+ #include <QScopeGuard>
+@@ -335,7 +337,7 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
          {QChar(u'\ue037'), XKB_KEY_F7},        {QChar(u'\ue038'), XKB_KEY_F8},
          {QChar(u'\ue039'), XKB_KEY_F9},        {QChar(u'\ue002'), XKB_KEY_Help},
          {QChar(u'\ue011'), XKB_KEY_Home},      {QChar(u'\ue016'), XKB_KEY_Insert},
@@ -22,7 +46,38 @@ inputsynth: absolute pointer moves and W3C Meta = Super
          {QChar(u'\ue024'), XKB_KEY_multiply},  {QChar(u'\ue000'), XKB_KEY_NoSymbol},
          {QChar(u'\ue01a'), XKB_KEY_KP_0},      {QChar(u'\ue01b'), XKB_KEY_KP_1},
          {QChar(u'\ue01c'), XKB_KEY_KP_2},      {QChar(u'\ue01d'), XKB_KEY_KP_3},
-@@ -474,16 +474,11 @@
+@@ -356,9 +358,12 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
+     return xkb_utf32_to_keysym(key.unicode());
+ }
+ 
+-PauseAction::PauseAction(unsigned long duration)
++std::atomic_bool PauseAction::s_resume = false;
++
++PauseAction::PauseAction(unsigned long duration, bool interruptible)
+     : BaseAction()
+     , m_duration(duration)
++    , m_interruptible(interruptible)
+ {
+ }
+ 
+@@ -368,7 +373,15 @@ PauseAction::~PauseAction()
+ 
+ void PauseAction::perform()
+ {
+-    QThread::msleep(m_duration);
++    if (!m_interruptible) {
++        QThread::msleep(m_duration);
++        return;
++    }
++    const QDeadlineTimer deadline{qint64(m_duration)};
++    while (!s_resume.load() && !deadline.hasExpired()) {
++        QThread::msleep(std::min<qint64>(deadline.remainingTime(), 10));
++    }
++    s_resume = false;
+ }
+ 
+ WheelAction::WheelAction(const QString &id, const QPoint &pos, const QPoint &deltaPos, unsigned long duration)
+@@ -474,16 +487,11 @@ void PointerAction::perform()
                  QThread::msleep(stepDurationMs);
              }
          }
@@ -44,7 +99,7 @@ inputsynth: absolute pointer moves and W3C Meta = Super
          if (m_pointerType == PointerKind::Touch) {
              s_interface->touch_motion(m_uniqueId, lastX, lastY);
          } else {
-@@ -493,7 +488,7 @@
+@@ -493,7 +501,7 @@ void PointerAction::perform()
          // Sleep to the total duration
          QThread::msleep(m_duration - (steps - 1) * stepDurationMs);
          // Update the last position
@@ -53,3 +108,98 @@ inputsynth: absolute pointer moves and W3C Meta = Super
  
          return;
      }
+diff --git a/inputsynth/interaction.h b/inputsynth/interaction.h
+index 710fcae..f7c2175 100644
+--- a/inputsynth/interaction.h
++++ b/inputsynth/interaction.h
+@@ -6,6 +6,7 @@
+ 
+ #pragma once
+ 
++#include <atomic>
+ #include <memory>
+ 
+ #include "qwayland-fake-input.h"
+@@ -145,13 +146,18 @@ private:
+ class PauseAction : public BaseAction
+ {
+ public:
+-    explicit PauseAction(unsigned long duration);
++    // An interruptible pause ends early on SIGUSR1: the signal ends the one
++    // in progress, or the next one if none is (it is not lost).
++    explicit PauseAction(unsigned long duration, bool interruptible = false);
+     ~PauseAction() override;
+ 
+     void perform() override;
+ 
++    static std::atomic_bool s_resume;
++
+ private:
+     unsigned long m_duration = 0;
++    bool m_interruptible = false;
+ };
+ 
+ class WheelAction : public BaseAction
+diff --git a/inputsynth/main.cpp b/inputsynth/main.cpp
+index a3073a3..4311c89 100644
+--- a/inputsynth/main.cpp
++++ b/inputsynth/main.cpp
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+ // SPDX-FileCopyrightText: 2023 Harald Sitter <sitter@kde.org>
+ 
++#include <csignal>
+ #include <optional>
+ 
+ #include <QDebug>
+@@ -25,10 +26,22 @@ std::optional<wl_keyboard_key_state> typeToKeyState(QStringView type)
+     qWarning() << "unsupported keyboard action type" << type;
+     return {};
+ }
++
++void resumePause(int)
++{
++    PauseAction::s_resume = true;
++}
++
++PauseAction *pauseAction(const QVariantHash &hash)
++{
++    return new PauseAction(hash.value(QStringLiteral("duration")).value<ulong>(), hash.value(QStringLiteral("interruptible")).toBool());
++}
+ } // namespace
+ 
+ int main(int argc, char **argv)
+ {
++    // Before anything else: SIGUSR1's default action would kill the process.
++    std::signal(SIGUSR1, resumePause);
+     QGuiApplication app(argc, argv);
+ 
+     const auto actionFilePath = qGuiApp->arguments().at(1);
+@@ -53,8 +66,7 @@ int main(int argc, char **argv)
+                 BaseAction *action = nullptr;
+ 
+                 if (type == QLatin1String("pause")) {
+-                    const ulong duration = hash.value(QStringLiteral("duration")).value<ulong>();
+-                    action = new PauseAction(duration);
++                    action = pauseAction(hash);
+                 } else {
+                     const auto string = hash.value(QStringLiteral("value")).toString();
+                     const QChar *character = string.unicode();
+@@ -92,7 +104,7 @@ int main(int argc, char **argv)
+                 } else if (actionType == QLatin1String("pointerMove")) {
+                     actionTypeInt = PointerAction::ActionType::Move;
+                 } else if (actionType == QLatin1String("pause")) {
+-                    actions.emplace_back(new PauseAction(duration));
++                    actions.emplace_back(pauseAction(hash));
+                     continue;
+                 }
+ 
+@@ -126,7 +138,7 @@ int main(int argc, char **argv)
+                 const auto duration = hash.value(QStringLiteral("duration")).value<ulong>();
+ 
+                 if (const QString actionType = hash.value(QStringLiteral("type")).toString(); actionType == QLatin1String("pause")) {
+-                    actions.emplace_back(new PauseAction(duration));
++                    actions.emplace_back(pauseAction(hash));
+                     continue;
+                 } else {
+                     const auto x = hash.value(QStringLiteral("x")).toInt();

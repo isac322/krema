@@ -28,6 +28,29 @@ if [ "${1:-}" = "--inner" ]; then
     : >"$KREMA_E2E_STATE/inner-started"
     # Clients (krema, fixtures) render with llvmpipe, like kwin --virtual.
     export LIBGL_ALWAYS_SOFTWARE=1
+    # Like Plasma, which starts kactivitymanagerd as a session service
+    # (plasma-kactivitymanagerd.service, with the session's environment), run
+    # it inside the kwin session when it is installed (Tier 3: krema's
+    # plasma-workspace dependency pulls it in). Otherwise krema's
+    # TaskManager::ActivityInfo D-Bus-activates it on every start from the
+    # bus's environment, which has no WAYLAND_DISPLAY: it tries xcb and
+    # aborts (SIGABRT), once per krema start, each crash handed to the host's
+    # core handler (apport on the CI runners).
+    for d in $(echo "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' ' '); do
+        f="$d/dbus-1/services/org.kde.ActivityManager.service"
+        [ -f "$f" ] || continue
+        exec_line=$(sed -n 's/^Exec=//p' "$f")
+        # shellcheck disable=SC2086  # Exec= is a command line; word-split it
+        $exec_line >>/artifacts/kactivitymanagerd.log 2>&1 &
+        tries=0
+        until dbus-send --session --print-reply=literal --dest=org.freedesktop.DBus / \
+            org.freedesktop.DBus.NameHasOwner string:org.kde.ActivityManager 2>/dev/null | grep -q true; do
+            tries=$((tries + 1))
+            [ "$tries" -le 100 ] || { echo "kactivitymanagerd did not start" >&2; cat /artifacts/kactivitymanagerd.log >&2; exit 1; }
+            sleep 0.05
+        done
+        break
+    done
     cd "$KREMA_E2E_TESTS_DIR"
     python3 -m pytest -p no:cacheprovider --junitxml=/artifacts/junit.xml "$@" >>/artifacts/pytest.log 2>&1
     exit $?

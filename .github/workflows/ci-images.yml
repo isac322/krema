@@ -61,7 +61,7 @@ name: CI images
 
 on:
   push:
-    branches: [master, ci/consolidate]
+    branches: [master]
     paths:
       - "tests/distro/**"
       - "!tests/distro/**/*.md"
@@ -161,7 +161,7 @@ jobs:
         id: decide
         env:
           EVENT: ${{ github.event_name }}
-          FORCE: "true"
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
         run: |
           runtime="$(tests/distro/image-ref.sh runtime "$TARGET")"
           builder="$(tests/distro/image-ref.sh builder "$TARGET")"
@@ -246,7 +246,7 @@ jobs:
       - name: Build and push if due
         env:
           EVENT: ${{ github.event_name }}
-          FORCE: "true"
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
           KREMA_CI_PUSH: "1"
         run: |
           ref="$(tests/distro/image-ref.sh ctest)"

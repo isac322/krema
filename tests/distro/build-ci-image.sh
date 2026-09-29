@@ -93,10 +93,21 @@ if ((pull)); then
 fi
 
 label=(--label "org.opencontainers.image.source=https://github.com/isac322/krema")
+# KREMA_CI_PUSH=1 (the publisher): also push the ref with zstd-compressed
+# layers. Consumers pull these multi-GB images on every job; zstd layers are
+# smaller and decompress several times faster than gzip, which is what a
+# pull mostly waits for. Needs a docker-container buildx builder (the default
+# docker driver cannot choose the compression); the image is still loaded
+# locally for the publisher's later steps.
+outputs=(--load)
+if [[ "${KREMA_CI_PUSH:-0}" == 1 ]]; then
+    outputs=(--output type=docker
+        --output "type=image,name=$ref,push=true,compression=zstd,compression-level=3,force-compression=true,oci-mediatypes=true")
+fi
 case "$kind" in
     runtime | builder)
         distro_target "$target"
-        docker buildx build --load "${platform_args[@]}" "${label[@]}" \
+        docker buildx build "${outputs[@]}" "${platform_args[@]}" "${label[@]}" \
             --target "$kind" \
             --build-arg "BASE_IMAGE=$DISTRO_BASE_IMAGE" \
             --build-arg "TARGET_ID=$target" \
@@ -106,7 +117,7 @@ case "$kind" in
             -t "$ref" "$here/image" >&2
         ;;
     ctest)
-        docker buildx build --load "${platform_args[@]}" "${label[@]}" \
+        docker buildx build "${outputs[@]}" "${platform_args[@]}" "${label[@]}" \
             --target ctest-image \
             -t "$ref" "$repo/tests/appium" >&2
         ;;

@@ -127,6 +127,13 @@ build).
 | `ctest-fedora-43-<hash>` | `tests/appium/Dockerfile --target ctest-image` (Build & tests) | `tests/appium/Dockerfile` |
 | `vgem-<kernel release>-<hash>` | `FROM scratch` with `/vgem.ko` built by `tests/appium/setup-vgem.sh` for that runner kernel | `tests/appium/setup-vgem.sh` |
 
+Every job pulls a builder and a runtime image, so their size is on the
+critical path. Installs run without weak dependencies/recommends and
+without docs in every family (Fedora's `dnf builddep` included). The
+publisher pushes zstd-compressed layers (`KREMA_CI_PUSH=1` in
+`build-ci-image.sh`, docker-container buildx builder), which are smaller
+and decompress faster than gzip. A local `--load` build is unaffected.
+
 `<hash>` is the first 12 hex digits of a sha256 over those files' paths and
 contents plus the listed build arguments, so a change to any input yields a
 new tag, which is missing from the registry until the publisher pushes it:

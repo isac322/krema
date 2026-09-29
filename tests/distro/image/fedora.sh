@@ -54,7 +54,11 @@ family_builddeps() {
         return 0
     fi
     echo "packages.sh: missing BuildRequires:" $missing
-    dnf -y builddep "$PACKAGING/obs/krema.spec"
+    # Weak deps and docs off like every other install here: builddep's
+    # defaults added ~100 packages / ~300 MB nothing builds with
+    # (mesa-vulkan-drivers, intel-mediasdk, gdb-minimal...) to the builder
+    # image every job pulls.
+    dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs builddep "$PACKAGING/obs/krema.spec"
 }
 
 family_clean() {

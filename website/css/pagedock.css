@@ -160,8 +160,8 @@
 
 /* Interpolate these gradients in sRGB. A color-mix() stop makes a gradient
    default to Oklab interpolation, which Firefox renders by expanding every
-   segment into ~128 stops on a slow shader path; on phones that made the
-   dock repaint expensive. The declarations above stay as the fallback for
+   segment into ~128 stops on a slow shader path (it made the #mechanics demo
+   wallpaper stutter on phones). The declarations above stay as the fallback for
    browsers without gradient interpolation syntax. Keep `in srgb` on any new
    gradient that uses color-mix() or color(). */
 @supports (background-image: linear-gradient(in srgb, red, blue)) {

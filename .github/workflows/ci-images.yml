@@ -51,7 +51,7 @@ name: CI images
 
 on:
   push:
-    branches: [master, ci/consolidate]
+    branches: [master]
     paths:
       - "tests/distro/**"
       - "!tests/distro/**/*.md"

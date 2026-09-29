@@ -61,7 +61,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 ### Visual Styles
 - **Panel-Inherit** — Match your Plasma panel style automatically
 - **Semi-Transparent** — Subtle translucency over your desktop
-- **Transparent** — Fully transparent dock background
+- **Transparent**  — Fully transparent dock background
 - **Tinted** — Custom color with adjustable opacity
 - **Acrylic / Frosted Glass** — Blur + noise texture effect
 - **Mica** — System accent color based, inspired by Windows 11 Mica

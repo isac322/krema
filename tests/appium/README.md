@@ -115,20 +115,26 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 | `KREMA_E2E_SCREEN_WIDTH`, `KREMA_E2E_SCREEN_HEIGHT` | 1024, 768 | size of each virtual output (px) |
 | `KREMA_E2E_OUTPUT_COUNT` | 1 | number of outputs (`--output-count`), laid out left to right; tests marked `@pytest.mark.outputs(n)` run only when the session has exactly `n` |
 | `KREMA_E2E_DOCKER_ARGS` | unset | extra `docker run` arguments, e.g. `--cpus=2` to approximate a slower CI runner |
+| `KREMA_E2E_SHARD` | unset | `<i>/<N>` (0-based): run only every N-th collected test and deselect the rest. `tests/distro/run-distro-e2e.sh` sets it per shard container (`KREMA_E2E_SHARDS`); composes with `-k`/`-m` (sharding applies to the filtered collection). The default build volume gets a `-shard-<i>` suffix |
 
 ### CI
 
 `run-e2e.sh` is the local development loop; CI does not call it on a
 source-built krema. Two workflows cover the suite:
 
-* `.github/workflows/e2e.yml`, job `Build & tests`: in this directory's
-  image, builds every target with `BUILD_TESTING=ON` and runs the full
+* `.github/workflows/e2e.yml`, job `Build & tests`: builds the
+  `ctest-image` stage of this directory's Dockerfile (the `base` package set
+  plus ccache, without the AT-SPI stack), builds every target with
+  `BUILD_TESTING=ON` through ccache (persisted across runs in an
+  `actions/cache` `.ccache/` dir, `CCACHE_MAXSIZE=500M`), and runs the full
   `ctest` (unit, integration, KWin, QML and desktop-entry tests) except the
-  `e2e` label.
+  `e2e` label, in parallel with `-j$(nproc)`.
 * `.github/workflows/distro-e2e.yml`: runs this suite against the packaged
   krema on each of the 12 distro targets (`tests/distro/README.md`), on
   `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`; GitHub's
-  Azure kernel ships no vgem). The `fedora-43` entry also runs the
+  Azure kernel ships no vgem, so the built module is cached per kernel
+  release). The suite runs sharded in two containers (`KREMA_E2E_SHARDS=2`,
+  `KREMA_E2E_SHARD` above). The `fedora-43` entry also runs the
   `@pytest.mark.outputs(2)` tests (SET-008) with `KREMA_E2E_OUTPUT_COUNT=2`,
   uploaded as `distro-e2e-fedora-43-2out`. Each run adds a JUnit summary to
   the step summary.

@@ -30,6 +30,11 @@
 #                            sync and krema build, runs the suite from the
 #                            read-only checkout (tests/distro/run-distro-e2e.sh)
 #   KREMA_E2E_DISTRO         target id exported to the tests (tests/distro)
+#   KREMA_E2E_SHARD=<i>/<N>  select only every N-th collected test (shard i,
+#                            0-based; krema_e2e/pytest_plugin.py deselects the
+#                            rest). tests/distro/run-distro-e2e.sh sets it from
+#                            KREMA_E2E_SHARDS; the default build volume then
+#                            gets a -shard-<i> suffix.
 #
 # If the host has /dev/dri (e.g. after `sudo tests/appium/setup-vgem.sh`), it
 # is passed through so KWin composites with OpenGL on the vgem render node:
@@ -49,6 +54,13 @@ platform_args=
 if [ -n "${KREMA_E2E_PLATFORM:-}" ]; then
     platform_args="--platform $KREMA_E2E_PLATFORM"
     volume=${KREMA_E2E_VOLUME:-krema-e2e-build-$(echo "$KREMA_E2E_PLATFORM" | tr '/' '-')}
+fi
+
+# Sharded runs share neither volume nor artifacts. An explicit
+# KREMA_E2E_VOLUME is already suffixed per shard by the caller; the default
+# is suffixed here so concurrent krema builds do not race on /build.
+if [ -n "${KREMA_E2E_SHARD:-}" ] && [ -z "${KREMA_E2E_VOLUME:-}" ]; then
+    volume="$volume-shard-${KREMA_E2E_SHARD%/*}"
 fi
 
 now() { date +%s; }
@@ -100,6 +112,6 @@ docker run --rm --init $tty_args $platform_args \
     -v "$artifacts:/artifacts" \
     -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     -e KREMA_E2E_SCREEN_WIDTH -e KREMA_E2E_SCREEN_HEIGHT -e KREMA_E2E_OUTPUT_COUNT \
-    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO \
+    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD \
     $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
     "$image" sh /src/tests/appium/entrypoint.sh "$@"

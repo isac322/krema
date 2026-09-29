@@ -52,7 +52,9 @@ What it does:
    worktree as `krema-<version>.tar.gz` and builds it in a clean container of
    the target's base image with the repo's own packaging
    (`packaging/obs/krema.spec`, `packaging/obs/debian.*`,
-   `packaging/arch/PKGBUILD`; helpers in `pkg/`). The result is cached in
+   `packaging/arch/PKGBUILD`; helpers in `pkg/`). While it runs, the image's
+   package-independent stages (base + swas-build, below) build in the
+   background into BuildKit's cache. The result is cached in
    `tests/distro/.cache/packages/<target>/`; it is rebuilt only when missing
    or with `KREMA_DISTRO_REBUILD_PACKAGE=1`, so **rebuild after changing
    `src/` or `packaging/`**.
@@ -82,7 +84,14 @@ What it does:
    declaration also makes krema privileged for xdg-activation; on KWin < 6.5
    without it krema cannot raise its own Settings window from the dock.
    Tier 2 keeps the checks off: a krema built from source has no installed
-   desktop file.
+   desktop file. With `KREMA_E2E_SHARDS=N` (N > 1) the script instead starts
+   N `run-e2e.sh` containers concurrently: shard `i` (0-based) gets
+   `KREMA_E2E_SHARD=i/N` (the suite deselects all but every N-th collected
+   test), writes to `artifacts-distro-<target>/shard-<i>/`, and is prefixed
+   `[shard i]` in the log; the script fails if any shard fails, after all
+   shards finish. Each shard is a full session — own container, KWin,
+   D-Bus session and WebDriver — so N is bounded by host CPU/RAM, and the
+   llvmpipe compositors contend for CPU.
 
 Environment:
 
@@ -92,6 +101,7 @@ Environment:
 | `KREMA_DISTRO_SKIP_IMAGE_BUILD=1` | reuse the existing `krema-e2e-distro:<target>` image |
 | `KREMA_E2E_ARTIFACTS` | artifacts directory (default `tests/appium/artifacts-distro-<target>`) |
 | `KREMA_E2E_PLATFORM` | container platform; defaults to `linux/amd64` for `arch` and `opensuse-slowroll` |
+| `KREMA_E2E_SHARDS` | number of concurrent suite shards (default 1 = one `run-e2e.sh`) |
 | other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, docker args) |
 
 ## Targets
@@ -144,13 +154,17 @@ dispatches it on `master` and waits for it to pass before tagging. A newer
 push to a pull request cancels its running jobs; `fail-fast` is off, so one
 distro's failure does not hide another's.
 
-Each job builds and loads the platform-bus vgem with
-`tests/appium/setup-vgem.sh` (see Running) and runs
-`tests/distro/run-distro-e2e.sh <target> -rs`: `kwin_wayland --virtual`
-with one output, compositing with OpenGL through llvmpipe on the vgem
-device. The job adds a JUnit summary to the step summary (a skip caused by
-QPainter compositing or a missing render node fails it) and uploads
-`tests/appium/artifacts-distro-<target>/` as `distro-e2e-<target>`.
+Each job loads the platform-bus vgem with `tests/appium/setup-vgem.sh` (see
+Running); the built module is cached keyed on the runner kernel release and
+the script's hash, so a hit skips the headers install and the out-of-tree
+build. It then runs `tests/distro/run-distro-e2e.sh <target> -rs` with
+`KREMA_E2E_SHARDS=2`: two concurrent `kwin_wayland --virtual` sessions
+compositing with OpenGL through llvmpipe on the vgem device, each running
+every second collected test. The job adds a JUnit summary of both
+`shard-*/junit.xml` files to the step summary (a skip caused by QPainter
+compositing or a missing render node fails it) and uploads
+`tests/appium/artifacts-distro-<target>/` (both shard directories) as
+`distro-e2e-<target>`.
 
 The `fedora-43` job then runs the `@pytest.mark.outputs(2)` tests again in
 a 2-output session, reusing the image it just built:
@@ -175,10 +189,11 @@ extents (`PAGE_ROLE`, `SETTINGS_STACK_XPATH`, `painted_rect()` in
 | --- | --- |
 | `fedora-42`, `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `opensuse-leap-16.0`, `debian-13`, `ubuntu-25.04`, `ubuntu-25.10`, `ubuntu-26.04`, `arch` | 77 passed, 4 skipped, 0 xfailed |
 
-Package and image are built from scratch on every run (about 2 minutes
-each), the suite takes about 8 minutes, and a full-matrix run about
-15 minutes. There is no layer cache: twelve distro images would not fit the
-repository's 10 GB Actions cache, which `e2e.yml` also uses.
+Package and image build overlap (the image's package-independent stages
+build while the package does) and the suite runs in two shards, so a
+full-matrix run is well under the former ~15 minutes. There is no image
+layer cache: twelve distro images would not fit the repository's 10 GB
+Actions cache, which `e2e.yml` also uses.
 
 ## Cleanup
 

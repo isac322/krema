@@ -9,7 +9,9 @@
 #
 # Graphics: KWin's --virtual backend on an out-of-tree vgem (render node; the
 # Azure runner kernel ships none), compositing with OpenGL through llvmpipe.
-# fedora-43 additionally reruns the @pytest.mark.outputs(2) tests with two
+# The built module is cached keyed on the runner kernel release, so a hit
+# skips the headers install and out-of-tree build. fedora-43 additionally
+# reruns the @pytest.mark.outputs(2) tests with two
 # virtual outputs; every other target skips them.
 #
 # Triggers: pull requests touching the product, a weekly schedule to catch
@@ -19,7 +21,9 @@
 #
 # No image layer cache: package and image build in a few minutes per target,
 # and twelve distro images would not fit the repository's 10 GB Actions
-# cache, which e2e.yml also uses.
+# cache, which e2e.yml also uses. Only the small vgem.ko is cached (per
+# kernel release). The suite runs sharded in two (KREMA_E2E_SHARDS=2;
+# tests/distro/run-distro-e2e.sh), all shards' JUnit files feed the summary.
 
 name: Distro E2E
 
@@ -98,21 +102,38 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Kernel release
+        id: krel
+        run: echo "release=$(uname -r)" >>"$GITHUB_OUTPUT"
+
+      - name: Cache vgem module
+        id: vgem-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/krema-e2e
+          # The module is bound to the exact kernel release and to this
+          # script's build recipe.
+          key: vgem-${{ runner.os }}-${{ hashFiles('tests/appium/setup-vgem.sh') }}-${{ steps.krel.outputs.release }}
+
       - name: Build and load vgem (DRM render node)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
-          sudo tests/appium/setup-vgem.sh
+          if [ "${{ steps.vgem-cache.outputs.cache-hit }}" != "true" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
+          fi
+          sudo VGEM_KO="$HOME/.cache/krema-e2e/vgem.ko" tests/appium/setup-vgem.sh
 
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
         id: main
+        env:
+          KREMA_E2E_SHARDS: "2"
         run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
 
       - name: JUnit summary
         if: always()
         run: |
           python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET" \
-            "tests/appium/artifacts-distro-$TARGET/junit.xml" \
+            tests/appium/artifacts-distro-"$TARGET"/shard-*/junit.xml \
             --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7

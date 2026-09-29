@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
-# Build & tests: inside the tests/appium image (Fedora, KWin, Qt/KF6), build
-# every target with BUILD_TESTING=ON and run the whole CTest suite except the
-# Docker-based `e2e` label: Catch2 unit tests, the KWin integration tests
+# Build & tests: inside the ctest-image stage of tests/appium/Dockerfile
+# (Fedora, KWin, Qt/KF6 + ccache; no AT-SPI stack), build every target with
+# BUILD_TESTING=ON and run the whole CTest suite except the Docker-based
+# `e2e` label: Catch2 unit tests, the KWin integration tests
 # (tests/integration, tests/kwin; each on a private `kwin_wayland --virtual`
 # via tests/run-with-kwin.sh), the Qt Quick QML tests and the desktop-entry
-# check.
+# check. ctest runs with -j$(nproc); every test is parallel-safe by
+# construction (private kwin session, private dbus-run-session bus,
+# per-test mktemp XDG dirs).
 #
 # The AT-SPI E2E suite (tests/appium) runs in distro-e2e.yml, against the
 # packaged krema on every supported distro including fedora-43.
@@ -51,25 +54,45 @@ jobs:
         with:
           context: tests/appium
           tags: ${{ env.KREMA_E2E_IMAGE }}
+          target: ctest-image
           load: true
           cache-from: type=gha,scope=krema-e2e-image
           cache-to: type=gha,scope=krema-e2e-image,mode=max
 
+      - name: ccache cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          # Image identity (dnf package set/toolchain) + source hash in the
+          # key; restore-keys falls back to any ccache dir for this OS/image.
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/appium/Dockerfile') }}-${{ hashFiles('src/**', 'tests/**', 'CMakeLists.txt') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/appium/Dockerfile') }}-
+            ccache-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Build and run ctest
         run: |
-          mkdir -p test-results
+          mkdir -p test-results .ccache
           docker run --rm -v "$PWD:/src:ro" -v "$PWD/test-results:/results" \
-            -e HOST_UID="$(id -u)" "$KREMA_E2E_IMAGE" sh -euc '
-              trap "chown -R $HOST_UID /results" EXIT
+            -v "$PWD/.ccache:/ccache" \
+            -e HOST_UID="$(id -u)" -e CCACHE_DIR=/ccache -e CCACHE_MAXSIZE=500M \
+            "$KREMA_E2E_IMAGE" sh -euc '
+              umask 022  # container runs as root; keep cache/results readable by the runner
+              trap "chown -R $HOST_UID /results /ccache" EXIT
               # Writable copy without .git: configuring a git checkout
               # installs the ECM pre-commit hook into .git/hooks.
-              rsync -a --exclude /.git/ /src/ /work/
+              rsync -a --exclude /.git/ --exclude /.ccache/ /src/ /work/
+              ccache -z
               cmake -S /work -B /tmp/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON \
+                -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                 >/results/cmake-configure.log 2>&1 || { tail -n 80 /results/cmake-configure.log; exit 1; }
               cmake --build /tmp/build >/results/build.log 2>&1 \
                 || { tail -n 80 /results/build.log; exit 1; }
+              rc=0
               ctest --test-dir /tmp/build -LE e2e --output-on-failure --no-tests=error \
-                --output-junit /results/junit.xml'
+                -j"$(nproc)" --output-junit /results/junit.xml || rc=$?
+              ccache -s
+              exit $rc'
 
       - name: JUnit summary
         if: always()

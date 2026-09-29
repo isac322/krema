@@ -10,6 +10,12 @@
 #
 #   sudo tests/appium/setup-vgem.sh
 #
+# Environment:
+#   VGEM_KO   optional cache path for the built module (CI caches it keyed on
+#             `uname -r` and this script's hash). When it exists it is loaded
+#             directly: no kernel headers, fetch or build needed. A built
+#             module is copied there after insmod.
+#
 # Needs: kernel headers for the running kernel (linux-headers-*), make, gcc,
 # curl, and no Secure Boot lockdown (GitHub runners ship SecureBoot=disabled).
 # Undo: rmmod vgem.
@@ -45,6 +51,19 @@ if modprobe vgem 2>/dev/null; then
     fi
     rmmod vgem
     echo "[setup-vgem] packaged vgem is a faux device: building the platform one"
+fi
+
+# Cache hit: load the module built for this kernel and this script (CI keys
+# its actions/cache entry on uname -r + hashFiles(setup-vgem.sh)); an
+# unloadable one falls through to the build below.
+ko=${VGEM_KO:-}
+if [ -n "$ko" ] && [ -f "$ko" ]; then
+    if insmod "$ko" 2>/dev/null; then
+        echo "[setup-vgem] loaded cached $ko"
+        ls -l /dev/dri
+        exit 0
+    fi
+    echo "[setup-vgem] cached $ko did not load; building" >&2
 fi
 
 kdir=/lib/modules/$(uname -r)/build
@@ -83,5 +102,13 @@ fi
 printf 'obj-m := vgem.o\nvgem-y := vgem_drv.o vgem_fence.o\n' >"$work/Makefile"
 make -C "$kdir" M="$work" modules
 insmod "$work/vgem.ko"
+if [ -n "$ko" ]; then
+    mkdir -p "$(dirname "$ko")"
+    cp "$work/vgem.ko" "$ko"
+    # Hand dir and file back to the invoking user: the CI cache restore runs
+    # unprivileged and must be able to read and replace them.
+    [ -n "${SUDO_UID:-}" ] &&
+        chown "$SUDO_UID:${SUDO_GID:-$SUDO_UID}" "$(dirname "$ko")" "$ko" 2>/dev/null || true
+fi
 ls -l /dev/dri
 echo "[setup-vgem] loaded vgem (module in $work)"

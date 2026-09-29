@@ -39,6 +39,16 @@
 # ~8 min suites per merge. Build & tests seeds its own ccache (e2e.yml runs
 # on pushes to master), since that job is the build.
 #
+# Retention (job `prune`, schedule and dispatch only): daily rebuilds move
+# tags and leave the previous versions untagged, and a changed image input
+# leaves the old hash's tags behind. Deleted: untagged versions older than
+# 2 days, and versions whose every tag is a runtime-/builder-/ctest-/vgem-
+# tag not updated for 14 days (superseded hashes; an open pull request
+# still on an old hash builds it locally). Never deleted: anything updated
+# in the last 2 days, and the refs this tree currently computes (the vgem
+# ref for the runner kernel is rebuilt only when missing, so its age says
+# nothing about being superseded).
+#
 # Only this workflow has `packages: write`. It publishes to the upstream
 # package, so it does nothing in forks.
 #
@@ -292,3 +302,61 @@ jobs:
           printf 'FROM scratch\nCOPY vgem.ko /vgem.ko\n' |
             docker build -q --label "org.opencontainers.image.source=$SOURCE" -t "$ref" -f - "$ctx"
           docker push -q "$ref"
+
+  prune:
+    name: Prune old versions
+    needs: [resolve, distro, ctest, vgem]
+    # After the publish jobs, whatever their result: a failed rebuild keeps
+    # the previous version tagged, and current refs are protected below.
+    if: >-
+      always() && github.repository == 'isac322/krema'
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Delete untagged and superseded versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSIONS: /users/isac322/packages/container/krema-ci/versions
+        run: |
+          # Tags of the refs this tree computes: never deleted.
+          keep="$(
+            for t in $(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/distro/targets.tsv) arch; do
+              tests/distro/image-ref.sh runtime "$t"
+              tests/distro/image-ref.sh builder "$t"
+            done
+            tests/distro/image-ref.sh ctest
+            tests/distro/image-ref.sh vgem
+          )"
+          keep_json="$(python3 -c 'import json,sys; print(json.dumps([r.rsplit(":", 1)[1] for r in sys.stdin.read().split()]))' <<<"$keep")"
+          # 2 refs per distro target (targets.tsv rows + arch) + ctest + vgem;
+          # fewer means image-ref.sh failed, and pruning would then hit
+          # current refs.
+          rows=$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { n++ } END { print n + 0 }' tests/distro/targets.tsv)
+          want=$(( 2 * (rows + 1) + 2 ))
+          got=$(jq length <<<"$keep_json")
+          echo "protected tags: $got of $want"
+          (( got == want )) || { echo "::error::could not compute the current refs; not pruning"; exit 1; }
+          gh api --paginate "$VERSIONS?per_page=100" --jq '.[]' |
+            jq -r --argjson keep "$keep_json" '
+              (.updated_at | sub("\\.[0-9]+"; "") | fromdateiso8601) as $updated
+              | (now - $updated) as $age
+              | .metadata.container.tags as $tags
+              | select($age > 2 * 86400)
+              | select(any($tags[]; IN($keep[])) | not)
+              | if ($tags | length) == 0 then "\(.id)\tuntagged\t\(.updated_at)"
+                elif $age > 14 * 86400
+                  and all($tags[]; test("^(runtime|builder|ctest|vgem)-"))
+                then "\(.id)\t\($tags | join(","))\t\(.updated_at)"
+                else empty end' |
+            while IFS=$'\t' read -r id tags updated; do
+              echo "delete $id ($tags, updated $updated)"
+              gh api -X DELETE "$VERSIONS/$id" >/dev/null
+            done

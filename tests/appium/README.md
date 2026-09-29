@@ -135,6 +135,9 @@ source-built krema. Three workflows are involved:
   changes an image input, is built locally by
   `tests/distro/build-ci-image.sh` instead, so no result depends on the
   registry.
+  Its scheduled and dispatched runs also prune the package: untagged
+  versions older than 2 days and superseded-hash tags not updated for 14
+  days are deleted, never a ref the current tree computes.
 * `.github/workflows/e2e.yml`, job `Build & tests`: pulls the ctest image
   (the `base` package set plus ccache, without the AT-SPI stack), builds
   every target with `BUILD_TESTING=ON` through ccache (persisted across runs

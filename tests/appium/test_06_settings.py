@@ -79,6 +79,13 @@ def dock_surfaces(krema: Krema) -> list[kwin.Window]:
     ]
     return sorted(out, key=lambda w: w.client_x)
 
+def _item_has_description(krema: Krema, name: str, part: str) -> bool:
+    item = krema.item_accessible(name)
+    if item is None:
+        return False
+    item.clear_cache()
+    return part in (item.description or "")
+
 
 def preview_surfaces(krema: Krema) -> list[kwin.Window]:
     """Pre-shown bottom-edge preview layer surfaces above the dock band."""
@@ -939,6 +946,11 @@ def assert_click_action_effects(
     for target in (alpha, beta, solo):
         kwin.activate(target.internal_id)
         wait_until(target.is_active, message=f"{target.title} active during MRU setup")
+    wait_until(
+        lambda: _item_has_description(krema, "Solo", "Active")
+        and not _item_has_description(krema, env.TEST_APP_NAME, "Active"),
+        message="dock model to observe Solo backgrounding the group",
+    )
     if grouped_action == 0:
         for target in (beta, alpha, beta):
             click_item_on_output(krema, env.TEST_APP_NAME, output_x)

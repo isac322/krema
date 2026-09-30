@@ -603,11 +603,23 @@ Item {
             dock.x = stage.width / 4
             dock.y = stage.height / 4
             let item = items(dock)[0]
+            let settledCenter = null
+            let settledSince = 0
             tryVerify(() => {
                 let c = centerOf(item)
+                let now = Date.now()
                 let origin = dock.mapToItem(stage, 0, 0)
-                return c.x > origin.x && c.x < origin.x + dock.width
+                let inside = c.x > origin.x && c.x < origin.x + dock.width
                     && c.y > origin.y && c.y < origin.y + dock.height
+                if (settledCenter
+                    && Math.abs(c.x - settledCenter.x) < 0.1
+                    && Math.abs(c.y - settledCenter.y) < 0.1) {
+                    settledSince = settledSince || now
+                } else {
+                    settledCenter = c
+                    settledSince = now
+                }
+                return inside && now - settledSince >= 250
             }, 2000, "icon did not settle inside the test dock surface")
 
             let from = hoverItem(item)

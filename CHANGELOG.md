@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Moving the mouse anywhere on screen ended dock keyboard navigation, not only when the pointer moved over the dock
 - The window preview no longer captured the mouse in the invisible area around it, which had ended thumbnail keyboard navigation (e.g. after closing a window with Delete) and blocked clicks beneath the preview
 - A window's hover preview no longer reopened or stayed open after the pointer left the dock through the preview while the dock re-centred for a newly opened window
+- Window previews stayed open after fast pointer entry, instead of closing under a resting pointer while their Wayland input region was still pending
 - The website's settings demo no longer stuttered while scrolling in Firefox on phones
 
 ## [0.9.0] - 2026-09-28

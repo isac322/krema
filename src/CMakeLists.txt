@@ -104,6 +104,7 @@ target_link_libraries(krema_lib PUBLIC
     PW::LibNotificationManager
     Wayland::Client
 )
+target_link_libraries(krema_lib PRIVATE Qt6::GuiPrivate)
 
 target_include_directories(krema_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

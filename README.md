@@ -202,6 +202,11 @@ sudo pacman -S --needed \
     catch2
 ```
 
+The build also uses Qt GUI private headers (`Qt6::GuiPrivate`). Arch's
+`qt6-base` includes them. On distributions that package them separately,
+install `qt6-base-private-dev` (Debian/Ubuntu), `qt6-qtbase-private-devel`
+(Fedora), or `qt6-gui-private-devel` (openSUSE).
+
 ### Minimum Versions
 
 | Dependency | Minimum Version |

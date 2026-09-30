@@ -278,3 +278,24 @@ Verified while building Tier 3 (`tests/distro`, `tests/appium` run on 12 distros
 - **Qt < 6.9 reports AT-SPI rects that ignore Item scale**: a zoomed DockItem's rect has the scaled top-left corner but the untransformed size, so `Rect.of(item).width` never changes under zoom. `painted_rect()` recovers the zoom factor from how far the corner rose (`EXTENTS_IGNORE_SCALE`); Qt >= 6.9 returns the scaled rect. Never compare scaled widths through the raw AT-SPI rect.
 - **Qt 6.11 changed AT-SPI roles**: `QQuickPage` moved from PageTab (`page_tab`) to Pane (`panel`), and since every `QQuickControl` is accessible, `ApplicationWindow`'s content adds a `filler` level above the PageRow — and the page stack's own role still differs across distro Qt/Kirigami (`panel`, `layered_pane`). Match structure by children, not by role (`PAGE_ROLE`, `SETTINGS_STACK_XPATH` in `krema_e2e/krema.py`).
 - **`XDG_MENU_PREFIX=plasma-` is required for KService on Debian**: KService resolves desktop files (dock item names, icons) through `${XDG_MENU_PREFIX}applications.menu`; startplasma exports it, but the harness's bare session does not, and Debian/Ubuntu ship only `plasma-applications.menu` (Fedora also has redhat-menus' `applications.menu`, which masked the issue there). The Tier 3 image exports it like a real Plasma session (`tests/distro/image/Dockerfile`).
+
+## 15. A visible preview can still have a pending Wayland input region (2026-10, issue #55)
+
+**Symptom:** A pointer entering the preview soon after AT-SPI reported it
+visible could rest inside the popup while the 200 ms hide timer closed it.
+The baseline regression entered after 33 ms and failed during a 500 ms hold.
+
+**Cause:** QtWayland's `setMask()` sent `wl_surface.set_input_region`
+without a commit. The compositor applied the new region only with the
+first rendered frame, previously observed 100–190 ms later. Waiting for
+painted pixels in the screenshot tests avoided that interval and hid the bug.
+
+**Fix:** Commit each changed preview mask on the existing native Wayland
+surface, including the hidden 1x1 mask. Cache the mask to avoid redundant
+commits, and leave the initial pre-show mask to Qt's configure sequence.
+See [the verified API and build dependencies](wayland-layer-shell.md#publishing-a-changed-preview-mask).
+
+**Key lessons:**
+- AT-SPI visibility, committed input state, and painted pixels are separate observations.
+- Keep fast-entry regression coverage separate from layout/paint waits needed for precise thumbnail and close-button clicks.
+- A 500 ms visible hold tests pointer acceptance beyond the existing hide delay; it does not prove stationary-pointer recovery or every possible timing race.

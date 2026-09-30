@@ -34,6 +34,10 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     ShaderTools
     WaylandClient
 )
+# Qt 6.9 moved private targets into separate CMake packages.
+if(Qt6Gui_VERSION VERSION_GREATER_EQUAL "6.9.0")
+    find_package(Qt6GuiPrivate ${Qt6Gui_VERSION} EXACT REQUIRED)
+endif()
 find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     WindowSystem
     Config

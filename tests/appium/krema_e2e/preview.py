@@ -131,7 +131,7 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
     x, y = rect.center
     # The second event is motion inside the popup, which its HoverHandler
     # needs after wl_pointer.enter. Both points lie inside this current rect.
-    inp.move_path([(x, y), (x + 4, y)], step_ms=10)
+    inp.move_path([(x, y), (x + 4, y)], step_ms=5)
     assert first_visible is not None
     return rect, time.monotonic() - first_visible
 

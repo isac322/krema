@@ -31,7 +31,7 @@
 # Triggers: pull requests touching what this workflow builds or runs, a
 # weekly schedule to catch rolling-distro drift (arch,
 # opensuse-tumbleweed/slowroll, ...), and manual dispatch, which the release
-# procedure (.claude/commands/release.md) runs on master before tagging.
+# procedure (.agents/skills/release/SKILL.md) runs on master before tagging.
 # Path filter: the package is built with BUILD_TESTING=OFF from src/,
 # CMakeLists.txt and packaging/ (plus LICENSES/, which the packages ship);
 # the suite is tests/appium (not its Dockerfile, which only e2e.yml

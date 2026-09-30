@@ -32,7 +32,7 @@ Rules that apply to every agent working on this repository, regardless of harnes
 
 ## Releases
 
-- Releases follow `.claude/commands/release.md` end to end (version choice, document sync, tag, GitHub release, AUR, OBS, COPR, PPA).
+- Releases follow the `release` skill (`.agents/skills/release/SKILL.md`) end to end (version choice, document sync, tag, GitHub release, AUR, OBS, COPR, PPA).
 - On release, move every `[Unreleased]` entry into a `## [x.y.z] - YYYY-MM-DD` section and leave `[Unreleased]` empty.
 
 ## Distribution Support Policy

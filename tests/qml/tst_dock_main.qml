@@ -411,7 +411,7 @@ Item {
         }
 
         function test_previewClosePreservesPendingHoverDeadline() {
-            DockSettings.previewHoverDelay = 500
+            DockSettings.previewHoverDelay = 1000
             addTasks(["A", "B"])
             let dock = makeDock(2)
             let its = items(dock)
@@ -420,17 +420,27 @@ Item {
             compare(PreviewController.parentIndex, 0)
 
             let started = Date.now()
-            let closed = false
             hoverItem(its[1])
+            tryCompare(dock, "hoveredIndex", 1, 2000)
+            tryVerify(() => Date.now() - started >= 750, 2000)
+            verify(PreviewController.visible && PreviewController.parentIndex === 0,
+                "runner was too slow: B appeared before A could close while its hover was pending")
+
+            // Most of B's original hover delay has elapsed before A closes.
+            // Restarting that delay would make B wait a full second again.
+            let closedAt = Date.now()
+            PreviewController.hidePreview()
+            let observedAfterClose = -1
             tryVerify(() => {
-                // Simulate hide completion at 200 ms while B's original
-                // 500 ms hover timer is still pending.
-                if (!closed && Date.now() - started >= 200) {
-                    PreviewController.hidePreview()
-                    closed = true
-                }
-                return closed && PreviewController.visible && PreviewController.parentIndex === 1
-            }, 550, "closing preview restarted rather than preserved B's pending hover deadline")
+                if (!PreviewController.visible || PreviewController.parentIndex !== 1)
+                    return false
+                if (observedAfterClose < 0)
+                    observedAfterClose = Date.now() - closedAt
+                return true
+            }, 3000, "B's hover preview never appeared after A closed")
+            verify(observedAfterClose < 750,
+                "closing A restarted B's pending hover delay: B appeared after "
+                + observedAfterClose + " ms")
             verify(!dockTooltip(dock).visible)
         }
 

@@ -476,12 +476,17 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
             current = painted_rect(krema.screen_rect(krema.item(source)), scene.rects[source])
             assert current.contains(*start), f"zoomed hit point {start} outside current {source!r} bounds {current}"
             outside = (env.SCREEN_WIDTH // 2, 20)
+            inside = (start[0] + current.width, start[1])
+            dock = krema.surface_rect("dock")
+            assert dock is not None and dock.contains(*start) and dock.contains(*inside), (
+                f"horizontal latch path {start} -> {inside} left the actual dock surface {dock}"
+            )
             if release_kind == "inside":
-                legs: list[tuple[int, int] | int] = [(start[0] + current.width, start[1]), start]
+                legs: list[tuple[int, int] | int] = [inside, start]
             elif release_kind == "outside":
-                legs = [outside]
+                legs = [inside, outside]
             else:
-                legs = [outside, start]
+                legs = [inside, outside, start]
 
             before = states()
             drag(start, legs)
@@ -538,6 +543,11 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
             current = painted_rect(krema.screen_rect(krema.item(source)), scene.rects[source])
             assert current.contains(*start), f"chord start {start} outside current {source!r} bounds {current}"
             outside = (env.SCREEN_WIDTH // 2, 20)
+            inside = (start[0] + current.width, start[1])
+            dock = krema.surface_rect("dock")
+            assert dock is not None and dock.contains(*start) and dock.contains(*inside), (
+                f"chord latch path {start} -> {inside} left the actual dock surface {dock}"
+            )
             before = states()
             native_popups_before = {w.internal_id for w in krema.windows() if not w.normal_window}
             held: list[str] = []
@@ -545,8 +555,10 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
                 inp.press("left", *start)
                 held.append("left")
                 inp.run_actions(_pointer([_pause(HOLD_MS)]))
+                inp.move_path(inp.line(start, inside, 8), step_ms=STEP_MS)
+                wait_cursor(inside)
                 krema.wait_keyboard_focus()
-                inp.move_path(inp.line(start, outside, 8), step_ms=STEP_MS)
+                inp.move_path(inp.line(inside, outside, 8), step_ms=STEP_MS)
                 wait_cursor(outside)
                 inp.move_path(inp.line(outside, start, 8), step_ms=STEP_MS)
                 wait_cursor(start)

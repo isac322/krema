@@ -31,7 +31,7 @@ from PIL import Image, ImageChops, ImageStat
 from krema_e2e import config, env, kwin, shortcuts
 from krema_e2e import input as inp
 from krema_e2e import preview as pv
-from krema_e2e.krema import PREVIEW_XPATH, Krema, Rect, has_state
+from krema_e2e.krema import ITEMS_XPATH, PREVIEW_XPATH, Krema, Rect, _xpath_str, has_state
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindow, TestWindows
 
@@ -47,10 +47,18 @@ EDGE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT - 1)
 
 
 def _item_state(krema: Krema, name: str) -> tuple[bool, Rect] | None:
-    item = krema.item(name)
-    if item is None:
+    surface = krema.surface_rect("dock")
+    if surface is None:
         return None
-    return has_state(item, "showing"), Rect.of(item)
+    item = next(
+        (
+            el
+            for el in krema.find_all(f"{ITEMS_XPATH}[@name={_xpath_str(name)}]")
+            if surface.x <= Rect.of(el).center[0] < surface.x + surface.width
+        ),
+        None,
+    )
+    return None if item is None else (has_state(item, "showing"), Rect.of(item))
 
 
 def dock_shown(krema: Krema, name: str) -> bool:

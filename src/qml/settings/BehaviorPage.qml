@@ -96,11 +96,55 @@ FormCard.FormCardPage {
             model: [
                 i18n("Primary monitor only"),
                 i18n("All monitors"),
-                i18n("Follow active screen")
+                i18n("Follow active screen"),
+                i18n("Selected monitors")
             ]
             currentIndex: DockSettings.monitorMode
             onActivated: function(index) {
                 DockSettings.monitorMode = index
+            }
+        }
+    }
+
+    FormCard.FormHeader {
+        visible: DockSettings.monitorMode === 3
+        title: i18n("Selected monitors")
+    }
+
+    Kirigami.InlineMessage {
+        Layout.fillWidth: true
+        visible: DockSettings.monitorMode === 3 && SettingsWindow.hasSelectedMonitorFallback
+        type: Kirigami.MessageType.Warning
+        text: i18n("No selected monitors are connected. Showing a temporary dock on the primary display.")
+    }
+
+    FormCard.FormCard {
+        visible: DockSettings.monitorMode === 3
+
+        Repeater {
+            model: SettingsWindow.availableScreens
+
+            delegate: FormCard.FormSwitchDelegate {
+                required property var modelData
+
+                text: modelData.label
+                description: !modelData.available
+                    ? i18n("Disconnected — turn off to remove from the selection")
+                    : (modelData.primary ? i18n("Primary monitor") : "")
+                Accessible.name: modelData.name
+                checked: DockSettings.selectedOutputs.indexOf(modelData.name) !== -1
+                onToggled: {
+                    const name = modelData.name
+                    let selected = DockSettings.selectedOutputs.slice()
+                    if (checked) {
+                        if (selected.indexOf(name) === -1) {
+                            selected.push(name)
+                        }
+                    } else {
+                        selected = selected.filter(output => output !== name)
+                    }
+                    DockSettings.selectedOutputs = selected
+                }
             }
         }
     }

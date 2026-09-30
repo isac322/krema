@@ -305,6 +305,8 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
 def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(krema: Krema, apps: TestWindows) -> None:
     max_zoom = 1.6
     apps.open("Alpha")
+    # apps.open waits for KWin only; the dock item follows through krema's task model.
+    krema.wait_for_item("Alpha")
     pid = krema.pid
 
     def peak_width(rest: Rect) -> int:

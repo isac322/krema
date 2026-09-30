@@ -29,13 +29,23 @@ all of them. An XPath cannot observe an attribute it does not reference, so
 it matches the same elements; a lookup like //tool_bar[@name='Krema Dock']
 makes three calls per node instead of six. Python's handling of each reply
 is about half of the build time, so the build takes about half as long.
-The locator's check that a match's path still leads to the same object
-needs the match's name and description; _completeMatches reads the missing
-ones for the matched elements only, through their object paths, before that
-check. The page source is always built with every attribute.
+The page source is always built with every attribute.
+
+The locator walks each match's index path through libatspi and drops the
+whole result when the path no longer leads to the matched object (the tree
+is outdated). Upstream compares the name and description of the tree
+element and the object it reached, so a lookup found nothing when the same
+object changed its description in between: a dock item's description
+("Active", "2 windows", "Starting") changes as windows open and activate.
+For the pipelined build, which knows every element's D-Bus object path,
+_liveObject checks the object path at each step instead and, where a
+sibling added or removed before it shifted an index, finds the child among
+the parent's current children by object path: a match is dropped only when
+its object has left the tree. The synchronous build keeps the name and
+description check.
 
 diff --git a/selenium-webdriver-at-spi.py b/selenium-webdriver-at-spi.py
-index 23075e5..bbb7c98 100644
+index 23075e5..5c522ce 100644
 --- a/selenium-webdriver-at-spi.py
 +++ b/selenium-webdriver-at-spi.py
 @@ -2,13 +2,16 @@
@@ -64,7 +74,7 @@ index 23075e5..bbb7c98 100644
  
  # Exposes AT-SPI as a webdriver. This is written in python because C sucks and pyatspi is a first class binding so
  # we lose nothing but gain the reduced sucking of python.
-@@ -122,6 +125,219 @@ def _createNode2(accessible, parentElement, indexInParents=[]):
+@@ -122,6 +125,204 @@ def _createNode2(accessible, parentElement, indexInParents=[]):
          return e
  
  
@@ -235,40 +245,25 @@ index 23075e5..bbb7c98 100644
 +    return element(accessible.path, []), objectPaths
 +
 +
-+def _completeMatches(accessible, matches, objectPaths):
-+    # Reads the name and description of every matched element whose tree was built without them, for the locator's
-+    # check that the element's path still leads to the same object. The calls are all in flight at once. A failed
-+    # read leaves the attribute out, which fails that check.
-+    if objectPaths is None:
-+        return
-+    wanted = {(c, key) for c in matches if isinstance(c, etree._Element) for key in ('name', 'description')
-+              if c.get(key) is None}
-+    if not wanted:
-+        return
-+    calls = {call[0]: call for call in _NODE_CALLS}
-+    connection = _a11y_connection()
-+    context = GLib.MainContext.new()
-+    pending = 0
-+
-+    def reply(conn, result, c, key):
-+        nonlocal pending
-+        pending -= 1
-+        try:
-+            c.set(key, _stringValue(conn.call_finish(result).get_child_value(0)))
-+        except Exception:  # an exception in a GLib callback would only be printed
-+            pass
-+
-+    context.push_thread_default()
-+    try:
-+        for c, key in wanted:
-+            _key, _attribute, interface, method, parameters, reply_type = calls[key]
-+            connection.call(accessible.app.bus_name, objectPaths[c.get('path')], interface, method, parameters,
-+                            reply_type, Gio.DBusCallFlags.NONE, 4000, None, reply, c, key)
-+            pending += 1
-+        while pending > 0:
-+            context.iteration(True)
-+    finally:
-+        context.pop_thread_default()
++def _liveObject(root, indexPath, objectPaths):
++    # The accessible a pipelined tree element stands for, reached from root through libatspi, or None when it has
++    # left the tree. Each step checks the child's D-Bus object path, so the walk cannot end on another object after
++    # the tree changed; where a sibling was added or removed before it (its index shifted), the child is looked up
++    # among the parent's current children by object path. (Upstream compares the element's name and description
++    # with the object's instead, which also fails for the same object when one of them changed after the build,
++    # e.g. a dock item's description gaining "Active" as its window is activated.)
++    item = root
++    for depth, index in enumerate(indexPath):
++        wanted = objectPaths[' '.join(str(x) for x in indexPath[:depth + 1])]
++        count = item.childCount
++        child = item.getChildAtIndex(index) if index < count else None
++        if child is None or child.path != wanted:
++            child = next((c for c in (item.getChildAtIndex(i) for i in range(count)) if c is not None and c.path == wanted),
++                         None)
++            if child is None:
++                return None
++        item = child
++    return item
 +
 +
 +@functools.cache
@@ -284,7 +279,7 @@ index 23075e5..bbb7c98 100644
  def errorFromMessage(error, message):
      return jsonify({'value': {'error': error, 'message': message}})
  
-@@ -303,7 +519,7 @@ def session_source(session_id):
+@@ -303,7 +504,7 @@ def session_source(session_id):
      if not session:
          return json.dumps({'value': {'error': 'no such window'}}), 404, {'content-type': 'application/json'}
  
@@ -293,7 +288,7 @@ index 23075e5..bbb7c98 100644
      return json.dumps({'value': etree.tostring(doc, pretty_print=False).decode("utf-8")}), 200, {'content-type': 'application/xml'}
  
  
-@@ -314,7 +530,7 @@ def session_source_raw(session_id):
+@@ -314,7 +515,7 @@ def session_source_raw(session_id):
      if not session:
          return json.dumps({'value': {'error': 'no such window'}}), 404, {'content-type': 'application/json'}
  
@@ -302,20 +297,34 @@ index 23075e5..bbb7c98 100644
      return etree.tostring(doc, pretty_print=True).decode("utf-8"), 200, {'content-type': 'application/xml'}
  
  def check_requires_button_compat():
-@@ -329,8 +545,11 @@ def locator(session, strategy, selector, start, findAll = False):
+@@ -329,15 +530,21 @@ def locator(session, strategy, selector, start, findAll = False):
  
      while datetime.now() < end_time:
          if strategy == 'xpath':
 -            doc = _createNode2(start, None)
--            for c in doc.xpath(selector):
 +            # The tree has only the attributes the XPath can read, so the XPath matches the same elements.
 +            doc, objectPaths = _createTree(start, _xpathAttributes(selector))
-+            matches = doc.xpath(selector)
-+            _completeMatches(start, matches, objectPaths)
-+            for c in matches:
+             for c in doc.xpath(selector):
                  path = [int(x) for x in c.get('path').split()]
                  # path is relative to the app root, not our start item!
-                 item = session.browsing_context
+-                item = session.browsing_context
+-                for i in path:
+-                    item = item[i]
+-                if c.get('name') != item.name or c.get('description') != item.description:
+-                    return []
++                if objectPaths is not None:
++                    item = _liveObject(session.browsing_context, path, objectPaths)
++                    if item is None:
++                        return []  # the matched object has left the tree
++                else:
++                    item = session.browsing_context
++                    for i in path:
++                        item = item[i]
++                    if c.get('name') != item.name or c.get('description') != item.description:
++                        return []
+                 results.append(item)
+         else:
+             # In a thrilling turn of events [push button | foo] became [button | foo] as of at-spi 2.53. Add compatibility
 
 selenium-webdriver-at-spi-screenshotter: capture an area, start without a
 platform plugin

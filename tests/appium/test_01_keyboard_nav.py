@@ -49,7 +49,7 @@ def open_items(krema: Krema, apps: TestWindows, titles: list[str]) -> None:
         apps.open(title, app_id=app_id)
     for title in titles:
         krema.wait_for_item(title)
-    wait_until(lambda: krema.item_names() == titles, message=f"dock items {titles} in order")
+    wait_until(lambda: krema.item_names() == titles, message=lambda: f"dock items {titles} in order (have {krema.item_names()})")
 
 
 def focused_items(krema: Krema) -> list[str]:

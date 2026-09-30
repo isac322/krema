@@ -412,9 +412,18 @@ reference (`@*`, `@node()`, an `@` inside a string literal) reads all of
 them. An XPath cannot see an attribute it does not name, so it matches the
 same elements. A lookup like `//tool_bar[@name='Krema Dock']` makes three
 calls per node instead of six, which halves lookups while Settings is open.
-For the check that a match's path still leads to the same object, the name
-and description of the matched elements are read afterwards. The page
-source always has every attribute.
+The page source always has every attribute.
+
+Upstream checks that each match's index path still leads to the same object
+by comparing names and descriptions, and returns nothing for the whole
+lookup on a difference. A dock item's description changes whenever its
+window gains or loses "Active" or its window count changes, so a lookup
+could miss an item that existed throughout (on CI, 34 of 42 such rejections
+in two full-matrix runs were the same object; with KWin switching the
+active window in a loop, 70-80% of `find_all` calls returned nothing). The
+pipelined build compares D-Bus object paths instead: at each step of the
+walk, and when an index has shifted it finds the child by object path, so
+a match is dropped only when its object has left the tree.
 
 Geometry. On Wayland, AT-SPI rects (`element.rect`, `Rect.of(element)`) are
 relative to the element's surface. The surface's screen position comes from
@@ -633,9 +642,14 @@ Tests that move the pointer onto a preview popup right after opening it call
 button, PREV-005), so they need capture as well. AT-SPI reports the popup
 as shown as soon as krema's QML shows it, but its input region reaches KWin
 only with the preview surface's next commit, the same commit that first
-draws it (see Investigations 4). The oracle: screenshot pixels inside the
-popup's rect that no other KWin window covers are the empty, black desktop
-until the popup paints its opaque background over them.
+draws it (see Investigations 4). The popup also grows while its rows arrive
+(it starts at 17x38), and each size change sets a new input region. So the
+oracle first waits until the popup's AT-SPI rect and KWin's preview surface
+agree and stay unchanged for 0.3 s (the layout has no timer or animation),
+then checks that screenshot pixels inside that final rect, where no other
+KWin window covers it, are no longer the empty black desktop: the popup has
+painted its opaque background at its final geometry. Callers read their
+glide target after this.
 
 ## Investigations
 

@@ -429,7 +429,12 @@ def test_mouse004_tooltip_shows_app_name_on_hover(krema: Krema) -> None:
     krema.wait_for_item(NAME1)
     krema.wait_for_item(NAME2)
     krema.move_away(close_preview=False)
-    baseline = _pixels(krema.screenshot("no-tooltip"))
+    # Baseline once the screen stopped changing: KWin's launch feedback for
+    # krema (its icon bouncing beside the pointer), started by an earlier test
+    # that opened krema windows, can outlive that test, and a frame of it
+    # would widen every tooltip diff.
+    wait_stable(lambda: _pixels(krema.screenshot("no-tooltip")).tobytes(), duration=0.6, interval=0.2)
+    baseline = _pixels(Image.open(env.artifact_path(f"{krema.name}/no-tooltip.png")))
 
     tips = {}
     for name in (NAME1, NAME2):

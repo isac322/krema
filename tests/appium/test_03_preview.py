@@ -188,8 +188,8 @@ def test_prev004_close_button_closes_that_window(krema: Krema, apps: TestWindows
     popup = pv.open_by_hover(krema, APP)
     wait_until(lambda: len(krema.thumbnails()) == 3, message="three thumbnails")
 
-    close = pv.screen_rect(krema, krema.wait_for(pv.close_xpath("Beta")))
     pv.wait_on_screen(krema, popup)
+    close = pv.screen_rect(krema, krema.wait_for(pv.close_xpath("Beta")))
     pv.glide_into(krema, close.center)
     assert krema.preview_visible(), "preview closed while moving the pointer into it"
     inp.click()

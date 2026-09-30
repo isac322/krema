@@ -13,16 +13,17 @@ so everything here is an absolute XPath.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Callable
 
 from PIL import Image
 from selenium.webdriver.remote.webelement import WebElement
 
+from . import env, kwin
 from . import input as inp
-from . import kwin
 from .krema import PREVIEW_XPATH, Krema, Rect, _xpath_str
-from .waits import wait_until
+from .waits import wait_stable, wait_until
 
 #: KPipeWire's warning for a received frame whose buffer carries no usable
 #: data type (``spa_data.type == SPA_ID_INVALID``): the frame is dropped and
@@ -81,50 +82,122 @@ def glide_into(krema: Krema, target: tuple[int, int], steps: int = 6, step_ms: i
 #: desktop: kwin.screenshot() flattens KWin's transparent desktop onto black.
 DESKTOP_MAX_CHANNEL = 16
 
+#: How long :func:`wait_on_screen` requires the popup's geometry unchanged.
+#: Its size and position follow the thumbnail rows through Qt layout and
+#: PreviewController::setContentSize/recalcContentPosition: no timer and no
+#: Behavior animation, so while the popup is still being laid out, successive
+#: changes are one or a few frames apart. That is the "layout animation that
+#: starts immediately" case in which tests/appium/README.md allows 0.3 s.
+GEOMETRY_SETTLE = 0.3
 
-def wait_on_screen(krema: Krema, popup: WebElement, timeout: float = 5.0) -> None:
-    """Wait until KWin shows the open preview ``popup`` on screen.
 
-    Call it before moving the pointer onto a popup that has just opened.
-    ``krema.preview_visible()`` reads the AT-SPI tree, which reports the popup
-    as shown once krema's QML shows it. The popup's input region
-    (PreviewController::updateInputRegion, QWindow::setMask) is double-buffered
-    Wayland state: it applies with the preview surface's next commit, the one
-    that first puts the popup on screen. On the first open after a krema start,
-    that commit lands 100-190 ms after the AT-SPI change. A pointer that
-    arrives earlier gets no wl_pointer.enter on the preview, and KWin sends
-    none once the pointer is resting, so the preview never sees the hover and
-    closes after its hide delay. A user cannot aim at a popup before it is
-    drawn.
+def _popup_geometry(krema: Krema, popup: WebElement) -> tuple[Rect, Rect] | None:
+    """(preview surface, popup) in screen coordinates, or None unless the
+    popup's AT-SPI rect is non-empty and lies inside the KWin window of the
+    preview surface. ``krema.surface_rect`` already matches that window by
+    the AT-SPI frame's size. A popup being laid out can report a new size
+    at its old position (648x211 at the 17x38 popup's origin, reaching past
+    the surface), which fails this check."""
+    surface = krema.surface_rect("preview")
+    if surface is None:
+        return None
+    local = Rect.of(popup)
+    inside = (
+        local.width > 0
+        and local.height > 0
+        and local.x >= 0
+        and local.y >= 0
+        and local.x + local.width <= surface.width
+        and local.y + local.height <= surface.height
+    )
+    if not inside:
+        return None
+    return surface, Rect(surface.x + local.x, surface.y + local.y, local.width, local.height)
 
-    Oracle: the screenshot pixels inside the popup's rect that no other window
-    covers were the empty (black) desktop until the popup painted its opaque
-    Kirigami background over them. Needs screenshots (OpenGL KWin)."""
+
+def wait_on_screen(krema: Krema, popup: WebElement, timeout: float = 5.0) -> Rect:
+    """Wait until the open preview ``popup`` is ready for the pointer, and
+    return its final screen rect.
+
+    Call it before moving the pointer onto a popup that has just opened, and
+    read the glide target (a thumbnail, a close button) only after it
+    returns. ``krema.preview_visible()`` reads the AT-SPI tree, which reports
+    the popup as shown once krema's QML shows it, while the popup is still
+    being laid out: it starts at 17x38 and grows as its rows arrive. The
+    popup's input region (PreviewController::updateInputRegion,
+    QWindow::setMask) follows every size change. It is double-buffered
+    Wayland state and applies with the preview surface's next commit. A
+    pointer that arrives before the commit that covers its target gets no
+    wl_pointer.enter on the preview, and KWin sends none once the pointer is
+    resting, so the preview never sees the hover and closes after its hide
+    delay. Under CPU load, layout and commits spread over hundreds of ms. A
+    user cannot aim at a popup before it is drawn where it stays.
+
+    Readiness, in order:
+
+    1. Final geometry: the popup's AT-SPI rect lies inside the preview
+       surface's KWin window, and both are unchanged for
+       :data:`GEOMETRY_SETTLE`.
+    2. Painted there: the screenshot pixels inside that rect (clipped to the
+       screen) that no other window covers were the empty (black) desktop
+       until the popup painted its opaque Kirigami background over them.
+       setMask runs in the same call as the size change, before the frame
+       that paints the new size, so that frame's commit carries the input
+       region too.
+    3. Still there: the geometry has not changed while waiting for the
+       paint.
+
+    Needs screenshots (OpenGL KWin)."""
     assert kwin.can_capture(), f"KWin compositing is {kwin.compositing_type()}: waiting for the popup on screen needs screenshots"
-    rect = screen_rect(krema, popup)
-    preview = krema.surface_rect("preview")
+    deadline = time.monotonic() + timeout
+
+    def settled() -> tuple[Rect, Rect] | None:
+        # None while the popup is outside its surface: wait_until keeps
+        # polling. A geometry that does not settle in time raises WaitTimeout,
+        # which wait_until chains into its own.
+        return wait_stable(
+            lambda: _popup_geometry(krema, popup),
+            duration=GEOMETRY_SETTLE,
+            timeout=max(GEOMETRY_SETTLE, deadline - time.monotonic()),
+        )
+
+    surface, rect = wait_until(
+        settled,
+        timeout=timeout,
+        message=lambda: f"preview popup geometry to settle inside the preview surface (now: {_popup_geometry(krema, popup)})",
+    )
+    x0, y0 = max(rect.x, 0), max(rect.y, 0)
+    x1, y1 = min(rect.x + rect.width, env.SCREEN_WIDTH), min(rect.y + rect.height, env.SCREEN_HEIGHT)
+    visible = Rect(x0, y0, max(0, x1 - x0), max(0, y1 - y0))
     covers = [
         Rect(w.x, w.y, w.width, w.height)
         for w in kwin.windows()
-        if (w.client_x, w.client_y, w.client_width, w.client_height) != tuple(preview or ())
+        if (w.client_x, w.client_y, w.client_width, w.client_height) != tuple(surface)
     ]
     # Inside the rounded corners and the 1 px border.
     inset = 8
     points = [
         (x, y)
-        for x in range(rect.x + inset, rect.x + rect.width - inset, 2)
-        for y in range(rect.y + inset, rect.y + rect.height - inset, 2)
+        for x in range(visible.x + inset, visible.x + visible.width - inset, 2)
+        for y in range(visible.y + inset, visible.y + visible.height - inset, 2)
         if not any(c.contains(x, y) for c in covers)
     ]
     assert len(points) >= 100, f"popup {rect} is covered by other windows {covers}: no desktop pixels left to check"
     lit: list[float] = []
 
     def shown() -> bool:
-        image = krema.screenshot("preview-on-screen", rect)
+        image = krema.screenshot("preview-on-screen", visible)
         lit[:] = [sum(1 for p in points if max(image.getpixel(p)) > DESKTOP_MAX_CHANNEL) / len(points)]
         return lit[0] > 0.5
 
-    wait_until(shown, timeout=timeout, message=lambda: f"preview popup {rect} on screen (painted fraction {lit})")
+    wait_until(
+        shown,
+        timeout=max(1.0, deadline - time.monotonic()),
+        message=lambda: f"preview popup {rect} on screen (painted fraction {lit})",
+    )
+    now = _popup_geometry(krema, popup)
+    assert now == (surface, rect), f"preview popup moved while it was painted: {(surface, rect)} -> {now}"
+    return rect
 
 
 def dominant_fraction(image: Image.Image, rect: Rect, matches: Callable[[tuple[int, int, int]], bool]) -> float:

@@ -20,9 +20,10 @@ screenshots (needs the OpenGL compositor, i.e. a DRM render node).
 
 from __future__ import annotations
 
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator, Sequence
+from typing import Callable, Iterator, Sequence
 
 import numpy as np
 import pytest
@@ -116,6 +117,15 @@ def dragging(start: tuple[int, int], legs: Sequence[tuple[int, int] | int]) -> I
 
 def wait_cursor(pos: tuple[int, int]) -> None:
     wait_until(lambda: kwin.cursor_pos() == tuple(pos), timeout=15, message=f"pointer to reach {pos}")
+
+
+def assert_stays(getter: Callable[[], object], expected: object, duration: float, message: str) -> None:
+    """Assert that an observed state stays unchanged for ``duration`` seconds."""
+    deadline = time.monotonic() + duration
+    while time.monotonic() < deadline:
+        actual = getter()
+        assert actual == expected, f"{message}: {actual!r} != {expected!r}"
+        time.sleep(0.05)
 
 
 # ------------------------------------------------------------ focus return
@@ -462,6 +472,13 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
     def states() -> dict[str, tuple[bool, bool]]:
         return {w.internal_id: (w.active, w.minimized) for w in kwin.app_windows()}
 
+    def observation() -> tuple[dict[str, tuple[bool, bool]], bool, set[str]]:
+        return (
+            states(),
+            krema.preview_visible(),
+            {w.internal_id for w in krema.windows() if not w.normal_window},
+        )
+
     # Active sources catch accidental minimize/cycle. Background sources catch
     # accidental activation by requiring the unrelated Focus window to survive.
     for source, active in ((TW, alpha), (TW, focus), ("Solo", solo), ("Solo", focus)):
@@ -488,13 +505,17 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
             else:
                 legs = [inside, outside, start]
 
-            before = states()
+            before = observation()
             drag(start, legs)
             # This helper only waits for KWin's active state; it does not issue
             # activation or otherwise repair a ghost click.
             wait_focus_returned(active)
-            assert states() == before, f"window state changed after {source!r} {release_kind} drag"
-            assert not krema.preview_visible(), f"popup opened after {source!r} {release_kind} drag"
+            assert_stays(
+                observation,
+                before,
+                1.0,
+                f"state changed after {source!r} {release_kind} drag",
+            )
 
             if source == TW and active is alpha and release_kind == "outside":
                 # The first fresh right press after an outside drop must not
@@ -525,8 +546,7 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
                     message="fresh right-click native menu to close on Escape",
                 )
                 wait_focus_returned(active)
-                assert states() == before, "fresh right-click menu changed application-window state"
-                assert not krema.preview_visible(), "fresh right-click menu invoked the explicit left-click preview"
+                assert_stays(observation, before, 1.0, "fresh right-click changed state after drag")
 
     # All button chains use the session's same persistent fake-input device.
     # A secondary press while Left is held is not a new click cycle, and
@@ -548,8 +568,7 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
             assert dock is not None and dock.contains(*start) and dock.contains(*inside), (
                 f"chord latch path {start} -> {inside} left the actual dock surface {dock}"
             )
-            before = states()
-            native_popups_before = {w.internal_id for w in krema.windows() if not w.normal_window}
+            before = observation()
             held: list[str] = []
             try:
                 inp.press("left", *start)
@@ -572,8 +591,9 @@ def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
                     inp.release(button)
 
             wait_focus_returned(active)
-            assert states() == before, f"{source!r} chord release order {release_order} changed application-window state"
-            assert not krema.preview_visible(), f"{source!r} chord release order {release_order} opened the left-click preview"
-            assert {
-                w.internal_id for w in krema.windows() if not w.normal_window
-            } == native_popups_before, f"{source!r} secondary chord press opened a fresh native menu"
+            assert_stays(
+                observation,
+                before,
+                1.0,
+                f"{source!r} chord release order {release_order} changed state",
+            )

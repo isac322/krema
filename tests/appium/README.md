@@ -29,7 +29,12 @@ Multi-monitor tests are marked `@pytest.mark.outputs(n)` and run in a
 session with `n` outputs, placed left to right:
 
 ```sh
-KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs
+KREMA_E2E_OUTPUT_COUNT=2 KREMA_E2E_ARTIFACTS=tests/appium/artifacts-2out \
+    tests/appium/run-e2e.sh -m outputs -rs \
+    --deselect test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts
+KREMA_E2E_OUTPUT_COUNT=3 KREMA_E2E_ARTIFACTS=tests/appium/artifacts-3out \
+    tests/appium/run-e2e.sh \
+    test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts -rs
 ```
 
 `--output-count n` creates `n` outputs of `KREMA_E2E_SCREEN_WIDTH` x
@@ -41,8 +46,11 @@ out-of-tree. On kernels >= 6.15, whose vgem is a faux device, use
 (see `tests/distro/README.md`); it builds vgem as the platform device those
 KWin versions expect.
 
-Tests whose output count differs from the session's are skipped with the
-reason, so a file with both kinds needs one run per output count.
+The default one-output session intentionally skips SET-008's two-output
+cases and SET-012's two- and three-output cases because their required
+output count differs. The two-output command above explicitly deselects
+the three-output subset case; the three-output command runs that node
+alone. Use both runs for full multi-output coverage.
 `tools/run-output-count.patch` makes `selenium-webdriver-at-spi-run` pass
 `--output-count` to `kwin_wayland`. On the second output, Qt reports a
 dock's AT-SPI rects shifted by the output's x offset.
@@ -151,10 +159,15 @@ source-built krema. Three workflows are involved:
   GitHub's Azure kernel ships no vgem, so the module for the runner kernel
   comes from ghcr.io, or is built in the job on a kernel ci-images.yml has
   not seen). The suite runs sharded in three containers
-  (`KREMA_E2E_SHARDS=3`, `KREMA_E2E_SHARD` above). The `fedora-43` entry
-  also runs the `@pytest.mark.outputs(2)` tests (SET-008) with
-  `KREMA_E2E_OUTPUT_COUNT=2`, uploaded as `distro-e2e-fedora-43-2out`. Each
-  run adds a JUnit summary to the step summary.
+  (`KREMA_E2E_SHARDS=3`, `KREMA_E2E_SHARD` above). The `fedora-43` and
+  `ubuntu-26.04` entries also run two-output SET-008 and SET-012 cases, then
+  the three-output SET-012 subset/shortcut case, reusing the installed
+  package image. Each leg writes
+  `tests/appium/artifacts-distro-<target>-2out/junit.xml` or
+  `tests/appium/artifacts-distro-<target>-3out/junit.xml` and uploads the
+  matching `distro-e2e-<target>-2out` or `distro-e2e-<target>-3out` artifact.
+  Each run adds a JUnit summary to the step summary. See
+  [installed-package reproduction commands](../distro/README.md#selected-monitor-reproduction).
 
 Changes that only touch `tests/qml`, `tests/unit`, `tests/kwin`,
 `tests/integration` or Markdown do not start `distro-e2e.yml`; changes that
@@ -230,8 +243,10 @@ passed three fresh opens in one run. The fast path is tested separately from
 pixel waits.
 
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
-parked and at the screen centre; `SET-008` needs a two-output session
-(`KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`).
+parked and at the screen centre. SET-008 runs with two outputs. SET-012 runs
+its switch/fallback/persistence cases with two outputs and its
+primary-excluding subset/shortcut case with three outputs; use the commands
+in Running above.
 SET-008 is also covered by `tests/integration/test_settings_lifecycle.cpp`
 (ctest `krema_integration_tests`).
 
@@ -289,6 +304,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | SET-009 | `test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly` | KWin (process exit) | pass |
 | SET-010 | `test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists` | AT-SPI, kremarc | pass |
 | SET-011 | `test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, `test_set010_zoom_style_combo_switches_zoom_live_and_persists` | AT-SPI, kremarc | partial: settings pass; timing and snapping covered by QML tests, live-dock timing screenshots manual |
+| SET-012 | `test_06_settings.py::test_set012_selected_monitors_toggle_keeps_settings_open`, `test_set012_selected_monitors_fallback_warns_and_keeps_saved_names[empty]`, `test_set012_selected_monitors_fallback_warns_and_keeps_saved_names[disconnected]` (2 outputs); `test_set012_selected_subset_preserves_docks_and_routes_shortcuts` (3 outputs) | KWin dock/preview output and identity, AT-SPI switches/warning/focus, kremarc, KGlobalAccel | automated; validation pending |
 | VIS-001 | `test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window`, `test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows` | AT-SPI, screenshot, KWin | pass |
 | VIS-002 | `test_07_visibility.py::test_vis002_auto_hide_hides_after_timeout_and_frees_the_screen` | AT-SPI, KWin | pass |
 | VIS-003 | `test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach` | AT-SPI, KWin | pass |
@@ -299,10 +315,11 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 
 ## Known krema bugs
 
-No open Krema product bugs are currently recorded here. Issue #55 is fixed and
-covered by `QA-PREV-01`: the baseline failed after a 33 ms entry, while the
-fixed run passed three fresh opens in one run. The earlier suite results were
-77 passed, 4 skipped in a 1-output session and 4 passed in a 2-output session.
+No Krema bug is currently pinned with an xfail. Tests marked `outputs(2)`
+or `outputs(3)` are intentionally skipped when the session has a different
+output count because the exact number of displays is a test precondition.
+Issue #55 is covered by `QA-PREV-01`: the baseline failed after a 33 ms
+entry, while the fixed run passed three fresh opens in one run.
 
 To pin a newly found bug, write the test for the correct behavior and mark
 it `@pytest.mark.xfail(strict=True, reason="krema bug: ...")` (or put the

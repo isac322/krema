@@ -215,10 +215,15 @@
     </entry>
 
     <entry name="MonitorMode" type="Int">
-      <label>Monitor mode (0=PrimaryOnly, 1=AllScreens, 2=FollowActive)</label>
+      <label>Monitor mode (0=PrimaryOnly, 1=AllScreens, 2=FollowActive, 3=SelectedScreens)</label>
       <default>0</default>
       <min>0</min>
-      <max>2</max>
+      <max>3</max>
+    </entry>
+
+    <entry name="SelectedOutputs" type="StringList">
+      <label>Output names selected for SelectedScreens monitor mode</label>
+      <default></default>
     </entry>
 
     <entry name="FollowActiveTrigger" type="Int">

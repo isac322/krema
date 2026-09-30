@@ -36,6 +36,38 @@ Results, JUnit XML and logs go to
 `tests/appium/artifacts-distro-<target>/`. The script exits with pytest's
 status.
 
+### Selected monitor reproduction
+
+Run the installed-package multi-output cases on both targets:
+
+```sh
+for TARGET in fedora-43 ubuntu-26.04; do
+    KREMA_E2E_OUTPUT_COUNT=2 \
+    KREMA_E2E_ARTIFACTS=tests/appium/artifacts-distro-$TARGET-2out \
+        tests/distro/run-distro-e2e.sh "$TARGET" -m outputs -rs \
+        --deselect test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts
+    KREMA_E2E_OUTPUT_COUNT=3 \
+    KREMA_E2E_ARTIFACTS=tests/appium/artifacts-distro-$TARGET-3out \
+        tests/distro/run-distro-e2e.sh "$TARGET" \
+        test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts -rs
+done
+```
+
+The two-output leg runs SET-008 and SET-012's native switch,
+fallback-warning, disconnected-row removal, persistence, and Settings-lock
+checks. It explicitly deselects the three-output node. The three-output
+leg runs SET-012's primary-excluding subset, retained dock/preview
+surfaces, and shortcut-routing checks.
+
+These commands build/install the target package as needed. To reuse an
+image already built for that target, add `KREMA_DISTRO_SKIP_IMAGE_BUILD=1`
+to each invocation, as CI does. Each leg has its own directory and
+`junit.xml` at
+`tests/appium/artifacts-distro-<target>-2out/junit.xml` or
+`tests/appium/artifacts-distro-<target>-3out/junit.xml`; later runs clear
+only their chosen artifact directory.
+
+
 On a host kernel >= 6.15 load vgem with `sudo tests/appium/setup-vgem.sh`,
 not `modprobe vgem` (after `rmmod vgem` if it is already loaded). Since 6.15
 the kernel registers vgem on the faux bus; the targets with KWin < 6.5
@@ -277,29 +309,29 @@ the rolling targets, weekly for the others and `ctest`, and on demand.
 Pull requests never push; a pull request that changes an image input builds
 the new image in its own jobs.
 
-Back in `distro-e2e.yml`, the `fedora-43` job then runs the
-`@pytest.mark.outputs(2)` tests again in a 2-output session, reusing the
-image it just built:
+Back in `distro-e2e.yml`, the `fedora-43` and `ubuntu-26.04` jobs then run
+the two- and three-output legs from
+[Selected monitor reproduction](#selected-monitor-reproduction), adding
+`KREMA_DISTRO_SKIP_IMAGE_BUILD=1` to reuse each job's installed package
+image. These legs are unsharded and have separate JUnit summaries and
+artifacts:
 
-```sh
-KREMA_E2E_OUTPUT_COUNT=2 KREMA_DISTRO_SKIP_IMAGE_BUILD=1 \
-KREMA_E2E_ARTIFACTS=tests/appium/artifacts-distro-fedora-43-2out \
-    tests/distro/run-distro-e2e.sh fedora-43 -m outputs -rs
-```
+| Target | Outputs | JUnit report | Artifact |
+|---|---|---|---|
+| `fedora-43` | 2 | `tests/appium/artifacts-distro-fedora-43-2out/junit.xml` | `distro-e2e-fedora-43-2out` |
+| `fedora-43` | 3 | `tests/appium/artifacts-distro-fedora-43-3out/junit.xml` | `distro-e2e-fedora-43-3out` |
+| `ubuntu-26.04` | 2 | `tests/appium/artifacts-distro-ubuntu-26.04-2out/junit.xml` | `distro-e2e-ubuntu-26.04-2out` |
+| `ubuntu-26.04` | 3 | `tests/appium/artifacts-distro-ubuntu-26.04-3out/junit.xml` | `distro-e2e-ubuntu-26.04-3out` |
 
-with its own JUnit summary and the artifact `distro-e2e-fedora-43-2out`.
-
-Expected result: every target matches Tier 2 — `77 passed, 4 skipped,
-0 xfailed` (the 4 skips are the 2-output tests, which the `fedora-43`
-2-output run covers). The suite pins no krema bug
-with an xfail, conditional or not. Differences in the distros' libraries are
-handled in the harness rather than in expectations: Qt's AT-SPI roles and
-extents (`PAGE_ROLE`, `SETTINGS_STACK_XPATH`, `painted_rect()` in
-`tests/appium/krema_e2e/krema.py`, keyed on the runtime `env.QT_VERSION`).
-
-| Targets | Result |
-| --- | --- |
-| `fedora-42`, `fedora-43`, `fedora-44`, `fedora-rawhide`, `opensuse-tumbleweed`, `opensuse-slowroll`, `opensuse-leap-16.0`, `debian-13`, `ubuntu-25.04`, `ubuntu-25.10`, `ubuntu-26.04`, `arch` | 77 passed, 4 skipped, 0 xfailed |
+The main one-output run intentionally skips SET-008's two-output cases
+and SET-012's two- and three-output cases: they require a different
+output count. The matching two- and three-output legs cover those cases.
+All cases collected for the matching output count are expected to pass;
+no Krema bug is pinned with an xfail.
+Differences in distro libraries are handled in the harness rather than
+in expectations: Qt's AT-SPI roles and extents (`PAGE_ROLE`,
+`SETTINGS_STACK_XPATH`, `painted_rect()` in
+`tests/appium/krema_e2e/krema.py`, keyed on runtime `env.QT_VERSION`).
 
 Per-phase wall time of a job when the images are published and the ccache
 is warm (4-vCPU runner; the runtime phases overlap the package phases):

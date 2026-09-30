@@ -1,14 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 
-# GUI integration tests: real dock shells on a private KWin virtual
-# compositor with two outputs (see tests/run-with-kwin.sh).
+# GUI integration tests: real dock shells on a private KWin virtual compositor.
+# Tests use two outputs by default; selected-monitor coverage uses three.
 find_program(KWIN_WAYLAND_EXECUTABLE kwin_wayland)
 find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
 add_executable(krema_kwin_tests
     test_primary_output.cpp
+)
+
+add_executable(krema_selected_output_tests
+    test_selected_outputs.cpp
+)
+
+target_link_libraries(krema_selected_output_tests PRIVATE
+    Catch2::Catch2
+    Qt6::Test
+    krema_lib
 )
 
 target_link_libraries(krema_kwin_tests PRIVATE
@@ -18,6 +28,10 @@ target_link_libraries(krema_kwin_tests PRIVATE
 )
 
 target_include_directories(krema_kwin_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_include_directories(krema_selected_output_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/tests
 )
 
@@ -78,6 +92,14 @@ if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
     add_test(NAME krema_kwin_tests
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_kwin_tests>
     )
+    add_test(NAME krema_selected_output_tests
+        COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_selected_output_tests>
+    )
+    set_tests_properties(krema_selected_output_tests PROPERTIES
+        TIMEOUT 300
+        ENVIRONMENT "KREMA_TEST_OUTPUT_COUNT=3"
+    )
+
     set_tests_properties(krema_kwin_tests PROPERTIES TIMEOUT 300)
 
     add_test(NAME krema_grouped_activation_tests
@@ -108,5 +130,5 @@ if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
     )
     set_tests_properties(krema_preview_tests PROPERTIES TIMEOUT 120)
 else()
-    message(STATUS "kwin_wayland or dbus-run-session not found: krema_kwin_tests, krema_grouped_activation_tests, krema_showdesktop_tests, krema_tooltip_tests, krema_hittest_tests and krema_preview_tests are built but not registered with CTest")
+    message(STATUS "kwin_wayland or dbus-run-session not found: krema_kwin_tests, krema_selected_output_tests, krema_grouped_activation_tests, krema_showdesktop_tests, krema_tooltip_tests, krema_hittest_tests and krema_preview_tests are built but not registered with CTest")
 endif()

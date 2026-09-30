@@ -3,14 +3,16 @@
 
 #pragma once
 
-#include <QObject>
 #include <QList>
+#include <QObject>
 #include <QPointer>
+#include <QVariantList>
 #include <QWindowList>
 
 class KremaSettings;
 class QQmlApplicationEngine;
 class QQuickWindow;
+class QScreen;
 class QVariant;
 
 namespace krema
@@ -30,6 +32,9 @@ class SettingsWindow : public QObject
 {
     Q_OBJECT
 
+    Q_PROPERTY(QVariantList availableScreens READ availableScreens NOTIFY availableScreensChanged)
+    Q_PROPERTY(bool hasSelectedMonitorFallback READ hasSelectedMonitorFallback NOTIFY hasSelectedMonitorFallbackChanged)
+
 public:
     explicit SettingsWindow(KremaSettings *settings, QObject *parent = nullptr);
     ~SettingsWindow() override;
@@ -44,18 +49,27 @@ public:
     /// visibleChanged(false)).
     [[nodiscard]] bool isVisible() const;
 
+    /// Value-only output rows: name, label, available and primary. Saved
+    /// disconnected selections remain present until the user removes them.
+    [[nodiscard]] QVariantList availableScreens() const;
+    [[nodiscard]] bool hasSelectedMonitorFallback() const;
+
     /// Check if a background style is available on this system (for settings
     /// QML).
     Q_INVOKABLE bool isStyleAvailable(int styleType) const;
 
 Q_SIGNALS:
     void visibleChanged(bool visible);
+    void availableScreensChanged();
+    void hasSelectedMonitorFallbackChanged();
 
 private:
     void open(const QVariant &defaultModule);
     void ensureEngine();
     [[nodiscard]] QQuickWindow *windowCreatedSince(const QWindowList &windowsBefore) const;
     void trackConfigWindow(QQuickWindow *win, bool deleteOnClose);
+    void watchScreen(QScreen *screen);
+    void updateAvailableScreens();
 
     KremaSettings *m_settings;
     QQmlApplicationEngine *m_engine = nullptr;
@@ -63,6 +77,8 @@ private:
     // Every settings window open() created that still exists, including
     // closed ones whose deletion is pending; destroyed before the engine.
     QList<QPointer<QQuickWindow>> m_openedWindows;
+    QVariantList m_availableScreens;
+    bool m_hasSelectedMonitorFallback = false;
     bool m_visible = false;
 };
 

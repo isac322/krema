@@ -283,6 +283,7 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | SET-008 | `test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings`, `test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen`, `test_set008_follow_active_shortcuts_act_on_the_shown_dock`, `test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen` | KWin, AT-SPI, kremarc | pass |
 | SET-009 | `test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly` | KWin (process exit) | pass |
 | SET-010 | `test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists` | AT-SPI, kremarc | pass |
+| SET-011 | `test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, `test_set010_zoom_style_combo_switches_zoom_live_and_persists` | AT-SPI, kremarc | partial: settings pass; timing and snapping covered by QML tests, live-dock timing screenshots manual |
 | VIS-001 | `test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window`, `test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows` | AT-SPI, screenshot, KWin | pass |
 | VIS-002 | `test_07_visibility.py::test_vis002_auto_hide_hides_after_timeout_and_frees_the_screen` | AT-SPI, KWin | pass |
 | VIS-003 | `test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach` | AT-SPI, KWin | pass |

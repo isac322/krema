@@ -265,4 +265,5 @@
 - The selected duration remains 250 ms after restart
 
 **Verification:** find_ui_elements (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
+**Automated:** `tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the default, 25 ms steps, persistence, zero value, and disabled state. `tests/qml/tst_dockitem_zoom.qml::test_zeroDurationSnapsInAndOut` and `test_customDurationUsesConfiguredTimeline` cover snapping and animation timing in both styles. The live-dock 500 ms screenshot checks remain manual.
 

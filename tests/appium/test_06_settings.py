@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-010).
+"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-012).
 
 The real Kirigami/FormCard settings window is driven with real pointer and
 keyboard input (KWin fake-input) and located through AT-SPI. Every test
@@ -21,8 +21,9 @@ AT-SPI facts this relies on (probed in this harness):
   is wheel-scrolled.
 * The QColorDialog is a separate toplevel ``frame[@name='Choose tint color']``.
 
-SET-008 needs two outputs and runs in its own session:
+SET-008 and SET-012 need two outputs and run in their own session:
 ``KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py``.
+The SET-012 three-output subset test uses ``KREMA_E2E_OUTPUT_COUNT=3``.
 """
 
 from __future__ import annotations
@@ -76,6 +77,22 @@ def dock_surfaces(krema: Krema) -> list[kwin.Window]:
         and w.client_height > EDGE_TRIGGER_PX
     ]
     return sorted(out, key=lambda w: w.client_x)
+
+
+def preview_surfaces(krema: Krema) -> list[kwin.Window]:
+    """Pre-shown bottom-edge preview layer surfaces above the dock band."""
+    return sorted(
+        [
+            w
+            for w in krema.windows()
+            if w.skip_taskbar
+            and not w.desktops
+            and w.client_width == W
+            and w.client_y + w.client_height < H - EDGE_TRIGGER_PX
+            and w.client_height > EDGE_TRIGGER_PX
+        ],
+        key=lambda w: w.client_x,
+    )
 
 
 def click_el(krema: Krema, el, surface: str = "settings", button: str = "left") -> None:
@@ -1142,3 +1159,265 @@ def test_clk011_preview_controls_follow_hover_and_explicit_group_choice(
     wait_until(lambda: not krema.preview_visible(), message="popup closes using its UI-selected hide delay")
     elapsed = time.monotonic() - started
     assert elapsed >= 0.25 * 0.95, f"popup closed before the selected 250 ms hide delay: {elapsed:.3f}s"
+# ------------------------------------------------------------------- SET-012
+@pytest.mark.outputs(2)
+@pytest.mark.no_krema_autostart
+def test_set012_selected_monitors_toggle_keeps_settings_open(krema: Krema, apps: TestWindows) -> None:
+    outputs = kwin.evaluate("report(workspace.screens.map(s => ({name: s.name, x: s.geometry.x, y: s.geometry.y})));")
+    assert [(o["x"], o["y"]) for o in outputs] == [(0, 0), (W, 0)], outputs
+    first, second = [o["name"] for o in outputs]
+    krema.write_config(
+        {"PinnedLaunchers": [], "VisibilityMode": kcfg.AUTO_HIDE, "MonitorMode": 0, "SelectedOutputs": [first]}
+    )
+    krema.start()
+    apps.open("Alpha")
+    wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="primary-only control dock")
+    reveal_dock(krema, "Alpha")
+    win = open_settings(krema)
+    open_page(krema, "Behavior")
+
+    # Healthy existing-mode control before exercising the new native option.
+    choose(krema, "Monitor mode", "All monitors")
+    wait_until(lambda: mapped_dock_xs(krema) == [0, W], timeout=5, message="all-monitors control docks")
+    choose(krema, "Monitor mode", "Selected monitors")
+    wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="only the saved selected output")
+
+    second_xpath = f"{SETTINGS}//check_box[@name='{second}']"
+    click_el(krema, scroll_into_view(krema, second_xpath))
+    wait_until(lambda: has_state(krema.wait_for(second_xpath), "checked"), message="second output selected")
+    wait_until(lambda: mapped_dock_xs(krema) == [0, W], timeout=5, message="both selected docks mapped")
+    retained_dock = next(d for d in dock_surfaces(krema) if d.output == second)
+    retained_preview = wait_until(
+        lambda: next((p for p in preview_surfaces(krema) if p.output == second), None),
+        message="new output's preview surface",
+    )
+    wait_until(
+        lambda: len(items := krema.find_all(ALPHA_ITEMS)) == 2 and all(has_state(i, "showing") for i in items),
+        message="new selected dock inherits Settings interaction lock",
+    )
+    pointer_to_center()
+    holds(
+        lambda: len(items := krema.find_all(ALPHA_ITEMS)) == 2 and all(has_state(i, "showing") for i in items),
+        1.0,
+        "a newly selected dock hid while Settings is open",
+    )
+    first_xpath = f"{SETTINGS}//check_box[@name='{first}']"
+    click_el(krema, scroll_into_view(krema, first_xpath))
+    wait_until(lambda: not has_state(krema.wait_for(first_xpath), "checked"), message="first output deselected")
+    wait_until(lambda: mapped_dock_xs(krema) == [W], timeout=5, message="exactly one dock on output 2")
+    (dock,) = dock_surfaces(krema)
+    assert dock.output == second and dock.client_x == W, dock
+    assert dock.internal_id == retained_dock.internal_id, "deselecting another output rebuilt the retained dock"
+    wait_until(
+        lambda: len(previews := preview_surfaces(krema)) == 1
+        and previews[0].output == second
+        and previews[0].internal_id == retained_preview.internal_id,
+        message="only the retained output's original preview surface",
+    )
+    assert [w.internal_id for w in settings_windows(krema)] == [win.internal_id], "originating dock removal closed Settings"
+    wait_until(
+        lambda: (active := kwin.active_window()) is not None and active.internal_id == win.internal_id,
+        message="the same Settings window remains focused",
+    )
+    wait_until(
+        lambda: config_value(krema, "MonitorMode") == "3" and kcfg.as_list(config_value(krema, "SelectedOutputs") or "") == [second],
+        message="selected output names persisted exactly",
+    )
+    pointer_to_center()
+    holds(lambda: has_state(krema.wait_for_item("Alpha"), "showing"), 1.0, "retained dock lost Settings interaction lock")
+    close_settings(krema)
+    wait_until(lambda: shown_alpha(krema) is None, timeout=5, message="selected dock auto-hides once Settings closes")
+
+    # Cold restart must restore mode 3 and the exact output name, not clamp it.
+    old_pid = krema.pid
+    krema.restart()
+    assert krema.pid != old_pid and krema.is_running()
+    wait_until(lambda: mapped_dock_xs(krema) == [W], timeout=5, message="restarted selected dock on output 2")
+    assert config_value(krema, "MonitorMode") == "3"
+    assert kcfg.as_list(config_value(krema, "SelectedOutputs") or "") == [second]
+    assert not settings_windows(krema)
+
+    # The pointer is on unselected output 1. Focus Dock still targets output 2.
+    pointer_to_center()
+    invoke_shortcut("focus-dock")
+    wait_until(lambda: krema.focused_item() == "Alpha", message="selected dock keyboard navigation")
+    (dock,) = dock_surfaces(krema)
+    wait_until(
+        lambda: (active := kwin.active_window()) is not None and active.internal_id == dock.internal_id,
+        message="KWin keyboard focus on selected output's dock",
+    )
+    inp.key("Up")
+    wait_until(krema.preview_visible, message="selected output's preview opens through keyboard navigation")
+    (preview,) = wait_until(
+        lambda: p if len(p := preview_surfaces(krema)) == 1 else None,
+        message="one preview surface for the one selected output",
+    )
+    assert preview.output == second and preview.client_x == W, preview
+    wait_until(
+        lambda: krema.find("//popup_menu/button/label[@name='Alpha']") is not None,
+        message="selected dock's preview contains the actual app window",
+    )
+
+
+FALLBACK_WARNING = SETTINGS + "//*[contains(@name, 'temporary dock') and contains(@name, 'primary')]"
+DISCONNECTED_OUTPUT = "KREMA-disconnected-output"
+
+
+def selected_outputs(krema: Krema) -> list[str]:
+    return kcfg.as_list(config_value(krema, "SelectedOutputs") or "")
+
+
+def fallback_warning_visible(krema: Krema) -> bool:
+    return any(has_state(el, "showing") for el in krema.find_all(FALLBACK_WARNING))
+
+
+def set_output_selected(krema: Krema, name: str, selected: bool) -> None:
+    xpath = f"{SETTINGS}//check_box[@name='{name}']"
+    row = scroll_into_view(krema, xpath)
+    if has_state(row, "checked") != selected:
+        click_el(krema, row)
+    wait_until(
+        lambda: has_state(krema.wait_for(xpath), "checked") == selected,
+        message=f"output {name} selected={selected}",
+    )
+
+
+@pytest.mark.outputs(2)
+@pytest.mark.no_krema_autostart
+@pytest.mark.parametrize("saved_names", [[], [DISCONNECTED_OUTPUT]], ids=["empty", "disconnected"])
+def test_set012_selected_monitors_fallback_warns_and_keeps_saved_names(
+    krema: Krema, apps: TestWindows, saved_names: list[str]
+) -> None:
+    outputs = kwin.evaluate("report(workspace.screens.map(s => ({name: s.name, x: s.geometry.x, y: s.geometry.y})));")
+    assert [(o["x"], o["y"]) for o in outputs] == [(0, 0), (W, 0)], outputs
+    first, second = [o["name"] for o in outputs]
+    assert DISCONNECTED_OUTPUT not in (first, second)
+    krema.write_config(
+        {"PinnedLaunchers": [], "VisibilityMode": kcfg.AUTO_HIDE, "MonitorMode": 3, "SelectedOutputs": saved_names}
+    )
+    krema.start()
+    apps.open("Alpha")
+    wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="one temporary primary dock")
+    assert dock_surfaces(krema)[0].output == first
+    reveal_dock(krema, "Alpha")
+    win = open_settings(krema)
+    open_page(krema, "Behavior")
+    assert current_choice(krema, "Monitor mode") == "Selected monitors"
+    scroll_into_view(krema, FALLBACK_WARNING)
+    wait_until(lambda: fallback_warning_visible(krema), message="temporary primary fallback warning")
+    assert selected_outputs(krema) == saved_names, "fallback rewrote the user's saved selection"
+    for name in (first, second):
+        assert not has_state(krema.wait_for(f"{SETTINGS}//check_box[@name='{name}']"), "checked")
+
+    if saved_names:
+        missing_xpath = f"{SETTINGS}//check_box[@name='{DISCONNECTED_OUTPUT}']"
+        assert has_state(krema.wait_for(missing_xpath), "checked"), "saved disconnected output is not removable"
+        choose(krema, "Monitor mode", "All monitors")
+        wait_until(lambda: mapped_dock_xs(krema) == [0, W], timeout=5, message="old all-monitors mode remains healthy")
+        assert selected_outputs(krema) == saved_names
+        assert not fallback_warning_visible(krema), "selected-mode warning remained visible in All monitors"
+        assert not any(has_state(el, "showing") for el in krema.find_all(missing_xpath)), "output switches escaped Selected mode"
+        choose(krema, "Monitor mode", "Primary monitor only")
+        wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="old primary-only mode remains healthy")
+        assert selected_outputs(krema) == saved_names
+        choose(krema, "Monitor mode", "Selected monitors")
+        scroll_into_view(krema, FALLBACK_WARNING)
+        wait_until(lambda: fallback_warning_visible(krema), message="fallback warning restored with saved unavailable selection")
+
+        # Real native toggle, then the unavailable row disappears rather than
+        # leaving an unremovable stale screen entry.
+        click_el(krema, scroll_into_view(krema, missing_xpath))
+        wait_until(lambda: selected_outputs(krema) == [], message="disconnected name removed from kremarc")
+        wait_until(lambda: krema.find(missing_xpath) is None, message="removed disconnected output row disappears")
+        wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="one primary fallback after pruning")
+
+    # A live selection removes fallback and its warning without closing the
+    # dialog whose originating primary dock has just been destroyed.
+    set_output_selected(krema, second, True)
+    wait_until(lambda: mapped_dock_xs(krema) == [W], timeout=5, message="live selection replaces primary fallback")
+    wait_until(lambda: selected_outputs(krema) == [second], message="only the user's live selection saved")
+    wait_until(lambda: not fallback_warning_visible(krema), message="no warning for a connected selected output")
+    assert [w.internal_id for w in settings_windows(krema)] == [win.internal_id]
+
+    set_output_selected(krema, second, False)
+    wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="empty selection restores exactly one fallback")
+    wait_until(lambda: selected_outputs(krema) == [], message="empty selection saved without inventing primary")
+    scroll_into_view(krema, FALLBACK_WARNING)
+    wait_until(lambda: fallback_warning_visible(krema), message="empty selection warning returns")
+    assert [w.internal_id for w in settings_windows(krema)] == [win.internal_id]
+
+
+@pytest.mark.outputs(3)
+@pytest.mark.no_krema_autostart
+def test_set012_selected_subset_preserves_docks_and_routes_shortcuts(krema: Krema, apps: TestWindows) -> None:
+    outputs = kwin.evaluate("report(workspace.screens.map(s => ({name: s.name, x: s.geometry.x, y: s.geometry.y})));")
+    assert [(o["x"], o["y"]) for o in outputs] == [(0, 0), (W, 0), (2 * W, 0)], outputs
+    first, second, third = [o["name"] for o in outputs]
+    # Save the opposite of compositor order to prove shortcut routing does
+    # not accidentally follow list insertion or unordered-map iteration.
+    krema.write_config(
+        {"PinnedLaunchers": [], "VisibilityMode": kcfg.AUTO_HIDE, "MonitorMode": 0, "SelectedOutputs": [third, second]}
+    )
+    krema.start()
+    apps.open("Alpha")
+    wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="primary-only control on three outputs")
+    reveal_dock(krema, "Alpha")
+    win = open_settings(krema)
+    open_page(krema, "Behavior")
+    choose(krema, "Monitor mode", "Selected monitors")
+    wait_until(lambda: mapped_dock_xs(krema) == [W, 2 * W], timeout=5, message="selected subset excludes primary")
+    assert [d.output for d in dock_surfaces(krema)] == [second, third]
+    wait_until(
+        lambda: [p.output for p in preview_surfaces(krema)] == [second, third],
+        message="one correctly aligned preview surface per selected output",
+    )
+    assert selected_outputs(krema) == [third, second]
+    assert not has_state(krema.wait_for(f"{SETTINGS}//check_box[@name='{first}']"), "checked")
+    retained = next(d for d in dock_surfaces(krema) if d.output == third)
+    retained_preview = next(p for p in preview_surfaces(krema) if p.output == third)
+
+    set_output_selected(krema, second, False)
+    wait_until(lambda: mapped_dock_xs(krema) == [2 * W], timeout=5, message="deselected output removed from subset")
+    assert dock_surfaces(krema)[0].internal_id == retained.internal_id, "selection update rebuilt unrelated dock"
+    wait_until(
+        lambda: len(previews := preview_surfaces(krema)) == 1 and previews[0].internal_id == retained_preview.internal_id,
+        message="selection update retains unrelated preview and removes deselected preview",
+    )
+    set_output_selected(krema, second, True)
+    wait_until(lambda: mapped_dock_xs(krema) == [W, 2 * W], timeout=5, message="selected subset restored")
+    assert next(d for d in dock_surfaces(krema) if d.output == third).internal_id == retained.internal_id
+    wait_until(lambda: selected_outputs(krema) == [third, second], message="exact ordered selected names autosaved")
+    assert [w.internal_id for w in settings_windows(krema)] == [win.internal_id]
+    pointer_to_center()
+    wait_until(
+        lambda: len(items := krema.find_all(ALPHA_ITEMS)) == 2 and all(has_state(i, "showing") for i in items),
+        message="restored selected dock inherits open Settings lock",
+    )
+    holds(
+        lambda: len(items := krema.find_all(ALPHA_ITEMS)) == 2 and all(has_state(i, "showing") for i in items),
+        1.0,
+        "selected subset hid while Settings was still open",
+    )
+
+    close_settings(krema)
+    pointer_to_center()
+    wait_until(
+        lambda: len(items := krema.find_all(ALPHA_ITEMS)) == 2 and all(not has_state(i, "showing") for i in items),
+        timeout=5,
+        message="both selected docks auto-hide after Settings closes",
+    )
+    # Pointer on unselected primary output: first live compositor output
+    # wins, even though the saved selection starts with output 3.
+    invoke_shortcut("focus-dock")
+    wait_until(
+        lambda: krema.find(TOOLBAR_XPATH + "/button[contains(@states, 'focused')]"),
+        message="a selected dock button focused from unselected output",
+    )
+    target = next(d for d in dock_surfaces(krema) if d.output == second)
+    wait_until(
+        lambda: (active := kwin.active_window()) is not None and active.internal_id == target.internal_id,
+        message="Focus Dock selects output 2 rather than saved-list-first output 3",
+    )
+    assert mapped_dock_xs(krema) == [W, 2 * W]
+    inp.key("Escape")
+    wait_until(lambda: krema.focused_item() is None, message="Escape leaves selected dock keyboard navigation")

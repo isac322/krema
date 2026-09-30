@@ -347,7 +347,7 @@ Item {
             let row = makeRow(5)
             row.mouseInside = true
             row.mouseX = row.itemAt(2).itemCenterX
-            for (let i = 0; i < 5; i++) tryCompare(row.itemAt(i), "currentScale", row.itemAt(i).zoomScale)
+            for (let i = 0; i < 5; i++) tryVerify(() => row.itemAt(i).currentScale === row.itemAt(i).zoomScale)
             fuzzyCompare(row.itemAt(2).currentScale, DockSettings.maxZoomFactor, 1e-9)
             for (let i = 0; i < 5; i++) {
                 let item = row.itemAt(i)

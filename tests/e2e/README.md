@@ -219,7 +219,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/models/dockmodel.*` | 02, 03 |
 | `src/shell/multidockmanager.*` | 02, 03, 06, 07 |
 | `src/shell/edgetrigger.*` | 06 |
-| `src/shell/outputordermonitor.*` | 02, 03, 07 |
+| `src/shell/outputordermonitor.*` | 02, 03, 06, 07 |
 | `src/platform/dockplatform.*` | 01, 07 |
 
 `src/qml/main.qml` maps to all seven scenario files because it owns the dock

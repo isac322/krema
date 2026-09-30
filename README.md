@@ -83,11 +83,17 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Auto-Stop** — Attention animations stop after configurable duration (default 5s)
 
 ### Multi-Monitor & Virtual Desktops
-- **Multi-Monitor Modes** — Primary only, all screens, or follow active window
+- **Multi-Monitor Modes** — Primary monitor only, All monitors, Follow active screen, or Selected monitors
 - **Per-Screen Settings** — Override icon size, edge, visibility mode per monitor
 - **Follow Active Triggers** — Mouse, focus, or composite trigger for dock follows
 - **Virtual Desktop Filtering** — Show all desktops, dim other desktops, or current only
 - **Automatic Startup** — Launches on login, enforces single instance
+
+Choose **Selected monitors** in Settings → Behavior, then enable the switches for the output names you want. Each selected connected output with usable geometry gets a dock. Primary-display changes and unselected monitor connections or disconnections leave retained docks and previews in place. Disconnected selections stay listed and can be removed by turning their switches off.
+
+If the selection is empty or no selected output is usable, Krema shows a temporary dock on the primary display and a warning in Settings. The saved selection stays unchanged; reconnecting a selected monitor restores its dock and removes the fallback. Switching to another mode hides the selection controls without clearing the saved names.
+
+In `kremarc`, `MonitorMode=3` means `SelectedScreens`; `SelectedOutputs` is a string list of exact output names such as `eDP-1` and `HDMI-A-1`. Existing values remain `0=PrimaryOnly` (default), `1=AllScreens`, and `2=FollowActive`.
 
 ### Integration & Accessibility
 - **KDE Native Integration** — Kirigami UI, KDE color schemes, Plasma theme colors
@@ -108,6 +114,8 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 | Arrow keys | Navigate between dock items / preview thumbnails |
 | Enter | Activate focused item |
 | Escape | Exit keyboard navigation |
+
+In Selected monitors mode, Toggle Dock and app-number shortcuts target the selected primary display, then the first selected output in the adopted compositor order, then the saved selection order. Focus Dock uses the dock on the cursor's screen when available; a cursor on an unselected output falls back to the same order.
 
 ## Installation
 

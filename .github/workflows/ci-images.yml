@@ -200,7 +200,7 @@ jobs:
           echo "[ci-images] builder built and pushed: $((SECONDS - t0))s"
 
       - name: Restore ccache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/ccache
           key: ${{ steps.decide.outputs.ccache_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
@@ -217,7 +217,7 @@ jobs:
           echo "[ci-images] package build: $((SECONDS - t0))s"
 
       - name: Save ccache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/ccache
           key: ${{ steps.decide.outputs.ccache_prefix }}${{ github.run_id }}-${{ github.run_attempt }}

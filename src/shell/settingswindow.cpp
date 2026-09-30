@@ -4,6 +4,8 @@
 #include "settingswindow.h"
 
 #include "krema.h"
+#include "multidockmanager.h"
+#include "outputordermonitor.h"
 #include "style/backgroundstyle.h"
 
 #include <KLocalizedQmlContext>
@@ -14,6 +16,9 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWindow>
+#include <QScreen>
+
+#include <utility>
 
 Q_LOGGING_CATEGORY(lcSettingsWindow, "krema.settings.window")
 
@@ -24,6 +29,23 @@ SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
     : QObject(parent)
     , m_settings(settings)
 {
+    auto *outputOrder = OutputOrderMonitor::instance();
+    connect(outputOrder, &OutputOrderMonitor::primaryOutputChanged, this, &SettingsWindow::updateAvailableScreens);
+    connect(m_settings, &KremaSettings::SelectedOutputsChanged, this, &SettingsWindow::updateAvailableScreens);
+    connect(m_settings, &KremaSettings::MonitorModeChanged, this, &SettingsWindow::updateAvailableScreens);
+
+    if (qGuiApp) {
+        connect(qGuiApp, &QGuiApplication::screenAdded, this, [this](QScreen *screen) {
+            watchScreen(screen);
+            updateAvailableScreens();
+        });
+        connect(qGuiApp, &QGuiApplication::screenRemoved, this, &SettingsWindow::updateAvailableScreens);
+        connect(qGuiApp, &QGuiApplication::primaryScreenChanged, this, &SettingsWindow::updateAvailableScreens);
+    }
+    for (auto *screen : QGuiApplication::screens()) {
+        watchScreen(screen);
+    }
+    updateAvailableScreens();
 }
 
 SettingsWindow::~SettingsWindow()
@@ -52,6 +74,69 @@ SettingsWindow::~SettingsWindow()
 bool SettingsWindow::isVisible() const
 {
     return m_visible;
+}
+
+QVariantList SettingsWindow::availableScreens() const
+{
+    return m_availableScreens;
+}
+
+bool SettingsWindow::hasSelectedMonitorFallback() const
+{
+    return m_hasSelectedMonitorFallback;
+}
+
+void SettingsWindow::watchScreen(QScreen *screen)
+{
+    connect(screen, &QScreen::geometryChanged, this, &SettingsWindow::updateAvailableScreens);
+}
+
+void SettingsWindow::updateAvailableScreens()
+{
+    const auto screens = QGuiApplication::screens();
+    const auto selectedOutputs = m_settings->selectedOutputs();
+    const auto *primary = OutputOrderMonitor::instance()->primaryScreen();
+    QVariantList rows;
+    rows.reserve(screens.size() + selectedOutputs.size());
+    QStringList outputNames;
+    outputNames.reserve(screens.size() + selectedOutputs.size());
+    bool hasLiveSelection = false;
+    for (auto *screen : screens) {
+        const QString name = screen->name();
+        const bool available = !screen->geometry().isEmpty();
+        rows.append(QVariantMap{
+            {QStringLiteral("name"), name},
+            {QStringLiteral("label"), name},
+            {QStringLiteral("available"), available},
+            {QStringLiteral("primary"), screen == primary},
+        });
+        outputNames.append(name);
+        hasLiveSelection |= available && selectedOutputs.contains(name);
+    }
+    for (const auto &name : selectedOutputs) {
+        if (outputNames.contains(name)) {
+            continue;
+        }
+        rows.append(QVariantMap{
+            {QStringLiteral("name"), name},
+            {QStringLiteral("label"), name},
+            {QStringLiteral("available"), false},
+            {QStringLiteral("primary"), false},
+        });
+        outputNames.append(name);
+    }
+
+    const bool fallback = m_settings->monitorMode() == MultiDockManager::SelectedScreens && !hasLiveSelection;
+    const bool rowsChanged = rows != m_availableScreens;
+    const bool fallbackChanged = fallback != m_hasSelectedMonitorFallback;
+    m_availableScreens = std::move(rows);
+    m_hasSelectedMonitorFallback = fallback;
+    if (rowsChanged) {
+        Q_EMIT availableScreensChanged();
+    }
+    if (fallbackChanged) {
+        Q_EMIT hasSelectedMonitorFallbackChanged();
+    }
 }
 
 bool SettingsWindow::isStyleAvailable(int styleType) const

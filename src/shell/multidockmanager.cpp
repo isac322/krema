@@ -25,6 +25,7 @@
 #include <QLoggingCategory>
 #include <QScreen>
 
+#include <algorithm>
 #include <utility>
 
 Q_LOGGING_CATEGORY(lcMultiDock, "krema.shell.multidock")
@@ -57,6 +58,11 @@ MultiDockManager::MultiDockManager(KremaSettings *settings, DockModel *model, No
     // The Plasma primary is published via kde_output_order_v1, not Qt's
     // primaryScreenChanged (which never fires on QtWayland).
     connect(OutputOrderMonitor::instance(), &OutputOrderMonitor::primaryOutputChanged, this, &MultiDockManager::onPrimaryScreenChanged);
+    connect(m_settings, &KremaSettings::SelectedOutputsChanged, this, [this] {
+        if (m_initialized && m_mode == SelectedScreens) {
+            reconcileSelectedScreens();
+        }
+    });
 }
 
 MultiDockManager::~MultiDockManager() = default;
@@ -91,6 +97,31 @@ DockShell *MultiDockManager::primaryShell() const
         if (it != m_shells.end()) {
             return it->second.get();
         }
+    }
+    if (m_mode == SelectedScreens) {
+        const auto shellNamed = [this](const QString &name) -> DockShell * {
+            for (const auto &[screen, shell] : m_shells) {
+                if (screen->name() == name) {
+                    return shell.get();
+                }
+            }
+            return nullptr;
+        };
+        // Only the adopted order is authoritative. A pending compositor list
+        // may still contain outputs whose QScreen has not appeared.
+        const auto order = OutputOrderMonitor::instance()->outputOrder();
+        for (const auto &name : order) {
+            if (auto *shell = shellNamed(name)) {
+                return shell;
+            }
+        }
+        const auto selected = m_settings->selectedOutputs();
+        for (const auto &name : selected) {
+            if (auto *shell = shellNamed(name)) {
+                return shell;
+            }
+        }
+        return nullptr;
     }
     // Fallback: return any available shell
     if (!m_shells.empty()) {
@@ -157,6 +188,9 @@ void MultiDockManager::applyMode()
     case FollowActive:
         setupFollowActive();
         break;
+    case SelectedScreens:
+        reconcileSelectedScreens();
+        break;
     }
 }
 
@@ -182,6 +216,39 @@ void MultiDockManager::setupAllScreens()
     }
 }
 
+void MultiDockManager::reconcileSelectedScreens()
+{
+    const auto screens = QGuiApplication::screens();
+    const auto selected = m_settings->selectedOutputs();
+    const auto isSelected = [&selected](QScreen *screen) {
+        return screen && !screen->geometry().isEmpty() && selected.contains(screen->name());
+    };
+    const bool hasSelectedScreen = std::any_of(screens.cbegin(), screens.cend(), isSelected);
+    auto *fallback = hasSelectedScreen ? nullptr : OutputOrderMonitor::instance()->primaryScreen();
+
+    // Remove only outputs no longer desired. A primary reorder or unrelated
+    // hotplug must not replace retained dock/preview surfaces or their state.
+    for (auto it = m_shells.begin(); it != m_shells.end();) {
+        auto *screen = it->first;
+        ++it;
+        if (hasSelectedScreen ? !isSelected(screen) : screen != fallback) {
+            destroyShellForScreen(screen);
+        }
+    }
+
+    if (hasSelectedScreen) {
+        for (auto *screen : screens) {
+            if (isSelected(screen) && !m_shells.contains(screen)) {
+                createShellForScreen(screen);
+            }
+        }
+    } else if (fallback && !fallback->geometry().isEmpty() && !m_shells.contains(fallback)) {
+        // Keep the saved names intact: this dock is temporary, so the intended
+        // subset returns automatically when any selected output reconnects.
+        createShellForScreen(fallback);
+    }
+}
+
 DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
 {
     if (auto it = m_shells.find(screen); it != m_shells.end()) {
@@ -196,6 +263,9 @@ DockShell *MultiDockManager::createShellForScreen(QScreen *screen)
 
     auto platform = DockPlatformFactory::create();
     auto shell = std::make_unique<DockShell>(m_settings, screenSettings, m_model, m_tracker, m_settingsWindow.get(), std::move(platform), this);
+    // Destroy the overlay after its own dock view, not at manager teardown:
+    // repeated selection toggles must not retain old settings connections.
+    screenSettings->setParent(shell.get());
 
     // Set the QWindow screen AND position before initialization. On QtWayland
     // the platform window re-derives its QScreen from the window geometry at
@@ -416,7 +486,7 @@ void MultiDockManager::setShellVisible(DockShell *shell, bool visible)
 void MultiDockManager::onScreenAdded(QScreen *screen)
 {
     qCDebug(lcMultiDock) << "Screen added:" << screen->name() << "geometry:" << screen->geometry();
-    if (m_mode == AllScreens || m_mode == FollowActive) {
+    if (m_mode == AllScreens || m_mode == FollowActive || m_mode == SelectedScreens) {
         scheduleTopologyUpdate();
     }
 }
@@ -425,13 +495,15 @@ void MultiDockManager::onScreenRemoved(QScreen *screen)
 {
     qCDebug(lcMultiDock) << "Screen removed:" << screen->name();
 
-    // Immediately destroy the shell for the removed screen to avoid dangling pointers
+    // Immediately destroy the shell for the removed screen to avoid dangling
+    // pointers
     destroyShellForScreen(screen);
 
     if (m_mode == AllScreens) {
         // No need to schedule — we already removed the shell synchronously
-    } else if (m_mode == PrimaryOnly || m_mode == FollowActive) {
-        // If the primary screen was removed, we need to migrate to the new primary
+    } else if (m_mode == PrimaryOnly || m_mode == FollowActive || m_mode == SelectedScreens) {
+        // Re-evaluate primary placement, follow-active state, or the selected
+        // subset's temporary fallback after the output disappears.
         scheduleTopologyUpdate();
     }
 }
@@ -440,7 +512,7 @@ void MultiDockManager::onPrimaryScreenChanged()
 {
     auto *screen = OutputOrderMonitor::instance()->primaryScreen();
     qCDebug(lcMultiDock) << "Primary output changed to:" << (screen ? screen->name() : QStringLiteral("null"));
-    if (m_initialized && (m_mode == PrimaryOnly || m_mode == FollowActive)) {
+    if (m_initialized && (m_mode == PrimaryOnly || m_mode == FollowActive || m_mode == SelectedScreens)) {
         scheduleTopologyUpdate();
     }
 }
@@ -453,7 +525,14 @@ void MultiDockManager::scheduleTopologyUpdate()
 void MultiDockManager::processTopologyUpdate()
 {
     qCDebug(lcMultiDock) << "Processing topology update, mode:" << m_mode;
-    applyMode();
+    if (!m_initialized) {
+        return;
+    }
+    if (m_mode == SelectedScreens) {
+        reconcileSelectedScreens();
+    } else {
+        applyMode();
+    }
 }
 
 } // namespace krema

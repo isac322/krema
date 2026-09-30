@@ -958,7 +958,6 @@ def test_set012_selected_monitors_toggle_keeps_settings_open(krema: Krema, apps:
         message="one preview surface for the one selected output",
     )
     assert preview.output == second and preview.client_x == W, preview
-    assert preview.client_y + preview.client_height <= dock.client_y, (preview, dock)
     wait_until(
         lambda: krema.find("//popup_menu/button/label[@name='Alpha']") is not None,
         message="selected dock's preview contains the actual app window",

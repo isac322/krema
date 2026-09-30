@@ -744,10 +744,9 @@ def test_mouse010_click_policies_observe_single_and_group_window_state(
         message="background singleton to activate without minimizing",
     )
     krema.move_away(close_preview=False)
-    wait_stable(
+    assert wait_stable(
         lambda: (w := solo.refresh()) is not None and w.active and not w.minimized,
-    )
-
+    ), "background singleton remained active without minimizing"
     # The grouped setting has a distinct consumer-visible result for every
     # choice; group 1 is covered further below by the thumbnail oracle.
     kwin.activate(grouped_wins[0].internal_id)
@@ -887,6 +886,12 @@ def test_mouse012_group2_restores_one_mru_child_when_all_children_are_minimized(
     )
 
 
+def _tooltip_bbox(shot: np.ndarray, baseline: np.ndarray) -> Rect | None:
+    """Return a tooltip bbox only after its full text surface has painted."""
+    bbox = _bbox(_changed(shot, baseline))
+    return bbox if bbox is not None and 14 <= bbox.height <= 48 else None
+
+
 def _tooltip_glyph_count(shot: np.ndarray, rect: Rect) -> int:
     region = shot[rect.y : rect.y + rect.height, rect.x : rect.x + rect.width]
     luminance = region[..., :3] @ np.array([0.299, 0.587, 0.114])
@@ -920,13 +925,17 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
 
     def tooltip_band(name: str) -> Rect:
         item = krema.screen_rect(krema.item(name))
-        return Rect(0, item.y - 80, env.SCREEN_WIDTH, 80)
+        band_top = item.y - 80
+        # The last rows of this band are the dock panel's rounded/shadowed
+        # edge, not tooltip pixels. Keep them out of the change bbox so a
+        # one-pixel panel repaint cannot satisfy tooltip readiness.
+        return Rect(0, band_top, env.SCREEN_WIDTH, item.y - band_top - 8)
 
     band = tooltip_band(target)
     baseline = _pixels(krema.screenshot("qa011-tooltip-base", band))
     krema.hover_item(target)
     target_tip = wait_until(
-        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-target-tooltip-before", band)), baseline)),
+        lambda: _tooltip_bbox(_pixels(krema.screenshot("qa011-target-tooltip-before", band)), baseline),
         message=f"text tooltip before explicit click, target {target!r}",
     )
     assert target_tip is not None and 14 <= target_tip.height <= 48
@@ -939,7 +948,7 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
 
     krema.hover_item(NAME1)
     group_tip = wait_until(
-        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-group-tooltip-before", band)), baseline)),
+        lambda: _tooltip_bbox(_pixels(krema.screenshot("qa011-group-tooltip-before", band)), baseline),
         message="group text tooltip before explicit preview",
     )
     assert group_tip is not None
@@ -952,14 +961,26 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
     krema.click_item(NAME1)
     assert krema.preview_visible(), "repeated explicit click must keep the popup"
 
-    # Re-enter on a different real window or a no-window launcher while the
-    # 1000 ms popup hide is pending. Check the composited pixels, then require
-    # actual text recovery after close. The overlay popup can occlude the
-    # lower-layer dock tooltip; its hidden visibility state is a Tier1 oracle,
-    # not something a screenshot can establish.
-    inp.move(env.SCREEN_WIDTH // 2, 20)
-    krema.hover_item(target)
+    # Re-enter along the bottom edge, below the popup surface. Resolve the
+    # target geometry before leaving the group: the configured hide timer
+    # starts as soon as the pointer leaves the dock item.
+    target_x, target_y = krema.item_center(target)
+    edge_y = env.SCREEN_HEIGHT - 1
+    reentry_started = time.monotonic()
+    inp.move_path(
+        [
+            *inp.line((env.SCREEN_WIDTH // 2, edge_y), (target_x, edge_y), 3),
+            *inp.line((target_x, edge_y), (target_x, target_y), 3),
+        ],
+        step_ms=40,
+    )
+    reentry_elapsed = time.monotonic() - reentry_started
+    assert reentry_elapsed < 1.0, f"re-entry path exceeded the configured 1000 ms hide delay ({reentry_elapsed:.3f}s)"
     assert krema.preview_visible(), "popup did not retain its configured hide delay"
+    # The popup can occlude the lower-layer tooltip while it remains visible;
+    # verify the hidden state and the cropped glyph oracle separately.
+    overlap_counts: list[int] = []
+
     def closed_without_tooltip_overlap() -> bool:
         if not krema.preview_visible():
             return True
@@ -970,6 +991,13 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
         if glyph_count >= 40:
             overlap_counts.append(glyph_count)
         return False
+
+    wait_until(
+        closed_without_tooltip_overlap,
+        timeout=5,
+        message="pending explicit popup to close without tooltip overlap",
+    )
+    assert not overlap_counts, f"text tooltip overlapped the still-visible preview ({overlap_counts})"
     wait_until(
         lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-tooltip-after-close", band)), target_tip) >= 40,
         message="target tooltip to recover after the popup closes without further pointer motion",
@@ -989,13 +1017,17 @@ def test_mouse014_fast_hover_launcher_tooltip_healthy_control(krema: Krema) -> N
     _require_capture()
     krema.wait_for_item(NAME1)
     krema.move_away(close_preview=False)
-    baseline = _pixels(krema.screenshot("qa011-launcher-base"))
+    item = krema.screen_rect(krema.wait_for_item(NAME1))
+    band_top = item.y - 80
+    band = Rect(0, band_top, env.SCREEN_WIDTH, item.y - band_top - 8)
+    baseline = _pixels(krema.screenshot("qa011-launcher-base", band))
     krema.hover_item(NAME1)
     tip = wait_until(
-        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-launcher-tip")), baseline)),
+        lambda: _tooltip_bbox(_pixels(krema.screenshot("qa011-launcher-tip", band)), baseline),
         message="fast-hover launcher tooltip to paint",
     )
-    assert tip is not None and tip.y < krema.screen_rect(krema.item(NAME1)).y
+    assert tip is not None and tip.y < item.y
+    assert _tooltip_glyph_count(_pixels(krema.screenshot("qa011-launcher-glyphs", band)), tip) >= 40
 
 
 @pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})

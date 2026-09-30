@@ -19,6 +19,7 @@
 #include "models/notificationtracker.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
+#include "shell/outputordermonitor.h"
 #include "shell/multidockmanager.h"
 #include "shell/previewcontroller.h"
 
@@ -183,6 +184,16 @@ TEST_CASE("A task row appearing while a window is hovered respects the preview s
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowRow(kHoveredTitle) < 0 && windowRow(kOtherTitle) < 0;
+        },
+        kTimeoutMs));
+
+    // Match Application::run(): wait for the compositor's final output order
+    // before creating the shell, so a later primary-output update cannot
+    // destroy the QML root while this scenario is driving task insertion.
+    auto *outputOrder = krema::OutputOrderMonitor::instance();
+    REQUIRE(QTest::qWaitFor(
+        [outputOrder] {
+            return outputOrder->orderReady();
         },
         kTimeoutMs));
 

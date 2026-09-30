@@ -23,7 +23,7 @@ Then check which upload channels are usable. Report every channel's state, skip 
 | AUR | `git remote get-url aur` works (add it with `git remote add aur ssh://aur@aur.archlinux.org/krema.git`) |
 | OBS | `osc api /about` succeeds (`osc` may run as `uvx --from osc osc`) |
 | COPR | `copr-cli whoami` succeeds |
-| PPA | `dput` is installed, Docker is running, and Launchpad has a GPG key for `~isac322` (see below) |
+| PPA | `dput` is installed, `dpkg-buildpackage` (with `devscripts` and `debhelper`) or Docker is available, and Launchpad has a GPG key for `~isac322` (see below) |
 
 ```bash
 keys=$(curl -s https://api.launchpad.net/devel/~isac322 | jq -r .gpg_keys_collection_link)
@@ -185,32 +185,41 @@ curl -s https://api.launchpad.net/devel/ubuntu/series | jq -r '.entries[] | sele
 
 The package version is `x.y.z-<debrev>~ppa1~<series>1`. `<debrev>` is the Debian revision of the top entry in `packaging/obs/debian.changelog`: `1` for a new upstream release, or the bumped revision for a packaging-only respin. Launchpad rejects versions that are not newer than the published one.
 
-Build each source package in Docker:
+Write the source-package build once, then run it natively on a Debian/Ubuntu host that has `dpkg-dev`, `devscripts` and `debhelper`, or in Docker anywhere else. Run it once per series; each run rewrites `debian/changelog` for that series.
 
 ```bash
 PPA_DIR=$(mktemp -d)
 curl -sL https://github.com/isac322/krema/archive/vx.y.z.tar.gz -o "$PPA_DIR/krema_x.y.z.orig.tar.gz"
-docker run --rm -v "$PWD:/src:ro" -v "$PPA_DIR:/output" ubuntu:<series> bash -c '
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq && apt-get install -y -qq dpkg-dev devscripts debhelper >/dev/null
-  cd /output && tar xzf krema_x.y.z.orig.tar.gz && cd krema-x.y.z
-  mkdir -p debian/source && echo "3.0 (quilt)" > debian/source/format
-  cp /src/packaging/obs/debian.control debian/control
-  cp /src/packaging/obs/debian.rules debian/rules
-  cp /src/packaging/obs/debian.copyright debian/copyright
-  chmod +x debian/rules
-  cat > debian/changelog <<CHLOG
+cat > "$PPA_DIR/build-source.sh" <<'EOF'
+set -e
+cd "$OUT" && rm -rf krema-x.y.z && tar xzf krema_x.y.z.orig.tar.gz && cd krema-x.y.z
+mkdir -p debian/source && echo "3.0 (quilt)" > debian/source/format
+cp "$SRC/packaging/obs/debian.control" debian/control
+cp "$SRC/packaging/obs/debian.rules" debian/rules
+cp "$SRC/packaging/obs/debian.copyright" debian/copyright
+chmod +x debian/rules
+cat > debian/changelog <<CHLOG
 krema (x.y.z-<debrev>~ppa1~<series>1) <series>; urgency=medium
 
   * <top entry bullets from packaging/obs/debian.changelog>
 
  -- <maintainer from packaging/obs/debian.changelog>  <RFC 2822 date>
 CHLOG
-  dpkg-buildpackage -S -us -uc -d
+dpkg-buildpackage -S -us -uc -d
+EOF
+
+# Native:
+SRC="$PWD" OUT="$PPA_DIR" bash "$PPA_DIR/build-source.sh"
+
+# Docker:
+docker run --rm -v "$PWD:/src:ro" -v "$PPA_DIR:/output" -e SRC=/src -e OUT=/output ubuntu:<series> bash -c '
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq && apt-get install -y -qq dpkg-dev devscripts debhelper >/dev/null
+  bash /output/build-source.sh
   chmod 666 /output/krema_x.y.z*'
 ```
 
-The `chmod 666` lets the host user sign the root-owned output. Sign with `debsign -k "$LP_GPG_KEY" <changes>`. Without `debsign`, clearsign the `.dsc` first, then update its checksums and size in `.changes`, then clearsign `.changes`. Upload with `dput ppa:isac322/krema <changes>`; the `.orig.tar.gz`, `.debian.tar.xz`, `.dsc`, `_source.buildinfo` and `_source.changes` must all be present. Remove `$PPA_DIR` afterwards.
+In Docker, the `chmod 666` lets the host user sign the root-owned output. Sign with `debsign -k "$LP_GPG_KEY" <changes>`. Without `debsign`, clearsign the `.dsc` first, then update its checksums and size in `.changes`, then clearsign `.changes`. Upload with `dput ppa:isac322/krema <changes>`; the `.orig.tar.gz`, `.debian.tar.xz`, `.dsc`, `_source.buildinfo` and `_source.changes` must all be present. Remove `$PPA_DIR` afterwards.
 
 ## 10. Summary
 

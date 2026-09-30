@@ -239,7 +239,7 @@ Item {
             compare(spy.count, 1, "zero duration must snap to the peak synchronously")
             for (let i = 0; i < row.count; i++) {
                 compare(row.itemAt(i).currentScale, row.itemAt(i).zoomScale)
-                compare(row.itemAt(i).transforms[0].xScale, row.itemAt(i).currentScale)
+                compare(row.itemAt(i).transform[0].xScale, row.itemAt(i).currentScale)
             }
 
             spy.clear()

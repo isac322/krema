@@ -729,13 +729,13 @@ def test_mouse010_click_policies_observe_single_and_group_window_state(
             message="minimized singleton to restore and become active",
         )
     else:
-        wait_until(
+        assert wait_stable(
             lambda: (w := solo.refresh()) is not None and w.active and not w.minimized,
-            message="active singleton to remain active under the default action",
-        )
+        ), "active singleton to remain active under the default action"
 
     # A background singleton is always activated, never minimized, in either
     # policy.
+    krema.move_away(close_preview=False)
     kwin.activate(grouped_wins[0].internal_id)
     wait_until(grouped_wins[0].is_active, message="a different window to become active")
     krema.click_item("Solo")

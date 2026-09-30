@@ -75,10 +75,15 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
 
     def accessible() -> Any | None:
         app = next((a for a in pyatspi.Registry.getDesktop(0) if a is not None and a.get_process_id() == krema.pid), None)
-        return pyatspi.findDescendant(app, lambda n: n.getRoleName() == "popup menu") if app is not None else None
+        if app is None:
+            return None
+        nodes = pyatspi.findAllDescendants(app, lambda n: n.getRoleName() == "popup menu")
+        return nodes[0] if len(nodes) == 1 else None
 
     popup = wait_until(accessible, timeout=timeout, message="preview popup over AT-SPI")
     popup_element = wait_until(krema.preview_popup, timeout=timeout, message="preview popup webdriver element")
+    if popup.get_accessible_id() != popup_element.get_attribute("accessibility-id"):
+        raise AssertionError("AT-SPI and WebDriver resolved different preview popups")
     surface = wait_until(
         lambda: krema.surface_rect("preview"),
         timeout=timeout,
@@ -94,7 +99,11 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
             return None
         if first_visible is None:
             first_visible = time.monotonic()
-        local = Rect.of(popup_element)
+        component = popup.get_component_iface()
+        if component is None:
+            return None
+        extents = component.get_extents(pyatspi.XY_SCREEN)
+        local = Rect(extents.x, extents.y, extents.width, extents.height)
         if (
             local.width <= 8
             or local.height <= 0

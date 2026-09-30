@@ -425,7 +425,7 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
     duration = scroll_into_view(krema, duration_xpath)
     click_el(krema, duration)
-    for _ in range(2):
+    for _ in range(4):
         inp.key("up")
     wait_until(lambda: float(duration.get_attribute("value")) == 200.0, message="zoom duration changed in 25 ms steps")
     wait_until(lambda: config_value(krema, "ZoomAnimationDuration") == "200", message="zoom duration saved")

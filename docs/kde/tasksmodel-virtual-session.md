@@ -225,7 +225,7 @@ reliably tested in virtual KWin sessions. These features must be verified on a r
 desktop. All other dock features (rendering, zoom, tooltips, drag-and-drop, input regions)
 work correctly in kwin-mcp virtual sessions.
 
-This is the current approach in Krema (see `work-state.md`).
+This is the current approach in Krema.
 
 ---
 

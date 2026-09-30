@@ -1,7 +1,7 @@
 # Settings UI
 
 ## Features
-- settings-appearance: Icon size, icon scale, zoom factor, zoom style, spacing, opacity, background style
+- settings-appearance: Icon size, icon scale, zoom factor, zoom style, zoom animation duration, spacing, opacity, background style
 - settings-behavior: Visibility mode, dock position, monitor mode
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
@@ -244,4 +244,26 @@
 
 **Verification:** find_ui_elements (combo entries/state/enabled), screenshot (Parabolic vs In place zoom), accessibility_tree (item bounding-box centres), kremarc (`ZoomStyle` key)
 **Automated:** tests/appium/test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists
+
+---
+
+## TC SET-011: Zoom Animation Duration
+
+**Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0 and Zoom style set to Parabolic.
+**Steps:**
+1. Find the "Zoom animation duration (ms)" spin box and verify it is enabled, shows 100, and accepts values from 0 to 1000 in steps of 25
+2. Set the duration to 500 ms, move the pointer onto a middle dock item, wait 250ms, and capture a screenshot; move the pointer away, wait 250ms, and capture another screenshot
+3. Select "In place - icons overlap" and repeat the hover check with the 500 ms duration
+4. Set the duration to 0 ms and verify hover zoom snaps immediately
+5. Set "Zoom factor" to 1.0 and verify the duration control is disabled
+6. Restore zoom factor > 1.0, set the duration to 250 ms, close Settings, restart Krema, and reopen Settings
+
+**Expected:**
+- Duration changes apply to hover zoom immediately in both Parabolic and In place styles; the value is an unscaled baseline, so Plasma animation scaling remains active
+- A duration of 0 ms disables the hover transition, so zoom changes snap instantly; Instant/reduced-motion behavior remains unchanged
+- The duration control is disabled while zoom factor is 1.0
+- The selected duration remains 250 ms after restart
+
+**Verification:** find_ui_elements (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
+**Automated:** `tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the default, 25 ms steps, persistence, zero value, and disabled state. `tests/qml/tst_dockitem_zoom.qml::test_zeroDurationSnapsInAndOut` and `test_customDurationUsesConfiguredTimeline` cover snapping and animation timing in both styles. The live-dock 500 ms screenshot checks remain manual.
 

@@ -3,7 +3,7 @@
 ## Features
 - mouse-click-activate: Left-click on dock item activates/launches app; on a grouped app it cycles through the app's windows
 - mouse-new-instance: Middle-click launches new instance
-- mouse-hover-zoom: Parabolic zoom on mouse hover; magnified icons push neighbours aside, the dock background grows, and in the middle of the dock the background edges and far icons stay still
+- mouse-hover-zoom: Parabolic zoom on mouse hover; magnified icons push neighbours aside, the dock background grows, and in the middle of the dock the background edges and far icons stay still; the unscaled hover transition baseline is configurable from 0 to 1000 ms (default 100 ms, matching normal-speed `Kirigami.Units.shortDuration`), Plasma animation scaling still applies, and 0 ms makes zoom snap instantly
 - mouse-hover-tooltip: Tooltip shows app name on hover
 - mouse-wheel-cycle: Scroll wheel cycles windows of grouped app; it never launches a pinned app that isn't running
 - mouse-drag-reorder: Drag to reorder dock items
@@ -71,7 +71,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 
 ## TC MOUSE-003: Parabolic Zoom on Hover
 
-**Precondition:** Dock visible with multiple items. `ZoomStyle=0` (Parabolic, the default).
+**Precondition:** Dock visible with multiple items. `ZoomStyle=0` (Parabolic, the default) and `ZoomAnimationDuration=100` (the default unscaled baseline; 100 ms matches normal-speed `Kirigami.Units.shortDuration`).
 **Steps:**
 1. `screenshot` — capture baseline dock state
 2. `accessibility_tree app_name="krema"` — record rest bounding boxes (position + size) of all dock items
@@ -89,7 +89,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - The dock background grows to contain the magnified icons
 - While the pointer sweeps across the middle of the dock, both background edges and the far icons stay still (no shaking or back-and-forth)
 - Toward a dock end, the background grows smoothly toward that end in one direction only
-- All items and the background return to the rest layout when the pointer leaves the dock
+- All items and the background return to the rest layout when the pointer leaves the dock, using the configured hover transition baseline and Plasma animation scaling
 
 **Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (item bounding boxes: shifted positions, grown sizes, no overlap)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover
@@ -221,7 +221,7 @@ neighbour's zoomed position as a click target.
 
 ## TC MOUSE-009: In-Place Zoom Style
 
-**Precondition:** Dock visible with multiple items.
+**Precondition:** Dock visible with multiple items. `ZoomAnimationDuration=100` (the default unscaled baseline; 100 ms matches normal-speed `Kirigami.Units.shortDuration`).
 **Steps:**
 1. Set `ZoomStyle=1` in `kremarc` (or choose "In place - icons overlap" in the "Zoom style" combo
    in Appearance settings) and restart krema
@@ -236,7 +236,7 @@ neighbour's zoomed position as a click target.
 - Hovered item and its neighbours grow via the same parabolic zoom curve
 - Icons scale in place: bounding-box centres do not move and the dock background does not grow
 - Magnified icons may overlap each other
-- All icons return to base size when the pointer leaves the dock
+- All icons return to base size when the pointer leaves the dock, using the configured hover transition baseline and Plasma animation scaling
 
 **Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (bounding-box sizes grow while centres stay fixed)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them

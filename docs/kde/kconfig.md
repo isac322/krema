@@ -227,6 +227,7 @@ class DockSettings : public QObject {
 | `IconSpacing` | int | 8 | Spacing between icons |
 | `MaxZoomFactor` | qreal | 2.0 | Maximum zoom magnification |
 | `ZoomStyle` | int | `0` | How magnified icons make room: 0 = Parabolic (neighbours pushed aside, background grows), 1 = InPlace (icons overlap) |
+| `ZoomAnimationDuration` | int | 100 | Unscaled hover zoom transition baseline in milliseconds (0 to 1000); 100 matches normal-speed `Kirigami.Units.shortDuration`, Plasma animation scaling still applies, and 0 = instant |
 | `CornerRadius` | int | 12 | Panel corner radius |
 | `Floating` | bool | true | Floating panel mode |
 | `VisibilityMode` | int | 0 | Dock visibility behavior |

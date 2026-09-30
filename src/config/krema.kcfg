@@ -34,6 +34,13 @@
       <max>1</max>
     </entry>
 
+    <entry name="ZoomAnimationDuration" type="Int">
+      <label>Zoom animation duration in milliseconds at normal animation speed</label>
+      <default>100</default>
+      <min>0</min>
+      <max>1000</max>
+    </entry>
+
     <entry name="IconNormalization" type="Bool">
       <label>Normalize icon sizes by removing internal padding</label>
       <default>true</default>

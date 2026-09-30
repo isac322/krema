@@ -946,10 +946,16 @@ def assert_click_action_effects(
     for target in (alpha, beta, solo):
         kwin.activate(target.internal_id)
         wait_until(target.is_active, message=f"{target.title} active during MRU setup")
+        wait_stable(target.is_active, duration=0.5)
     wait_until(
         lambda: _item_has_description(krema, "Solo", "Active")
         and not _item_has_description(krema, env.TEST_APP_NAME, "Active"),
         message="dock model to observe Solo backgrounding the group",
+    )
+    wait_stable(
+        lambda: _item_has_description(krema, "Solo", "Active")
+        and not _item_has_description(krema, env.TEST_APP_NAME, "Active"),
+        duration=0.5,
     )
     if grouped_action == 0:
         for target in (beta, alpha, beta):

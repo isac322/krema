@@ -43,6 +43,18 @@ CENTRE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
 EDGE = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT - 1)
 
 
+def _hover_revealed_item(krema: Krema, name: str) -> None:
+    """Reach a revealed item without leaving the dock's edge trigger strip."""
+    x, y = krema.settled_item_center(name)
+    inp.move_path(
+        [
+            *inp.line(EDGE, (x, EDGE[1]), 3),
+            *inp.line((x, EDGE[1]), (x, y), 3),
+        ],
+        40,
+    )
+
+
 # --------------------------------------------------------------------------- oracles
 
 
@@ -502,7 +514,7 @@ def test_clk012_repeated_explicit_preview_releases_visibility_hold(
     wait_hidden(krema, env.TEST_APP_NAME, why=f" before explicit preview in {hide_mode}")
     inp.move(*EDGE)
     wait_shown(krema, env.TEST_APP_NAME)
-    krema.hover_item(env.TEST_APP_NAME)
+    _hover_revealed_item(krema, env.TEST_APP_NAME)
 
     for _ in range(3):
         krema.click_item(env.TEST_APP_NAME)
@@ -587,7 +599,7 @@ def test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold(
     wait_hidden(krema, env.TEST_APP_NAME)
     inp.move(*EDGE)
     wait_shown(krema, env.TEST_APP_NAME)
-    krema.hover_item(env.TEST_APP_NAME)
+    _hover_revealed_item(krema, env.TEST_APP_NAME)
     for _ in range(3):
         krema.click_item(env.TEST_APP_NAME)
         wait_until(lambda: _visible_preview(krema), message="repeated explicit popup remains open")

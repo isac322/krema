@@ -4,7 +4,6 @@
 - settings-appearance: Icon size, icon scale, zoom factor, zoom style, zoom animation duration, spacing, opacity, background style
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
-- settings-behavior: Visibility mode, dock position, monitor mode
 - settings-behavior: Visibility mode, dock position, monitor mode, selected monitor switches and temporary fallback
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
@@ -30,7 +29,6 @@
 - src/shell/multidockmanager.cpp
 - src/shell/outputordermonitor.h
 - src/shell/outputordermonitor.cpp
-- src/app/application.cpp
 - src/models/taskiconprovider.h
 - src/models/taskiconprovider.cpp
 - src/config/krema.kcfg

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-012).
+"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-014).
 
 The real Kirigami/FormCard settings window is driven with real pointer and
 keyboard input (KWin fake-input) and located through AT-SPI. Every test
@@ -22,8 +22,9 @@ AT-SPI facts this relies on (probed in this harness):
 * The QColorDialog is a separate toplevel ``frame[@name='Choose tint color']``.
 
 SET-008 and SET-012 need two outputs and run in their own session:
-``KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py``.
-The SET-012 three-output subset test uses ``KREMA_E2E_OUTPUT_COUNT=3``.
+``KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs``.
+SET-013 also has a two-output shared-dock case; SET-012's subset test uses
+``KREMA_E2E_OUTPUT_COUNT=3``.
 """
 
 from __future__ import annotations

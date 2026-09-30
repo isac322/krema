@@ -51,10 +51,11 @@ out-of-tree. On kernels >= 6.15, whose vgem is a faux device, use
 KWin versions expect.
 
 The default one-output session intentionally skips SET-008's two-output
-cases and SET-012's two- and three-output cases because their required
-output count differs. The two-output command above explicitly deselects
-the three-output subset case; the three-output command runs that node
-alone. Use both runs for full multi-output coverage.
+cases, SET-012's two- and three-output cases, and SET-013/VIS-008's
+two-output cases because their required output count differs. The two-output
+command above explicitly deselects the three-output subset case; the
+three-output command runs that node alone. Use both runs for full
+multi-output coverage.
 `tools/run-output-count.patch` makes `selenium-webdriver-at-spi-run` pass
 `--output-count` to `kwin_wayland`. On the second output, Qt reports a
 dock's AT-SPI rects shifted by the output's x offset.
@@ -236,19 +237,19 @@ a click activates a window, hover zooms, the Focus Dock shortcut focuses a
 dock button, and ScreenShot2 captures the rendered dock.
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
-automate the launch checklists in `tests/e2e/scenarios/01-07-*.md`.
+automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.
 Each scenario's **Automated:** lines refer to the tests below. Every row
 has concrete assertions on the AT-SPI tree (states, names, geometry), the
 KWin window list, the `kremarc` file, ScreenShot2 pixel analysis, or AT-SPI
 events. Existing pass rows are historical baseline records; Issue 54 rows
-record the current branch's Tier 1, Tier 2, and packaged Tier 3 evidence.
+remain `pending` until the parent completes Tier 2 and packaged Tier 3 QA.
 
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
 parked and at the screen centre; `SET-008` needs a two-output session
 (`KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`).
-SET-012 runs its switch/fallback/persistence cases with two outputs and its
-primary-excluding subset/shortcut case with three outputs; use the commands
-in Running above.
+`SET-012` runs switch/fallback/persistence cases with two outputs and its
+primary-excluding subset/shortcut case with three outputs. `SET-013` and
+`VIS-008` also have two-output cases. Use the commands in Running above.
 SET-008 is also covered by `tests/integration/test_settings_lifecycle.cpp`
 (ctest `krema_integration_tests`).
 
@@ -356,7 +357,7 @@ source-review disposition for a real non-minimizable fixture.
 | Contract | Consumer observation | Automation | Tier |
 |---|---|---|---|
 | QA-CLK-001 | Active single remains focused and unminimized; group0 keeps MRU A→B→A | `test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru`; KWin `Default activation keeps an active single window focused and unminimized` | Tier 2 |
-| QA-CLK-002 | Both settings apply live, save independently, survive restart, and remain shared across recreated docks | `test_clk002_click_action_combinations_apply_live_persist_and_restore`; `test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them` | Tier 2, `outputs(2)` |
+| QA-CLK-002 | Both settings apply live, save independently, survive restart, and remain shared across recreated docks | `SET-013`; `test_clk002_click_action_combinations_apply_live_persist_and_restore`; `test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them` | Tier 2, `outputs(2)` |
 | QA-CLK-003 | Active single click minimizes the actual window | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Single-window minimize clicks honor actual focus and minimized state` | Tier 2 |
 | QA-CLK-004 | Minimized single restores and takes focus | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Single-window minimize clicks honor actual focus and minimized state` | Tier 2 |
 | QA-CLK-005 | Background single activates without minimizing | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Single-window minimize clicks honor actual focus and minimized state` | Tier 2 |
@@ -365,8 +366,8 @@ source-review disposition for a real non-minimizable fixture.
 | QA-CLK-008 | Explicit popup lists all children; selected child activates/restores and pending hide retargets | `test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes`; `test_prev009_explicit_group_pending_hide_retargets_after_reenter` | Tier 2 |
 | QA-CLK-009 | Launcher/startup and wheel no-launch behavior remains unchanged in all six policy pairs; no empty popup | `test_mouse002_left_click_launches_pinned_app`; `test_mouse005_scroll_wheel_cycles_grouped_windows` | Tier 2 |
 | QA-CLK-010 | Accessible press, keyboard, Meta+N, middle/right, and wheel paths ignore mouse click policies | `test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies`; six-case `test_mouse005_scroll_wheel_cycles_grouped_windows`; six-case `test_mouse006_middle_click_launches_new_instance`; QML `test_nonLeftKeyboardAndDragNeverOpenPreview` | Tier 1 + Tier 2 |
-| QA-CLK-011 | Hover remains independent; explicit preview clears tooltip and restores it after close without overlap | `test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close`; `test_mouse014_fast_hover_launcher_tooltip_healthy_control`; `test_prev009_explicit_group_pending_hide_retargets_after_reenter`; `test_clk011_preview_controls_follow_hover_and_explicit_group_choice`; QML `test_groupPreviewClickStopsDelayedTooltip`, `test_groupPreviewClickReenterDuringHideKeepsTooltipHidden`, `test_previewCloseWhilePointerOverItemRestartsTextTooltip`, `test_fastLauncherTooltipAtZeroDelay`, `test_fastLauncherTooltipRecoversAfterPreviewClose`, `test_previewClosePreservesPendingHoverDeadline`, `test_previewInvalidationDuringDragDoesNotReopenTooltip` | Tier 1 + Tier 2 |
-| QA-CLK-012 | Repeated explicit popup releases AutoHide/Dodge/SmartHide and follow-screen holds | `test_clk012_repeated_explicit_preview_releases_visibility_hold`; `test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold` | Tier 2, `outputs(2)` |
+| QA-CLK-011 | Hover remains independent; explicit preview clears tooltip and restores it after close without overlap | `SET-014`; `test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close`; `test_mouse014_fast_hover_launcher_tooltip_healthy_control`; `test_prev009_explicit_group_pending_hide_retargets_after_reenter`; `test_clk011_preview_controls_follow_hover_and_explicit_group_choice`; QML `test_groupPreviewClickStopsDelayedTooltip`, `test_groupPreviewClickReenterDuringHideKeepsTooltipHidden`, `test_previewCloseWhilePointerOverItemRestartsTextTooltip`, `test_fastLauncherTooltipAtZeroDelay`, `test_fastLauncherTooltipRecoversAfterPreviewClose`, `test_previewClosePreservesPendingHoverDeadline`, `test_previewInvalidationDuringDragDoesNotReopenTooltip` | Tier 1 + Tier 2 |
+| QA-CLK-012 | Repeated explicit popup releases AutoHide/Dodge/SmartHide and follow-screen holds | `VIS-008`; `test_clk012_repeated_explicit_preview_releases_visibility_hold`; `test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold` | Tier 2, `outputs(2)` |
 | QA-CLK-013 | Invalid indices preserve unrelated focus/minimized state; non-minimizable guard remains source-review only | KWin `Invalid minimize-click indices preserve unrelated focus and minimized windows`; API/source review | Tier 2 + review |
 | QA-CLK-014 | Actual inside/outside/exit-reenter drag releases preserve every window state and keep the popup closed; the additional held-left/right release-order controls preserve the same state and popup invariants | `test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state` (72 base scenarios plus 24 chord controls) | Tier 2 |
 | QA-CLK-015 | 1→2→1 membership uses the current action immediately | `test_mouse011_membership_change_reselects_single_and_group_actions`; QML `test_membershipTransitionsUseCurrentGroupingAction`; KWin `Minimize-click targeting tracks single-group-single window membership` | Tier 1 + Tier 2 |

@@ -1011,9 +1011,14 @@ def test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru(
     wait_until(solo.is_active, message="single window active under unconfigured defaults")
     krema.click_item("Solo")
     assert wait_stable(lambda: (w.active, w.minimized) if (w := solo.refresh()) is not None else None) == (True, False)
+    krema.move_away(close_preview=False)
 
     kwin.activate(alpha.internal_id)
     wait_until(alpha.is_active, message="known group MRU child")
+    wait_until(
+        lambda: _has_description(krema, NAME1, "Active"),
+        message="dock model to observe the active group child",
+    )
     kwin.activate(solo.internal_id)
     wait_until(solo.is_active, message="group becomes background")
     krema.click_item(NAME1)

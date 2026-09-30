@@ -19,8 +19,8 @@
 #include "models/notificationtracker.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
-#include "shell/outputordermonitor.h"
 #include "shell/multidockmanager.h"
+#include "shell/outputordermonitor.h"
 #include "shell/previewcontroller.h"
 
 #include <taskmanager/abstracttasksmodel.h>

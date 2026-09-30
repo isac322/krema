@@ -92,31 +92,34 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
 
     first_visible: float | None = None
     component: Any | None = None
+    geometry: Rect | None = None
 
     def current() -> Rect | None:
-        nonlocal component, first_visible
+        nonlocal component, geometry, first_visible
         popup.clear_cache()
         states = popup.getState()
-        if states.contains(pyatspi.STATE_SHOWING) and component is None:
-            component = popup.get_component_iface()
+        if states.contains(pyatspi.STATE_VISIBLE) and first_visible is None:
+            first_visible = time.monotonic()
+        if states.contains(pyatspi.STATE_SHOWING):
+            if component is None:
+                component = popup.get_component_iface()
+            if component is not None and geometry is None:
+                candidate = component.get_extents(pyatspi.XY_SCREEN)
+                local = Rect(candidate.x, candidate.y, candidate.width, candidate.height)
+                if (
+                    local.width > 8
+                    and local.height > 0
+                    and local.x >= 0
+                    and local.y >= 0
+                    and local.x + local.width <= surface.width
+                    and local.y + local.height <= surface.height
+                ):
+                    geometry = local
         if not states.contains(pyatspi.STATE_SHOWING) or not states.contains(pyatspi.STATE_VISIBLE):
             return None
-        if first_visible is None:
-            first_visible = time.monotonic()
-        if component is None:
+        if geometry is None:
             return None
-        extents = component.get_extents(pyatspi.XY_SCREEN)
-        local = Rect(extents.x, extents.y, extents.width, extents.height)
-        if (
-            local.width <= 8
-            or local.height <= 0
-            or local.x < 0
-            or local.y < 0
-            or local.x + local.width > surface.width
-            or local.y + local.height > surface.height
-        ):
-            return None
-        return Rect(surface.x + local.x, surface.y + local.y, local.width, local.height)
+        return Rect(surface.x + geometry.x, surface.y + geometry.y, geometry.width, geometry.height)
 
     krema.hover_item(item)
     rect = wait_until(

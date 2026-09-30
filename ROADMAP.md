@@ -142,6 +142,7 @@ Visual refinement and polish.
 - [x] MultiDockManager (replaces single DockShell in Application)
 - [x] All Screens mode (one dock per screen)
 - [x] Primary Only mode
+- [x] Selected monitors mode with output-name switches, retained disconnected selections, and temporary primary fallback
 - [x] Screen hot-plug handling (with debounce)
 - [x] Global shortcut policy (primary dock target)
 - [ ] PipeWire global stream cap (shared across PreviewControllers)

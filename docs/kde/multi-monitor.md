@@ -115,7 +115,7 @@ layerWin->setScreen(screen);              // resets wantsToBeOnActiveScreen to f
 ```
 
 - `layerWin->screen()` is what `QWaylandLayerSurface` passes to `get_layer_surface` as the `wl_output`. When `screen()` is null and `wantsToBeOnActiveScreen()` is false, it falls back to `QWindow::screen()` — which, per the note above, is unreliable on QtWayland once the surface maps.
-- **Use `LayerShellQt::Window::setScreen` for all multi-monitor modes** (all-screens, primary-only, follow-active). Verify against `qwaylandlayersurface.cpp:29-46` in the LayerShellQt source: `m_interface->screen()` is read first, then `window->window()->screen()`.
+- **Use `LayerShellQt::Window::setScreen` for all multi-monitor modes** (all-screens, primary-only, follow-active, selected-screens). Verify against `qwaylandlayersurface.cpp:29-46` in the LayerShellQt source: `m_interface->screen()` is read first, then `window->window()->screen()`.
 
 ### ScreenFromCompositor (Single Monitor — Deprecated pattern)
 
@@ -125,7 +125,18 @@ layerWin->setScreen(screen);              // resets wantsToBeOnActiveScreen to f
 
 ---
 
-## Multi-Monitor Architecture for M8
+## Multi-Monitor Architecture
+
+`src/config/krema.kcfg` stores `MonitorMode` as an integer with the following values:
+
+| Value | C++ mode | Behavior settings label |
+|---|---|---|
+| 0 | `PrimaryOnly` | Primary monitor only |
+| 1 | `AllScreens` | All monitors |
+| 2 | `FollowActive` | Follow active screen |
+| 3 | `SelectedScreens` | Selected monitors |
+
+The default remains 0. `SelectedOutputs` is a KConfigXT `StringList` (`QStringList` in C++) with an empty default. It stores exact `QScreen::name()` values, not display labels or hardware identities. Modes 0, 1, and 2 do not use this list and do not clear it.
 
 ### Mode 1: All Screens (One Dock Per Screen)
 
@@ -159,7 +170,7 @@ void DockManager::onScreenRemoved(QScreen *screen) {
 }
 ```
 
-### Mode 2: Primary Only (Single Dock on Chosen Monitor)
+### Mode 0: Primary Only (Single Dock on the Plasma Primary)
 
 ### The Plasma primary is NOT `QGuiApplication::primaryScreen()` (verified)
 
@@ -170,7 +181,7 @@ On QtWayland, `primaryScreen()` is the **first `wl_output` the registry announce
 - falls back to `QGuiApplication::primaryScreen()` when the global is absent;
 - is intentionally leaked: destroying a Wayland client object after the Qt Wayland platform tears down the display crashes on some Qt versions.
 
-On primary change, dock + preview shells must be **recreated** — layer surfaces bind their `wl_output` at `get_layer_surface` time and cannot migrate.
+In Primary Only mode, a primary change recreates the dock and preview shells: layer surfaces bind their `wl_output` at `get_layer_surface` time and cannot migrate. Selected Screens instead retains shells whose selected outputs are still usable.
 
 - One `DockView` that tracks `OutputOrderMonitor::instance()->primaryScreen()`
 - On `primaryOutputChanged`: destroy the shell and `createShellForScreen(newPrimary)` (hide/setScreen/show is insufficient — the surface is already bound)
@@ -184,14 +195,31 @@ void DockManager::onPrimaryScreenChanged(QScreen *newPrimary) {
 }
 ```
 
-### Mode 3: Follow Active (Single Dock Follows Mouse/Focus)
+### Mode 2: Follow Active (Single Dock Follows Mouse/Focus)
 
 See "Active Screen Detection" section below for detection strategy.
 
 Architecture is the same as "All Screens" but:
 - All dock windows exist simultaneously
 - Only the "active" one is visible
-- Transition animation: fade-out on old screen + fade-in on new screen
+- Switching currently shows/hides the docks instantly; configured fade/slide animations remain unimplemented
+
+### Mode 3: Selected Screens (One Dock Per Selected Usable Output)
+
+`MultiDockManager::reconcileSelectedScreens()` intersects `SelectedOutputs` with live `QScreen` names whose geometry is non-empty. It removes only shells outside that set and creates only missing shells. Changing the primary output or adding/removing an unselected output does not recreate retained docks or their preview surfaces.
+
+If no selected output is usable, the manager keeps one temporary shell on the resolved Plasma primary output, provided that output has usable geometry. It never adds that name to `SelectedOutputs`. When a selected output returns, its dock replaces the fallback; if the last selected output disappears, the temporary primary dock returns.
+
+`SettingsWindow::availableScreens` exposes output-name rows with `name`, `label`, `available`, and `primary` fields. The Behavior page shows native switches only in mode 3. Saved names that are disconnected remain as removable rows; switching one off removes it from the list and the row. `hasSelectedMonitorFallback` controls the warning when the selection is empty or unavailable.
+
+Selection changes keep the shared Settings window open and focused. Newly created docks inherit its interaction lock, so Auto hide cannot hide them until Settings closes. Mode 3 and the exact saved name list restore after restart. This adds no per-screen styling editor, dependency, or Wayland protocol.
+
+#### Shortcut routing
+
+`MultiDockManager::primaryShell()` chooses the selected primary dock when it exists, otherwise the first selected live dock in `OutputOrderMonitor::outputOrder()` (the adopted compositor order), then the first live name in saved selection order. Temporary fallback uses the primary dock.
+
+Toggle Dock and Meta+number actions use this target through `activeShell()`. Focus Dock uses `shellAtCursor()`: it prefers a dock on the cursor's screen and uses the same deterministic fallback when the cursor is on an unselected output. Preview surfaces stay pinned to their own selected output.
+
 
 ---
 
@@ -393,7 +421,7 @@ connect(op, &KScreen::ConfigOperation::finished, this, [this](KScreen::ConfigOpe
 op->start();
 ```
 
-**Note**: KScreen is optional for M8. `QGuiApplication::primaryScreenChanged` is simpler and sufficient for detecting primary screen changes. KScreen is needed only if Krema wants to read output metadata (e.g., serial numbers for stable per-monitor identification).
+**Note**: Selected Screens adds no KScreen dependency. Krema uses the existing `OutputOrderMonitor` for the Plasma primary and adopted output order; `QGuiApplication::primaryScreenChanged` is not sufficient on QtWayland. The optional KScreen example above is for additional output metadata.
 
 ---
 

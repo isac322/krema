@@ -2,7 +2,7 @@
 
 ## Features
 - settings-appearance: Icon size, icon scale, zoom factor, zoom style, zoom animation duration, spacing, opacity, background style
-- settings-behavior: Visibility mode, dock position, monitor mode
+- settings-behavior: Visibility mode, dock position, monitor mode, selected monitor switches and temporary fallback
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
@@ -21,6 +21,9 @@
 - src/shell/dockview.cpp
 - src/shell/multidockmanager.h
 - src/shell/multidockmanager.cpp
+- src/shell/outputordermonitor.h
+- src/shell/outputordermonitor.cpp
+- src/app/application.cpp
 - src/models/taskiconprovider.h
 - src/models/taskiconprovider.cpp
 - src/config/krema.kcfg
@@ -267,3 +270,32 @@
 **Verification:** find_ui_elements (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
 **Automated:** `tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the default, 25 ms steps, persistence, zero value, and disabled state. `tests/qml/tst_dockitem_zoom.qml::test_zeroDurationSnapsInAndOut` and `test_customDurationUsesConfiguredTimeline` cover snapping and animation timing in both styles. The live-dock 500 ms screenshot checks remain manual.
 
+---
+
+## TC SET-012: Selected Monitors, Fallback, and Shortcut Routing
+
+**Precondition:** Three usable outputs A, B, and C, with A primary. Krema uses Auto hide. Open two windows of one app for preview checks. The two-output automation covers switches, fallback, and persistence; the three-output automation covers a subset that excludes the primary.
+
+**Steps:**
+1. Confirm "Primary monitor only" shows one dock on A and "All monitors" shows one dock on each output. Open Settings → Behavior and record the focused Settings window.
+2. Select "Selected monitors". Enable C, then B, leaving A off. Verify docks and their preview surfaces appear only on B and C, and `kremarc` saves `MonitorMode=3` with `SelectedOutputs` in the exact chosen order C, B.
+3. Turn B off and on. Verify C's dock and preview surfaces keep their window identities. The same Settings window stays open and focused; the newly created B dock stays visible while Settings is open. Close Settings and verify both docks auto-hide normally.
+4. Put the pointer on unselected A and invoke Focus Dock. Verify it targets B when compositor order is A, B, C, despite saved order C, B. Check Toggle Dock, Meta+N, and Meta+Shift+N use B. Make C primary and verify those actions target C without recreating the retained B/C dock or preview surfaces. Restore A as primary.
+5. Disconnect and reconnect unselected A while B and C remain usable. Verify their retained dock and preview surfaces stay on their outputs with the same window identities.
+6. Open Settings again. Disconnect B, then C. Verify one temporary dock appears on primary A, the warning appears, and saved names remain C, B. Reconnect B, then C; verify the selected subset returns and the temporary dock and warning disappear without closing Settings.
+7. Disconnect C again and turn off its disconnected switch. Verify C is removed from `SelectedOutputs` and its disconnected row disappears. Reconnect C and verify it remains unselected, with no dock.
+8. Turn B off so the selection is empty. Verify one temporary primary dock and the warning, with an empty saved list rather than A being added. Select B again and verify the warning clears and only B has a dock.
+9. Switch through the other monitor modes. Verify the selected switches and warning are hidden without clearing the saved B name. Return to Selected monitors, close Settings, restart Krema, and verify mode 3, the exact B name, its dock placement, and its output-aligned preview restore.
+
+**Expected:**
+- Mode 3 selects only exact saved output names that are connected and have non-empty geometry; modes 0, 1, and 2 retain their behavior, and the default remains 0
+- Primary changes and unselected topology changes preserve retained selected dock and preview surfaces
+- Empty or wholly unavailable selections use one temporary primary dock without changing the saved names; a returning selected output replaces it
+- Disconnected selections remain removable, and removing one prevents its dock from returning
+- Selection changes preserve the shared, focused Settings window; new docks inherit its interaction lock until the dialog closes
+- Shortcut order is selected primary, adopted compositor order, then saved selection order; Focus Dock on an unselected output uses the same fallback
+- Mode 3 and exact selected names persist across restart; previews stay aligned with their own output
+
+**Verification:** AT-SPI (native switches, disconnected rows, warning, focused Settings), KWin (mapped dock/preview output and window identity, keyboard focus), `kremarc` (mode and exact name list), KGlobalAccel actions, and output enable/disable or cable reconnection for topology steps.
+
+**Automated:** `tests/appium/test_06_settings.py::test_set012_selected_monitors_toggle_keeps_settings_open` and `test_set012_selected_monitors_fallback_warns_and_keeps_saved_names[empty]` / `[disconnected]` run with two outputs. `test_set012_selected_subset_preserves_docks_and_routes_shortcuts` runs with three outputs. `tests/kwin/test_selected_outputs.cpp` (ctest `krema_selected_output_tests`) covers primary changes, actual virtual-output disable/enable, retained shells, and deterministic routing; `tests/integration/test_settings_lifecycle.cpp` covers the shared Settings lifecycle. Physical cable reconnection remains a manual check.

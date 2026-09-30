@@ -57,6 +57,8 @@ QVariant changedValue(const KConfigSkeletonItem &item, const QVariant &current)
         return current.toDouble() + 1.0;
     case QMetaType::QString:
         return QStringLiteral("#123456");
+    case QMetaType::QStringList:
+        return QStringList{QStringLiteral("HDMI-A-2"), QStringLiteral("eDP-1"), QStringLiteral("unavailable-output")};
     default:
         return {};
     }

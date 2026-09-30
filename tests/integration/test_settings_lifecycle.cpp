@@ -20,6 +20,7 @@
 #include "shell/multidockmanager.h"
 #include "shell/outputordermonitor.h"
 
+#include "config/screensettings.h"
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -301,9 +302,34 @@ void resetTo(MultiDockManager::MonitorMode mode)
         closeSettings();
     }
     app().settings->setMonitorMode(mode);
+    app().settings->setSelectedOutputs({});
     startDocks();
-    REQUIRE(app().manager->shells().size() == (mode == MultiDockManager::PrimaryOnly ? 1 : QGuiApplication::screens().size()));
+    const int expected = mode == MultiDockManager::PrimaryOnly || mode == MultiDockManager::SelectedScreens ? 1 : QGuiApplication::screens().size();
+    REQUIRE(app().manager->shells().size() == expected);
     g_qmlErrors.clear();
+}
+
+void setOutputSelected(const QString &name, bool selected)
+{
+    QQuickItem *control = nullptr;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            control = findInSettings(name, "toggled()", true);
+            return control != nullptr;
+        },
+        kTimeoutMs));
+    REQUIRE(control->setProperty("checked", selected));
+    REQUIRE(QMetaObject::invokeMethod(control, "toggled"));
+}
+
+DockShell *shellForOutput(const QString &name)
+{
+    for (auto *shell : app().manager->shells()) {
+        if (shell->view()->screen() && shell->view()->screen()->name() == name) {
+            return shell;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -336,6 +362,122 @@ TEST_CASE(
     CHECK(app().manager->shells().size() == 1);
     CHECK(dialog == settingsWindow());
     CHECK(g_qmlErrors.isEmpty());
+}
+
+TEST_CASE("Selected output changes before initialization do not create docks", "[settings][selected-output][initialization]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    app().manager.reset();
+    auto &a = app();
+    REQUIRE(QGuiApplication::screens().size() == 2);
+    const auto selected = QGuiApplication::screens().last()->name();
+    a.settings->setMonitorMode(MultiDockManager::SelectedScreens);
+    auto manager = std::make_unique<MultiDockManager>(a.settings.get(), a.model.get(), a.tracker.get());
+    manager->setMonitorMode(MultiDockManager::SelectedScreens);
+
+    a.settings->setSelectedOutputs({selected});
+    QCoreApplication::processEvents();
+    CHECK(manager->shells().isEmpty());
+
+    manager->initialize();
+    REQUIRE(manager->shells().size() == 1);
+    CHECK(manager->shells().first()->view()->screen()->name() == selected);
+}
+
+TEST_CASE("Selected output changes leave other monitor modes unchanged", "[settings][selected-output][control]")
+{
+    REQUIRE(QGuiApplication::screens().size() == 2);
+    for (const auto mode : {MultiDockManager::PrimaryOnly, MultiDockManager::AllScreens, MultiDockManager::FollowActive}) {
+        resetTo(mode);
+        QList<QPointer<DockShell>> retained;
+        for (auto *shell : app().manager->shells()) {
+            retained.append(shell);
+        }
+        const auto active = app().manager->activeShell();
+        app().settings->setSelectedOutputs({QGuiApplication::screens().last()->name(), QStringLiteral("disconnected-control")});
+        QCoreApplication::processEvents();
+        CHECK(app().manager->shells().size() == retained.size());
+        CHECK(app().manager->activeShell() == active);
+        for (const auto &shell : retained) {
+            CHECK(shell);
+        }
+    }
+    resetTo(MultiDockManager::PrimaryOnly);
+}
+
+TEST_CASE(
+    "Selected-output switches preserve the focused settings window and "
+    "retained docks",
+    "[settings][selected-output][lifetime]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    REQUIRE(QGuiApplication::screens().size() == 2);
+    const auto primary = krema::OutputOrderMonitor::instance()->primaryScreen()->name();
+    QString other;
+    for (auto *screen : QGuiApplication::screens()) {
+        if (screen->name() != primary) {
+            other = screen->name();
+        }
+    }
+    REQUIRE_FALSE(other.isEmpty());
+    openSettingsFrom(app().manager->primaryShell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
+    REQUIRE(dialog);
+    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
+    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::SelectedScreens);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return dialog->isActive();
+        },
+        kTimeoutMs));
+
+    // Selecting the fallback's own output adopts the existing shell; adding a
+    // second output must preserve it while the new dock inherits the dialog's
+    // interaction lock.
+    QPointer<DockShell> origin = shellForOutput(primary);
+    REQUIRE(origin);
+    setOutputSelected(primary, true);
+    REQUIRE(shellForOutput(primary) == origin);
+    setOutputSelected(other, true);
+    REQUIRE(app().manager->shells().size() == 2);
+    QPointer<DockShell> retained = shellForOutput(other);
+    REQUIRE(retained);
+    CHECK(shellForOutput(primary) == origin);
+    CHECK(allDocksVisible());
+    CHECK(origin->view()->visibilityController()->isInteracting());
+    CHECK(retained->view()->visibilityController()->isInteracting());
+    CHECK(dialog == settingsWindow());
+    CHECK(dialog->isActive());
+
+    // This signal handler removes the dock on the output from which settings
+    // was opened. Its screen overlay must die with it, while the global dialog
+    // and the retained dock remain alive and focused.
+    QPointer<krema::ScreenSettings> originSettings = origin->findChild<krema::ScreenSettings *>();
+    REQUIRE(originSettings);
+    setOutputSelected(primary, false);
+    CHECK_FALSE(origin);
+    CHECK_FALSE(originSettings);
+    REQUIRE(app().manager->shells().size() == 1);
+    CHECK(shellForOutput(other) == retained);
+    CHECK(app().settings->selectedOutputs() == QStringList{other});
+    CHECK(dialog == settingsWindow());
+    CHECK(dialog->isActive());
+    CHECK(retained->view()->visibilityController()->isInteracting());
+
+    setOutputSelected(primary, true);
+    REQUIRE(app().manager->shells().size() == 2);
+    CHECK(shellForOutput(other) == retained);
+    CHECK(allDocksVisible());
+    CHECK(shellForOutput(primary)->view()->visibilityController()->isInteracting());
+    CHECK(dialog == settingsWindow());
+    CHECK(dialog->isActive());
+    closeSettings();
+    CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
+    for (auto *shell : app().manager->shells()) {
+        CHECK_FALSE(shell->view()->visibilityController()->isInteracting());
+    }
+    CHECK(g_qmlErrors.isEmpty());
+    resetTo(MultiDockManager::PrimaryOnly);
 }
 
 TEST_CASE(

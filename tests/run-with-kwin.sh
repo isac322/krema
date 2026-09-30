@@ -3,10 +3,11 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 #
 # Runs a GUI integration test against a private KWin virtual compositor with
-# two outputs, a private session bus and throwaway XDG directories, so the test
-# never touches the user's session, config or running dock.
+# two outputs by default, a private session bus and throwaway XDG directories,
+# so the test never touches the user's session, config or running dock.
 #
 # Usage: run-with-kwin.sh <test-binary> [args...]
+# Set KREMA_TEST_OUTPUT_COUNT=3 for selected-monitor subset coverage.
 
 set -eu
 
@@ -51,7 +52,8 @@ if [ -n "${KREMA_TEST_KWIN_EFFECTS:-}" ]; then
 fi
 # Tests may read what KWin scripts and effects log (console.* -> "js").
 export KREMA_TEST_KWIN_LOG="$scratch/kwin.log"
-QT_LOGGING_RULES="js.info=true" kwin_wayland --virtual --no-lockscreen --socket "$socket" --width 1024 --height 768 --output-count 2 >"$KREMA_TEST_KWIN_LOG" 2>&1 &
+output_count=${KREMA_TEST_OUTPUT_COUNT:-2}
+QT_LOGGING_RULES="js.info=true" kwin_wayland --virtual --no-lockscreen --socket "$socket" --width 1024 --height 768 --output-count "$output_count" >"$KREMA_TEST_KWIN_LOG" 2>&1 &
 kwin_pid=$!
 
 tries=0

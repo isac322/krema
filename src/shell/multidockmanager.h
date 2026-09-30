@@ -31,6 +31,8 @@ class SettingsWindow;
  *   - PrimaryOnly: one dock on the primary screen (default, current behavior)
  *   - AllScreens: one dock per connected screen
  *   - FollowActive: all screens have shells, only the active one is visible
+ *   - SelectedScreens: one dock per selected connected output, or a temporary
+ *     primary-screen dock when no selected output is available
  */
 class MultiDockManager : public QObject
 {
@@ -41,6 +43,7 @@ public:
         PrimaryOnly = 0,
         AllScreens = 1,
         FollowActive = 2,
+        SelectedScreens = 3,
     };
 
     explicit MultiDockManager(KremaSettings *settings, DockModel *model, NotificationTracker *tracker, QObject *parent = nullptr);
@@ -52,7 +55,9 @@ public:
     /// Change the monitor mode at runtime (e.g. from settings).
     void setMonitorMode(MonitorMode mode);
 
-    /// Return the shell on the primary screen, or any shell as fallback.
+    /// Return the primary-screen shell. SelectedScreens falls back to adopted
+    /// compositor output order, then saved selection order; other modes use
+    /// any shell when the primary has none.
     [[nodiscard]] DockShell *primaryShell() const;
 
     /// Return the shell global shortcuts should act on: the Follow Active
@@ -81,6 +86,7 @@ private:
     void setupPrimaryOnly();
     void setupAllScreens();
     void setupFollowActive();
+    void reconcileSelectedScreens();
 
     DockShell *createShellForScreen(QScreen *screen);
     void destroyShellForScreen(QScreen *screen);

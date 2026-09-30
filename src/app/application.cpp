@@ -82,6 +82,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::VirtualDesktopModeChanged, context, saveSettings);
     connect(settings, &KremaSettings::OtherDesktopOpacityChanged, context, saveSettings);
     connect(settings, &KremaSettings::MonitorModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::SelectedOutputsChanged, context, saveSettings);
     connect(settings, &KremaSettings::FollowActiveTriggerChanged, context, saveSettings);
     connect(settings, &KremaSettings::ScreenTransitionChanged, context, saveSettings);
     connect(settings, &KremaSettings::IconScaleChanged, context, saveSettings);

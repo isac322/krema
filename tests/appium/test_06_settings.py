@@ -275,7 +275,7 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     # FormCard widgets exposed with labels.
     spin = krema.find(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
     assert spin is not None and float(spin.get_attribute("value")) == 48.0
-    duration = krema.find(f"{SETTINGS}//list_item[@name='{ZOOM_DURATION}']/spin_button")
+    duration = krema.find(f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button")
     assert duration is not None and float(duration.get_attribute("value")) == 100.0
     assert krema.find(f"{SETTINGS}//slider[@name='Zoom factor']") is not None
     assert krema.find(f"{SETTINGS}//list_item[@name='Attention animation']/combo_box") is not None
@@ -422,7 +422,7 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     for _ in range(4):
         inp.key("up")
     wait_until(lambda: float(spin.get_attribute("value")) == 64.0)
-    duration_xpath = f"{SETTINGS}//list_item[@name='{ZOOM_DURATION}']/spin_button"
+    duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
     duration = scroll_into_view(krema, duration_xpath)
     click_el(krema, duration)
     for _ in range(2):
@@ -795,7 +795,7 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     assert options == [PARABOLIC, IN_PLACE]
     click_el(krema, first)
     wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
-    duration_xpath = f"{SETTINGS}//list_item[@name='{ZOOM_DURATION}']/spin_button"
+    duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
     duration = scroll_into_view(krema, duration_xpath)
     assert has_state(duration, "enabled")
     assert float(duration.get_attribute("value")) == 100.0

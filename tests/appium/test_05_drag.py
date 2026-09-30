@@ -5,12 +5,13 @@ dock items with a real press-hold-move-release pointer drag.
 
 main.qml starts an internal drag when the left button stays pressed on an
 item for 300 ms (dragHoldTimer) and the pointer then moves more than 10 px.
-Every drag here is ONE inputsynth action chain: a button pressed by one
-inputsynth process is never released by the next one (the release does not
-reach krema and the drag stays active), so a mid-drag check runs the chain in
-the background with an interruptible in-chain pause and inspects the screen
-and the AT-SPI tree during that pause; the pause ends (and the chain goes on
-to the drop) as soon as the check is done.
+Every drag here is ONE action chain for the session's persistent
+``inputsynth --stdin`` process: a button held across separate chains lasts
+only as long as that process (a crash or a timeout restarts it and drops the
+button), so a mid-drag check runs the chain in the background with an
+interruptible in-chain pause and inspects the screen and the AT-SPI tree
+during that pause; the pause ends (and the chain goes on to the drop) as
+soon as the check is done.
 
 The drag ghost, the drop indicator and the dimmed source are
 ``Accessible.ignored`` QML items, so those checks are pixel checks on KWin
@@ -25,7 +26,6 @@ from typing import Iterator, Sequence
 
 import numpy as np
 import pytest
-from PIL import Image
 
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
@@ -184,8 +184,11 @@ class Scene:
 
     # -- screenshots
     def shot(self, name: str) -> np.ndarray:
-        """RGB screenshot (flattened onto black by kwin.screenshot)."""
-        return np.asarray(Image.open(self.krema.screenshot(name)).convert("RGB"))
+        """RGB screenshot (flattened onto black by kwin.screenshot) of the
+        rows every pixel check reads: from 60 px above the item row (the
+        drag ghost sits 16 px above it) down to the screen edge."""
+        top = min(r.y for r in self.rects.values()) - 60
+        return np.asarray(self.krema.screenshot(name, Rect(0, top, env.SCREEN_WIDTH, env.SCREEN_HEIGHT - top)))
 
     def stable_shot(self, name: str) -> np.ndarray:
         """Screenshot once the dock band stopped changing (icons loaded,

@@ -150,8 +150,8 @@ source-built krema. Three workflows are involved:
   `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`;
   GitHub's Azure kernel ships no vgem, so the module for the runner kernel
   comes from ghcr.io, or is built in the job on a kernel ci-images.yml has
-  not seen). The suite runs sharded in two containers
-  (`KREMA_E2E_SHARDS=2`, `KREMA_E2E_SHARD` above). The `fedora-43` entry
+  not seen). The suite runs sharded in three containers
+  (`KREMA_E2E_SHARDS=3`, `KREMA_E2E_SHARD` above). The `fedora-43` entry
   also runs the `@pytest.mark.outputs(2)` tests (SET-008) with
   `KREMA_E2E_OUTPUT_COUNT=2`, uploaded as `distro-e2e-fedora-43-2out`. Each
   run adds a JUnit summary to the step summary.
@@ -387,22 +387,43 @@ AT-SPI lookup (XPath tags are role names with `_`: `tool_bar`, `button`,
 
 Lookup cost. Every XPath lookup (`find`, `find_all`, `wait_for`, every
 `item*`/`preview*`/`surface_rect` helper) makes selenium-webdriver-at-spi
-serialise krema's whole AT-SPI tree to XML and evaluate the XPath on it.
+build an XML tree of krema's AT-SPI tree and evaluate the XPath on it.
 Upstream reads each node with about eight synchronous D-Bus round trips
 (~1 ms per node). The image patches it (`tools/pipelined-tree.patch`) to
 send each node's calls (`GetRole`, the `Name`, `Description` and
 `AccessibleId` properties, `GetState`, `GetChildren`) asynchronously, all
-in flight at once. The XML is the same element for element, so XPaths
-match the same nodes (checked on the dock, the open preview, every Settings
-page and an open Settings combo box). Qt's `Cache.GetItems` returns no
-items, so no single call returns the tree. Anything the patch cannot
-reproduce exactly (an error reply, another application's child, a role
-outside libatspi's table) falls back to the upstream walk. On the host of
-"Timings" above, building the tree takes 2.6 ms instead of 12 ms for the dock
-(11 nodes) and 28 ms instead of 191 ms with the Settings window open (180
-nodes). The cost still grows with the tree: pages visited in the Settings
-window stay in it (up to ~380 nodes). A lookup that matches nothing still
-rebuilds the tree until the 50 ms implicit wait has elapsed.
+in flight at once. With every attribute read, the XML is the same element
+for element as upstream's (checked on the dock, the open preview, every
+Settings page and an open Settings combo box). Qt's `Cache.GetItems`
+returns no items, so no single call returns the tree. Anything the patch
+cannot reproduce exactly (an error reply, another application's child, a
+role outside libatspi's table) falls back to the upstream walk. On the host
+of "Timings" above, building the full tree takes 2.6 ms instead of 12 ms
+for the dock (11 nodes) and 28 ms instead of 191 ms with the Settings
+window open (180 nodes). The cost still grows with the tree: pages visited
+in the Settings window stay in it (up to ~380 nodes). A lookup that matches
+nothing still rebuilds the tree until the 50 ms implicit wait has elapsed.
+
+Each find (element or elements) builds the tree with only the attributes
+its XPath reads. The role (the tag name), path and children are always
+read. name, description, accessibility-id and states are read only when the
+XPath names them after `@` or `attribute::`, and any other attribute
+reference (`@*`, `@node()`, an `@` inside a string literal) reads all of
+them. An XPath cannot see an attribute it does not name, so it matches the
+same elements. A lookup like `//tool_bar[@name='Krema Dock']` makes three
+calls per node instead of six, which halves lookups while Settings is open.
+The page source always has every attribute.
+
+Upstream checks that each match's index path still leads to the same object
+by comparing names and descriptions, and returns nothing for the whole
+lookup on a difference. A dock item's description changes whenever its
+window gains or loses "Active" or its window count changes, so a lookup
+could miss an item that existed throughout (on CI, 34 of 42 such rejections
+in two full-matrix runs were the same object; with KWin switching the
+active window in a loop, 70-80% of `find_all` calls returned nothing). The
+pipelined build compares D-Bus object paths instead: at each step of the
+walk, and when an index has shifted it finds the child by object path, so
+a match is dropped only when its object has left the tree.
 
 Geometry. On Wayland, AT-SPI rects (`element.rect`, `Rect.of(element)`) are
 relative to the element's surface. The surface's screen position comes from
@@ -429,7 +450,7 @@ Input and UI flows:
 | `choose_context_menu_entry(label, entries)` | Keyboard selection (Down x position, Return) in the open menu. |
 | `context_menu_entries(pinned, is_window, has_notifications=False) -> list[str]` (module function) | Enabled menu entries in order, mirroring `src/models/dockcontextmenu.cpp`. |
 | `open_settings(via_item, entries=None) -> kwin.Window` | Open Settings through an item's context menu; returns the "Settings — Krema" window. |
-| `screenshot(name) -> Path` | `artifacts/<name of krema>/<name>.png` (see "Screenshots and previews"). |
+| `screenshot(name, area=None) -> PIL.Image.Image` | RGB screen image, also saved to `artifacts/<name of krema>/<name>.png`. With `area` only that part is captured, the rest is black, and the PNG holds only the area (see "Screenshots and previews"). |
 
 ### `krema_e2e.windows` (fixture windows)
 
@@ -466,22 +487,40 @@ works too, e.g. `org.kde.kwrite` to pose as KWrite (kwrite and kfind
 
 The image patches upstream inputsynth (`tools/inputsynth-fixes.patch`) so that
 every `pointerMove` is absolute, which multi-move chains and drags need, so
-that W3C `Meta` sends Super, which KDE calls Meta, and so that SIGUSR1 ends
-a pause marked `"interruptible": true` (the one in progress, or the next).
-A button pressed by one inputsynth process cannot be released by another,
-so a mid-drag check (`test_05_drag.py`) holds the button in such a pause of
-the drag's own chain and ends it as soon as its checks are done.
+that W3C `Meta` sends Super, which KDE calls Meta, so that a pause marked
+`"interruptible": true` can be ended early (the one in progress, or the
+next), and so that it has a persistent `--stdin` mode.
+
+Every call hands its chain to one long-lived `inputsynth --stdin` process
+per session, started on first use and started again if it dies. Chains are
+sent over stdin as JSON lines, and inputsynth answers each one when it has
+finished, so a chain costs a pipe round trip instead of a process start
+(about 100 ms on CI). All chains share that process's one fake-input device.
+Each chain runs on a thread of its own, so a key press sent during a drag's
+pause (`test_05_drag.py`) is not held up. `background_actions` ends its
+chain's interruptible pause with a request for that chain only. A chain
+that exceeds its timeout kills the process and raises `TimeoutExpired`, as
+before. The process exits when pytest does (stdin closes).
+
+`drag` presses, moves and releases in one chain, so the button is held
+throughout. A button held across separate calls lasts only as long as the
+`--stdin` process: a crash or a timeout restarts it and drops the button. A
+mid-drag check (`test_05_drag.py`) therefore holds the button in an
+interruptible pause of the drag's own chain and ends it as soon as its
+checks are done.
 
 Every inputsynth process registers its own fake-input device, and KWin
 advertises `wl_seat` pointer capability only while some pointer device
-exists. Between two calls the seat would therefore lose the pointer, and Qt
-releases its `wl_pointer` without a leave: the surface under the pointer
-stays hovered, and if krema binds the new `wl_pointer` only after KWin has
-handled the next call's motion, it also misses that enter or leave. Under
-load this left the dock hovered after the pointer had moved away. The
-session fixture `_pointer_capability` (`hold_pointer_capability(park)`)
-keeps one inputsynth alive for the whole session, so the pointer capability
-never drops, as with a real mouse. It parks the pointer mid-screen first.
+exists. Without one the seat loses the pointer, and Qt releases its
+`wl_pointer` without a leave: the surface under the pointer stays hovered,
+and if krema binds the new `wl_pointer` only after KWin has handled the next
+motion, it also misses that enter or leave. When each call ran its own
+inputsynth process, this left the dock hovered under load after the pointer
+had moved away. The session fixture `_pointer_capability`
+(`hold_pointer_capability(park)`) keeps a second inputsynth alive for the
+whole session, so the pointer capability never drops, as with a real mouse,
+also before the first chain and while the `--stdin` process restarts. It
+parks the pointer mid-screen first.
 
 ### `krema_e2e.kwin` (oracle)
 
@@ -493,7 +532,8 @@ never drops, as with a real mouse. It parks the pointer mid-screen first.
 | `activate(internal_id)`, `set_minimized(internal_id, bool)` | Setup helpers, not assertions. |
 | `cursor_pos() -> (x, y)` | KWin's pointer position. |
 | `evaluate(js, timeout=10)` | Run JavaScript in KWin's scripting engine; the script calls `report(value)` once with a JSON-serializable value. |
-| `screenshot(path) -> Path` | Full-screen PNG via ScreenShot2, flattened onto black (KWin 6.7 returns RGBA with a transparent desktop, KWin 6.3 an opaque image already on black), so pixel oracles see the same image on every KWin. Raises `ScreenshotUnavailable` when KWin composites with QPainter. |
+| `screenshot(path, area=None) -> PIL.Image.Image` | RGB screen image via ScreenShot2, flattened onto black (KWin 6.7 returns RGBA with a transparent desktop, KWin 6.3 an opaque image already on black), so pixel oracles see the same image on every KWin; also saved as PNG to `path`. With `area` KWin captures only that part: the image stays screen-sized and is black elsewhere, and the PNG holds only the area (see "Screenshots and previews"). Raises `ScreenshotUnavailable` when KWin composites with QPainter. |
+| `bounds(*rects) -> (x, y, width, height)` | Bounding rect of several rects, e.g. one `screenshot` area for several pixel checks. |
 | `compositing_type() -> str`, `can_capture() -> bool` | `"OpenGL"` or `"QPainter"`. |
 
 `Window` fields: `internal_id`, `title`, `app_id` (desktop file name),
@@ -526,11 +566,11 @@ names are the entries in `src/config/krema.kcfg`.
 
 ### `krema_e2e.waits`, `krema_e2e.dbus`, `krema_e2e.env`
 
-* `wait_until(predicate, timeout=10, interval=0.1, message=None)` returns the
+* `wait_until(predicate, timeout=10, interval=0.05, message=None)` returns the
   first truthy value. Exceptions count as "not yet". On timeout it raises
   `WaitTimeout`, an `AssertionError`, with the last value.
-* `wait_stable(getter, duration=0.5, timeout=10)` waits until a value stops
-  changing, for example after zoom animations.
+* `wait_stable(getter, duration=0.5, timeout=10, interval=0.05)` waits until a
+  value stops changing, for example after zoom animations.
 * `dbus.call(service, path, iface, method, signature=None, *args)`,
   `dbus.get_property`, `dbus.has_name`, `dbus.list_names`, `dbus.name_pid`,
   and `dbus.session_bus()` for the test session bus.
@@ -539,6 +579,15 @@ names are the entries in `src/config/krema.kcfg`.
   `TEST_APP2_NAME`, `QT_VERSION` (runtime Qt version as an int tuple, for
   version-conditional expectations), and
   `artifact_path(name)`.
+
+`wait_until` polls every 50 ms by default: it returns only when the
+predicate is true, so a shorter interval lowers latency and checks the same
+thing. `wait_stable` defaults to a 0.5 s settle window because the window
+must be longer than any pause in the transition (dock hide delay 400 ms,
+attention animation pauses up to 2 s). A call may pass `duration=0.3` only
+when the value comes from a hover zoom or a layout animation that starts
+immediately, with no timer of 300 ms or more before its first change and no
+pause inside the animation.
 
 ## Screenshots and previews (need a DRM render node)
 
@@ -571,14 +620,36 @@ tests/appium/run-e2e.sh
 The OrbStack VM on the development Mac has no DRM driver, so capture cannot
 be exercised there.
 
+Screenshots of an area: `krema.screenshot(name, area)` and
+`kwin.screenshot(path, area)` take an optional `(x, y, width, height)` in
+screen coordinates (a `Rect`, or `kwin.bounds(...)` of several). KWin then
+renders and reads back only that area (ScreenShot2.CaptureArea through the
+screenshotter helper, patched in `tools/pipelined-tree.patch`). A dock item
+costs 13 ms instead of 52 ms on fedora-43 and 29 ms instead of 180 ms on
+debian-13. Both functions return a PIL image, not a path. It stays
+screen-sized and black outside the area, so checks index it with screen
+coordinates, and inside the area it has the same pixels as a full capture
+(compared for the areas the tests use on both targets). The PNG in
+`artifacts/` then holds only the area. Pass the rect the check reads. If
+that rect is read only after the shot, pass the surface that contains it
+(`krema.surface_rect(...)`) and keep the read after the shot. Checks that
+diff or scan the whole screen, checks over the whole preview surface or the
+Settings window, artifact-only shots and the failure screenshot capture the
+full screen.
+
 Tests that move the pointer onto a preview popup right after opening it call
 `preview.wait_on_screen(krema, popup)` first (PREV-003, PREV-004 close
 button, PREV-005), so they need capture as well. AT-SPI reports the popup
 as shown as soon as krema's QML shows it, but its input region reaches KWin
 only with the preview surface's next commit, the same commit that first
-draws it (see Investigations 4). The oracle: screenshot pixels inside the
-popup's rect that no other KWin window covers are the empty, black desktop
-until the popup paints its opaque background over them.
+draws it (see Investigations 4). The popup also grows while its rows arrive
+(it starts at 17x38), and each size change sets a new input region. So the
+oracle first waits until the popup's AT-SPI rect and KWin's preview surface
+agree and stay unchanged for 0.3 s (the layout has no timer or animation),
+then checks that screenshot pixels inside that final rect, where no other
+KWin window covers it, are no longer the empty black desktop: the popup has
+painted its opaque background at its final geometry. Callers read their
+glide target after this.
 
 ## Investigations
 

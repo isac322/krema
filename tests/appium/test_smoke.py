@@ -7,7 +7,6 @@ exercised with a real assertion."""
 from __future__ import annotations
 
 import pytest
-from PIL import Image
 
 from krema_e2e import env, kwin
 from krema_e2e import input as inp
@@ -62,12 +61,12 @@ def test_hovering_an_item_zooms_it_beyond_its_neighbour(krema: Krema, apps: Test
     krema.wait_for_item("One")
     krema.wait_for_item("Two")
     krema.move_away()
-    rest = wait_stable(lambda: (Rect.of(krema.item("One")), Rect.of(krema.item("Two"))))
+    rest = wait_stable(lambda: (Rect.of(krema.item("One")), Rect.of(krema.item("Two"))), duration=0.3)
     assert rest[0].width == rest[1].width
 
     krema.hover_item("One")
 
-    hovered, neighbour = wait_stable(lambda: (Rect.of(krema.item("One")), Rect.of(krema.item("Two"))))
+    hovered, neighbour = wait_stable(lambda: (Rect.of(krema.item("One")), Rect.of(krema.item("Two"))), duration=0.3)
     hovered, neighbour = painted_rect(hovered, rest[0]), painted_rect(neighbour, rest[1])
     assert hovered.width > rest[0].width
     assert hovered.width > neighbour.width
@@ -96,9 +95,8 @@ def test_screenshot_captures_the_rendered_dock(krema: Krema, apps: TestWindows) 
     apps.open("Shot")
     krema.wait_for_item("Shot")
     krema.move_away()
-    path = krema.screenshot("dock")
+    image = krema.screenshot("dock")
 
-    image = Image.open(path)
     assert image.size == (env.SCREEN_WIDTH, env.SCREEN_HEIGHT)
     item = krema.screen_rect(krema.item("Shot"))
     crop = image.crop((item.x, item.y, item.x + item.width, item.y + item.height))

@@ -18,6 +18,7 @@ from appium import webdriver
 from appium.options.common.base import AppiumOptions
 from appium.webdriver.common.appiumby import AppiumBy
 from appium.webdriver.webelement import WebElement
+from PIL import Image
 from selenium.common.exceptions import WebDriverException
 
 from . import config as kcfg
@@ -165,8 +166,15 @@ class Krema:
             raise
         # One lookup pass per request; helpers poll with wait_until instead.
         self._set_implicit_wait(50)
-        wait_until(lambda: self.find(TOOLBAR_XPATH), timeout=timeout, message="dock tool bar in AT-SPI")
-        wait_until(lambda: self.surface_rect("dock"), timeout=timeout, message="dock surface mapped by KWin")
+        # One poll for both conditions: the dock frame XPath in surface_rect
+        # matches only a frame whose child is the dock tool bar, so a surface
+        # rect means the tool bar is in the tree too. The budget is the two
+        # former sequential waits' combined.
+        wait_until(
+            lambda: self.surface_rect("dock"),
+            timeout=2 * timeout,
+            message=lambda: "dock surface mapped by KWin" if self.find(TOOLBAR_XPATH) is not None else "dock tool bar in AT-SPI",
+        )
 
     def stop(self, timeout: float = 10.0) -> None:
         """Quit the webdriver session and terminate krema (SIGTERM, then SIGKILL)."""
@@ -425,9 +433,11 @@ class Krema:
             message="Settings window",
         )
 
-    def screenshot(self, name: str) -> Path:
-        """Full-screen PNG to ``artifacts/<krema name>/<name>.png``."""
-        return kwin.screenshot(env.artifact_path(f"{self.name}/{name}.png"))
+    def screenshot(self, name: str, area: tuple[int, int, int, int] | None = None) -> Image.Image:
+        """Screen image (RGB, screen coordinates), also saved as PNG to
+        ``artifacts/<krema name>/<name>.png``. With ``area`` only that part is
+        captured and the rest is black; see :func:`kwin.screenshot`."""
+        return kwin.screenshot(env.artifact_path(f"{self.name}/{name}.png"), area)
 
 
 def has_state(element: WebElement, state: str) -> bool:

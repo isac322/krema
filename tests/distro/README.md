@@ -259,9 +259,9 @@ headers and builds it. The job restores the target's ccache
 (`KREMA_CCACHE_DIR`, keyed on the builder reference; saved only by
 default-branch runs, which is where Actions caches are shared with every
 pull request). It then runs `tests/distro/run-distro-e2e.sh <target> -rs`
-with `KREMA_E2E_SHARDS=2`: two concurrent `kwin_wayland --virtual` sessions
+with `KREMA_E2E_SHARDS=3`: three concurrent `kwin_wayland --virtual` sessions
 compositing with OpenGL through llvmpipe on the vgem device, each running
-every second collected test (all targets, including `ubuntu-25.04`; its old
+every third collected test (all targets, including `ubuntu-25.04`; its old
 preview flake was a PipeWire/KWin untyped-buffer race that
 `tests/appium/krema_e2e/preview.py` now renegotiates once). The job adds a
 JUnit summary of every `junit.xml` (one per shard) to the step summary (a

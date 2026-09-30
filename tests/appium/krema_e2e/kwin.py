@@ -25,7 +25,7 @@ from typing import Any
 from PIL import Image
 from gi.repository import Gio, GLib
 
-from . import dbus
+from . import dbus, env
 
 _IFACE_XML = """
 <node>
@@ -228,11 +228,35 @@ def can_capture() -> bool:
     return compositing_type() != "QPainter"
 
 
-def screenshot(path: str | Path) -> Path:
-    """Capture the whole virtual screen via KWin ScreenShot2 (through the
-    webdriver's screenshotter helper) and write an opaque RGB PNG to ``path``
+def bounds(*rects: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    """Bounding (x, y, width, height) of ``rects``, e.g. to capture the
+    area several pixel checks read with one :func:`screenshot`."""
+    x0 = min(r[0] for r in rects)
+    y0 = min(r[1] for r in rects)
+    x1 = max(r[0] + r[2] for r in rects)
+    y1 = max(r[1] + r[3] for r in rects)
+    return (x0, y0, x1 - x0, y1 - y0)
+
+
+def screenshot(path: str | Path, area: tuple[int, int, int, int] | None = None) -> Image.Image:
+    """Capture the screen via KWin ScreenShot2 (through the webdriver's
+    screenshotter helper) and return it as an opaque RGB image in screen
+    coordinates. The captured pixels are also written as PNG to ``path``
     (parents created). Raises ScreenshotUnavailable when KWin runs without
     OpenGL.
+
+    Without ``area`` this is the whole active output (CaptureActiveScreen).
+    With ``area`` (x, y, width, height, e.g. a Rect) KWin renders and reads
+    back only that part of the screen (CaptureArea; the helper takes the area
+    through tools/pipelined-tree.patch), several times cheaper on llvmpipe.
+    The result is still a full-screen image, black outside ``area``, so
+    callers index it with screen coordinates. The PNG then holds only
+    ``area``. Inside ``area`` the pixels equal a full capture's for the
+    areas the tests use (items, rows, menus, the popup, dock-sized bands;
+    compared on debian-13 and fedora-43). On fedora-43 a 1024x400 preview
+    surface or a 900x540 window differed from a full capture in a few
+    antialiased corner pixels, so checks over such surfaces capture the
+    whole screen.
 
     The image is flattened onto black: KWin 6.7 returns RGBA with the
     empty desktop transparent and translucent surfaces (the dock panel) at
@@ -243,13 +267,26 @@ def screenshot(path: str | Path) -> Path:
             "KWin is compositing with QPainter (no DRM render node in the container); "
             "ScreenShot2 needs OpenGL. Provide /dev/dri (e.g. modprobe vgem) to enable screenshots."
         )
-    proc = subprocess.run(["selenium-webdriver-at-spi-screenshotter", "0", "0", "0", "0"], capture_output=True, timeout=30)
-    if proc.returncode != 0 or not proc.stdout:
-        raise RuntimeError(f"screenshot failed: {proc.stderr.decode(errors='replace')[-2000:]}")
-    image = Image.open(io.BytesIO(base64.b64decode(proc.stdout))).convert("RGBA")
-    flat = Image.new("RGB", image.size, (0, 0, 0))
-    flat.paste(image, mask=image.getchannel("A"))
+    box = None
+    if area is not None:
+        box = (max(0, area[0]), max(0, area[1]), min(env.SCREEN_WIDTH, area[0] + area[2]), min(env.SCREEN_HEIGHT, area[1] + area[3]))
+    flat = None
+    if box is None or (box[2] > box[0] and box[3] > box[1]):
+        # The helper's "0 0 0 0" means the active output.
+        args = (box[0], box[1], box[2] - box[0], box[3] - box[1]) if box else (0, 0, 0, 0)
+        proc = subprocess.run(["selenium-webdriver-at-spi-screenshotter", *map(str, args)], capture_output=True, timeout=30)
+        if proc.returncode != 0 or not proc.stdout:
+            raise RuntimeError(f"screenshot failed: {proc.stderr.decode(errors='replace')[-2000:]}")
+        image = Image.open(io.BytesIO(base64.b64decode(proc.stdout))).convert("RGBA")
+        flat = Image.new("RGB", image.size, (0, 0, 0))
+        flat.paste(image, mask=image.getchannel("A"))
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    flat.save(out)
-    return out
+    if box is None:
+        flat.save(out, compress_level=1)
+        return flat
+    canvas = Image.new("RGB", (env.SCREEN_WIDTH, env.SCREEN_HEIGHT), (0, 0, 0))
+    if flat is not None:
+        canvas.paste(flat, box[:2])
+    (canvas if flat is None else flat).save(out, compress_level=1)
+    return canvas

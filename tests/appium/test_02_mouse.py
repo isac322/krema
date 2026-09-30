@@ -124,15 +124,21 @@ def _max_lift_while_launching(krema: Krema, ref: np.ndarray, item: Rect, app_id:
     lift, i, mapped_at = 0, 0, None
     deadline = time.monotonic() + SLOW_DELAY_S + 8
     while time.monotonic() < deadline and (mapped_at is None or time.monotonic() < mapped_at + 1):
-        lift = max(lift, _icon_lift(ref, _pixels(krema.screenshot(f"{tag}-{i}")), item))
+        lift = max(lift, _icon_lift(ref, _pixels(krema.screenshot(f"{tag}-{i}", item)), item))
         i += 1
         if mapped_at is None and len(_app_windows(app_id)) > windows_before:
             mapped_at = time.monotonic()
     return lift
 
 
-def _pixels(path: Path) -> np.ndarray:
-    return np.asarray(Image.open(path).convert("RGB"), dtype=np.int16)
+def _pixels(image: Image.Image) -> np.ndarray:
+    return np.asarray(image.convert("RGB"), dtype=np.int16)
+
+
+def _dock_area(krema: Krema) -> Rect:
+    """Screen rect of the dock surface: where its items and their indicator
+    dots are drawn (the part of the screen the dot oracles read)."""
+    return wait_until(lambda: krema.surface_rect("dock"), message="dock surface geometry")
 
 
 def _changed(a: np.ndarray, b: np.ndarray, tolerance: int = 24) -> np.ndarray:
@@ -178,7 +184,7 @@ def _background_span(krema: Krema, y: int, tag: str) -> tuple[int, int]:
     """Screen x extent [left, right) of the dock background on screen row
     ``y`` (an item's centre row: below the panel's rounded corners, with
     only the black desktop around it; icons lie inside the background)."""
-    row = _pixels(krema.screenshot(tag))[y]
+    row = _pixels(krema.screenshot(tag, Rect(0, y, env.SCREEN_WIDTH, 1)))[y]
     xs = np.nonzero(row.sum(axis=1) > 30)[0]
     assert len(xs), f"no dock background on screen row {y}"
     return int(xs.min()), int(xs.max()) + 1
@@ -255,7 +261,8 @@ def test_mouse002_left_click_launches_pinned_app(krema: Krema) -> None:
     krema.wait_for_item(SLOW_NAME)
     assert _app_windows(SLOW_ID) == []
     krema.move_away(close_preview=False)
-    idle = _pixels(krema.screenshot("pinned-only"))
+    dock = _dock_area(krema)
+    idle = _pixels(krema.screenshot("pinned-only", dock))
 
     krema.click_item(SLOW_NAME)
 
@@ -267,7 +274,7 @@ def test_mouse002_left_click_launches_pinned_app(krema: Krema) -> None:
     assert _has_description(krema, launched[0].title, "Pinned")
     krema.move_away(close_preview=False)
     wait_until(
-        lambda: _dot_pixels(krema, launched[0].title, _pixels(krema.screenshot("running")), idle) >= 4,
+        lambda: _dot_pixels(krema, launched[0].title, _pixels(krema.screenshot("running", dock)), idle) >= 4,
         timeout=5,
         message="indicator dot to appear under the launched app",
     )
@@ -283,8 +290,8 @@ def test_mouse002_pinned_launch_bounces(krema: Krema) -> None:
     krema.hover_item(SLOW_NAME)
     # The hovered icon is zoomed: where it is drawn comes from painted_rect
     # (Qt < 6.9 reports zoomed extents with the unscaled size).
-    item = wait_stable(lambda: painted_rect(krema.screen_rect(krema.item(SLOW_NAME)), rest))
-    ref = _pixels(krema.screenshot("hovered"))
+    item = wait_stable(lambda: painted_rect(krema.screen_rect(krema.item(SLOW_NAME)), rest), duration=0.3)
+    ref = _pixels(krema.screenshot("hovered", item))
 
     # Click where the pointer already rests: a click at a centre recomputed
     # from the zoomed extents would move the pointer and the zoom layout.
@@ -422,7 +429,12 @@ def test_mouse004_tooltip_shows_app_name_on_hover(krema: Krema) -> None:
     krema.wait_for_item(NAME1)
     krema.wait_for_item(NAME2)
     krema.move_away(close_preview=False)
-    baseline = _pixels(krema.screenshot("no-tooltip"))
+    # Baseline once the screen stopped changing: KWin's launch feedback for
+    # krema (its icon bouncing beside the pointer), started by an earlier test
+    # that opened krema windows, can outlive that test, and a frame of it
+    # would widen every tooltip diff.
+    wait_stable(lambda: _pixels(krema.screenshot("no-tooltip")).tobytes(), duration=0.6, interval=0.2)
+    baseline = _pixels(Image.open(env.artifact_path(f"{krema.name}/no-tooltip.png")))
 
     tips = {}
     for name in (NAME1, NAME2):
@@ -435,7 +447,7 @@ def test_mouse004_tooltip_shows_app_name_on_hover(krema: Krema) -> None:
         )
         # Settle: tooltip drawn fully (identical bbox in two consecutive shots).
         tip = wait_stable(lambda: _bbox(_changed(_pixels(krema.screenshot(f"tooltip-{name}")), baseline)), duration=0.3)
-        shot = _pixels(env.artifact_path(f"{krema.name}/tooltip-{name}.png"))
+        shot = _pixels(Image.open(env.artifact_path(f"{krema.name}/tooltip-{name}.png")))
         assert tip is not None
         assert tip.y + tip.height <= item.y, f"tooltip {tip} above item {item}"
         assert item.y - (tip.y + tip.height) <= 40, f"tooltip {tip} close to item {item}"
@@ -584,12 +596,13 @@ def test_mouse007_indicator_dots_reflect_running_state(krema: Krema, apps: TestW
     krema.wait_for_item(NAME2)
     krema.move_away(close_preview=False)
     pinned = wait_stable(lambda: tuple(krema.screen_rect(e) for e in krema.items()))
-    baseline = _pixels(krema.screenshot("pinned-only"))
+    dock = _dock_area(krema)
+    baseline = _pixels(krema.screenshot("pinned-only", dock))
 
     def settle_shot(name: str) -> np.ndarray:
         krema.move_away(close_preview=False)
         wait_stable(lambda: tuple(krema.screen_rect(e) for e in krema.items()))
-        return _pixels(krema.screenshot(name))
+        return _pixels(krema.screenshot(name, dock))
 
     one = apps.open(NAME1, app_id=APP1)
     wait_until(

@@ -904,10 +904,14 @@ Item {
         // and out when it leaves, and icons/background track the layout
         // directly. InPlace smooths per-item scales instead.
         property real zoomAmount: mouseInside ? 1.0 : 0.0
+        // The setting is an unscaled baseline: 100 ms matches shortDuration at
+        // normal speed. Plasma scaling also makes Instant/reduced motion snap.
+        readonly property int _effectiveZoomAnimationDuration: Math.round(
+            DockSettings.zoomAnimationDuration * Kirigami.Units.shortDuration / 100.0)
         Behavior on zoomAmount {
-            enabled: dockPanel.zoomStyle !== 1
+            enabled: dockPanel.zoomStyle !== 1 && dockPanel._effectiveZoomAnimationDuration > 0
             NumberAnimation {
-                duration: Kirigami.Units.shortDuration
+                duration: dockPanel._effectiveZoomAnimationDuration
                 easing.type: Easing.OutCubic
             }
         }

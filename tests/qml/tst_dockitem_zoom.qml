@@ -5,6 +5,7 @@
 // by the production zoom layout (DockView.zoomLayout, see DockItemRow.qml).
 import QtQuick
 import QtTest
+import org.kde.kirigami as Kirigami
 import com.bhyoo.krema 1.0
 
 // TestCase is an invisible Item: visual fixtures live under `stage`, a visible
@@ -201,7 +202,10 @@ Item {
             row.mouseInside = true
             row.mouseX = item.itemCenterX
             tryCompare(item, "currentScale", DockSettings.maxZoomFactor)
-            verify(spy.count >= 2, "scale jumped to the peak in " + spy.count + " step(s) instead of easing in")
+            if (row._effectiveZoomAnimationDuration > 0)
+                verify(spy.count >= 2, "scale jumped to the peak in " + spy.count + " step(s) instead of easing in")
+            else
+                compare(spy.count, 1, "Plasma Instant must snap to the peak")
 
             // Pointer leaves the panel: every item returns to exactly 1.0 and rest position.
             spy.clear()
@@ -212,7 +216,86 @@ Item {
                 tryCompare(row.itemAt(i), "currentScale", 1.0)
                 tryCompare(row.itemAt(i), "currentOffset", 0.0)
             }
-            verify(spy.count >= 2, "scale jumped back to 1.0 in " + spy.count + " step(s) instead of easing out")
+            if (row._effectiveZoomAnimationDuration > 0)
+                verify(spy.count >= 2, "scale jumped back to 1.0 in " + spy.count + " step(s) instead of easing out")
+            else
+                compare(spy.count, 1, "Plasma Instant must snap back to rest")
+        }
+
+        function test_zeroDurationSnapsInAndOut_data() {
+            return [{ tag: "parabolic", style: 0 }, { tag: "in-place", style: 1 }]
+        }
+
+        function test_zeroDurationSnapsInAndOut(data) {
+            DockSettings.zoomStyle = data.style
+            DockSettings.zoomAnimationDuration = 0
+            let row = makeRow(3)
+            let item = row.itemAt(1)
+            let spy = createTemporaryObject(spyComponent, tc, { target: item, signalName: "currentScaleChanged" })
+            row.mouseX = item.itemCenterX
+            row.mouseInside = true
+            compare(row.zoomAmount, 1.0)
+            compare(item.currentScale, DockSettings.maxZoomFactor)
+            compare(spy.count, 1, "zero duration must snap to the peak synchronously")
+            for (let i = 0; i < row.count; i++) {
+                compare(row.itemAt(i).currentScale, row.itemAt(i).zoomScale)
+                compare(row.itemAt(i).transform[0].xScale, row.itemAt(i).currentScale)
+            }
+
+            spy.clear()
+            row.mouseInside = false
+            row.mouseX = -1
+            compare(row.zoomAmount, 0.0)
+            for (let i = 0; i < row.count; i++) {
+                compare(row.itemAt(i).zoomScale, 1.0)
+                compare(row.itemAt(i).currentScale, 1.0)
+                compare(row.itemAt(i).currentOffset, 0.0)
+            }
+            compare(spy.count, 1, "zero duration must snap back synchronously")
+        }
+
+        function test_customDurationUsesConfiguredTimeline_data() {
+            return [{ tag: "parabolic", style: 0 }, { tag: "in-place", style: 1 }]
+        }
+
+        function test_customDurationUsesConfiguredTimeline(data) {
+            DockSettings.zoomStyle = data.style
+            DockSettings.zoomAnimationDuration = 1000
+            let row = makeRow(3)
+            let item = row.itemAt(1)
+            let probe = createTemporaryObject(durationProbeComponent, tc, { targetItem: item })
+            row.mouseX = item.itemCenterX
+            row.mouseInside = true
+            if (probe.effectiveDuration === 0)
+                compare(item.currentScale, DockSettings.maxZoomFactor, "Plasma Instant must snap synchronously")
+            probe.start()
+            tryCompare(probe, "finished", true, probe.effectiveDuration + 2000)
+            if (probe.effectiveDuration > 0)
+                verifyDurationSamples(probe, 1.0, DockSettings.maxZoomFactor)
+            tryCompare(item, "currentScale", DockSettings.maxZoomFactor)
+
+            row.mouseInside = false
+            row.mouseX = -1
+            if (probe.effectiveDuration === 0)
+                compare(item.currentScale, 1.0, "Plasma Instant must return to rest synchronously")
+            probe.start()
+            tryCompare(probe, "finished", true, probe.effectiveDuration + 2000)
+            if (probe.effectiveDuration > 0)
+                verifyDurationSamples(probe, DockSettings.maxZoomFactor, 1.0)
+            for (let i = 0; i < row.count; i++) {
+                tryCompare(row.itemAt(i), "zoomScale", 1.0)
+                tryCompare(row.itemAt(i), "currentScale", 1.0)
+                tryCompare(row.itemAt(i), "currentOffset", 0.0)
+            }
+        }
+
+        function verifyDurationSamples(probe, from, to) {
+            verify(probe.samples.length >= 2, "configured duration must produce intermediate zoom frames")
+            for (const sample of probe.samples) {
+                const easedProgress = 1.0 - Math.pow(1.0 - sample.progress, 3)
+                fuzzyCompare(sample.scale, from + (to - from) * easedProgress, 1e-6,
+                    "zoom scale at configured timeline progress " + sample.progress)
+            }
         }
 
         function test_appliedTransformMatchesCurrentScaleAndOffset() {
@@ -294,6 +377,42 @@ Item {
             let expect = (k, size) => k === "start" ? 0 : (k === "end" ? size : size / 2)
             compare(origin.x, expect(data.ox, item.width))
             compare(origin.y, expect(data.oy, item.height))
+        }
+
+        // Samples on Qt's shared animation clock, not after a wall-clock sleep.
+        Component {
+            id: durationProbeComponent
+            Item {
+                id: probe
+                property var targetItem
+                readonly property int effectiveDuration: Math.round(
+                    DockSettings.zoomAnimationDuration * Kirigami.Units.shortDuration / 100.0)
+                property real progress: 0.0
+                property var samples: []
+                property bool finished: false
+                function start() {
+                    finished = false
+                    samples = []
+                    reference.start()
+                }
+                onProgressChanged: {
+                    if (progress <= 0.0 || progress >= 1.0) return
+                    // Let both animations update before observing the real item.
+                    Qt.callLater(function() {
+                        if (probe.progress > 0.0 && probe.progress < 1.0)
+                            probe.samples.push({ progress: probe.progress, scale: probe.targetItem.currentScale })
+                    })
+                }
+                NumberAnimation {
+                    id: reference
+                    target: probe
+                    property: "progress"
+                    from: 0.0
+                    to: 1.0
+                    duration: probe.effectiveDuration
+                    onFinished: probe.finished = true
+                }
+            }
         }
 
         Component {

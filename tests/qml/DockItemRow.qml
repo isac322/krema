@@ -34,10 +34,12 @@ Item {
     property real zoomCursor: 0
     onMouseXChanged: if (mouseX >= 0) zoomCursor = mouseX
     property real zoomAmount: _inside ? 1.0 : 0.0
+    readonly property int _effectiveZoomAnimationDuration: Math.round(
+        DockSettings.zoomAnimationDuration * Kirigami.Units.shortDuration / 100.0)
     Behavior on zoomAmount {
-        enabled: host.zoomStyle !== 1
+        enabled: host.zoomStyle !== 1 && host._effectiveZoomAnimationDuration > 0
         NumberAnimation {
-            duration: Kirigami.Units.shortDuration
+            duration: host._effectiveZoomAnimationDuration
             easing.type: Easing.OutCubic
         }
     }

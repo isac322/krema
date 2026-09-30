@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Krema now ships its own app icon, shown in the application launcher, task switcher, Discover, and window title bars
+- Added a "Zoom animation duration" setting in Appearance for Parabolic and In place hover zoom, with a range of 0 to 1000 ms (default 100 ms, an unscaled baseline that preserves the normal-speed zoom feel); Plasma animation scaling still applies, and 0 ms makes the zoom snap instantly
 
 ### Changed
 

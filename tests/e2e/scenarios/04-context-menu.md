@@ -16,6 +16,10 @@
 - src/qml/main.qml
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
+**Tier:** Tier 2 (Appium/KWin). The left-click policy settings do not change
+right-click menu contents, entry ordering, Pin/Unpin, New Instance, Close,
+Settings, About, or Quit behavior.
+
 
 ---
 
@@ -144,10 +148,10 @@ use screenshot-based coordinate estimation.
 - Kirigami-based settings dialog opens as separate window
 - Contains pages: Appearance, Behavior, Window Preview, About Krema, About KDE
 - FormCard-based layout with sliders, spinboxes, comboboxes
-- Settings UI is fully accessible via AT-SPI (PoC verified)
+- Settings UI accessibility is covered by the automated AT-SPI checks below.
 
-**Verified in PoC:** Settings opened successfully. `find_ui_elements` found
-"Icon size" label and "Zoom factor" slider with Increase/Decrease actions.
+**Historical PoC note:** Earlier checks found the `"Icon size"` label and
+`"Zoom factor"` slider with Increase/Decrease actions.
 
 **Verification:** list_windows (krema window count +1), find_ui_elements (FormCard widgets), screenshot (dialog layout)
 

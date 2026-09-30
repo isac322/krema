@@ -59,6 +59,37 @@ FormCard.FormCardPage {
             }
         }
 
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Single window click action")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Activate window"),
+                i18n("Minimize active window")
+            ]
+            currentIndex: DockSettings.singleWindowClickAction
+            onActivated: function(index) {
+                DockSettings.singleWindowClickAction = index
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Grouped window click action")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Cycle through windows"),
+                i18n("Show window previews"),
+                i18n("Minimize active window")
+            ]
+            currentIndex: DockSettings.groupedWindowClickAction
+            onActivated: function(index) {
+                DockSettings.groupedWindowClickAction = index
+            }
+        }
+
         // Show/hide delay controls — only visible in hide-capable modes
         FormCard.FormDelegateSeparator {
             visible: DockSettings.visibilityMode !== 0

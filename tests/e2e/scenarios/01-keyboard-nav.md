@@ -28,6 +28,13 @@
 - src/platform/kwinpointermotionwatcher.cpp
 - src/app/application.cpp
 
+**Tier:** Tier 2 (Appium), with Tier 1 QML coverage for shared `main.qml`
+keyboard behavior.
+
+**Click-policy scope:** The new left-click choices do not change Enter/Space,
+Meta+N, preview keyboard navigation, Escape, or visibility locking. The
+existing keyboard assertions remain the consumer contract for those paths.
+
 ---
 
 ## TC KBD-001: Dock Focus Entry via Meta+Alt+D

@@ -234,3 +234,9 @@ class DockSettings : public QObject {
 | `Edge` | int | 0 | Screen edge (0=Bottom, 1=Top, 2=Left, 3=Right) |
 | `ShowDelay` | int | 200 | Show delay in ms |
 | `HideDelay` | int | 500 | Hide delay in ms |
+| `SingleWindowClickAction` | int | `0` | Left-click action (0 to 1): 0 = Activate window; 1 = Minimize active window (restore a minimized window or focus a background window) |
+| `GroupedWindowClickAction` | int | `0` | Grouped left-click action (0 to 2): 0 = Cycle through windows; 1 = Show window previews; 2 = Minimize only the currently active child (activate or restore the most recently used child when none is active) |
+
+Both click-action keys are global values in the `[General]` group of `~/.config/kremarc`, shared by every monitor's dock through the application's `DockSettings` singleton. Each choice saves independently when changed and loads on startup. Their default value of `0` preserves single-window activation and grouped-window cycling on upgrade.
+
+These choices apply only to mouse left clicks. Hover previews remain independent: `GroupedWindowClickAction=1` opens the grouped preview even when `PreviewEnabled=false`.

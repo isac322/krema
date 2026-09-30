@@ -2,6 +2,8 @@
 
 ## Features
 - settings-appearance: Icon size, icon scale, zoom factor, zoom style, zoom animation duration, spacing, opacity, background style
+- settings-click-actions: Independent single and grouped left-click choices
+- settings-click-persistence: Six policy pairs apply live, save, and restore
 - settings-behavior: Visibility mode, dock position, monitor mode
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
@@ -14,6 +16,10 @@
 - src/qml/settings/BehaviorPage.qml
 - src/qml/settings/PreviewPage.qml
 - src/qml/SettingsDialog.qml
+- src/qml/main.qml
+- src/app/application.cpp
+- src/models/dockactions.h
+- src/models/dockactions.cpp
 - src/qml/DockItem.qml
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
@@ -25,6 +31,14 @@
 - src/models/taskiconprovider.cpp
 - src/config/krema.kcfg
 - src/config/krema.kcfgc
+
+**Tier:** Tier 2 (Appium) for real settings controls, persistence, and KWin
+effects. Tier 1 QML does not replace these FormCard and multi-dock checks.
+Tier 3 reuses the Appium cases against installed packages.
+The existing context-menu Settings entry, keyboard paths, and multi-monitor
+lifecycle remain covered by their original cases; the new rows assert only
+the click-policy controls and their consumer effects.
+
 
 ---
 
@@ -49,8 +63,8 @@
 - All controls accessible via AT-SPI (labels, sliders with Increase/Decrease)
 - Choosing "Settings..." again raises the same window; the dock stays shown while it is open
 
-**Verified in PoC:** Settings opened. Found "Icon size" label and
-"Zoom factor" slider with Increase/Decrease actions in AT-SPI.
+**Historical PoC note:** Earlier checks found the `"Icon size"` label and
+`"Zoom factor"` slider with Increase/Decrease actions in AT-SPI.
 
 **Verification:** list_windows (window count +1), find_ui_elements (FormCard widgets), screenshot
 **Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown (English session: title "Settings — Krema"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
@@ -267,3 +281,62 @@
 **Verification:** find_ui_elements (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
 **Automated:** `tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the default, 25 ms steps, persistence, zero value, and disabled state. `tests/qml/tst_dockitem_zoom.qml::test_zeroDurationSnapsInAndOut` and `test_customDurationUsesConfiguredTimeline` cover snapping and animation timing in both styles. The live-dock 500 ms screenshot checks remain manual.
 
+
+---
+
+## TC SET-012: Click actions apply live and persist independently
+
+**Precondition:** Settings open on Behavior. The controls show the exact
+labels `Single window click action` and `Grouped window click action`.
+
+**Steps:**
+1. Exercise all six pairs of `Activate window`/`Minimize active window` and
+   `Cycle through windows`/`Show window previews`/`Minimize active window`.
+2. Change both controls from their initial values and observe single and
+   grouped windows without restarting.
+3. Restart Krema, reopen Settings, and repeat the state checks.
+4. In a two-output session, choose `All monitors`, recreate the second dock,
+   and verify the choices remain shared.
+
+**Expected:**
+- Each control applies independently and immediately.
+- The saved pair survives restart and remains available to recreated docks.
+- Single and grouped consumer effects match the selected pair.
+
+**Verification:** AT-SPI FormComboBoxDelegate values, `kremarc`, KWin
+active/minimized state, popup state, and two-output dock state.
+**Automated (Tier 2):** `tests/appium/test_06_settings.py::test_clk002_click_action_combinations_apply_live_persist_and_restore`
+(six cases) and
+`tests/appium/test_06_settings.py::test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them`
+(`outputs(2)`).
+
+Run the multi-screen cases with:
+`KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`.
+
+---
+
+## TC SET-013: Hover controls stay independent from explicit preview
+
+**Precondition:** Settings open on Window Preview. The controls show the exact
+labels `Show window previews on hover`, `Thumbnail width (px)`, `Hover delay
+(ms)`, and `Hide delay (ms)`.
+
+**Steps:**
+1. Toggle hover previews on and off with each grouped action choice.
+2. Observe which controls are enabled and change their values.
+3. Close Settings, then open the popup by hover or explicit click according
+   to the selected controls.
+
+**Expected:**
+- `Thumbnail width (px)` and `Hide delay (ms)` are enabled when hover is
+  enabled or the grouped action is `Show window previews`.
+- `Hover delay (ms)` is enabled only when hover previews are enabled.
+- Hover-off group1 still opens an explicit popup on click.
+- Changed values are saved to `kremarc` and affect popup width/hide behavior
+  without restarting.
+
+**Verification:** AT-SPI control enabled state and values, `kremarc`, popup
+visibility, labels, and thumbnail width. Visual thumbnail checks require
+DRM/vgem capture.
+**Automated (Tier 2):** `tests/appium/test_06_settings.py::test_clk011_preview_controls_follow_hover_and_explicit_group_choice`
+(six cases).

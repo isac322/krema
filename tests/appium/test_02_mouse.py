@@ -18,11 +18,14 @@ from PIL import Image
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import ITEMS_XPATH, DescriptionChanges, Krema, Rect, painted_rect
+from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.waits import wait_stable, wait_until
-from krema_e2e.windows import TestWindows
+from krema_e2e.windows import TestWindow, TestWindows
 
 APP1, APP2 = env.TEST_APP_ID, env.TEST_APP2_ID
 NAME1, NAME2 = env.TEST_APP_NAME, env.TEST_APP2_NAME
+CLICK_ACTION_CASES = [(single, grouped) for single in (0, 1) for grouped in (0, 1, 2)]
+CLICK_ACTION_IDS = [f"single{single}-group{grouped}" for single, grouped in CLICK_ACTION_CASES]
 
 
 def _require_capture() -> None:
@@ -252,10 +255,19 @@ def test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointe
 QUIET_HOVER = {"PreviewEnabled": False, "PreviewHoverDelay": 600000}
 
 
+@pytest.mark.parametrize(("single", "grouped"), CLICK_ACTION_CASES, ids=CLICK_ACTION_IDS)
 @pytest.mark.no_krema_autostart
 @pytest.mark.kremarc({"PinnedLaunchers": [config.launcher(SLOW_ID)], **QUIET_HOVER})
-def test_mouse002_left_click_launches_pinned_app(krema: Krema) -> None:
+def test_mouse002_left_click_launches_pinned_app(krema: Krema, single: int, grouped: int) -> None:
     _require_capture()
+    krema.write_config(
+        {
+            "PinnedLaunchers": [config.launcher(SLOW_ID)],
+            **QUIET_HOVER,
+            "SingleWindowClickAction": single,
+            "GroupedWindowClickAction": grouped,
+        }
+    )
     _install_slow_launcher(krema)
     krema.start()
     krema.wait_for_item(SLOW_NAME)
@@ -263,8 +275,14 @@ def test_mouse002_left_click_launches_pinned_app(krema: Krema) -> None:
     krema.move_away(close_preview=False)
     dock = _dock_area(krema)
     idle = _pixels(krema.screenshot("pinned-only", dock))
+    krema.scroll_item(SLOW_NAME)
+    assert wait_stable(
+        lambda: _app_windows(SLOW_ID), duration=SLOW_DELAY_S + 1, timeout=SLOW_DELAY_S + 5
+    ) == [], "wheel must not launch a windowless pin"
+    assert not krema.preview_visible(), "windowless pin must not show an empty popup"
 
     krema.click_item(SLOW_NAME)
+    assert not krema.preview_visible(), "launcher activation must not show an empty popup"
 
     launched = wait_until(lambda: _app_windows(SLOW_ID), timeout=SLOW_DELAY_S + 10, message="pinned app window in KWin")
     assert len(launched) == 1, f"exactly one new window of the pinned app: {launched}"
@@ -476,8 +494,12 @@ def test_mouse004_tooltip_shows_app_name_on_hover(krema: Krema) -> None:
 
 
 # ------------------------------------------------------------------ MOUSE-005
+@pytest.mark.parametrize(("single", "grouped"), CLICK_ACTION_CASES, ids=CLICK_ACTION_IDS)
 @pytest.mark.kremarc({"PinnedLaunchers": [], "PreviewEnabled": False})
-def test_mouse005_scroll_wheel_cycles_grouped_windows(krema: Krema, apps: TestWindows) -> None:
+def test_mouse005_scroll_wheel_cycles_grouped_windows(
+    krema: Krema, apps: TestWindows, single: int, grouped: int
+) -> None:
+    _configure_click_actions(krema, single, grouped)
     titles = ["Alpha", "Beta", "Gamma"]
     wins = {t: apps.open(t, app_id=APP1) for t in titles}
     krema.wait_for_item(NAME1)
@@ -508,6 +530,8 @@ def test_mouse005_scroll_wheel_cycles_grouped_windows(krema: Krema, apps: TestWi
     inp.scroll(x, y, dy=-15)
     back = wait_until(lambda: (t := active_title()) != seen[3] and t, message="scroll up to switch window")
     assert back == seen[2], f"scroll up goes to the previous window: {seen} -> {back}"
+    assert all((window := win.refresh()) is not None and not window.minimized for win in wins.values())
+    assert not krema.preview_visible(), "wheel cycling must not invoke the explicit click-preview policy"
 
 
 # ------------------------------------------------------------------ MOUSE-006
@@ -536,9 +560,20 @@ def _open_slow_original(krema: Krema, apps: TestWindows):
     return original
 
 
+@pytest.mark.parametrize(("single", "grouped"), CLICK_ACTION_CASES, ids=CLICK_ACTION_IDS)
 @pytest.mark.no_krema_autostart
 @pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
-def test_mouse006_middle_click_launches_new_instance(krema: Krema, apps: TestWindows) -> None:
+def test_mouse006_middle_click_launches_new_instance(
+    krema: Krema, apps: TestWindows, single: int, grouped: int
+) -> None:
+    krema.write_config(
+        {
+            "PinnedLaunchers": [],
+            **QUIET_HOVER,
+            "SingleWindowClickAction": single,
+            "GroupedWindowClickAction": grouped,
+        }
+    )
     original = _open_slow_original(krema, apps)
     changes = DescriptionChanges()
     try:
@@ -634,3 +669,427 @@ def test_mouse007_indicator_dots_reflect_running_state(krema: Krema, apps: TestW
         timeout=3,
         message="indicator dot removed within 1s of closing",
     )
+# ----------------------------------------------------------- MOUSE-010 / 015
+
+
+def _configure_click_actions(krema: Krema, single: int, grouped: int, **settings: object) -> None:
+    """Restart this isolated dock with the two independent click policies."""
+    krema.write_config(
+        {
+            "PinnedLaunchers": [],
+            "PreviewEnabled": False,
+            "SingleWindowClickAction": single,
+            "GroupedWindowClickAction": grouped,
+            **settings,
+        }
+    )
+    krema.restart()
+    wait_until(
+        lambda: krema.read_config().get("General", {}).get("SingleWindowClickAction") == str(single)
+        and krema.read_config().get("General", {}).get("GroupedWindowClickAction") == str(grouped),
+        message=f"click policies persisted ({single}, {grouped})",
+    )
+
+
+def _window_title(wins: list[TestWindow]) -> str | None:
+    active = kwin.active_window()
+    return next((w.title for w in wins if active is not None and active.pid == w.pid), None)
+
+
+@pytest.mark.parametrize(
+    ("single", "grouped"),
+    CLICK_ACTION_CASES,
+    ids=[f"single{single}-group{grouped}" for single, grouped in CLICK_ACTION_CASES],
+)
+def test_mouse010_click_policies_observe_single_and_group_window_state(
+    krema: Krema, apps: TestWindows, single: int, grouped: int
+) -> None:
+    """All six policies use their own real-pointer path and KWin state oracle."""
+    _configure_click_actions(krema, single, grouped)
+    solo = apps.open("Solo", app_id=APP2)
+    grouped_wins = [apps.open(title, app_id=APP1) for title in ("Alpha", "Beta", "Gamma")]
+    krema.wait_for_item("Solo")
+    krema.wait_for_item(NAME1)
+    krema.move_away(close_preview=False)
+
+    # A singleton's active click either preserves activation (the default) or
+    # minimizes and, on the next click, restores the actual toplevel.
+    kwin.activate(solo.internal_id)
+    wait_until(solo.is_active, message="singleton to become active")
+    krema.click_item("Solo")
+    if single == 1:
+        wait_until(
+            lambda: (w := solo.refresh()) is not None and w.minimized,
+            message="active singleton to minimize under SingleWindowClickAction=1",
+        )
+        assert not solo.is_active()
+        krema.click_item("Solo")
+        wait_until(
+            lambda: (w := solo.refresh()) is not None and w.active and not w.minimized,
+            message="minimized singleton to restore and become active",
+        )
+    else:
+        wait_until(
+            lambda: (w := solo.refresh()) is not None and w.active and not w.minimized,
+            message="active singleton to remain active under the default action",
+        )
+
+    # A background singleton is always activated, never minimized, in either
+    # policy.
+    kwin.activate(grouped_wins[0].internal_id)
+    wait_until(grouped_wins[0].is_active, message="a different window to become active")
+    krema.click_item("Solo")
+    wait_until(
+        lambda: (w := solo.refresh()) is not None and w.active and not w.minimized,
+        message="background singleton to activate without minimizing",
+    )
+
+    # The grouped setting has a distinct consumer-visible result for every
+    # choice; group 1 is covered further below by the thumbnail oracle.
+    kwin.activate(grouped_wins[0].internal_id)
+    wait_until(grouped_wins[0].is_active, message="first grouped child to become active")
+    before = _window_title(grouped_wins)
+    krema.click_item(NAME1)
+    if grouped == 0:
+        after = wait_until(
+            lambda: title if (title := _window_title(grouped_wins)) is not None and title != before else None,
+            message="group click to cycle to a different child",
+        )
+        assert after != before
+        assert all((w := child.refresh()) is not None and not w.minimized for child in grouped_wins)
+    elif grouped == 1:
+        wait_until(krema.preview_visible, message="explicit group preview to become visible")
+        assert len(krema.thumbnails()) == 3
+        assert _window_title(grouped_wins) == before, "preview action did not activate a different child"
+        krema.move_away()
+        wait_until(lambda: not krema.preview_visible(), message="explicit group preview to close")
+    else:
+        wait_until(
+            lambda: (w := grouped_wins[0].refresh()) is not None and w.minimized,
+            message="only the active grouped child to minimize",
+        )
+        assert all(
+            (w := child.refresh()) is not None and (child is grouped_wins[0] or not w.minimized)
+            for child in grouped_wins
+        )
+        # A different child now becomes current after the first minimize.
+        # The next click must act on this child, not restore/toggle the old one.
+        kwin.activate(grouped_wins[1].internal_id)
+        wait_until(grouped_wins[1].is_active, message="second grouped child to become current")
+        krema.click_item(NAME1)
+        wait_until(
+            lambda: (w := grouped_wins[1].refresh()) is not None and w.minimized,
+            message="group2 to minimize the new current child after the previous minimize",
+        )
+        assert (w := grouped_wins[0].refresh()) is not None and w.minimized
+        assert (w := grouped_wins[2].refresh()) is not None and not w.minimized
+
+
+def test_mouse011_membership_change_reselects_single_and_group_actions(krema: Krema, apps: TestWindows) -> None:
+    """The 1-window -> 2-window -> 1-window transition does not cache mode."""
+    _configure_click_actions(krema, single=1, grouped=1)
+    first = apps.open("First", app_id=APP1)
+    krema.wait_for_item("First")
+    kwin.activate(first.internal_id)
+    wait_until(first.is_active, message="single member to become active")
+
+    krema.click_item("First")
+    wait_until(
+        lambda: (w := first.refresh()) is not None and w.minimized,
+        message="single member to minimize under SingleWindowClickAction=1",
+    )
+
+    second = apps.open("Second", app_id=APP1)
+    krema.wait_for_item(NAME1)
+    kwin.activate(second.internal_id)
+    wait_until(second.is_active, message="new grouped child to become active")
+    krema.click_item(NAME1)
+    wait_until(krema.preview_visible, message="grouped action to show a preview")
+    assert second.is_active(), "group preview must not activate or minimize its active child"
+    assert second.refresh() is not None and not second.refresh().minimized
+    krema.move_away()
+    wait_until(lambda: not krema.preview_visible(), message="group preview to close")
+
+    apps.close(second)
+    wait_until(lambda: krema.item("First") is not None, message="group to return to a singleton dock item")
+    kwin.set_minimized(first.internal_id, False)
+    kwin.activate(first.internal_id)
+    wait_until(first.is_active, message="remaining singleton to become active")
+    krema.click_item("First")
+    wait_until(
+        lambda: (w := first.refresh()) is not None and w.minimized,
+        message="singleton action to be selected again after regrouping",
+    )
+
+
+def test_mouse012_group2_restores_one_mru_child_when_all_children_are_minimized(
+    krema: Krema, apps: TestWindows
+) -> None:
+    """No-active/all-minimized group clicks restore only one existing child."""
+    _configure_click_actions(krema, single=0, grouped=2)
+    children = [apps.open(title, app_id=APP1) for title in ("Alpha", "Beta", "Gamma")]
+    krema.wait_for_item(NAME1)
+    kwin.activate(children[1].internal_id)
+    wait_until(children[1].is_active, message="known grouped child to become active")
+    observer = apps.open("Observer", app_id=APP2)
+    kwin.activate(children[1].internal_id)
+    wait_until(children[1].is_active, message="known MRU group child before backgrounding the group")
+    kwin.activate(observer.internal_id)
+    wait_until(observer.is_active, message="unrelated window to become active")
+    krema.click_item(NAME1)
+    wait_until(children[1].is_active, message="background group2 click to activate the existing MRU child")
+    assert all((w := child.refresh()) is not None and not w.minimized for child in children)
+    for child in (children[0], children[2], children[1]):
+        kwin.set_minimized(child.internal_id, True)
+    wait_until(
+        lambda: all((window := child.refresh()) is not None and window.minimized for child in children),
+        message="all grouped children to be minimized",
+    )
+    assert kwin.active_window() is None or all(not child.is_active() for child in children)
+
+    krema.click_item(NAME1)
+    restored = wait_until(
+        lambda: [
+            child
+            for child in children
+            if (window := child.refresh()) is not None and window.active and not window.minimized
+        ],
+        message="one existing MRU child to restore",
+    )
+    assert len(restored) == 1
+    assert restored[0] is children[1], "all-minimized group must restore its most recently active child"
+    active_child = restored[0]
+    assert all(
+        child is active_child or (window := child.refresh()) is not None and window.minimized
+        for child in children
+    )
+
+    # The next click follows the current active child, not a cached first
+    # target. A subsequent no-active click again restores one child.
+    krema.click_item(NAME1)
+    wait_until(
+        lambda: (window := active_child.refresh()) is not None and window.minimized,
+        message="current active child to minimize on the next group2 click",
+    )
+    krema.click_item(NAME1)
+    wait_until(
+        lambda: sum(
+            1
+            for child in children
+            if (window := child.refresh()) is not None and window.active and not window.minimized
+        )
+        == 1,
+        message="one child to restore again after all become minimized",
+    )
+
+
+def _tooltip_glyph_count(shot: np.ndarray, rect: Rect) -> int:
+    region = shot[rect.y : rect.y + rect.height, rect.x : rect.x + rect.width]
+    luminance = region[..., :3] @ np.array([0.299, 0.587, 0.114])
+    background = np.median(luminance)
+    return int((np.abs(luminance - background) > 80).sum())
+
+
+@pytest.mark.parametrize(
+    ("hover_delay", "target"), [(500, "Observer"), (0, "KFind")], ids=["window-hover500", "launcher-hover0"]
+)
+def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
+    krema: Krema, apps: TestWindows, hover_delay: int, target: str
+) -> None:
+    """Rendered tooltip glyphs recover after a hover-disabled popup closes."""
+    assert kwin.can_capture(), "QA-CLK-011 tooltip pixels require an OpenGL KWin"
+    _configure_click_actions(
+        krema,
+        single=0,
+        grouped=1,
+        PreviewHoverDelay=hover_delay,
+        PreviewHideDelay=1000,
+        PinnedLaunchers=[config.launcher("org.kde.kfind")],
+        MaxZoomFactor=1.0,
+    )
+    apps.open("Alpha", app_id=APP1)
+    apps.open("Beta", app_id=APP1)
+    apps.open("Observer", app_id=APP2)
+    for name in (NAME1, "Observer", "KFind"):
+        krema.wait_for_item(name)
+    krema.move_away(close_preview=False)
+
+    def tooltip_band(name: str) -> Rect:
+        item = krema.screen_rect(krema.item(name))
+        return Rect(0, item.y - 80, env.SCREEN_WIDTH, 80)
+
+    band = tooltip_band(target)
+    baseline = _pixels(krema.screenshot("qa011-tooltip-base", band))
+    krema.hover_item(target)
+    target_tip = wait_until(
+        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-target-tooltip-before", band)), baseline)),
+        message=f"text tooltip before explicit click, target {target!r}",
+    )
+    assert target_tip is not None and 14 <= target_tip.height <= 48
+    assert _tooltip_glyph_count(_pixels(krema.screenshot("qa011-target-tooltip-glyphs", band)), target_tip) >= 40
+    krema.move_away(close_preview=False)
+    wait_until(
+        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-target-tip-cleared", band)), baseline)) is None,
+        message="target tooltip to disappear on leave",
+    )
+
+    krema.hover_item(NAME1)
+    group_tip = wait_until(
+        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-group-tooltip-before", band)), baseline)),
+        message="group text tooltip before explicit preview",
+    )
+    assert group_tip is not None
+    krema.click_item(NAME1)
+    wait_until(krema.preview_visible, message="explicit group preview to become visible")
+    wait_until(
+        lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-popup-no-tooltip", band)), group_tip) < 40,
+        message="explicit preview to clear its text tooltip",
+    )
+    krema.click_item(NAME1)
+    assert krema.preview_visible(), "repeated explicit click must keep the popup"
+
+    # Re-enter on a different real window or a no-window launcher while the
+    # 1000 ms popup hide is pending. Check the composited pixels, then require
+    # actual text recovery after close. The overlay popup can occlude the
+    # lower-layer dock tooltip; its hidden visibility state is a Tier1 oracle,
+    # not something a screenshot can establish.
+    inp.move(env.SCREEN_WIDTH // 2, 20)
+    krema.hover_item(target)
+    assert krema.preview_visible(), "popup did not retain its configured hide delay"
+    overlap_counts: list[int] = []
+
+    def closed_without_tooltip_overlap() -> bool:
+        if not krema.preview_visible():
+            return True
+        shot = _pixels(krema.screenshot("qa011-pending-hide-no-tooltip", band))
+        glyph_count = _tooltip_glyph_count(shot, target_tip)
+        if glyph_count >= 40:
+            overlap_counts.append(glyph_count)
+        return False
+
+    wait_until(closed_without_tooltip_overlap, timeout=5, message="pending explicit popup to close without tooltip overlap")
+    assert not overlap_counts, f"composited text glyphs overlapped the still-visible preview: {overlap_counts}"
+    wait_until(
+        lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-tooltip-after-close", band)), target_tip) >= 40,
+        message="target tooltip to recover after the popup closes without further pointer motion",
+    )
+
+
+@pytest.mark.kremarc(
+    {
+        "PinnedLaunchers": [config.launcher(APP1)],
+        "PreviewEnabled": False,
+        "PreviewHoverDelay": 0,
+        "MaxZoomFactor": 1.0,
+    }
+)
+def test_mouse014_fast_hover_launcher_tooltip_healthy_control(krema: Krema) -> None:
+    """QA-CLK-011 healthy control: zero-delay launcher tooltip still paints."""
+    _require_capture()
+    krema.wait_for_item(NAME1)
+    krema.move_away(close_preview=False)
+    baseline = _pixels(krema.screenshot("qa011-launcher-base"))
+    krema.hover_item(NAME1)
+    tip = wait_until(
+        lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-launcher-tip")), baseline)),
+        message="fast-hover launcher tooltip to paint",
+    )
+    assert tip is not None and tip.y < krema.screen_rect(krema.item(NAME1)).y
+
+
+@pytest.mark.kremarc({"PinnedLaunchers": [], **QUIET_HOVER})
+def test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru(
+    krema: Krema, apps: TestWindows
+) -> None:
+    """Omitting both new keys preserves the existing consumer contracts."""
+    alpha = apps.open("Alpha", app_id=APP1)
+    beta = apps.open("Beta", app_id=APP1)
+    solo = apps.open("Solo", app_id=APP2)
+    krema.wait_for_item(NAME1)
+    krema.wait_for_item("Solo")
+    kwin.activate(solo.internal_id)
+    wait_until(solo.is_active, message="single window active under unconfigured defaults")
+    krema.click_item("Solo")
+    assert wait_stable(lambda: (w.active, w.minimized) if (w := solo.refresh()) is not None else None) == (True, False)
+
+    kwin.activate(alpha.internal_id)
+    wait_until(alpha.is_active, message="known group MRU child")
+    kwin.activate(solo.internal_id)
+    wait_until(solo.is_active, message="group becomes background")
+    krema.click_item(NAME1)
+    wait_until(alpha.is_active, message="default group click to activate its MRU entry child")
+    krema.click_item(NAME1)
+    wait_until(beta.is_active, message="default group click to cycle Alpha to Beta")
+    krema.click_item(NAME1)
+    wait_until(alpha.is_active, message="default group click to cycle Beta back to Alpha")
+    assert all((w := child.refresh()) is not None and not w.minimized for child in (alpha, beta))
+    assert not krema.preview_visible()
+
+
+@pytest.mark.parametrize(("single", "grouped"), CLICK_ACTION_CASES, ids=CLICK_ACTION_IDS)
+def test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies(
+    krema: Krema, apps: TestWindows, single: int, grouped: int
+) -> None:
+    """Accessible press, keyboard, Meta+N and right click retain activation semantics."""
+    _configure_click_actions(krema, single, grouped, PreviewHoverDelay=600000)
+    alpha = apps.open("Alpha", app_id=APP1)
+    beta = apps.open("Beta", app_id=APP1)
+    solo = apps.open("Solo", app_id=APP2)
+    krema.wait_for_item(NAME1)
+    krema.wait_for_item("Solo")
+    names = wait_stable(krema.item_names)
+
+    # WebDriver click() invokes the item's AT-SPI Press action; it is not
+    # pointer input and must not route through the mouse-only choices.
+    kwin.activate(beta.internal_id)
+    wait_until(beta.is_active, message="Beta active before accessible group press")
+    krema.wait_for_item(NAME1).click()
+    wait_until(alpha.is_active, message="accessible group press to cycle to Alpha")
+    assert all((w := child.refresh()) is not None and not w.minimized for child in (alpha, beta))
+    assert not krema.preview_visible(), "accessible group press must not invoke explicit mouse preview"
+
+    kwin.activate(solo.internal_id)
+    wait_until(solo.is_active, message="Solo active before accessible single press")
+    krema.wait_for_item("Solo").click()
+    assert wait_stable(lambda: (w.active, w.minimized) if (w := solo.refresh()) is not None else None) == (True, False)
+
+    # Real Meta+N uses the current visual entry index, not a fixed incidental
+    # ordering of apps. Both group and singleton shortcuts restore activation.
+    for name, target in ((NAME1, beta), ("Solo", solo)):
+        kwin.activate(target.internal_id)
+        wait_until(target.is_active, message=f"{target.title} to become the MRU target")
+        kwin.activate(solo.internal_id if target is beta else alpha.internal_id)
+        wait_until(lambda: not target.is_active(), message=f"{target.title} to become background")
+        inp.key("Meta", str(names.index(name) + 1))
+        wait_until(
+            lambda: (w := target.refresh()) is not None and w.active and not w.minimized,
+            message=f"Meta+N to activate {target.title} without minimizing",
+        )
+        assert not krema.preview_visible()
+
+    for key in ("Return", "Space"):
+        for name in (NAME1, "Solo"):
+            krema.move_away()
+            invoke_shortcut("focus-dock")
+            wait_until(lambda: krema.focused_item() == names[0], message="first dock item focused")
+            krema.wait_keyboard_focus()
+            for index in range(names.index(name)):
+                inp.key("Right")
+                wait_until(lambda: krema.focused_item() == names[index + 1], message="keyboard focus to advance")
+            inp.key(key)
+            if name == "Solo":
+                wait_until(solo.is_active, message=f"keyboard {key} to activate singleton")
+            else:
+                wait_until(lambda: alpha.is_active() or beta.is_active(), message=f"keyboard {key} to activate a grouped child")
+            assert all((w := child.refresh()) is not None and not w.minimized for child in (alpha, beta, solo))
+            assert not krema.preview_visible(), f"keyboard {key} must not invoke explicit mouse preview"
+
+    kwin.activate(alpha.internal_id)
+    wait_until(alpha.is_active, message="Alpha active before right-click menu")
+    menu = krema.open_context_menu(NAME1)
+    assert menu.width > 0 and menu.height > 0, "right click opened the native context menu"
+    inp.key("Escape")
+    wait_until(lambda: all(w.internal_id != menu.internal_id for w in krema.windows()), message="context menu to close")
+    wait_until(alpha.is_active, message="right-click menu to return existing focus")
+    assert all((w := child.refresh()) is not None and not w.minimized for child in (alpha, beta, solo))
+    assert not krema.preview_visible()

@@ -56,7 +56,7 @@ Item {
         function hover(row, x) {
             row.mouseInside = true
             row.mouseX = x
-            tryCompare(row, "zoomAmount", 1.0)
+            tryVerify(() => row.zoomAmount === 1.0)
         }
 
         function zooms(row) {

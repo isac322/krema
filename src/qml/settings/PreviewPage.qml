@@ -18,7 +18,7 @@ FormCard.FormCardPage {
     FormCard.FormCard {
         FormCard.FormSwitchDelegate {
             id: previewEnabledSwitch
-            text: i18n("Enable window preview")
+            text: i18n("Show window previews on hover")
             description: i18n("Show window thumbnails when hovering dock items")
             checked: DockSettings.previewEnabled
             onToggled: DockSettings.previewEnabled = checked
@@ -33,7 +33,7 @@ FormCard.FormCardPage {
             from: 120; to: 320; stepSize: 20
             value: DockSettings.previewThumbnailSize
             onValueChanged: DockSettings.previewThumbnailSize = value
-            enabled: DockSettings.previewEnabled
+            enabled: DockSettings.previewEnabled || DockSettings.groupedWindowClickAction === 1
         }
 
         FormCard.FormDelegateSeparator {}
@@ -53,7 +53,7 @@ FormCard.FormCardPage {
             from: 0; to: 1000; stepSize: 50
             value: DockSettings.previewHideDelay
             onValueChanged: DockSettings.previewHideDelay = value
-            enabled: DockSettings.previewEnabled
+            enabled: DockSettings.previewEnabled || DockSettings.groupedWindowClickAction === 1
         }
     }
 }

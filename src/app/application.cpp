@@ -66,10 +66,12 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::ShowDelayChanged, context, saveSettings);
     connect(settings, &KremaSettings::HideDelayChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewEnabledChanged, context, saveSettings);
+    connect(settings, &KremaSettings::SingleWindowClickActionChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewThumbnailSizeChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewHoverDelayChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewHideDelayChanged, context, saveSettings);
     connect(settings, &KremaSettings::ShadowEnabledChanged, context, saveSettings);
+    connect(settings, &KremaSettings::GroupedWindowClickActionChanged, context, saveSettings);
     connect(settings, &KremaSettings::ShadowLightXChanged, context, saveSettings);
     connect(settings, &KremaSettings::ShadowLightYChanged, context, saveSettings);
     connect(settings, &KremaSettings::ShadowLightZChanged, context, saveSettings);

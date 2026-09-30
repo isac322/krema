@@ -30,7 +30,8 @@ from PIL import Image, ImageChops, ImageStat
 
 from krema_e2e import config, env, kwin, shortcuts
 from krema_e2e import input as inp
-from krema_e2e.krema import Krema, Rect, has_state
+from krema_e2e import preview as pv
+from krema_e2e.krema import PREVIEW_XPATH, Krema, Rect, has_state
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindow, TestWindows
 
@@ -424,3 +425,187 @@ def test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible(krema: Krema, a
     wait_until(lambda: krema.focused_item() is None, message="Escape to end keyboard navigation")
     inp.move(*CENTRE)
     wait_hidden(krema, "Keys", why=" after keyboard navigation ended")
+
+
+# --------------------------------------------------------------------------- QA-CLK-012
+
+
+def _visible_preview(krema: Krema):
+    """Select the shown popup rather than a hidden other-output popup."""
+    return next(
+        (popup for popup in krema.find_all(PREVIEW_XPATH) if has_state(popup, "showing") and Rect.of(popup).width > 0),
+        None,
+    )
+
+
+@pytest.mark.parametrize("close_mode", ("leave", "thumbnail"))
+@pytest.mark.parametrize(
+    "hide_mode",
+    [
+        pytest.param(
+            "Auto hide",
+            id="auto-hide",
+            marks=pytest.mark.kremarc(
+                {"PinnedLaunchers": [], "VisibilityMode": config.AUTO_HIDE, "PreviewEnabled": False, "GroupedWindowClickAction": 1}
+            ),
+        ),
+        pytest.param(
+            "Dodge windows",
+            id="dodge",
+            marks=pytest.mark.kremarc(
+                {
+                    "PinnedLaunchers": [],
+                    "VisibilityMode": config.DODGE_WINDOWS,
+                    "DodgeActiveOnly": False,
+                    "PreviewEnabled": False,
+                    "GroupedWindowClickAction": 1,
+                }
+            ),
+        ),
+        pytest.param(
+            "Only dodge active window",
+            id="smart-hide",
+            marks=pytest.mark.kremarc(
+                {
+                    "PinnedLaunchers": [],
+                    "VisibilityMode": config.DODGE_WINDOWS,
+                    "DodgeActiveOnly": True,
+                    "PreviewEnabled": False,
+                    "GroupedWindowClickAction": 1,
+                }
+            ),
+        ),
+    ],
+)
+def test_clk012_repeated_explicit_preview_releases_visibility_hold(
+    krema: Krema, apps: TestWindows, hide_mode: str, close_mode: str
+) -> None:
+    alpha = apps.open("Alpha")
+    beta = apps.open("Beta")
+    foreground = apps.open("Overlap", app_id=env.TEST_APP2_ID)
+    set_geometry(alpha, Rect(40, 40, 400, 300))
+    set_geometry(beta, Rect(460, 40, 400, 300))
+    # Overlap the dock without covering the popup's whole painted-background oracle.
+    set_geometry(foreground, Rect(0, env.SCREEN_HEIGHT - 120, env.SCREEN_WIDTH, 120))
+    kwin.activate(foreground.internal_id)
+    wait_until(foreground.is_active, message="overlapping window active")
+    krema.wait_for_item(env.TEST_APP_NAME)
+    inp.move(*CENTRE)
+    wait_hidden(krema, env.TEST_APP_NAME, why=f" before explicit preview in {hide_mode}")
+    inp.move(*EDGE)
+    wait_shown(krema, env.TEST_APP_NAME)
+    krema.hover_item(env.TEST_APP_NAME)
+
+    for _ in range(3):
+        krema.click_item(env.TEST_APP_NAME)
+        wait_until(lambda: _visible_preview(krema), message="explicit group popup visible after each click")
+        assert foreground.is_active(), "showing previews must not activate or minimize a child"
+    wait_until(lambda: set(pv.thumb_titles(krema)) == {"Alpha", "Beta"}, message="both group children previewed")
+    popup = _visible_preview(krema)
+    pv.wait_on_screen(krema, popup)
+    pv.glide_into(krema, pv.screen_rect(krema, krema.wait_for(pv.thumb_xpath("Alpha") + "[contains(@states, 'showing')]")).center)
+    assert_stays(
+        lambda: _visible_preview(krema) is not None and dock_shown(krema, env.TEST_APP_NAME),
+        1.0,
+        f"{hide_mode} dock and popup held while the pointer is in the popup, outside the dock",
+    )
+
+    if close_mode == "thumbnail":
+        inp.click()
+        wait_until(alpha.is_active, message="thumbnail activates Alpha")
+    inp.move(*CENTRE)
+    wait_until(lambda: _visible_preview(krema) is None, message=f"popup closes after {close_mode}")
+    kwin.activate(foreground.internal_id)
+    wait_until(foreground.is_active, message="overlapping window active after popup closes")
+    wait_hidden(krema, env.TEST_APP_NAME, why=f" after repeated explicit popup closes in {hide_mode}")
+    assert_stays(lambda: dock_hidden(krema, env.TEST_APP_NAME), 1.0, f"{hide_mode} resumes after the popup releases its hold")
+
+    # The released hold must leave the normal reveal/hide lifecycle usable.
+    inp.move(*EDGE)
+    wait_shown(krema, env.TEST_APP_NAME)
+    inp.move(*CENTRE)
+    wait_hidden(krema, env.TEST_APP_NAME, why=" after the subsequent edge reveal")
+
+
+def _mapped_dock_xs(krema: Krema) -> list[int]:
+    """Mapped bottom docks, excluding the inactive output's 4 px edge trigger."""
+    return sorted(
+        w.client_x
+        for w in krema.windows()
+        if w.skip_taskbar
+        and not w.desktops
+        and w.client_width == env.SCREEN_WIDTH
+        and w.client_y + w.client_height == env.SCREEN_HEIGHT
+        and w.client_height > 4
+    )
+
+
+@pytest.mark.outputs(2)
+@pytest.mark.parametrize("close_mode", ("leave", "thumbnail"))
+@pytest.mark.parametrize(
+    "follow_trigger",
+    [
+        pytest.param(
+            trigger,
+            id=name,
+            marks=pytest.mark.kremarc(
+                {
+                    "PinnedLaunchers": [],
+                    "VisibilityMode": config.AUTO_HIDE,
+                    "MonitorMode": 2,
+                    "FollowActiveTrigger": trigger,
+                    "ScreenTransition": 2,
+                    "PreviewEnabled": False,
+                    "GroupedWindowClickAction": 1,
+                }
+            ),
+        )
+        for trigger, name in ((0, "mouse"), (1, "focus"))
+    ],
+)
+def test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold(
+    krema: Krema, apps: TestWindows, follow_trigger: int, close_mode: str
+) -> None:
+    width, height = env.SCREEN_WIDTH, env.SCREEN_HEIGHT
+    alpha = apps.open("Alpha")
+    apps.open("Beta")
+    other = apps.open("Other output", app_id=env.TEST_APP2_ID)
+    set_geometry(other, Rect(width + 300, 200, 400, 300))
+    kwin.activate(alpha.internal_id)
+    wait_until(alpha.is_active, message="primary-output group child active")
+    wait_until(lambda: _mapped_dock_xs(krema) == [0], message="follow-active dock on the primary output")
+    krema.wait_for_item(env.TEST_APP_NAME)
+    inp.move(*CENTRE)
+    wait_hidden(krema, env.TEST_APP_NAME)
+    inp.move(*EDGE)
+    wait_shown(krema, env.TEST_APP_NAME)
+    krema.hover_item(env.TEST_APP_NAME)
+    for _ in range(3):
+        krema.click_item(env.TEST_APP_NAME)
+        wait_until(lambda: _visible_preview(krema), message="repeated explicit popup remains open")
+        assert alpha.is_active(), "explicit preview must preserve the current window"
+    popup = _visible_preview(krema)
+    pv.wait_on_screen(krema, popup)
+    pv.glide_into(krema, pv.screen_rect(krema, krema.wait_for(pv.thumb_xpath("Alpha") + "[contains(@states, 'showing')]")).center)
+    assert_stays(
+        lambda: _visible_preview(krema) is not None and dock_shown(krema, env.TEST_APP_NAME) and _mapped_dock_xs(krema) == [0],
+        1.0,
+        "popup interaction holds the shown follow-active dock",
+    )
+    if close_mode == "thumbnail":
+        inp.click()
+        wait_until(alpha.is_active, message="thumbnail keeps Alpha active")
+    inp.move(*CENTRE)
+    wait_until(lambda: _visible_preview(krema) is None, message=f"follow-active popup closes after {close_mode}")
+    wait_hidden(krema, env.TEST_APP_NAME, why=" after the explicit popup releases visibility")
+
+    if follow_trigger == 1:
+        kwin.activate(other.internal_id)
+        wait_until(other.is_active, message="window on the second output active")
+        wait_until(lambda: _mapped_dock_xs(krema) == [width], message="dock follows focus after popup closes")
+    inp.move_path(inp.line(CENTRE, (width + width // 2, height - 1), 10))
+    wait_until(lambda: _mapped_dock_xs(krema) == [width], message="second-output dock available after popup closes")
+    wait_shown(krema, env.TEST_APP_NAME, why=" on the second output")
+    assert_stays(lambda: dock_shown(krema, env.TEST_APP_NAME), 1.0, "second-output edge can show the dock after the hold releases")
+    inp.move(width + width // 2, height // 2)
+    wait_hidden(krema, env.TEST_APP_NAME, why=" after leaving the second-output dock")

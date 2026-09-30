@@ -12,6 +12,7 @@ QtObject {
     function callsTo(name) { return calls.filter(c => c.name === name) }
     signal taskLaunching(int index)
     function activate(i) { _record("activate", arguments) }
+    function activateOrMinimize(i) { _record("activateOrMinimize", arguments) }
     function newInstance(i) { _record("newInstance", arguments) }
     function cycleWindows(i, forward) { _record("cycleWindows", arguments) }
     function moveTask(from, to) { _record("moveTask", arguments) }

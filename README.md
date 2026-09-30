@@ -58,6 +58,8 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Pin/Unpin** — Keep favorite apps in the dock
 - **Context Menu** — Right-click for pin, close, new instance (KDE Breeze native)
 - **Mouse Wheel Cycling** — Scroll to switch between windows of the same app
+- **Single-Window Click Action** — Activate by default; optionally minimize the active window with a left click, while clicking a minimized or background window still restores or focuses it
+- **Grouped-Window Click Action** — Cycle through windows by default, or independently choose previews of all windows or minimize only the currently active window; with no active group window, the minimize choice restores or focuses the most recently used window
 
 ### Visual Styles
 - **Panel-Inherit** — Match your Plasma panel style automatically
@@ -68,7 +70,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 
 ### Window Previews
 - **PipeWire Thumbnails** — Live GPU-efficient window previews on hover
-- **Multi-Window List** — All windows of grouped apps shown together
+- **Multi-Window List** — All windows of grouped apps shown together; the optional grouped click action opens this list even with hover previews off
 - **Click-to-Activate** — Click a preview to switch to that window
 - **Preview Close Button** — Close windows directly from the preview popup
 

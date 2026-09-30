@@ -127,6 +127,75 @@ int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
 
 } // namespace
 
+void DockActions::activateOrMinimize(int index)
+{
+    auto *tasksModel = m_model->tasksModel();
+    const QModelIndex idx = tasksModel->index(index, 0);
+    if (!idx.isValid()) {
+        return;
+    }
+
+    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    if (!isWindow) {
+        activate(index);
+        return;
+    }
+
+    if (!idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+        const bool isActive = idx.data(TaskManager::AbstractTasksModel::IsActive).toBool();
+        const bool isMinimized = idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
+        const bool isMinimizable = idx.data(TaskManager::AbstractTasksModel::IsMinimizable).toBool();
+        if (isActive && !isMinimized && isMinimizable) {
+            tasksModel->requestToggleMinimized(idx);
+        } else {
+            activate(index);
+        }
+        return;
+    }
+
+    const int childCount = tasksModel->rowCount(idx);
+    if (childCount <= 0) {
+        return;
+    }
+
+    int activeChild = -1;
+    for (int i = 0; i < childCount; ++i) {
+        const QModelIndex child = tasksModel->makeModelIndex(index, i);
+        if (child.isValid() && child.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
+            && !child.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool() && child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+            activeChild = i;
+            break;
+        }
+    }
+
+    if (activeChild < 0) {
+        const int target = entryChild(tasksModel, index, childCount);
+        if (target < 0 || target >= childCount) {
+            return;
+        }
+        const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
+        if (targetIdx.isValid() && targetIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
+            && !targetIdx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+            tasksModel->requestActivate(targetIdx);
+        }
+        return;
+    }
+
+    const QModelIndex activeIdx = tasksModel->makeModelIndex(index, activeChild);
+    if (!activeIdx.isValid() || !activeIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
+        || activeIdx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+        return;
+    }
+
+    const bool isMinimized = activeIdx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
+    const bool isMinimizable = activeIdx.data(TaskManager::AbstractTasksModel::IsMinimizable).toBool();
+    if (!isMinimized && isMinimizable) {
+        tasksModel->requestToggleMinimized(activeIdx);
+    } else {
+        tasksModel->requestActivate(activeIdx);
+    }
+}
+
 void DockActions::cycleWindows(int index, bool forward)
 {
     auto *tasksModel = m_model->tasksModel();

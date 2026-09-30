@@ -2,6 +2,7 @@
 
 ## Features
 - vis-always-visible: Dock always shown regardless of windows
+- vis-explicit-preview-hold: Repeated explicit previews release visibility holds after close
 - vis-auto-hide: Dock hides after timeout, shows on mouse approach
 - vis-dodge-windows: Dock hides when windows overlap its area
 - vis-smart-hide: Dock hides when active window overlaps its area
@@ -18,6 +19,12 @@
 - src/shell/dockview.cpp
 - src/qml/main.qml
 - src/config/krema.kcfg
+**Tier:** Tier 2 (Appium) for real visibility, KWin, and multi-output state.
+Tier 3 reuses the Appium cases against installed packages.
+Keyboard navigation still locks visibility, and context-menu actions remain
+unchanged; VIS-008 checks only release of the explicit-preview hold.
+
+
 
 ---
 
@@ -170,3 +177,35 @@ cannot be verified in kwin-mcp due to D-08.
 - KWin treats the dock surface as a Dock (layer-shell namespace `dock`), so Show Desktop leaves it on screen like a Plasma panel (#16)
 
 **Verification:** screenshot (dock visible while the desktop is shown). Automated: `krema_showdesktop_tests` (tests/kwin).
+
+---
+
+## TC VIS-008: Explicit previews release visibility holds
+
+**Precondition:** Use each of AutoHide, DodgeWindows, and SmartHide. In a
+two-output session also use Follow active screen with its existing mouse and
+focus triggers.
+
+**Steps:**
+1. Start with the dock hidden because of the selected visibility mode.
+2. Open the explicit group preview three times.
+3. Close it by leaving or by selecting a thumbnail.
+4. Wait for the existing hide delay, then reveal and leave the dock again.
+
+**Expected:**
+- The popup and its pointer hold keep the dock usable while visible.
+- Closing or leaving the popup releases the hold.
+- AutoHide, DodgeWindows, SmartHide, and follow-screen interaction resume
+  their existing hide/reveal behavior.
+- The repeated popup does not leave a dock or hidden secondary output stuck
+  visible.
+
+**Verification:** AT-SPI showing state, KWin dock/window geometry, and
+two-output screen placement. Visual popup checks require DRM/vgem capture.
+**Automated (Tier 2):** `tests/appium/test_07_visibility.py::test_clk012_repeated_explicit_preview_releases_visibility_hold`
+(six cases) and
+`tests/appium/test_07_visibility.py::test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold`
+(four `outputs(2)` cases).
+
+Run the multi-screen cases with:
+`KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`.

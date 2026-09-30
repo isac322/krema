@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Krema now ships its own app icon, shown in the application launcher, task switcher, Discover, and window title bars
 - Added a "Zoom animation duration" setting in Appearance for Parabolic and In place hover zoom, with a range of 0 to 1000 ms (default 100 ms, an unscaled baseline that preserves the normal-speed zoom feel); Plasma animation scaling still applies, and 0 ms makes the zoom snap instantly
+- Added independent left-click choices for single and grouped windows: optional active-window minimization or grouped previews, with activation and grouped cycling kept as defaults
 
 ### Changed
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Clicking a pinned app bounced its icon until the app's window appeared, including on sessions without startup notifications
 - Launching a new instance of a running app (middle click or New Instance) kept the launch bounce going until the new window appeared, instead of stopping after half a second
 - Pressing Escape while dragging a dock icon cancelled the drag and kept the original order
+- Releasing a dock-item drag after leaving and re-entering the dock no longer activated or minimized a window or opened a grouped preview; the next click still followed its configured action
 - Leaving dock keyboard navigation with Escape returned keyboard focus to the previously active window, so typing worked right away and "Dodge active window" hid the dock again
 - Moving the mouse anywhere on screen ended dock keyboard navigation, not only when the pointer moved over the dock
 - The window preview no longer captured the mouse in the invisible area around it, which had ended thumbnail keyboard navigation (e.g. after closing a window with Delete) and blocked clicks beneath the preview

@@ -1,5 +1,9 @@
 # Krema AT-SPI E2E tests
 
+This is the Tier 2 suite: it runs a source-built `krema` in a real KWin
+session. Tier 3 reuses the same scenarios against the installed package on
+each supported distribution; see `tests/distro/README.md`.
+
 Automated end-to-end tests for the real dock. Each test starts a fresh krema
 inside a private `kwin_wayland --virtual` session, drives it with real input
 (KWin fake-input), and asserts on observable
@@ -219,12 +223,14 @@ a click activates a window, hover zooms, the Focus Dock shortcut focuses a
 dock button, and ScreenShot2 captures the rendered dock.
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
-automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`. Each
-scenario's `**Automated:**` lines point back to the tests below. Every test
-is the oracle it asserts on: the AT-SPI tree (states, names, geometry), the
-KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
-screenshots, or AT-SPI events. Every row passes; the suite currently pins
-no known krema bug (see "Known krema bugs").
+automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.
+Each scenario's `**Automated:**` lines point back to the consumer tests below.
+The oracles are observable state: the AT-SPI tree (states, names, geometry),
+the KWin window list, the `kremarc` file, ScreenShot2 pixel analysis, or
+AT-SPI events. The existing `pass` rows below are historical baseline
+records; Issue 54 additions remain `pending` until the parent runs Tier 2 and
+Tier 3 QA.
+
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
 parked and at the screen centre; `SET-008` needs a two-output session
 (`KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`).
@@ -233,8 +239,11 @@ SET-008 is also covered by `tests/integration/test_settings_lifecycle.cpp`
 
 Lower level than this suite, Tier 1 `tests/qml/` (`ctest -R qml`, label
 `qml`; see `tests/qml/README.md`) loads the real QML files headless against
-mocked C++ backends: `DockItem` zoom/geometry/indicators, `main.qml`
-layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
+mocked C++ backends. The new click-policy checks use consumer-visible QML
+state such as popup visibility, tooltip text, membership transitions, and
+non-left input paths; they do not replace the Tier 2 KWin and AT-SPI oracles.
+Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
+
 
 | TC | Test(s) | Oracle | Status |
 |---|---|---|---|
@@ -248,13 +257,13 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | KBD-008 | `test_01_keyboard_nav.py::test_kbd008_mouse_movement_cancels_keyboard_mode`, `test_kbd008_mouse_movement_over_dock_cancels_keyboard_mode` | AT-SPI | pass |
 | KBD-009 | `test_01_keyboard_nav.py::test_kbd009_keyboard_mode_keeps_hidden_dock_visible`, `test_kbd009_dock_auto_hides_again_after_escape` | AT-SPI, KWin | pass |
 | MOUSE-001 | `test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app`, `test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer` | KWin, AT-SPI | pass |
-| MOUSE-002 | `test_02_mouse.py::test_mouse002_left_click_launches_pinned_app`, `test_mouse002_pinned_launch_bounces` | KWin, screenshot | pass |
+| MOUSE-002 | `test_02_mouse.py::test_mouse002_left_click_launches_pinned_app`, `test_mouse002_pinned_launch_bounces` (six click-policy cases for the launch test) | KWin, screenshot | baseline pass; Issue 54 cases pending |
 | MOUSE-003 | `test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover` | AT-SPI, screenshot | pass |
 | MOUSE-004 | `test_02_mouse.py::test_mouse004_tooltip_shows_app_name_on_hover` | screenshot | pass |
-| MOUSE-005 | `test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows` | KWin | pass |
-| MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance`, `test_mouse006_launch_bounce_lasts_until_the_new_window_maps` | KWin, AT-SPI events | pass |
+| MOUSE-005 | `test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows` (six click-policy cases) | KWin | baseline pass; Issue 54 cases pending |
+| MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance`, `test_mouse006_launch_bounce_lasts_until_the_new_window_maps` (six click-policy cases for the launch test) | KWin, AT-SPI events | baseline pass; Issue 54 cases pending |
 | MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state` | screenshot | pass |
-| MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`, added on master) | KWin | pass (C++ KWin test, not this suite) |
+| MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`; existing cycle/no-launch cases plus Issue 54 click-minimize cases) | KWin | baseline pass; Issue 54 cases pending |
 | MOUSE-009 | `test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them` | AT-SPI, screenshot | pass |
 | PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails` | AT-SPI, screenshot | pass |
 | PREV-002 | `test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row` | AT-SPI | pass |
@@ -291,12 +300,76 @@ layout/keyboard/drag, `PreviewPopup`/`PreviewThumbnail`.
 | VIS-005 | `test_07_visibility.py::test_vis005_smart_hide_hides_only_for_the_active_overlapping_window` | AT-SPI, KWin | pass |
 | VIS-006 | `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible` | AT-SPI, KWin | pass |
 | VIS-007 | `tests/kwin` ctest `krema_showdesktop_tests` (added on master) | KWin | pass (C++ KWin test, not this suite) |
+| MOUSE-010 | `test_02_mouse.py::test_mouse010_click_policies_observe_single_and_group_window_state` (six policy cases) | KWin, AT-SPI | pending |
+| MOUSE-011 | `test_02_mouse.py::test_mouse011_membership_change_reselects_single_and_group_actions` | KWin, AT-SPI | pending |
+| MOUSE-012 | `test_02_mouse.py::test_mouse012_group2_restores_one_mru_child_when_all_children_are_minimized` | KWin, AT-SPI | pending |
+| MOUSE-013 | `test_02_mouse.py::test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close` (two cases: `window-hover500`, `launcher-hover0`) | KWin, screenshot | pending; DRM capture required |
+| MOUSE-014 | `test_02_mouse.py::test_mouse014_fast_hover_launcher_tooltip_healthy_control` | screenshot | pending; DRM capture required |
+| MOUSE-015 | `test_02_mouse.py::test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru` | KWin | pending |
+| MOUSE-016 | `test_02_mouse.py::test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies` (six policy cases) | KWin, AT-SPI | pending |
+| PREV-008 | `test_03_preview.py::test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes` | KWin, AT-SPI, screenshot | pending; DRM capture required |
+| PREV-009 | `test_03_preview.py::test_prev009_explicit_group_pending_hide_retargets_after_reenter` | AT-SPI, screenshot | pending; DRM capture required |
+| DND-005 | `test_05_drag.py::test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state` (72 base scenarios: six policy pairs × 12 source/release cases, plus 24 held-left/right release-order controls) | KWin, AT-SPI, screenshot | pending; DRM capture required |
+| CLK-002 | `test_06_settings.py::test_clk002_click_action_combinations_apply_live_persist_and_restore` (six cases), `test_06_settings.py::test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them` (`outputs(2)`) | KWin, AT-SPI, `kremarc` | pending |
+| CLK-011 | `test_06_settings.py::test_clk011_preview_controls_follow_hover_and_explicit_group_choice` (six cases) | AT-SPI, screenshot, `kremarc` | pending; DRM capture required |
+| CLK-012 | `test_07_visibility.py::test_clk012_repeated_explicit_preview_releases_visibility_hold` (six cases), `test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold` (four `outputs(2)` cases) | KWin, AT-SPI, screenshot | pending; DRM capture required |
+| KWIN-CLK | `tests/kwin/test_grouped_activation.cpp` ctest `krema_grouped_activation_tests`: seven named click-minimize/default/membership cases | KWin model state | pending |
+| QML-CLK | `tests/qml/tst_dock_main.qml`: 12 named popup, tooltip, membership, group0, single, and non-left/drag consumer cases | QML consumer state | pending |
+The Tier 1 QML names are:
+`test_groupPreviewClickShowsPopupAndSuppressesTooltip`,
+`test_groupPreviewClickStopsDelayedTooltip`,
+`test_groupPreviewClickReenterDuringHideKeepsTooltipHidden`,
+`test_previewCloseWhilePointerOverItemRestartsTextTooltip`,
+`test_fastLauncherTooltipAtZeroDelay`,
+`test_fastLauncherTooltipRecoversAfterPreviewClose`,
+`test_previewClosePreservesPendingHoverDeadline`,
+`test_previewInvalidationDuringDragDoesNotReopenTooltip`,
+`test_group0ClickDoesNotOpenPreview`,
+`test_singleClickDoesNotOpenPreview`,
+`test_membershipTransitionsUseCurrentGroupingAction`, and
+`test_nonLeftKeyboardAndDragNeverOpenPreview`.
+
+
+### Issue 54 click-policy contracts
+
+The table maps every approved QA contract to a consumer observation and its
+automation tier. `pending` means the test definition is present but the
+parent's full verification has not run. QA-CLK-013 keeps the approved
+source-review disposition for a real non-minimizable fixture.
+
+| Contract | Consumer observation | Automation | Tier |
+|---|---|---|---|
+| QA-CLK-001 | Active single remains focused and unminimized; group0 keeps MRU A→B→A | `test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru`; KWin `Default activation keeps an active single window focused and unminimized` | Tier 2 |
+| QA-CLK-002 | Both settings apply live, save independently, survive restart, and remain shared across recreated docks | `test_clk002_click_action_combinations_apply_live_persist_and_restore`; `test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them` | Tier 2, `outputs(2)` |
+| QA-CLK-003 | Active single click minimizes the actual window | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Single-window minimize clicks honor actual focus and minimized state` | Tier 2 |
+| QA-CLK-004 | Minimized single restores and takes focus | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Single-window minimize clicks honor actual focus and minimized state` | Tier 2 |
+| QA-CLK-005 | Background single activates without minimizing | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Single-window minimize clicks honor actual focus and minimized state` | Tier 2 |
+| QA-CLK-006 | Group1 opens one explicit popup, leaves single clicks alone, and suppresses text tooltip | `test_mouse010_click_policies_observe_single_and_group_window_state`; `test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes`; `test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close`; QML `test_groupPreviewClickShowsPopupAndSuppressesTooltip`, `test_singleClickDoesNotOpenPreview` | Tier 1 + Tier 2 |
+| QA-CLK-007 | Group0 retains MRU cycling and does not minimize children | `test_mouse010_click_policies_observe_single_and_group_window_state`; `test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru`; KWin `Left-click on a grouped app cycles through its windows`; QML `test_group0ClickDoesNotOpenPreview` | Tier 1 + Tier 2 |
+| QA-CLK-008 | Explicit popup lists all children; selected child activates/restores and pending hide retargets | `test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes`; `test_prev009_explicit_group_pending_hide_retargets_after_reenter` | Tier 2 |
+| QA-CLK-009 | Launcher/startup and wheel no-launch behavior remains unchanged in all six policy pairs; no empty popup | `test_mouse002_left_click_launches_pinned_app`; `test_mouse005_scroll_wheel_cycles_grouped_windows` | Tier 2 |
+| QA-CLK-010 | Accessible press, keyboard, Meta+N, middle/right, and wheel paths ignore mouse click policies | `test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies`; six-case `test_mouse005_scroll_wheel_cycles_grouped_windows`; six-case `test_mouse006_middle_click_launches_new_instance`; QML `test_nonLeftKeyboardAndDragNeverOpenPreview` | Tier 1 + Tier 2 |
+| QA-CLK-011 | Hover remains independent; explicit preview clears tooltip and restores it after close without overlap | `test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close`; `test_mouse014_fast_hover_launcher_tooltip_healthy_control`; `test_prev009_explicit_group_pending_hide_retargets_after_reenter`; `test_clk011_preview_controls_follow_hover_and_explicit_group_choice`; QML `test_groupPreviewClickStopsDelayedTooltip`, `test_groupPreviewClickReenterDuringHideKeepsTooltipHidden`, `test_previewCloseWhilePointerOverItemRestartsTextTooltip`, `test_fastLauncherTooltipAtZeroDelay`, `test_fastLauncherTooltipRecoversAfterPreviewClose`, `test_previewClosePreservesPendingHoverDeadline`, `test_previewInvalidationDuringDragDoesNotReopenTooltip` | Tier 1 + Tier 2 |
+| QA-CLK-012 | Repeated explicit popup releases AutoHide/Dodge/SmartHide and follow-screen holds | `test_clk012_repeated_explicit_preview_releases_visibility_hold`; `test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold` | Tier 2, `outputs(2)` |
+| QA-CLK-013 | Invalid indices preserve unrelated focus/minimized state; non-minimizable guard remains source-review only | KWin `Invalid minimize-click indices preserve unrelated focus and minimized windows`; API/source review | Tier 2 + review |
+| QA-CLK-014 | Actual inside/outside/exit-reenter drag releases preserve every window state and keep the popup closed; the additional held-left/right release-order controls preserve the same state and popup invariants | `test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state` (72 base scenarios plus 24 chord controls) | Tier 2 |
+| QA-CLK-015 | 1→2→1 membership uses the current action immediately | `test_mouse011_membership_change_reselects_single_and_group_actions`; QML `test_membershipTransitionsUseCurrentGroupingAction`; KWin `Minimize-click targeting tracks single-group-single window membership` | Tier 1 + Tier 2 |
+| QA-CLK-016 | Group2 minimizes only the active child and preserves other children | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Active grouped-window clicks minimize only the current child` | Tier 2 |
+| QA-CLK-017 | Group2 restores only the existing MRU child when no child is active or all are minimized | `test_mouse012_group2_restores_one_mru_child_when_all_children_are_minimized`; KWin `Background grouped-window minimize clicks enter only the most recently used child` | Tier 2 |
+| QA-CLK-018 | Group2 follows the current KWin focus after the previous child was minimized | `test_mouse010_click_policies_observe_single_and_group_window_state`; KWin `Grouped minimize clicks follow current KWin focus rather than the previous target` | Tier 2 |
+
+The dedicated normal-hover pending-deadline and drag-time tooltip-invalidation
+seams are covered by the named Tier 1 QML tests, not by new Appium fixtures.
+ScreenShot2/PipeWire observations and installed-package Tier 3 runs require
+the existing DRM/vgem environment. OrbStack's QPainter path cannot provide
+that proof.
 
 ## Known krema bugs
 
-None: every krema bug the suite found has been fixed and its test is a plain
-passing test (1-output session: 77 passed, 4 skipped; 2-output session:
-4 passed).
+The baseline run recorded no pinned Krema bug. Issue 54 rows are not
+marked as passed until the parent completes the Tier 2 and Tier 3 runs.
+Baseline counts before Issue 54 were 77 passed and 4 skipped in one-output
+mode, plus 4 passed in the two-output run.
 
 To pin a newly found bug, write the test for the correct behavior and mark
 it `@pytest.mark.xfail(strict=True, reason="krema bug: ...")` (or put the

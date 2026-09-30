@@ -413,3 +413,155 @@ def test_dnd_004_escape_cancels_drag(krema: Krema, apps: TestWindows) -> None:
     assert krema.item_names() == [KWRITE, KFIND, FOCUS, TW2]
     assert krema.config_path.read_text() == rc_before
     wait_focus_returned(focus)
+
+
+# --------------------------------------------------------------- DND-005/006
+DRAG_CLICK_ACTION_CASES = [(single, grouped) for single in (0, 1) for grouped in (0, 1, 2)]
+
+
+def _configure_drag_click_actions(krema: Krema, single: int, grouped: int) -> None:
+    """Keep drag checks on the same six policy combinations as click tests."""
+    krema.write_config(
+        {
+            **kremarc(KWRITE, KFIND, TW, TW2),
+            "PreviewEnabled": False,
+            "SingleWindowClickAction": single,
+            "GroupedWindowClickAction": grouped,
+        }
+    )
+    krema.restart()
+    wait_until(
+        lambda: krema.read_config().get("General", {}).get("SingleWindowClickAction") == str(single)
+        and krema.read_config().get("General", {}).get("GroupedWindowClickAction") == str(grouped),
+        message=f"drag policy pair persisted ({single}, {grouped})",
+    )
+
+
+@pytest.mark.parametrize(
+    ("single", "grouped"),
+    DRAG_CLICK_ACTION_CASES,
+    ids=[f"single{single}-group{grouped}" for single, grouped in DRAG_CLICK_ACTION_CASES],
+)
+def test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state(
+    krema: Krema, apps: TestWindows, single: int, grouped: int
+) -> None:
+    """Drag release never routes through a configured click action."""
+    _configure_drag_click_actions(krema, single, grouped)
+    alpha = apps.open("Alpha", app_id=env.TEST_APP_ID, width=300, height=200)
+    beta = apps.open("Beta", app_id=env.TEST_APP_ID, width=300, height=200)
+    solo = apps.open("Solo", app_id=env.TEST_APP2_ID, width=300, height=200)
+    focus = apps.open(FOCUS, app_id=DESKTOP_IDS[KWRITE], width=300, height=200)
+    for win in (alpha, beta, solo, focus):
+        kwin.evaluate(
+            f"const w = workspace.windowList().find(w => String(w.internalId) === {win.internal_id!r});"
+            "w.frameGeometry = {x: 0, y: 0, width: 300, height: 200}; report(true);"
+        )
+    for name in (TW, "Solo", FOCUS):
+        krema.wait_for_item(name)
+
+    def states() -> dict[str, tuple[bool, bool]]:
+        return {w.internal_id: (w.active, w.minimized) for w in kwin.app_windows()}
+
+    # Active sources catch accidental minimize/cycle. Background sources catch
+    # accidental activation by requiring the unrelated Focus window to survive.
+    for source, active in ((TW, alpha), (TW, focus), ("Solo", solo), ("Solo", focus)):
+        for release_kind in ("inside", "outside", "exit-reenter"):
+            kwin.activate(active.internal_id)
+            wait_until(active.is_active, message=f"{active.title!r} active before dragging {source!r}")
+            scene = Scene.capture(krema, wait_stable(krema.item_names))
+            krema.hover_item(source)
+            start = wait_stable(
+                lambda: painted_rect(krema.screen_rect(krema.item(source)), scene.rects[source]).center
+            )
+            current = painted_rect(krema.screen_rect(krema.item(source)), scene.rects[source])
+            assert current.contains(*start), f"zoomed hit point {start} outside current {source!r} bounds {current}"
+            outside = (env.SCREEN_WIDTH // 2, 20)
+            if release_kind == "inside":
+                legs: list[tuple[int, int] | int] = [(start[0] + current.width, start[1]), start]
+            elif release_kind == "outside":
+                legs = [outside]
+            else:
+                legs = [outside, start]
+
+            before = states()
+            drag(start, legs)
+            # This helper only waits for KWin's active state; it does not issue
+            # activation or otherwise repair a ghost click.
+            wait_focus_returned(active)
+            assert states() == before, f"window state changed after {source!r} {release_kind} drag"
+            assert not krema.preview_visible(), f"popup opened after {source!r} {release_kind} drag"
+
+            if source == TW and active is alpha and release_kind == "outside":
+                # The first fresh right press after an outside drop must not
+                # be swallowed by the retained drag-release click guard.
+                click = krema.settled_item_center(source)
+                menu = krema.open_context_menu(source)
+                assert menu.pid == krema.pid and not menu.normal_window
+                area = Rect(*menu.client_geometry)
+                work = Rect(
+                    *(
+                        round(v)
+                        for v in kwin.evaluate(
+                            "const a = workspace.clientArea(KWin.PlacementArea, workspace.activeScreen, workspace.currentDesktop);"
+                            "report([a.x, a.y, a.width, a.height]);"
+                        )
+                    )
+                )
+                anchor = (click[0], min(click[1], work.y + work.height - 1))
+                grown = Rect(area.x - 2, area.y - 2, area.width + 4, area.height + 4)
+                assert grown.contains(*anchor), f"fresh right-click menu {area} not anchored at {anchor}"
+                assert area.x >= 0 and area.y >= 0
+                assert area.x + area.width <= env.SCREEN_WIDTH and area.y + area.height <= env.SCREEN_HEIGHT
+
+                inp.key("Escape")
+                wait_until(
+                    lambda: all(w.internal_id != menu.internal_id for w in kwin.windows()),
+                    timeout=5,
+                    message="fresh right-click native menu to close on Escape",
+                )
+                wait_focus_returned(active)
+                assert states() == before, "fresh right-click menu changed application-window state"
+                assert not krema.preview_visible(), "fresh right-click menu invoked the explicit left-click preview"
+
+    # All button chains use the session's same persistent fake-input device.
+    # A secondary press while Left is held is not a new click cycle, and
+    # releasing either button first must not consume the drag-release guard.
+    for source, active in ((TW, alpha), ("Solo", solo)):
+        for release_order in (("right", "left"), ("left", "right")):
+            kwin.activate(active.internal_id)
+            wait_until(active.is_active, message=f"{active.title!r} active before the chord drag")
+            scene = Scene.capture(krema, wait_stable(krema.item_names))
+            krema.hover_item(source)
+            start = wait_stable(
+                lambda: painted_rect(krema.screen_rect(krema.item(source)), scene.rects[source]).center
+            )
+            current = painted_rect(krema.screen_rect(krema.item(source)), scene.rects[source])
+            assert current.contains(*start), f"chord start {start} outside current {source!r} bounds {current}"
+            outside = (env.SCREEN_WIDTH // 2, 20)
+            before = states()
+            native_popups_before = {w.internal_id for w in krema.windows() if not w.normal_window}
+            held: list[str] = []
+            try:
+                inp.press("left", *start)
+                held.append("left")
+                inp.run_actions(_pointer([_pause(HOLD_MS)]))
+                krema.wait_keyboard_focus()
+                inp.move_path(inp.line(start, outside, 8), step_ms=STEP_MS)
+                wait_cursor(outside)
+                inp.move_path(inp.line(outside, start, 8), step_ms=STEP_MS)
+                wait_cursor(start)
+                inp.press("right")
+                held.append("right")
+                for button in release_order:
+                    inp.release(button)
+                    held.remove(button)
+            finally:
+                for button in reversed(held):
+                    inp.release(button)
+
+            wait_focus_returned(active)
+            assert states() == before, f"{source!r} chord release order {release_order} changed application-window state"
+            assert not krema.preview_visible(), f"{source!r} chord release order {release_order} opened the left-click preview"
+            assert {
+                w.internal_id for w in krema.windows() if not w.normal_window
+            } == native_popups_before, f"{source!r} secondary chord press opened a fresh native menu"

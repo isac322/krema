@@ -211,6 +211,32 @@ Notes:
 - Empty `QRegion()` means the **entire surface** receives input (no restriction)
 - A hidden dock should still keep a thin trigger strip for hover detection
 
+### Publishing a changed preview mask
+
+QtWayland's `QWaylandWindow::setMask()` sends `wl_surface.set_input_region`
+without committing the surface. The input region is double-buffered, so
+the compositor uses the old region until `wl_surface.commit`.
+AT-SPI visibility does not establish that the new region has been committed.
+
+`PreviewController::updateInputRegion()` commits each changed mask through
+`wl_surface_commit()`. It obtains the existing surface with
+`QGuiApplication::platformNativeInterface()->nativeResourceForWindow("surface", window)`;
+both the native interface and the surface may be null. This Qt 6.8-compatible
+API needs `<qpa/qplatformnativeinterface.h>` and `Qt6::GuiPrivate`.
+Qt 6.9+ requires finding the separate `Qt6GuiPrivate` CMake package at the
+exact public Qt GUI version.
+
+The preview stays mapped with a 1x1 mask while hidden. Its initial mask is
+set before `show()` and left to Qt's normal layer-shell configure sequence;
+the explicit commit is only for later mask changes. Unchanged regions do
+not generate extra commits. Keep the input region limited to the popup:
+expanding it or increasing the hide delay does not fix publication order.
+
+Verified sources:
+- [Qt 6.8 QtWayland window implementation](https://github.com/qt/qtwayland/blob/v6.8.0/src/client/qwaylandwindow.cpp) (`setMask`, `updateInputRegion`)
+- [Qt 6.8 native surface lookup](https://github.com/qt/qtwayland/blob/v6.8.0/src/client/qwaylandnativeinterface.cpp) (`nativeResourceForWindow`)
+- [Qt 6.9 private CMake package handling](https://github.com/qt/qtbase/blob/v6.9.0/cmake/QtModuleConfig.cmake.in)
+
 ---
 
 ## Surface Coordinate Calculation

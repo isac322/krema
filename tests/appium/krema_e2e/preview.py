@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from PIL import Image
 from selenium.webdriver.remote.webelement import WebElement
@@ -60,6 +60,81 @@ def thumb_titles(krema: Krema) -> list[str]:
 
 def screen_rect(krema: Krema, element: WebElement) -> Rect:
     return krema.screen_rect(element, "preview")
+
+
+def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[Rect, float]:
+    """Enter the current popup as soon as AT-SPI reports it visible.
+
+    Cache the in-process Accessible and the already mapped preview surface
+    before hovering. Polling the Accessible avoids serializing the whole
+    webdriver tree during the short visibility-to-input window. Unlike
+    :func:`wait_on_screen`, this waits for neither pixels nor settled layout.
+    Return the popup rect used for entry and the elapsed time since visibility.
+    """
+    import pyatspi  # noqa: PLC0415 - only this timing-sensitive helper needs it
+
+    def accessible() -> Any | None:
+        app = next((a for a in pyatspi.Registry.getDesktop(0) if a is not None and a.get_process_id() == krema.pid), None)
+        if app is None:
+            return None
+        nodes = pyatspi.findAllDescendants(app, lambda n: n.getRoleName() == "popup menu")
+        return nodes[0] if len(nodes) == 1 else None
+
+    popup = wait_until(accessible, timeout=timeout, message="preview popup over AT-SPI")
+    popup_element = wait_until(krema.preview_popup, timeout=timeout, message="preview popup webdriver element")
+    if popup.get_accessible_id() != popup_element.get_attribute("accessibility-id"):
+        raise AssertionError("AT-SPI and WebDriver resolved different preview popups")
+    surface = wait_until(
+        lambda: krema.surface_rect("preview"),
+        timeout=timeout,
+        message="pre-mapped KWin preview surface",
+    )
+
+    first_visible: float | None = None
+    component: Any | None = None
+    geometry: Rect | None = None
+
+    def current() -> Rect | None:
+        nonlocal component, geometry, first_visible
+        popup.clear_cache()
+        states = popup.getState()
+        if states.contains(pyatspi.STATE_VISIBLE) and first_visible is None:
+            first_visible = time.monotonic()
+        if states.contains(pyatspi.STATE_SHOWING):
+            if component is None:
+                component = popup.get_component_iface()
+            # Refresh extents at the first VISIBLE sample in case AT-SPI reports SHOWING and VISIBLE separately.
+            if component is not None and (geometry is None or states.contains(pyatspi.STATE_VISIBLE)):
+                candidate = component.get_extents(pyatspi.XY_SCREEN)
+                local = Rect(candidate.x, candidate.y, candidate.width, candidate.height)
+                if (
+                    local.width > 8
+                    and local.height > 0
+                    and local.x >= 0
+                    and local.y >= 0
+                    and local.x + local.width <= surface.width
+                    and local.y + local.height <= surface.height
+                ):
+                    geometry = local
+        if not states.contains(pyatspi.STATE_SHOWING) or not states.contains(pyatspi.STATE_VISIBLE):
+            return None
+        if geometry is None:
+            return None
+        return Rect(surface.x + geometry.x, surface.y + geometry.y, geometry.width, geometry.height)
+
+    krema.hover_item(item)
+    rect = wait_until(
+        current,
+        timeout=timeout,
+        interval=0.005,
+        message="visible AT-SPI popup geometry inside its KWin surface",
+    )
+    x, y = rect.center
+    # The second event is motion inside the popup, which its HoverHandler
+    # needs after wl_pointer.enter. Both points lie inside this current rect.
+    inp.move_path([(x, y), (x + 4, y)], step_ms=5)
+    assert first_visible is not None
+    return rect, time.monotonic() - first_visible
 
 
 def open_by_hover(krema: Krema, item: str, timeout: float = 10.0) -> WebElement:
@@ -116,22 +191,13 @@ def _popup_geometry(krema: Krema, popup: WebElement) -> tuple[Rect, Rect] | None
 
 
 def wait_on_screen(krema: Krema, popup: WebElement, timeout: float = 5.0) -> Rect:
-    """Wait until the open preview ``popup`` is ready for the pointer, and
-    return its final screen rect.
+    """Wait for settled popup layout and painted pixels; return its screen rect.
 
-    Call it before moving the pointer onto a popup that has just opened, and
-    read the glide target (a thumbnail, a close button) only after it
-    returns. ``krema.preview_visible()`` reads the AT-SPI tree, which reports
-    the popup as shown once krema's QML shows it, while the popup is still
-    being laid out: it starts at 17x38 and grows as its rows arrive. The
-    popup's input region (PreviewController::updateInputRegion,
-    QWindow::setMask) follows every size change. It is double-buffered
-    Wayland state and applies with the preview surface's next commit. A
-    pointer that arrives before the commit that covers its target gets no
-    wl_pointer.enter on the preview, and KWin sends none once the pointer is
-    resting, so the preview never sees the hover and closes after its hide
-    delay. Under CPU load, layout and commits spread over hundreds of ms. A
-    user cannot aim at a popup before it is drawn where it stays.
+    Read thumbnail and close-button glide targets only after this returns.
+    AT-SPI reports the popup shown before its rows finish layout (it starts
+    at 17x38). This wait also guarded against the delayed input-region commit
+    found in issue #55. Keep it for layout and thumbnail-paint stability;
+    :func:`fast_pointer_entry` exercises the earlier AT-SPI-visible path.
 
     Readiness, in order:
 

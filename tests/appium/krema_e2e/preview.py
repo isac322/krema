@@ -103,7 +103,7 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
         if states.contains(pyatspi.STATE_SHOWING):
             if component is None:
                 component = popup.get_component_iface()
-            if component is not None and geometry is None:
+            if component is not None:
                 candidate = component.get_extents(pyatspi.XY_SCREEN)
                 local = Rect(candidate.x, candidate.y, candidate.width, candidate.height)
                 if (

@@ -90,6 +90,16 @@ FormCard.FormCardPage {
 
         FormCard.FormDelegateSeparator {}
 
+        FormCard.FormSpinBoxDelegate {
+            label: i18n("Zoom animation duration (ms)")
+            from: 0; to: 1000; stepSize: 25
+            value: DockSettings.zoomAnimationDuration
+            onValueChanged: DockSettings.zoomAnimationDuration = value
+            enabled: DockSettings.maxZoomFactor > 1.0
+        }
+
+        FormCard.FormDelegateSeparator {}
+
         FormCard.FormSwitchDelegate {
             text: i18n("Icon size normalization")
             description: i18n("Automatically adjust icons with excess padding to appear visually consistent")

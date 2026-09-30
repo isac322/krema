@@ -275,6 +275,8 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     # FormCard widgets exposed with labels.
     spin = krema.find(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
     assert spin is not None and float(spin.get_attribute("value")) == 48.0
+    duration = krema.find(f"{SETTINGS}//list_item[@name='{ZOOM_DURATION}']/spin_button")
+    assert duration is not None and float(duration.get_attribute("value")) == 100.0
     assert krema.find(f"{SETTINGS}//slider[@name='Zoom factor']") is not None
     assert krema.find(f"{SETTINGS}//list_item[@name='Attention animation']/combo_box") is not None
     assert krema.find(f"{SETTINGS}//check_box[@name='Icon size normalization']") is not None
@@ -420,11 +422,18 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     for _ in range(4):
         inp.key("up")
     wait_until(lambda: float(spin.get_attribute("value")) == 64.0)
+    duration_xpath = f"{SETTINGS}//list_item[@name='{ZOOM_DURATION}']/spin_button"
+    duration = scroll_into_view(krema, duration_xpath)
+    click_el(krema, duration)
+    for _ in range(2):
+        inp.key("up")
+    wait_until(lambda: float(duration.get_attribute("value")) == 200.0, message="zoom duration changed in 25 ms steps")
+    wait_until(lambda: config_value(krema, "ZoomAnimationDuration") == "200", message="zoom duration saved")
     choose(krema, "Style", "Acrylic")
     open_page(krema, "Behavior")
     choose(krema, "Visibility mode", "Auto hide")
-    saved = {k: config_value(krema, k) for k in ("IconSize", "BackgroundStyle", "VisibilityMode")}
-    assert saved == {"IconSize": "64", "BackgroundStyle": "3", "VisibilityMode": "1"}
+    saved = {k: config_value(krema, k) for k in ("IconSize", "ZoomAnimationDuration", "BackgroundStyle", "VisibilityMode")}
+    assert saved == {"IconSize": "64", "ZoomAnimationDuration": "200", "BackgroundStyle": "3", "VisibilityMode": "1"}
     close_settings(krema)
 
     old_pid = krema.pid
@@ -443,6 +452,8 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     open_settings(krema)
     spin = krema.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
     assert float(spin.get_attribute("value")) == 64.0
+    duration = scroll_into_view(krema, duration_xpath)
+    assert float(duration.get_attribute("value")) == 200.0
     wait_until(lambda: current_choice(krema, "Style") == "Acrylic", message="Style shows Acrylic")
     open_page(krema, "Behavior")
     assert current_choice(krema, "Visibility mode") == "Auto hide"
@@ -740,6 +751,7 @@ def test_set009_quit_while_settings_is_open_exits_cleanly(tmp_path: Path, apps: 
 
 # ------------------------------------------------------------------- SET-010
 ZOOM_STYLE = "Zoom style"
+ZOOM_DURATION = "Zoom animation duration (ms)"
 PARABOLIC, IN_PLACE = "Parabolic - neighbors move aside", "In place - icons overlap"
 
 
@@ -783,6 +795,15 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     assert options == [PARABOLIC, IN_PLACE]
     click_el(krema, first)
     wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
+    duration_xpath = f"{SETTINGS}//list_item[@name='{ZOOM_DURATION}']/spin_button"
+    duration = scroll_into_view(krema, duration_xpath)
+    assert has_state(duration, "enabled")
+    assert float(duration.get_attribute("value")) == 100.0
+    click_el(krema, duration)
+    for _ in range(4):
+        inp.key("down")
+    wait_until(lambda: float(duration.get_attribute("value")) == 0.0, message="instant zoom selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationDuration") == "0", message="instant zoom saved")
 
     # Parabolic: neighbours move aside.
     mid, base, rest, drawn = hovered_middle_layout(krema)
@@ -817,7 +838,10 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     inp.click(r.x + 1, r.center[1])
     wait_until(lambda: float(config_value(krema, "MaxZoomFactor") or 0) == 1.0, message="kremarc MaxZoomFactor=1")
     wait_until(lambda: not has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo disabled at zoom 1.0")
+    assert not has_state(krema.wait_for(duration_xpath), "enabled"), "zoom duration must be disabled when zoom is off"
     for _ in range(6):
         inp.key("right")
     wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 0) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
     wait_until(lambda: has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo enabled again")
+    wait_until(lambda: has_state(krema.wait_for(duration_xpath), "enabled"), message="zoom duration enabled again")
+    assert float(krema.wait_for(duration_xpath).get_attribute("value")) == 0.0, "disabling zoom must preserve the duration"

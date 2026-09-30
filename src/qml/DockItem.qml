@@ -349,11 +349,15 @@ Item {
     property real currentScale: 1.0
     readonly property real currentOffset: zoomOffset
     property bool _zoomAnimReady: false
+    // The setting is an unscaled baseline: 100 ms matches shortDuration at
+    // normal speed. Plasma scaling also makes Instant/reduced motion snap.
+    readonly property int _effectiveZoomAnimationDuration: Math.round(
+        DockSettings.zoomAnimationDuration * Kirigami.Units.shortDuration / 100.0)
 
     Behavior on currentScale {
-        enabled: dockItem._zoomAnimReady && dockItem.zoomStyle === 1
+        enabled: dockItem._zoomAnimReady && dockItem.zoomStyle === 1 && dockItem._effectiveZoomAnimationDuration > 0
         NumberAnimation {
-            duration: Kirigami.Units.shortDuration
+            duration: dockItem._effectiveZoomAnimationDuration
             easing.type: Easing.OutCubic
         }
     }

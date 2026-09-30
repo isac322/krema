@@ -69,7 +69,7 @@ def _wait_thumbnail_color(krema: Krema, title: str, matches, shot: str) -> Image
     def check() -> Image.Image | None:
         nonlocal renegotiated
         rect = pv.thumbnail_image_rect(pv.screen_rect(krema, krema.wait_for(pv.thumb_xpath(title))))
-        image = Image.open(krema.screenshot(shot))
+        image = krema.screenshot(shot)
         last[:] = [pv.dominant_fraction(image, rect, matches)]
         if last[0] > 0.6:
             return image

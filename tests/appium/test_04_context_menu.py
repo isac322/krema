@@ -87,9 +87,10 @@ def work_area() -> Rect:
     return Rect(*(round(v) for v in a))
 
 
-def capture(krema: Krema, name: str) -> Image.Image:
+def capture(krema: Krema, name: str, area: Rect | None = None) -> Image.Image:
+    """Screen image; with ``area`` only that part is captured (see kwin.screenshot)."""
     assert kwin.can_capture(), f"KWin compositing is {kwin.compositing_type()}: pixel oracle needs a DRM render node"
-    return Image.open(krema.screenshot(name)).convert("RGB")
+    return krema.screenshot(name, area)
 
 
 def crop(image: Image.Image, r: Rect | tuple[int, int, int, int]) -> Image.Image:
@@ -143,7 +144,7 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     assert area.x + area.width <= env.SCREEN_WIDTH and area.y + area.height <= env.SCREEN_HEIGHT
 
     # Rendered with content (text/separators), not an empty surface.
-    shot = crop(capture(krema, "menu-open"), area)
+    shot = crop(capture(krema, "menu-open", area), area)
     colors = shot.getcolors(maxcolors=1 << 16)
     assert colors is None or len(colors) > 16, f"menu region looks blank: {colors}"
 
@@ -152,7 +153,7 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     # upper part of the menu.
     inp.key("Down")
     changed = wait_until(
-        lambda: ImageChops.difference(shot, crop(capture(krema, "menu-down"), area)).getbbox(),
+        lambda: ImageChops.difference(shot, crop(capture(krema, "menu-down", area), area)).getbbox(),
         timeout=5,
         message="keyboard highlight in the menu",
     )
@@ -201,7 +202,7 @@ def test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes(krema: Krema, apps
     krema.wait_for_item("Alpha")
     assert LAUNCHER not in pinned_launchers(krema)
     krema.move_away()
-    running_strip = indicator_contrast(capture(krema, "running"), krema.screen_rect(krema.item("Alpha")))
+    running_strip = indicator_contrast(capture(krema, "running", krema.surface_rect("dock")), krema.screen_rect(krema.item("Alpha")))
 
     krema.open_context_menu("Alpha")
     krema.choose_context_menu_entry("Pin to Dock", UNPINNED_WINDOW)
@@ -216,7 +217,7 @@ def test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes(krema: Krema, apps
     # No running indicator: the dot drawn under the icon while running is gone.
     krema.move_away()
     rect = wait_stable(lambda: krema.screen_rect(krema.item(APP_NAME)))
-    closed_strip = indicator_contrast(capture(krema, "closed"), rect)
+    closed_strip = indicator_contrast(capture(krema, "closed", rect), rect)
     assert running_strip >= 120, f"oracle cannot see the running dot (contrast {running_strip})"
     assert closed_strip <= 40, f"indicator strip still shows a dot (contrast {closed_strip})"
 
@@ -323,7 +324,7 @@ def test_ctx005_close_keeps_a_pinned_app_without_indicator(krema: Krema, apps: T
     wait_until(lambda: "windows" not in description(krema, APP_NAME), timeout=5, message="window count to clear")
     krema.move_away()
     rect = wait_stable(lambda: krema.screen_rect(krema.item(APP_NAME)))
-    strip = indicator_contrast(capture(krema, "closed"), rect)
+    strip = indicator_contrast(capture(krema, "closed", rect), rect)
     assert strip <= 40, f"indicator strip still shows a dot (contrast {strip})"
     assert pinned_launchers(krema) == [LAUNCHER]
 

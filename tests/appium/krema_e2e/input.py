@@ -13,18 +13,22 @@ The inputsynth in the image is patched (tools/inputsynth-fixes.patch): every
 ``pointerMove`` is absolute, so several moves can share one chain (needed
 for drags), and the W3C Meta key is Super (KDE's Meta).
 
-Each inputsynth process registers its own fake-input device with KWin for its
-lifetime. The session must hold one more device open throughout (see
-:func:`hold_pointer_capability`), otherwise the seat loses its pointer
-capability between calls and clients drop their ``wl_pointer``.
+All chains go to one long-lived ``inputsynth --stdin`` per session (see
+:class:`_Inputsynth`), so they share one fake-input device, and a chain costs
+a pipe round trip instead of a process start. The session holds one more
+device open throughout (see :func:`hold_pointer_capability`), so the seat
+never loses its pointer capability and clients never drop their
+``wl_pointer``, also before the first chain and while that process restarts.
 """
 
 from __future__ import annotations
 
+import atexit
+import itertools
 import json
-import signal
 import subprocess
 import tempfile
+import threading
 import time
 from contextlib import contextmanager
 from typing import Iterable, Iterator, Sequence
@@ -38,8 +42,9 @@ INPUTSYNTH = "selenium-webdriver-at-spi-inputsynth"
 
 _BUTTONS = {"left": 0, "middle": 1, "right": 2, "back": 3, "forward": 4}
 
-#: Last pointer position we moved to. inputsynth is a fresh process per call
-#: and interpolates from (0, 0), so every chain first teleports here.
+#: Last pointer position we moved to. Every chain first teleports here: an
+#: inputsynth process interpolates from (0, 0) until its first move, and the
+#: session's process may have been restarted since the last chain.
 _pointer: tuple[int, int] | None = None
 
 # Friendly key names -> W3C key values understood by inputsynth.
@@ -81,47 +86,172 @@ def key_value(name: str) -> str:
         raise ValueError(f"unknown key name {name!r}") from None
 
 
+class _Inputsynth:
+    """One ``inputsynth --stdin`` process (tools/inputsynth-fixes.patch): a
+    single fake-input device that runs every chain of the session. Each
+    request is a JSON line ``{"id": n, "actions": [...]}``; the process
+    answers ``{"id": n, "ok": true}`` once that chain has finished. Chains
+    run concurrently in the process, so a chain started while an earlier
+    one sits in a pause (e.g. Escape during a drag) runs right away."""
+
+    def __init__(self) -> None:
+        self._stderr = tempfile.TemporaryFile()
+        self.proc = subprocess.Popen(
+            [INPUTSYNTH, "--stdin"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self._stderr,
+            text=True,
+            bufsize=1,
+        )
+        self._ids = itertools.count(1)
+        self._lock = threading.Lock()
+        self._done: dict[int, threading.Event] = {}
+        self._replies: dict[int, dict] = {}
+        threading.Thread(target=self._read, name="inputsynth-replies", daemon=True).start()
+
+    def _read(self) -> None:
+        assert self.proc.stdout is not None
+        for line in self.proc.stdout:
+            try:
+                reply = json.loads(line)
+            except json.JSONDecodeError:
+                reply = {"id": None, "ok": False, "error": f"unexpected output {line!r}"}
+            with self._lock:
+                if reply.get("id") is None:  # a request it could not parse: fail every chain in flight
+                    for chain, done in self._done.items():
+                        self._replies[chain] = reply
+                        done.set()
+                elif (done := self._done.get(reply["id"])) is not None:
+                    self._replies[reply["id"]] = reply
+                    done.set()
+        # stdout closed: the process is gone; its chains in flight have no reply.
+        with self._lock:
+            for done in self._done.values():
+                done.set()
+
+    def _write(self, request: dict) -> None:
+        assert self.proc.stdin is not None
+        with self._lock:
+            self.proc.stdin.write(json.dumps(request) + "\n")
+            self.proc.stdin.flush()
+
+    def _failure(self) -> RuntimeError:
+        """The process died: its exit code and the end of its stderr."""
+        try:
+            code = self.proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            code = self.proc.wait()
+        self._stderr.seek(0)
+        return RuntimeError(f"inputsynth failed ({code}): {self._stderr.read().decode(errors='replace')[-2000:]}")
+
+    def start(self, action_sets: Sequence[dict]) -> int:
+        """Start a chain; returns its id for :meth:`resume` and :meth:`wait`."""
+        chain = next(self._ids)
+        with self._lock:
+            self._done[chain] = threading.Event()
+        try:
+            self._write({"id": chain, "actions": list(action_sets)})
+        except (BrokenPipeError, ValueError):  # ValueError: stdin already closed
+            with self._lock:
+                del self._done[chain]
+            raise self._failure() from None
+        return chain
+
+    def resume(self, chain: int) -> None:
+        """End the chain's pause marked ``"interruptible": True`` (the one in
+        progress, or its next one). No-op once the chain has finished."""
+        try:
+            self._write({"resume": chain})
+        except (BrokenPipeError, ValueError):
+            pass  # the process is gone: wait() reports it
+
+    def wait(self, chain: int, timeout: float) -> None:
+        """Wait for the chain to finish. A chain still running after
+        ``timeout`` seconds kills the process (the next chain starts a fresh
+        one) and raises :class:`subprocess.TimeoutExpired`, like
+        ``subprocess.run(timeout=...)``; a chain the process could not run or
+        did not finish because it died raises :class:`RuntimeError`."""
+        done = self._done[chain]
+        finished = done.wait(max(0.0, timeout))
+        with self._lock:
+            del self._done[chain]
+            reply = self._replies.pop(chain, None)
+        if not finished:
+            self.proc.kill()
+            self.proc.wait()
+            raise subprocess.TimeoutExpired([INPUTSYNTH, "--stdin"], timeout)
+        if reply is None:
+            raise self._failure()
+        if not reply.get("ok"):
+            raise RuntimeError(f"inputsynth failed: {reply.get('error')}")
+
+    def close(self) -> None:
+        """EOF on stdin: the process exits once its chains have finished."""
+        try:
+            assert self.proc.stdin is not None
+            self.proc.stdin.close()
+        except BrokenPipeError:
+            pass
+        try:
+            self.proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            self.proc.wait()
+        self._stderr.close()
+
+
+_inputsynth: _Inputsynth | None = None
+_inputsynth_lock = threading.Lock()
+
+
+def _session_inputsynth() -> _Inputsynth:
+    """The session's inputsynth, started on first use and again after it died
+    (a crash, or a chain that hit its timeout)."""
+    global _inputsynth
+    with _inputsynth_lock:
+        if _inputsynth is None or _inputsynth.proc.poll() is not None:
+            if _inputsynth is not None:
+                _inputsynth.close()
+            _inputsynth = _Inputsynth()
+        return _inputsynth
+
+
+@atexit.register
+def _close_inputsynth() -> None:
+    global _inputsynth
+    with _inputsynth_lock:
+        if _inputsynth is not None:
+            _inputsynth.close()
+            _inputsynth = None
+
+
 def run_actions(action_sets: Sequence[dict], timeout: float = 30.0) -> None:
     """Execute raw W3C action sets (``{"type": "pointer"|"key"|"wheel", ...}``)
     in order. Low level; prefer the helpers below."""
-    with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
-        json.dump({"actions": list(action_sets)}, f)
-        f.flush()
-        proc = subprocess.run([INPUTSYNTH, f.name], capture_output=True, text=True, timeout=timeout)
-    if proc.returncode != 0:
-        raise RuntimeError(f"inputsynth failed ({proc.returncode}): {proc.stderr[-2000:]}")
+    synth = _session_inputsynth()
+    synth.wait(synth.start(action_sets), timeout)
 
 
 @contextmanager
 def background_actions(action_sets: Sequence[dict], timeout: float = 30.0) -> Iterator[None]:
     """Run raw W3C action sets like :func:`run_actions`, in the background
-    while the body runs. Leaving the body (also by an exception) sends the
-    chain SIGUSR1 and waits for it to finish: the signal ends the chain's
-    pause marked ``"interruptible": True`` (the one in progress, or the next
-    one if the chain has not reached it yet; tools/inputsynth-fixes.patch).
-    So a chain can hold a button in such a pause exactly as long as the body
-    needs, with the pause's duration as the upper bound."""
+    while the body runs. Leaving the body (also by an exception) ends the
+    chain's pause marked ``"interruptible": True`` (the one in progress, or
+    the next one if the chain has not reached it yet;
+    tools/inputsynth-fixes.patch) and waits for the chain to finish. So a
+    chain can hold a button in such a pause exactly as long as the body
+    needs, with the pause's duration as the upper bound. Chains the body
+    runs meanwhile run alongside it."""
     deadline = time.monotonic() + timeout
-    with (
-        tempfile.NamedTemporaryFile("w", suffix=".json") as f,
-        tempfile.TemporaryFile("w+") as err,
-    ):
-        json.dump({"actions": list(action_sets)}, f)
-        f.flush()
-        proc = subprocess.Popen([INPUTSYNTH, f.name], stdout=subprocess.DEVNULL, stderr=err, text=True)
-        try:
-            yield
-        finally:
-            proc.send_signal(signal.SIGUSR1)  # no-op once it has exited
-            try:
-                proc.wait(timeout=max(0.0, deadline - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-                raise
-            if proc.returncode != 0:
-                err.seek(0)
-                raise RuntimeError(f"inputsynth failed ({proc.returncode}): {err.read()[-2000:]}")
+    synth = _session_inputsynth()
+    chain = synth.start(action_sets)
+    try:
+        yield
+    finally:
+        synth.resume(chain)
+        synth.wait(chain, deadline - time.monotonic())
 
 
 def _pointer_set(actions: list[dict]) -> dict:
@@ -226,9 +356,10 @@ def click(x: int | None = None, y: int | None = None, button: str = "left", coun
 def press(button: str = "left", x: int | None = None, y: int | None = None) -> None:
     """Press and keep holding ``button`` (release with :func:`release`).
 
-    Note: the fake-input device lives as long as one inputsynth process, so a
-    held button spans calls only as far as KWin keeps it pressed; prefer
-    :func:`drag` for press-move-release sequences."""
+    Note: press and release reach KWin from the session's one fake-input
+    device, which lives as long as its inputsynth process (a crash or a
+    timeout restarts it and drops the held button); prefer :func:`drag` for
+    press-move-release sequences."""
     global _pointer
     actions: list[dict] = []
     if x is not None and y is not None:

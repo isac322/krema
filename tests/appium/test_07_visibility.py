@@ -190,8 +190,8 @@ def settle_item_rect(krema: Krema, name: str) -> Rect:
     return krema.screen_rect(krema.item(name))
 
 
-def crop(path, rect: Rect) -> Image.Image:
-    return Image.open(path).convert("RGB").crop((rect.x, rect.y, rect.x + rect.width, rect.y + rect.height))
+def crop(image: Image.Image, rect: Rect) -> Image.Image:
+    return image.crop((rect.x, rect.y, rect.x + rect.width, rect.y + rect.height))
 
 
 def mean_diff(a: Image.Image, b: Image.Image) -> float:
@@ -216,8 +216,9 @@ def test_vis001_always_visible_dock_stays_shown_over_a_maximized_window(krema: K
     surface = krema.surface_rect("dock")
     control = Rect(item.x, surface.y - item.height - 10, item.width, item.height)
     capture = kwin.can_capture()
+    area = kwin.bounds(item, control)
     if capture:
-        before = krema.screenshot("vis001-before")
+        before = krema.screenshot("vis001-before", area)
 
     maximize(win)
     wait_until(win.is_active, message="maximized window to be active")
@@ -225,7 +226,7 @@ def test_vis001_always_visible_dock_stays_shown_over_a_maximized_window(krema: K
     if capture:
         # The window is not drawn over the dock: the dock item's pixels are
         # unchanged while the control region above now shows the window.
-        after = krema.screenshot("vis001-maximized")
+        after = krema.screenshot("vis001-maximized", area)
         item_diff = mean_diff(crop(before, item), crop(after, item))
         control_diff = mean_diff(crop(before, control), crop(after, control))
         assert control_diff > 20, f"control region did not change ({control_diff:.1f}): window not drawn there?"
@@ -234,7 +235,7 @@ def test_vis001_always_visible_dock_stays_shown_over_a_maximized_window(krema: K
     inp.move(*CENTRE)
     assert_stays(lambda: dock_shown(krema, "Always"), 2.0, "dock shown 2 s after moving the pointer to the centre")
     if capture:
-        later = krema.screenshot("vis001-pointer-away")
+        later = krema.screenshot("vis001-pointer-away", area)
         item_diff = mean_diff(crop(before, item), crop(later, item))
         assert item_diff < 8, f"dock item pixels changed ({item_diff:.1f}) with the pointer away"
 

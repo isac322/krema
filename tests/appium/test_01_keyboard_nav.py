@@ -148,11 +148,11 @@ def _assert_dock_keyboard_entry(krema: Krema, first: str, rest: dict[str, Rect])
         # Focus ring: a highlight-coloured border drawn only while the item
         # has keyboard focus. Same screen region with and without focus.
         region = krema.to_screen(rects[first])
-        ring = blueish_pixels(Image.open(krema.screenshot("keyboard-focus")), region)
+        ring = blueish_pixels(krema.screenshot("keyboard-focus", region), region)
         inp.key("Escape")
         wait_until(lambda: focused_items(krema) == [], message="Escape to end keyboard navigation")
         wait_stable(lambda: Rect.of(krema.item(first)))
-        plain = blueish_pixels(Image.open(krema.screenshot("no-keyboard-focus")), region)
+        plain = blueish_pixels(krema.screenshot("no-keyboard-focus", region), region)
         assert ring > 200 and ring > 3 * plain, f"no focus ring on {first!r}: {ring} blue px focused vs {plain} unfocused"
 
 
@@ -229,7 +229,7 @@ def test_kbd003_down_opens_preview_with_first_thumbnail_focused(krema: Krema, ap
 
     if kwin.can_capture():
         # Live thumbnail: the popup area must contain rendered, varied content.
-        img = Image.open(krema.screenshot("preview-open")).convert("RGB")
+        img = krema.screenshot("preview-open")
         r = krema.screen_rect(thumbs[0], surface="preview")
         colors = img.crop((r.x, r.y, r.x + r.width, r.y + r.height)).getcolors(maxcolors=1 << 16)
         assert colors is None or len(colors) > 16, f"thumbnail region looks blank: {colors}"
@@ -305,13 +305,14 @@ def test_kbd006_left_right_move_between_thumbnails(krema: Krema, apps: TestWindo
         thumbs = {thumbnail_title(e.get_attribute("name")): e for e in krema.thumbnails()}
         ring_rect = krema.screen_rect(thumbs[second], surface="preview")
         plain_rect = krema.screen_rect(thumbs[first], surface="preview")
+        area = kwin.bounds(ring_rect, plain_rect)
         counts: list[tuple[int, int]] = []
 
         def ring_moved() -> bool:
             # AT-SPI focus changes as soon as krema's GUI thread handles the
             # key; the ring reaches KWin's output only with krema's next
             # frame, so wait for a screenshot that shows the new focus.
-            img = Image.open(krema.screenshot("thumbnail-focus"))
+            img = krema.screenshot("thumbnail-focus", area)
             ring, plain = blueish_pixels(img, ring_rect), blueish_pixels(img, plain_rect)
             counts.append((ring, plain))
             return ring > 40 and ring > 4 * plain
@@ -434,10 +435,10 @@ def _keyboard_mode_keeps_dock_shown(krema: Krema, apps: TestWindows, visibility:
     krema.wait_keyboard_focus()
     if kwin.can_capture():
         wait_stable(lambda: Rect.of(krema.item(first)))  # slide-in finished
-        img = Image.open(krema.screenshot("keyboard-shown"))
+        img = krema.screenshot("keyboard-shown", krema.surface_rect("dock"))
         r = krema.screen_rect(krema.item(first))
         assert 0 <= r.y and r.y + r.height <= env.SCREEN_HEIGHT, f"item off screen: {r}"
-        colors = img.convert("RGB").crop((r.x, r.y, r.x + r.width, r.y + r.height)).getcolors(maxcolors=1 << 16)
+        colors = img.crop((r.x, r.y, r.x + r.width, r.y + r.height)).getcolors(maxcolors=1 << 16)
         assert colors is None or len(colors) > 16, "dock item region looks blank"
     # Longer than HideDelay (400 ms) plus the slide-out: the dock stays.
     assert_holds(

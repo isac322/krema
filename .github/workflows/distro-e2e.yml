@@ -38,7 +38,7 @@
 # harness is tests/distro. tests/unit, qml, kwin, integration and e2e
 # (scenario docs) and Markdown are never used here.
 #
-# The suite runs sharded in two (KREMA_E2E_SHARDS=2;
+# The suite runs sharded in three (KREMA_E2E_SHARDS=3;
 # tests/distro/run-distro-e2e.sh), all shards' JUnit files feed the summary.
 # A thumbnail whose PipeWire buffer set arrives untyped (an upstream
 # PipeWire/KWin race that load makes likelier; see tests/appium/krema_e2e/
@@ -182,7 +182,7 @@ jobs:
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
         id: main
         env:
-          KREMA_E2E_SHARDS: "2"
+          KREMA_E2E_SHARDS: "3"
           KREMA_CCACHE_DIR: ${{ runner.temp }}/ccache
         run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
 

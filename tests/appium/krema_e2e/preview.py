@@ -120,7 +120,7 @@ def wait_on_screen(krema: Krema, popup: WebElement, timeout: float = 5.0) -> Non
     lit: list[float] = []
 
     def shown() -> bool:
-        image = Image.open(krema.screenshot("preview-on-screen"))
+        image = krema.screenshot("preview-on-screen", rect)
         lit[:] = [sum(1 for p in points if max(image.getpixel(p)) > DESKTOP_MAX_CHANNEL) / len(points)]
         return lit[0] > 0.5
 

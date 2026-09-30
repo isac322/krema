@@ -1,4 +1,5 @@
-inputsynth: absolute pointer moves, W3C Meta = Super, interruptible pauses
+inputsynth: absolute pointer moves, W3C Meta = Super, interruptible pauses,
+a persistent --stdin mode
 
 1. Upstream adds every mouse move to the previous *target* and stores the raw
    move value, so the 2nd+ move of one action chain lands in the wrong place.
@@ -10,15 +11,27 @@ inputsynth: absolute pointer moves, W3C Meta = Super, interruptible pauses
    shift level, so "Meta+F5" is sent as Shift+<META>+F5 and never matches a
    Meta+F5 KGlobalAccel shortcut. Map it to Super_L (<LWIN>, KEY_LEFTMETA),
    which is what KDE calls Meta.
-3. A pause action with "interruptible": true ends early when the process
-   gets SIGUSR1 (the signal ends the interruptible pause in progress, or the
-   next one; other pauses ignore it). A mid-drag check holds the button in a
-   pause of the drag's own chain (a later process cannot release it) while it
-   inspects the screen; the test releases it as soon as it is done instead of
-   always sitting out a worst-case fixed pause.
+3. A pause action with "interruptible": true ends early on request: the
+   request ends the interruptible pause in progress, or the next one (other
+   pauses ignore it). A mid-drag check holds the button in a pause of the
+   drag's own chain while it inspects the screen; the test releases it as
+   soon as it is done instead of always sitting out a worst-case fixed pause.
+   With an action file the request is SIGUSR1.
+4. `inputsynth --stdin` stays up and reads one request per line: {"id": n,
+   "actions": [...]} runs a chain and is answered with {"id": n, "ok": true}
+   on stdout when it has finished; {"resume": n} is the request of 3. for
+   chain n only (a finished chain ignores it, so it never reaches a later
+   chain). Starting a process, connecting to Wayland and registering a
+   fake-input device per chain cost ~100 ms; the E2E suite sends ~500 chains
+   per run through one process and one device. Each chain runs on a thread
+   of its own, so a request arriving while an earlier chain sits in a pause
+   (e.g. Escape during a drag) is not held up. Consequences: the roundtrip
+   after each request waits on a per-thread event queue when called off the
+   GUI thread (Qt dispatches the default queue there), and the pointer
+   state shared by all chains is guarded by a mutex.
 
 diff --git a/inputsynth/interaction.cpp b/inputsynth/interaction.cpp
-index 5e7dd9d..0049ab9 100644
+index 5e7dd9d..3e2eb99 100644
 --- a/inputsynth/interaction.cpp
 +++ b/inputsynth/interaction.cpp
 @@ -6,6 +6,7 @@
@@ -37,7 +50,56 @@ index 5e7dd9d..0049ab9 100644
  #include <QDebug>
  #include <QGuiApplication>
  #include <QScopeGuard>
-@@ -335,7 +337,7 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
+@@ -23,6 +25,7 @@
+ 
+ FakeInputInterface *s_interface;
+ 
++std::mutex PointerAction::s_stateMutex;
+ QHash<unsigned /* unique id */, QPoint> PointerAction::s_positions = {};
+ QSet<unsigned /*unique id*/> PointerAction::s_touchPoints = {};
+ QSet<int /* pressed button */> PointerAction::s_mouseButtons = {};
+@@ -100,7 +103,16 @@ void FakeInputInterface::roundtrip(bool touch)
+     if (touch) {
+         touch_frame();
+     }
+-    wl_display_roundtrip(s_interface->m_display);
++    if (QThread::currentThread() == thread()) {
++        wl_display_roundtrip(m_display);
++        return;
++    }
++    // --stdin mode performs chains on worker threads while Qt dispatches the
++    // default queue on the GUI thread: wait for the sync callback on a queue
++    // of this thread's own.
++    thread_local const std::unique_ptr<wl_event_queue, decltype(&wl_event_queue_destroy)> queue{wl_display_create_queue(m_display),
++                                                                                               wl_event_queue_destroy};
++    wl_display_roundtrip_queue(m_display, queue.get());
+ }
+ 
+ void FakeInputInterface::sendKey(const std::vector<quint32> &linuxModifiers, quint32 linuxKeyCode, wl_keyboard_key_state keyState)
+@@ -109,19 +121,19 @@ void FakeInputInterface::sendKey(const std::vector<quint32> &linuxModifiers, qui
+         for (const auto &modifier : linuxModifiers) {
+             qDebug() << "  pressing modifier" << modifier;
+             keyboard_key(modifier, WL_KEYBOARD_KEY_STATE_PRESSED);
+-            wl_display_roundtrip(m_display);
++            roundtrip();
+         }
+     }
+ 
+     qDebug() << "    key (state)" << linuxKeyCode << keyState;
+     keyboard_key(linuxKeyCode, keyState);
+-    wl_display_roundtrip(m_display);
++    roundtrip();
+ 
+     if (keyState == WL_KEYBOARD_KEY_STATE_RELEASED) {
+         for (const auto &modifier : linuxModifiers) {
+             qDebug() << "  releasing modifier" << modifier;
+             keyboard_key(modifier, WL_KEYBOARD_KEY_STATE_RELEASED);
+-            wl_display_roundtrip(m_display);
++            roundtrip();
+         }
+     }
+ }
+@@ -335,7 +347,7 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
          {QChar(u'\ue037'), XKB_KEY_F7},        {QChar(u'\ue038'), XKB_KEY_F8},
          {QChar(u'\ue039'), XKB_KEY_F9},        {QChar(u'\ue002'), XKB_KEY_Help},
          {QChar(u'\ue011'), XKB_KEY_Home},      {QChar(u'\ue016'), XKB_KEY_Insert},
@@ -46,38 +108,57 @@ index 5e7dd9d..0049ab9 100644
          {QChar(u'\ue024'), XKB_KEY_multiply},  {QChar(u'\ue000'), XKB_KEY_NoSymbol},
          {QChar(u'\ue01a'), XKB_KEY_KP_0},      {QChar(u'\ue01b'), XKB_KEY_KP_1},
          {QChar(u'\ue01c'), XKB_KEY_KP_2},      {QChar(u'\ue01d'), XKB_KEY_KP_3},
-@@ -356,9 +358,12 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
+@@ -356,9 +368,12 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
      return xkb_utf32_to_keysym(key.unicode());
  }
  
 -PauseAction::PauseAction(unsigned long duration)
 +std::atomic_bool PauseAction::s_resume = false;
 +
-+PauseAction::PauseAction(unsigned long duration, bool interruptible)
++PauseAction::PauseAction(unsigned long duration, std::atomic_bool *resume)
      : BaseAction()
      , m_duration(duration)
-+    , m_interruptible(interruptible)
++    , m_resume(resume)
  {
  }
  
-@@ -368,7 +373,15 @@ PauseAction::~PauseAction()
+@@ -368,7 +383,15 @@ PauseAction::~PauseAction()
  
  void PauseAction::perform()
  {
 -    QThread::msleep(m_duration);
-+    if (!m_interruptible) {
++    if (!m_resume) {
 +        QThread::msleep(m_duration);
 +        return;
 +    }
 +    const QDeadlineTimer deadline{qint64(m_duration)};
-+    while (!s_resume.load() && !deadline.hasExpired()) {
++    while (!m_resume->load() && !deadline.hasExpired()) {
 +        QThread::msleep(std::min<qint64>(deadline.remainingTime(), 10));
 +    }
-+    s_resume = false;
++    *m_resume = false;
  }
  
  WheelAction::WheelAction(const QString &id, const QPoint &pos, const QPoint &deltaPos, unsigned long duration)
-@@ -474,16 +487,11 @@ void PointerAction::perform()
+@@ -385,6 +408,7 @@ WheelAction::~WheelAction()
+ 
+ void WheelAction::perform()
+ {
++    const std::lock_guard lock(PointerAction::s_stateMutex);
+     PointerAction::s_positions[m_uniqueId] = m_pos;
+     s_interface->pointer_motion_absolute(wl_fixed_from_int(m_pos.x()), wl_fixed_from_int(m_pos.y()));
+     s_interface->roundtrip();
+@@ -430,6 +454,10 @@ void PointerAction::perform()
+         {static_cast<int>(Button::Back), BTN_BACK},
+     };
+ 
++    // Whole actions, so a Move's interpolation sees a stable position. Pauses
++    // are separate actions: a chain in a pause does not hold the lock.
++    const std::lock_guard lock(s_stateMutex);
++
+     switch (m_actionType) {
+     case ActionType::Move: {
+         auto lastPosIt = s_positions.find(m_uniqueId);
+@@ -474,16 +502,11 @@ void PointerAction::perform()
                  QThread::msleep(stepDurationMs);
              }
          }
@@ -99,7 +180,7 @@ index 5e7dd9d..0049ab9 100644
          if (m_pointerType == PointerKind::Touch) {
              s_interface->touch_motion(m_uniqueId, lastX, lastY);
          } else {
-@@ -493,7 +501,7 @@ void PointerAction::perform()
+@@ -493,7 +516,7 @@ void PointerAction::perform()
          // Sleep to the total duration
          QThread::msleep(m_duration - (steps - 1) * stepDurationMs);
          // Update the last position
@@ -109,25 +190,29 @@ index 5e7dd9d..0049ab9 100644
          return;
      }
 diff --git a/inputsynth/interaction.h b/inputsynth/interaction.h
-index 710fcae..f7c2175 100644
+index 710fcae..0d08512 100644
 --- a/inputsynth/interaction.h
 +++ b/inputsynth/interaction.h
-@@ -6,6 +6,7 @@
+@@ -6,7 +6,9 @@
  
  #pragma once
  
 +#include <atomic>
  #include <memory>
++#include <mutex>
  
  #include "qwayland-fake-input.h"
-@@ -145,13 +146,18 @@ private:
+ #include <QHash>
+@@ -145,13 +147,20 @@ private:
  class PauseAction : public BaseAction
  {
  public:
 -    explicit PauseAction(unsigned long duration);
-+    // An interruptible pause ends early on SIGUSR1: the signal ends the one
-+    // in progress, or the next one if none is (it is not lost).
-+    explicit PauseAction(unsigned long duration, bool interruptible = false);
++    // An interruptible pause ends early once *resume is set (it is reset
++    // then): the one in progress, or the next one if none is (a request is
++    // not lost). nullptr: not interruptible. In file mode resume is s_resume,
++    // set by SIGUSR1; in --stdin mode each chain has its own flag.
++    explicit PauseAction(unsigned long duration, std::atomic_bool *resume = nullptr);
      ~PauseAction() override;
  
      void perform() override;
@@ -136,70 +221,279 @@ index 710fcae..f7c2175 100644
 +
  private:
      unsigned long m_duration = 0;
-+    bool m_interruptible = false;
++    std::atomic_bool *m_resume = nullptr;
  };
  
  class WheelAction : public BaseAction
+@@ -211,6 +220,8 @@ public:
+     void perform() override;
+ 
+ private:
++    // Guards the three sets below: --stdin mode runs chains on several threads.
++    static std::mutex s_stateMutex;
+     static QHash<unsigned /* unique id */, QPoint> s_positions;
+     static QSet<unsigned /*unique id*/> s_touchPoints;
+     static QSet<int /* pressed button */> s_mouseButtons;
 diff --git a/inputsynth/main.cpp b/inputsynth/main.cpp
-index a3073a3..4311c89 100644
+index a3073a3..56fef20 100644
 --- a/inputsynth/main.cpp
 +++ b/inputsynth/main.cpp
-@@ -1,6 +1,7 @@
+@@ -1,7 +1,14 @@
  // SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
  // SPDX-FileCopyrightText: 2023 Harald Sitter <sitter@kde.org>
  
 +#include <csignal>
++#include <cstdio>
++#include <iostream>
++#include <memory>
  #include <optional>
++#include <string>
++#include <thread>
++#include <utility>
  
  #include <QDebug>
-@@ -25,10 +26,22 @@ std::optional<wl_keyboard_key_state> typeToKeyState(QStringView type)
+ #include <QFile>
+@@ -9,6 +16,8 @@
+ #include <QJsonArray>
+ #include <QJsonDocument>
+ #include <QJsonObject>
++#include <QRunnable>
++#include <QThreadPool>
+ 
+ #include "interaction.h"
+ 
+@@ -25,26 +34,21 @@ std::optional<wl_keyboard_key_state> typeToKeyState(QStringView type)
      qWarning() << "unsupported keyboard action type" << type;
      return {};
  }
-+
+-} // namespace
+ 
+-int main(int argc, char **argv)
 +void resumePause(int)
-+{
+ {
+-    QGuiApplication app(argc, argv);
 +    PauseAction::s_resume = true;
 +}
-+
-+PauseAction *pauseAction(const QVariantHash &hash)
+ 
+-    const auto actionFilePath = qGuiApp->arguments().at(1);
+-    QFile actionFile(actionFilePath);
+-    if (!actionFile.open(QFile::ReadOnly)) {
+-        qWarning() << "failed to open action file" << actionFilePath;
+-        return 1;
+-    }
++// resume: the flag that ends this chain's pauses marked "interruptible".
++PauseAction *pauseAction(const QVariantHash &hash, std::atomic_bool *resume)
 +{
-+    return new PauseAction(hash.value(QStringLiteral("duration")).value<ulong>(), hash.value(QStringLiteral("interruptible")).toBool());
++    return new PauseAction(hash.value(QStringLiteral("duration")).value<ulong>(), hash.value(QStringLiteral("interruptible")).toBool() ? resume : nullptr);
 +}
- } // namespace
  
- int main(int argc, char **argv)
- {
-+    // Before anything else: SIGUSR1's default action would kill the process.
-+    std::signal(SIGUSR1, resumePause);
-     QGuiApplication app(argc, argv);
- 
-     const auto actionFilePath = qGuiApp->arguments().at(1);
-@@ -53,8 +66,7 @@ int main(int argc, char **argv)
++std::vector<BaseAction *> parseActions(const QJsonArray &jsonActions, std::atomic_bool *resume)
++{
+     std::vector<BaseAction *> actions;
+-
+-    s_interface = new FakeInputInterface;
+-
+-    const auto document = QJsonDocument::fromJson(actionFile.readAll());
+-    const auto jsonObject = document.object();
+-    const auto jsonActions = jsonObject.value(QStringLiteral("actions")).toArray();
+     for (const auto &jsonActionSet : jsonActions) {
+         if (auto inputType = jsonActionSet[QLatin1String("type")]; inputType == QLatin1String("key")) {
+             for (const auto &jsonAction : jsonActionSet[QStringLiteral("actions")].toArray()) {
+@@ -53,8 +57,7 @@ int main(int argc, char **argv)
                  BaseAction *action = nullptr;
  
                  if (type == QLatin1String("pause")) {
 -                    const ulong duration = hash.value(QStringLiteral("duration")).value<ulong>();
 -                    action = new PauseAction(duration);
-+                    action = pauseAction(hash);
++                    action = pauseAction(hash, resume);
                  } else {
                      const auto string = hash.value(QStringLiteral("value")).toString();
                      const QChar *character = string.unicode();
-@@ -92,7 +104,7 @@ int main(int argc, char **argv)
+@@ -92,7 +95,7 @@ int main(int argc, char **argv)
                  } else if (actionType == QLatin1String("pointerMove")) {
                      actionTypeInt = PointerAction::ActionType::Move;
                  } else if (actionType == QLatin1String("pause")) {
 -                    actions.emplace_back(new PauseAction(duration));
-+                    actions.emplace_back(pauseAction(hash));
++                    actions.emplace_back(pauseAction(hash, resume));
                      continue;
                  }
  
-@@ -126,7 +138,7 @@ int main(int argc, char **argv)
+@@ -126,7 +129,7 @@ int main(int argc, char **argv)
                  const auto duration = hash.value(QStringLiteral("duration")).value<ulong>();
  
                  if (const QString actionType = hash.value(QStringLiteral("type")).toString(); actionType == QLatin1String("pause")) {
 -                    actions.emplace_back(new PauseAction(duration));
-+                    actions.emplace_back(pauseAction(hash));
++                    actions.emplace_back(pauseAction(hash, resume));
                      continue;
                  } else {
                      const auto x = hash.value(QStringLiteral("x")).toInt();
+@@ -141,16 +144,162 @@ int main(int argc, char **argv)
+             continue;
+         }
+     }
++    return actions;
++}
+ 
+-    auto performActions = [actions = std::move(actions)] {
+-        for (auto action : actions) {
+-            action->perform();
++void performActions(const std::vector<BaseAction *> &actions)
++{
++    for (auto action : actions) {
++        action->perform();
++    }
++    qDeleteAll(actions);
++}
++
++// --stdin mode: one request per line, {"id": <int>, "actions": [...]} runs a
++// chain, {"resume": <id>} ends that chain's interruptible pause (the one in
++// progress, or its next one). Each chain runs on its own thread, so a chain
++// sitting in a pause does not hold up the requests after it. A finished chain
++// is answered with {"id": <id>, "ok": true}; an unparsable line with
++// {"id": null, "ok": false, "error": "..."}. EOF on stdin ends the process
++// once the chains in flight have finished. Everything but the chains' own
++// actions runs on the GUI thread.
++struct Chain {
++    qint64 id = 0;
++    std::atomic_bool resume = false;
++    std::vector<BaseAction *> actions;
++};
++
++class Server
++{
++public:
++    void handleLine(const QByteArray &line)
++    {
++        if (!m_ready) {
++            m_pending.append(line);
++            return;
+         }
+-        qDeleteAll(actions);
+-        QCoreApplication::quit();
+-    };
++        QJsonParseError error;
++        const auto document = QJsonDocument::fromJson(line, &error);
++        if (!document.isObject()) {
++            reply(QJsonObject{{QStringLiteral("id"), QJsonValue()},
++                              {QStringLiteral("ok"), false},
++                              {QStringLiteral("error"), QString(QStringLiteral("invalid request: ") + error.errorString())}});
++            return;
++        }
++        const auto request = document.object();
++        if (const auto resume = request.value(QStringLiteral("resume")); !resume.isUndefined()) {
++            // A chain that has already finished has nothing left to end.
++            if (auto it = m_chains.find(resume.toVariant().toLongLong()); it != m_chains.end()) {
++                (*it)->resume = true;
++            }
++            return;
++        }
++        auto chain = std::make_shared<Chain>();
++        chain->id = request.value(QStringLiteral("id")).toVariant().toLongLong();
++        chain->actions = parseActions(request.value(QStringLiteral("actions")).toArray(), &chain->resume);
++        m_chains.insert(chain->id, chain);
++        m_pool.start(QRunnable::create([this, chain] {
++            performActions(chain->actions);
++            QMetaObject::invokeMethod(qApp, [this, chain] { finished(chain); }, Qt::QueuedConnection);
++        }));
++    }
++
++    void setReady()
++    {
++        m_ready = true;
++        const auto pending = std::exchange(m_pending, {});
++        for (const auto &line : pending) {
++            handleLine(line);
++        }
++        quitIfDone();
++    }
+ 
+-    app.connect(s_interface, &FakeInputInterface::readyChanged, &app, performActions);
++    void endOfInput()
++    {
++        m_eof = true;
++        quitIfDone();
++    }
++
++    Server()
++    {
++        // Every chain in flight needs a thread of its own.
++        m_pool.setMaxThreadCount(256);
++    }
++
++private:
++    void finished(const std::shared_ptr<Chain> &chain)
++    {
++        m_chains.remove(chain->id);
++        reply(QJsonObject{{QStringLiteral("id"), chain->id}, {QStringLiteral("ok"), true}});
++        quitIfDone();
++    }
++
++    static void reply(const QJsonObject &object)
++    {
++        const QByteArray line = QJsonDocument(object).toJson(QJsonDocument::Compact) + '\n';
++        std::fwrite(line.constData(), 1, line.size(), stdout);
++        std::fflush(stdout);
++    }
++
++    void quitIfDone()
++    {
++        if (m_eof && m_ready && m_chains.isEmpty()) {
++            QCoreApplication::quit();
++        }
++    }
++
++    bool m_ready = false;
++    bool m_eof = false;
++    QList<QByteArray> m_pending;
++    QHash<qint64, std::shared_ptr<Chain>> m_chains;
++    QThreadPool m_pool;
++};
++} // namespace
++
++int main(int argc, char **argv)
++{
++    // Before anything else: SIGUSR1's default action would kill the process.
++    std::signal(SIGUSR1, resumePause);
++    QGuiApplication app(argc, argv);
++
++    if (qGuiApp->arguments().value(1) == QLatin1String("--stdin")) {
++        s_interface = new FakeInputInterface;
++        Server server;
++        app.connect(s_interface, &FakeInputInterface::readyChanged, &app, [&server] {
++            server.setReady();
++        });
++        // Blocking reads on a thread of their own; every line is handled on the GUI thread.
++        std::thread([&server] {
++            std::string line;
++            while (std::getline(std::cin, line)) {
++                QMetaObject::invokeMethod(qApp, [&server, line = QByteArray::fromStdString(line)] {
++                    server.handleLine(line);
++                }, Qt::QueuedConnection);
++            }
++            QMetaObject::invokeMethod(qApp, [&server] {
++                server.endOfInput();
++            }, Qt::QueuedConnection);
++        }).detach();
++        return app.exec();
++    }
++
++    const auto actionFilePath = qGuiApp->arguments().at(1);
++    QFile actionFile(actionFilePath);
++    if (!actionFile.open(QFile::ReadOnly)) {
++        qWarning() << "failed to open action file" << actionFilePath;
++        return 1;
++    }
++
++    s_interface = new FakeInputInterface;
++
++    const auto document = QJsonDocument::fromJson(actionFile.readAll());
++    const auto jsonObject = document.object();
++    auto actions = parseActions(jsonObject.value(QStringLiteral("actions")).toArray(), &PauseAction::s_resume);
++
++    app.connect(s_interface, &FakeInputInterface::readyChanged, &app, [actions = std::move(actions)] {
++        performActions(actions);
++        QCoreApplication::quit();
++    });
+ 
+     return app.exec();
+ }

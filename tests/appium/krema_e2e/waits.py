@@ -26,7 +26,7 @@ class WaitTimeout(AssertionError):
 def wait_until(
     predicate: Callable[[], T],
     timeout: float = 10.0,
-    interval: float = 0.1,
+    interval: float = 0.05,
     message: str | Callable[[], str] | None = None,
 ) -> T:
     """Poll ``predicate`` until it returns a truthy value and return that value.

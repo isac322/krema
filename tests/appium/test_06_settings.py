@@ -33,7 +33,6 @@ from typing import Callable
 
 import pyatspi
 import pytest
-from PIL import Image
 
 from krema_e2e import config as kcfg
 from krema_e2e import env, kwin
@@ -235,7 +234,7 @@ def panel_band(krema: Krema, tag: str) -> list[tuple[int, int, int]]:
     centre row, and the icon). Only the black desktop is behind it. The left
     side is used because an open Settings window adds krema's own item on the
     right."""
-    img = Image.open(krema.screenshot(tag)).convert("RGB")
+    img = krema.screenshot(tag, krema.surface_rect("dock"))
     ir = min((krema.screen_rect(e) for e in krema.items()), key=lambda r: r.x)
     cy = ir.y + ir.height // 2
     x = ir.x - 1
@@ -326,9 +325,9 @@ def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(kr
             inp.move(*centre())
             if wait_stable(centre, duration=0.3) == inp.pointer_position():
                 break
-        return wait_stable(lambda: zoomed_width(krema, "Alpha", rest))
+        return wait_stable(lambda: zoomed_width(krema, "Alpha", rest), duration=0.3)
 
-    rest = wait_stable(lambda: Rect.of(krema.item("Alpha")))
+    rest = wait_stable(lambda: Rect.of(krema.item("Alpha")), duration=0.3)
     assert rest.width == 48
     zoomed_before = peak_width(rest)
     krema.move_away()
@@ -344,7 +343,7 @@ def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(kr
 
     assert config_value(krema, "IconSize") == "64"
     assert krema.pid == pid and krema.is_running(), "icon size change must not restart krema"
-    zoomed_after = peak_width(wait_stable(lambda: Rect.of(krema.item("Alpha"))))
+    zoomed_after = peak_width(wait_stable(lambda: Rect.of(krema.item("Alpha")), duration=0.3))
     # The item width is an integer, so the ratio is off by at most ~0.5/base;
     # a residual pointer offset of <=1 px lowers it by <0.03. 0.05 is safe.
     for base, zoomed in ((48, zoomed_before), (64, zoomed_after)):
@@ -475,7 +474,7 @@ def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindow
     assert has_state(item, "showing")
     ir = wait_stable(lambda: krema.screen_rect(krema.item("Alpha")))
     assert 0 <= ir.y and ir.y + ir.height <= top.height and ir.width == 48
-    img = Image.open(krema.screenshot("dock-top")).convert("RGB")
+    img = krema.screenshot("dock-top", ir)
     colors = img.crop((ir.x, ir.y, ir.x + ir.width, ir.y + ir.height)).getcolors(4096)
     assert colors is None or len(colors) > 16, f"icon at the top edge looks blank: {colors}"
 
@@ -582,7 +581,7 @@ def test_set008_monitor_mode_all_monitors_from_open_settings(krema: Krema, apps:
     # dock reports the hover (its item zooms) before right-clicking.
     inp.move_path(inp.line((x, docks[1].client_y - 40), (x, y), 5), step_ms=40)
     wait_until(lambda: painted_rect(second_alpha(), second).width > second.width, timeout=5, message="second dock item hovered")
-    r = wait_stable(second_alpha)
+    r = wait_stable(second_alpha, duration=0.3)
     before = {w.internal_id for w in krema.windows()}
     inp.click(r.center[0], docks[1].client_y + r.center[1], button="right")
     menu = wait_until(
@@ -749,7 +748,7 @@ def hovered_middle_layout(krema: Krema) -> tuple[int, int, list[Rect], list[Rect
     rest = wait_stable(lambda: [Rect.of(e) for e in krema.items()])
     mid = len(rest) // 2
     krema.hover_item(krema.item_names()[mid])
-    drawn = wait_stable(lambda: [painted_rect(Rect.of(e), r0) for e, r0 in zip(krema.items(), rest, strict=True)])
+    drawn = wait_stable(lambda: [painted_rect(Rect.of(e), r0) for e, r0 in zip(krema.items(), rest, strict=True)], duration=0.3)
     return mid, rest[mid].width, rest, drawn
 
 

@@ -20,11 +20,25 @@ reproduce exactly (a toolkit other than Qt, the desktop root, an error reply,
 a child on another bus, a role outside libatspi's table) falls back to
 _createNode2 for the whole tree.
 
+A find element(s) lookup builds the tree only with the attributes its XPath
+can read. The role (the tag name), the path and the children are always
+there; the name, description, accessibility-id and states are read only
+when the XPath names them after @ or attribute:: (_xpathAttributes). Any
+other attribute reference (@*, @node(), an @ inside a string literal) reads
+all of them. An XPath cannot observe an attribute it does not reference, so
+it matches the same elements; a lookup like //tool_bar[@name='Krema Dock']
+makes three calls per node instead of six. Python's handling of each reply
+is about half of the build time, so the build takes about half as long.
+The locator's check that a match's path still leads to the same object
+needs the match's name and description; _completeMatches reads the missing
+ones for the matched elements only, through their object paths, before that
+check. The page source is always built with every attribute.
+
 diff --git a/selenium-webdriver-at-spi.py b/selenium-webdriver-at-spi.py
-index 23075e5..3329092 100644
+index 23075e5..bbb7c98 100644
 --- a/selenium-webdriver-at-spi.py
 +++ b/selenium-webdriver-at-spi.py
-@@ -2,6 +2,7 @@
+@@ -2,13 +2,16 @@
  # SPDX-FileCopyrightText: 2021-2023 Harald Sitter <sitter@kde.org>
  
  import base64
@@ -32,7 +46,8 @@ index 23075e5..3329092 100644
  import json
  import logging
  import os
-@@ -9,6 +10,7 @@ import signal
++import re
+ import signal
  import subprocess
  import sys
  import tempfile
@@ -40,7 +55,7 @@ index 23075e5..3329092 100644
  import time
  import traceback
  import uuid
-@@ -28,7 +30,7 @@ import logging
+@@ -28,7 +31,7 @@ import logging
  logging.getLogger("werkzeug").disabled = True
  gi.require_version('Gdk', '3.0')
  gi.require_version('Gtk', '3.0')
@@ -49,23 +64,28 @@ index 23075e5..3329092 100644
  
  # Exposes AT-SPI as a webdriver. This is written in python because C sucks and pyatspi is a first class binding so
  # we lose nothing but gain the reduced sucking of python.
-@@ -122,6 +124,150 @@ def _createNode2(accessible, parentElement, indexInParents=[]):
+@@ -122,6 +125,219 @@ def _createNode2(accessible, parentElement, indexInParents=[]):
          return e
  
  
 +_ATSPI_ACCESSIBLE = 'org.a11y.atspi.Accessible'
 +_ATSPI_NULL_PATH = '/org/a11y/atspi/null'
 +_DBUS_PROPERTIES = 'org.freedesktop.DBus.Properties'
-+# One node's calls (key, interface, method, parameters, reply type): what _createNode2 reads through libatspi, with
-+# GetChildren in place of ChildCount + GetChildAtIndex (Qt answers both from the same childCount()/child(i)).
++# One node's calls (key, XML attribute, interface, method, parameters, reply type): what _createNode2 reads through
++# libatspi, with GetChildren in place of ChildCount + GetChildAtIndex (Qt answers both from the same
++# childCount()/child(i)). The role (the tag name) and the children are always read; the calls for the other
++# attributes only when the tree is built for an XPath that can read them.
 +_NODE_CALLS = (
-+    ('role', _ATSPI_ACCESSIBLE, 'GetRole', None, GLib.VariantType('(u)')),
-+    ('name', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'Name')), GLib.VariantType('(v)')),
-+    ('description', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'Description')), GLib.VariantType('(v)')),
-+    ('id', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'AccessibleId')), GLib.VariantType('(v)')),
-+    ('states', _ATSPI_ACCESSIBLE, 'GetState', None, GLib.VariantType('(au)')),
-+    ('children', _ATSPI_ACCESSIBLE, 'GetChildren', None, GLib.VariantType('(a(so))')),
++    ('role', None, _ATSPI_ACCESSIBLE, 'GetRole', None, GLib.VariantType('(u)')),
++    ('name', 'name', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'Name')), GLib.VariantType('(v)')),
++    ('description', 'description', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'Description')), GLib.VariantType('(v)')),
++    ('id', 'accessibility-id', _DBUS_PROPERTIES, 'Get', GLib.Variant('(ss)', (_ATSPI_ACCESSIBLE, 'AccessibleId')), GLib.VariantType('(v)')),
++    ('states', 'states', _ATSPI_ACCESSIBLE, 'GetState', None, GLib.VariantType('(au)')),
++    ('children', None, _ATSPI_ACCESSIBLE, 'GetChildren', None, GLib.VariantType('(a(so))')),
 +)
++_OPTIONAL_ATTRIBUTES = frozenset(call[1] for call in _NODE_CALLS if call[1])
++# An attribute reference in an XPath: @name, attribute::name, or anything else after @ / attribute:: (@*, @node()).
++_XPATH_ATTRIBUTE = re.compile(r'(?:@|attribute\s*::)\s*([\w.-]*)(\s*\()?')
 +_a11y_bus = None
 +_a11y_bus_lock = threading.Lock()
 +
@@ -91,24 +111,48 @@ index 23075e5..3329092 100644
 +    pass
 +
 +
-+def _createTree(accessible):
++def _createTree(accessible, attributes=None):
 +    # Same XML as _createNode2(accessible, None), but the D-Bus calls for every node are sent asynchronously and are
 +    # all in flight at once, instead of ~8 synchronous round trips per node one after the other. (Qt's
 +    # org.a11y.atspi.Cache.GetItems returns no items, so no single call returns the whole tree.) Whatever this cannot
 +    # reproduce exactly (another toolkit, the desktop root, a node that vanished or answers with an error, a role
 +    # outside libatspi's table) is built the synchronous way.
++    # attributes: the optional XML attributes (_OPTIONAL_ATTRIBUTES) to read, None for all of them; the synchronous
++    # build always has all. Returns the tree and, for the pipelined build, each element's D-Bus object path by its
++    # path attribute (None for the synchronous build).
 +    try:
-+        return _createTreePipelined(accessible)
++        return _createTreePipelined(accessible, attributes)
 +    except _PipelineUnsupported:
-+        return _createNode2(accessible, None)
++        return _createNode2(accessible, None), None
 +
 +
-+def _createTreePipelined(accessible):
++def _xpathAttributes(selector):
++    # The optional attributes an XPath can read: the ones it names after @ or attribute::. Any other attribute
++    # reference (@*, @node(), an @ inside a string literal, ...) may read any of them: None (all).
++    attributes = set()
++    for match in _XPATH_ATTRIBUTE.finditer(selector):
++        name = match.group(1)
++        if match.group(2) or (name not in _OPTIONAL_ATTRIBUTES and name not in ('role', 'path')):
++            return None
++        attributes.add(name)
++    return attributes
++
++
++def _stringValue(reply):
++    # The string in a Properties.Get reply (child 0 of the result tuple), or _PipelineUnsupported.
++    value = reply.get_variant()
++    if value.get_type_string() != 's':
++        raise _PipelineUnsupported()
++    return value.get_string()
++
++
++def _createTreePipelined(accessible, attributes):
 +    if not accessible or accessible.toolkitName != "Qt":
 +        raise _PipelineUnsupported()
 +    bus_name = accessible.app.bus_name
 +    connection = _a11y_connection()
 +    context = GLib.MainContext.new()
++    calls = tuple(call for call in _NODE_CALLS if call[1] is None or attributes is None or call[1] in attributes)
 +    nodes = {}  # object path -> {key: reply value}
 +    pending = 0
 +    failed = False
@@ -119,10 +163,7 @@ index 23075e5..3329092 100644
 +        try:
 +            value = conn.call_finish(result).get_child_value(0)
 +            if key in ('name', 'description', 'id'):
-+                value = value.get_variant()
-+                if value.get_type_string() != 's':
-+                    raise _PipelineUnsupported()
-+                value = value.get_string()
++                value = _stringValue(value)
 +            elif key == 'role':
 +                value = value.get_uint32()
 +            else:
@@ -148,7 +189,7 @@ index 23075e5..3329092 100644
 +    def request(path):
 +        nonlocal pending
 +        nodes[path] = {}
-+        for key, interface, method, parameters, reply_type in _NODE_CALLS:
++        for key, _attribute, interface, method, parameters, reply_type in calls:
 +            connection.call(bus_name, path, interface, method, parameters, reply_type, Gio.DBusCallFlags.NONE, 4000,
 +                            None, reply, path, key)
 +            pending += 1  # the reply is dispatched by context.iteration() below, never before this
@@ -163,28 +204,71 @@ index 23075e5..3329092 100644
 +    if failed:
 +        raise _PipelineUnsupported()
 +
++    objectPaths = {}
++
 +    def element(path, indexInParents):
 +        node = nodes[path]
 +        role = node['role']
-+        if role >= Atspi.ROLE_COUNT or role == Atspi.Role.EXTENDED or len(node['states']) != 2:
++        if role >= Atspi.ROLE_COUNT or role == Atspi.Role.EXTENDED or len(node.get('states', (0, 0))) != 2:
 +            raise _PipelineUnsupported()  # libatspi would ask the toolkit for the role name / reject the state set
 +        roleName = _role_name(role)
 +        e = etree.Element(roleName.replace(" ", "_") if roleName else "accessible")
-+        e.set("name", node['name'])
++        if 'name' in node:
++            e.set("name", node['name'])
 +        e.set("role", str(role))
-+        e.set("description", node['description'])
-+        if node['id'] != None:
++        if 'description' in node:
++            e.set("description", node['description'])
++        if node.get('id') != None:
 +            e.set("accessibility-id", node['id'])
-+        e.set("path", ' '.join(str(x) for x in indexInParents))
-+        # pyatspi's StateSet.getStates() lists the 64 state bits (GetState: low word, high word) in bit order.
-+        bits = node['states'][0] | (node['states'][1] << 32)
-+        e.set("states", ', '.join(_state_name(i) for i in range(64) if bits & (1 << i)))
++        pathString = ' '.join(str(x) for x in indexInParents)
++        e.set("path", pathString)
++        objectPaths[pathString] = path
++        if 'states' in node:
++            # pyatspi's StateSet.getStates() lists the 64 state bits (GetState: low word, high word) in bit order.
++            bits = node['states'][0] | (node['states'][1] << 32)
++            e.set("states", ', '.join(_state_name(i) for i in range(64) if bits & (1 << i)))
 +        for i, (_child_bus, child_path) in enumerate(node['children']):
 +            if child_path != _ATSPI_NULL_PATH:
 +                e.append(element(child_path, indexInParents + [i]))
 +        return e
 +
-+    return element(accessible.path, [])
++    return element(accessible.path, []), objectPaths
++
++
++def _completeMatches(accessible, matches, objectPaths):
++    # Reads the name and description of every matched element whose tree was built without them, for the locator's
++    # check that the element's path still leads to the same object. The calls are all in flight at once. A failed
++    # read leaves the attribute out, which fails that check.
++    if objectPaths is None:
++        return
++    wanted = {(c, key) for c in matches if isinstance(c, etree._Element) for key in ('name', 'description')
++              if c.get(key) is None}
++    if not wanted:
++        return
++    calls = {call[0]: call for call in _NODE_CALLS}
++    connection = _a11y_connection()
++    context = GLib.MainContext.new()
++    pending = 0
++
++    def reply(conn, result, c, key):
++        nonlocal pending
++        pending -= 1
++        try:
++            c.set(key, _stringValue(conn.call_finish(result).get_child_value(0)))
++        except Exception:  # an exception in a GLib callback would only be printed
++            pass
++
++    context.push_thread_default()
++    try:
++        for c, key in wanted:
++            _key, _attribute, interface, method, parameters, reply_type = calls[key]
++            connection.call(accessible.app.bus_name, objectPaths[c.get('path')], interface, method, parameters,
++                            reply_type, Gio.DBusCallFlags.NONE, 4000, None, reply, c, key)
++            pending += 1
++        while pending > 0:
++            context.iteration(True)
++    finally:
++        context.pop_thread_default()
 +
 +
 +@functools.cache
@@ -200,30 +284,114 @@ index 23075e5..3329092 100644
  def errorFromMessage(error, message):
      return jsonify({'value': {'error': error, 'message': message}})
  
-@@ -303,7 +449,7 @@ def session_source(session_id):
+@@ -303,7 +519,7 @@ def session_source(session_id):
      if not session:
          return json.dumps({'value': {'error': 'no such window'}}), 404, {'content-type': 'application/json'}
  
 -    doc = _createNode2(session.browsing_context, None)
-+    doc = _createTree(session.browsing_context)
++    doc, _objectPaths = _createTree(session.browsing_context)
      return json.dumps({'value': etree.tostring(doc, pretty_print=False).decode("utf-8")}), 200, {'content-type': 'application/xml'}
  
  
-@@ -314,7 +460,7 @@ def session_source_raw(session_id):
+@@ -314,7 +530,7 @@ def session_source_raw(session_id):
      if not session:
          return json.dumps({'value': {'error': 'no such window'}}), 404, {'content-type': 'application/json'}
  
 -    doc = _createNode2(session.browsing_context, None)
-+    doc = _createTree(session.browsing_context)
++    doc, _objectPaths = _createTree(session.browsing_context)
      return etree.tostring(doc, pretty_print=True).decode("utf-8"), 200, {'content-type': 'application/xml'}
  
  def check_requires_button_compat():
-@@ -329,7 +475,7 @@ def locator(session, strategy, selector, start, findAll = False):
+@@ -329,8 +545,11 @@ def locator(session, strategy, selector, start, findAll = False):
  
      while datetime.now() < end_time:
          if strategy == 'xpath':
 -            doc = _createNode2(start, None)
-+            doc = _createTree(start)
-             for c in doc.xpath(selector):
+-            for c in doc.xpath(selector):
++            # The tree has only the attributes the XPath can read, so the XPath matches the same elements.
++            doc, objectPaths = _createTree(start, _xpathAttributes(selector))
++            matches = doc.xpath(selector)
++            _completeMatches(start, matches, objectPaths)
++            for c in matches:
                  path = [int(x) for x in c.get('path').split()]
                  # path is relative to the app root, not our start item!
+                 item = session.browsing_context
+
+selenium-webdriver-at-spi-screenshotter: capture an area, start without a
+platform plugin
+
+The helper ignored its x y width height arguments and always captured the
+whole active output (CaptureActiveScreen). With a non-empty area it now calls
+ScreenShot2.CaptureArea, so KWin renders and reads back only that part: on
+llvmpipe a dock item costs 29 ms instead of 180 ms (debian-13) and 13 ms
+instead of 52 ms (fedora-43). The image still goes through the same Qt
+conversion and PNG writer; for a dock item, the dock surface and a screen
+row the flattened area equals the same crop of a full capture (checked on
+both targets). "0 0 0 0", what the webdriver passes,
+still captures the active output. QCoreApplication replaces QGuiApplication:
+talking D-Bus and encoding a QImage needs no Wayland connection.
+
+diff --git a/screenshotter/main.cpp b/screenshotter/main.cpp
+--- a/screenshotter/main.cpp
++++ b/screenshotter/main.cpp
+@@ -13,7 +13,7 @@
+ #include <QDBusUnixFileDescriptor>
+ #include <QDebug>
+ #include <QFile>
+-#include <QGuiApplication>
++#include <QCoreApplication>
+ #include <QImage>
+ #include <qplatformdefs.h>
+ 
+@@ -103,22 +103,15 @@ static QImage readImage(int pipeFd, const QVariantMap &metadata)
+ 
+ int main(int argc, char **argv)
+ {
+-    const QGuiApplication app(argc, argv);
+-
+-    // Unfortunately since the geometries are not including the DPR we can only look at one screen
+-    // and hope that they are all the same :(
+-    //
+-    // Also since the position is entirely wrong on wayland (always 0,0) we currently ignore all of this
+-    // and instead make full screen shots.
+-    //
+-    // const auto dpr = app.primaryScreen()->devicePixelRatio();
+-    //
+-    // auto args const = app.arguments().mid(1);
+-    // const auto positionX = int(args.takeFirst().toInt() * dpr);
+-    // const auto positionY = int(args.takeFirst().toInt() * dpr);
+-    // const auto width = int(args.takeFirst().toInt() * dpr);
+-    // const auto height = int(args.takeFirst().toInt() * dpr);
+-    // Q_ASSERT(args.isEmpty());
++    // No platform plugin (Wayland connection) is needed to talk D-Bus and
++    // encode a QImage.
++    const QCoreApplication app(argc, argv);
++
++    // Optional area in global logical coordinates: x y width height. A zero
++    // width or height (the webdriver passes "0 0 0 0") captures the active
++    // screen, as before.
++    const QStringList args = app.arguments().mid(1);
++    const bool area = args.size() == 4 && args.at(2).toInt() > 0 && args.at(3).toInt() > 0;
+ 
+     const auto service = kwinService();
+     if (!service.has_value()) {
+@@ -132,15 +125,14 @@ int main(int argc, char **argv)
+         return 1;
+     }
+ 
+-    QVariantList arguments;
+-    arguments.append(QVariantMap());
+-    arguments.append(QVariant::fromValue(QDBusUnixFileDescriptor(pipeFds.at(1))));
+-
+     auto bus = QDBusConnection::sessionBus();
+     QDBusMessage message = QDBusMessage::createMethodCall(service.value(),
+                                                           QStringLiteral("/org/kde/KWin/ScreenShot2"),
+                                                           QStringLiteral("org.kde.KWin.ScreenShot2"),
+-                                                          QStringLiteral("CaptureActiveScreen")); // CaptureWorkspace is nicer but only available in plasma6
++                                                          area ? QStringLiteral("CaptureArea") : QStringLiteral("CaptureActiveScreen"));
++    if (area) {
++        message << args.at(0).toInt() << args.at(1).toInt() << args.at(2).toUInt() << args.at(3).toUInt();
++    }
+     message << QVariantMap() << QVariant::fromValue(QDBusUnixFileDescriptor(pipeFds.at(1)));
+ 
+     QDBusPendingCall msg = bus.asyncCall(message);

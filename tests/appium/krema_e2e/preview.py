@@ -89,17 +89,20 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
         timeout=timeout,
         message="pre-mapped KWin preview surface",
     )
+
     first_visible: float | None = None
+    component: Any | None = None
 
     def current() -> Rect | None:
-        nonlocal first_visible
+        nonlocal component, first_visible
         popup.clear_cache()
         states = popup.getState()
+        if states.contains(pyatspi.STATE_SHOWING) and component is None:
+            component = popup.get_component_iface()
         if not states.contains(pyatspi.STATE_SHOWING) or not states.contains(pyatspi.STATE_VISIBLE):
             return None
         if first_visible is None:
             first_visible = time.monotonic()
-        component = popup.get_component_iface()
         if component is None:
             return None
         extents = component.get_extents(pyatspi.XY_SCREEN)

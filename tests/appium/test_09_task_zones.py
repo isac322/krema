@@ -128,7 +128,7 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
     _configure(krema, edge=edge, separate=False)
     _open_matrix(apps, krema)
     assert krema.item_names() == list(task_zone_names)
-    original_membership = set(_launcher_ids(krema))
+    original_membership = _launcher_ids(krema)
     _wait_no_separator(krema)
 
     # Prove ON-mode migration from a genuinely cross-zone OFF-mode order. The
@@ -138,7 +138,7 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
     _drag_from_rest(krema, UNPINNED_B, PINNED_A, "off-mode-cross-zone-before-toggle")
     off_order = [UNPINNED_B, PINNED_A, PINNED_B, UNPINNED_A]
     wait_until(lambda: krema.item_names() == off_order, message="OFF mode permits cross-zone order before enabling separation")
-    assert set(_launcher_ids(krema)) == original_membership
+    assert _launcher_ids(krema) == original_membership
     # Match the established post-drag focus contract before opening a fresh
     # menu. This observes KWin state without activating or repairing a client.
     wait_until(
@@ -159,37 +159,55 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
     )
     _assert_partition(krema, separated_order)
     _wait_separator(krema)
-    assert set(_launcher_ids(krema)) == original_membership
+    assert _launcher_ids(krema) == original_membership
     close_settings(krema)
     wait_until(lambda: krema.item_names() == separated_order, message="exact separated order once Settings closes")
 
     krema.restart()
     for name in task_zone_names:
         krema.wait_for_item(name)
-    wait_until(lambda: krema.item_names() == separated_order, message="partitioned order persists across restart")
-    _assert_partition(krema, separated_order)
+    # Only launcher order is persisted. Running-task enumeration may change
+    # after a process restart, but ON mode must restore the pinned section.
+    wait_until(
+        lambda: len(names := krema.item_names()) == 4 and names[:2] == [PINNED_A, PINNED_B] and set(names[2:]) == {UNPINNED_A, UNPINNED_B},
+        message="ON restart restores pinned order and exactly one of each running fixture",
+    )
+    restarted_order = wait_stable(krema.item_names)
+    assert len(restarted_order) == 4
+    assert restarted_order[:2] == [PINNED_A, PINNED_B]
+    assert set(restarted_order[2:]) == {UNPINNED_A, UNPINNED_B}
     _wait_separator(krema)
-    assert set(_launcher_ids(krema)) == original_membership
+    assert _launcher_ids(krema) == original_membership
     assert config.as_bool(krema.read_config()["General"]["SeparateLaunchers"])
 
     _toggle_separation(krema, False)
     close_settings(krema)
     _wait_no_separator(krema)
-    wait_until(lambda: krema.item_names() == separated_order, message="OFF mode retains the current order after toggle")
-    _assert_partition(krema, separated_order)
-    assert set(_launcher_ids(krema)) == original_membership
+    wait_until(lambda: krema.item_names() == restarted_order, message="live OFF mode retains the settled pre-toggle order")
+    _assert_partition(krema, restarted_order)
+    assert _launcher_ids(krema) == original_membership
     assert config.as_bool(krema.read_config().get("General", {}).get("SeparateLaunchers", "false")) is False
 
     krema.restart()
     for name in task_zone_names:
         krema.wait_for_item(name)
+    wait_until(
+        lambda: len(names := krema.item_names()) == 4 and set(names) == set(ALL_NAMES),
+        message="OFF restart restores exactly one of each fixture without imposing task ranks",
+    )
+    off_restart_order = wait_stable(krema.item_names)
+    assert len(off_restart_order) == 4 and set(off_restart_order) == set(ALL_NAMES)
     switch = _open_behavior_switch(krema)
-    _assert_partition(krema, separated_order)
+    wait_until(
+        lambda: [name for name in krema.item_names() if name in ALL_NAMES] == off_restart_order,
+        message="opening Settings preserves existing OFF-mode fixture order",
+    )
     _wait_no_separator(krema)
-    assert set(_launcher_ids(krema)) == original_membership
+    assert _launcher_ids(krema) == original_membership
     assert not has_state(switch, "checked"), "OFF separation preference must persist across restart"
+    assert not config.as_bool(krema.read_config().get("General", {}).get("SeparateLaunchers", "false"))
     close_settings(krema)
-    wait_until(lambda: krema.item_names() == separated_order, message="exact OFF-mode order after restart once Settings closes")
+    wait_until(lambda: krema.item_names() == off_restart_order, message="closing Settings preserves exact OFF-mode fixture order")
 
 
 @pytest.mark.parametrize(

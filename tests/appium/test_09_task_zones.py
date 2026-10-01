@@ -14,7 +14,7 @@ from typing import Iterable
 
 import pytest
 
-from krema_e2e import config, env
+from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import Krema, context_menu_entries, has_state
 from krema_e2e.preview import Announcements
@@ -71,11 +71,11 @@ def _open_matrix(apps: TestWindows, krema: Krema) -> None:
     krema.move_away()
 
 
-def _assert_partition(krema: Krema) -> None:
+def _assert_partition(krema: Krema, expected: Iterable[str] = ALL_NAMES) -> None:
     names = krema.item_names()
     fixture_names = [name for name in names if name in ALL_NAMES]
     assert names[:2] == [PINNED_A, PINNED_B], f"pinned zone order: {names}"
-    assert fixture_names == list(ALL_NAMES), f"fixture task order/duplicates: {names}"
+    assert fixture_names == list(expected), f"fixture task order/duplicates: {names}"
 
 def _separator(krema: Krema):
     return krema.find(SEPARATOR)
@@ -93,7 +93,10 @@ def _open_behavior_switch(krema: Krema, *, pinned: bool = True):
     # Use the real button currently exposed by the dock. Running fixture
     # tasks are named by their window titles in the source-built QA image,
     # while launcher-only items may use the desktop Name.
-    anchor = wait_until(lambda: next(iter(krema.item_names()), None), message="a real dock item for Settings")
+    anchor = wait_until(
+        lambda: next((name for name in krema.item_names() if ("Pinned" in description(krema, name)) is pinned), None),
+        message="a real dock item matching the Settings context-menu membership",
+    )
     krema.open_settings(anchor, entries=context_menu_entries(pinned=pinned, is_window=True))
     open_page(krema, "Behavior")
     return scroll_into_view(krema, SEPARATE_SWITCH)
@@ -125,31 +128,51 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
     _configure(krema, edge=edge, separate=False)
     _open_matrix(apps, krema)
     assert krema.item_names() == list(task_zone_names)
+    original_membership = set(_launcher_ids(krema))
+    _wait_no_separator(krema)
 
     # Prove ON-mode migration from a genuinely cross-zone OFF-mode order. The
     # relative order within each resulting zone must remain stable.
+    active = kwin.active_window()
+    assert active is not None
     _drag_from_rest(krema, UNPINNED_B, PINNED_A, "off-mode-cross-zone-before-toggle")
     off_order = [UNPINNED_B, PINNED_A, PINNED_B, UNPINNED_A]
     wait_until(lambda: krema.item_names() == off_order, message="OFF mode permits cross-zone order before enabling separation")
+    assert set(_launcher_ids(krema)) == original_membership
+    # Match the established post-drag focus contract before opening a fresh
+    # menu. This observes KWin state without activating or repairing a client.
+    wait_until(
+        lambda: (current := kwin.active_window()) is not None and current.internal_id == active.internal_id,
+        message="pre-drag window active again after the drop",
+    )
+    park = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
+    dock = krema.surface_rect("dock")
+    assert dock is not None and not dock.contains(*park)
+    inp.move(*park)
 
     _toggle_separation(krema, True)
     separated_order = [PINNED_A, PINNED_B, UNPINNED_B, UNPINNED_A]
     wait_until(lambda: krema.item_names() == separated_order, message="ON mode preserves relative order while partitioning zones")
-    _assert_partition(krema)
-    assert _separator(krema) is not None
+    _assert_partition(krema, separated_order)
+    _wait_separator(krema)
+    assert set(_launcher_ids(krema)) == original_membership
     close_settings(krema)
 
     krema.restart()
     for name in task_zone_names:
         krema.wait_for_item(name)
     wait_until(lambda: krema.item_names() == separated_order, message="partitioned order persists across restart")
-    _assert_partition(krema)
+    _assert_partition(krema, separated_order)
+    _wait_separator(krema)
+    assert set(_launcher_ids(krema)) == original_membership
     assert config.as_bool(krema.read_config()["General"]["SeparateLaunchers"])
 
     _toggle_separation(krema, False)
     close_settings(krema)
     _wait_no_separator(krema)
     wait_until(lambda: krema.item_names() == separated_order, message="OFF mode retains the current order after toggle")
+    _assert_partition(krema, separated_order)
+    assert set(_launcher_ids(krema)) == original_membership
     assert config.as_bool(krema.read_config().get("General", {}).get("SeparateLaunchers", "false")) is False
 
     krema.restart()
@@ -157,6 +180,9 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
         krema.wait_for_item(name)
     switch = _open_behavior_switch(krema)
     assert krema.item_names() == separated_order
+    _assert_partition(krema, separated_order)
+    _wait_no_separator(krema)
+    assert set(_launcher_ids(krema)) == original_membership
     assert not has_state(switch, "checked"), "OFF separation preference must persist across restart"
     close_settings(krema)
 

@@ -71,7 +71,14 @@ dev-desktop:
     kbuildsycoca6 --noincremental
     echo "Installed dev launcher and icons under ~/.local/share"
 
-# Remove dev .desktop file
+# Remove dev .desktop file and the icons dev-desktop installed
 dev-desktop-clean:
-    @rm -f ~/.local/share/applications/com.bhyoo.krema.desktop ~/.local/share/icons/hicolor/*/apps/com.bhyoo.krema.*
-    @echo "Removed dev .desktop file and icons"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -f ~/.local/share/applications/com.bhyoo.krema.desktop \
+        ~/.local/share/icons/hicolor/scalable/apps/com.bhyoo.krema.svg
+    for png in src/icons/*-apps-com.bhyoo.krema.png; do
+        size=$(basename "$png" | cut -d- -f1)
+        rm -f ~/.local/share/icons/hicolor/${size}x${size}/apps/com.bhyoo.krema.png
+    done
+    echo "Removed dev .desktop file and icons"

@@ -164,15 +164,17 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
         near = (trigger[0], rest.center[1]) if edge == config.EDGE_TOP else (rest.center[0], trigger[1])
         inp.move_path([trigger, near, *inp.line(near, rest.center, 5)], 40)
 
-        def pointer_on_item():
-            item = krema.wait_for_item(name)
-            rect = krema.screen_rect(item)
-            cursor = kwin.cursor_pos()
-            return rect if has_state(item, "showing") and rect.contains(*cursor) and not krema.preview_visible() else None
-
-        pointer_item = wait_until(pointer_on_item, timeout=5, message=f"native pointer on {name!r} with preview closed")
+        # Older Qt does not expose a transformed hover hit box. Prove the
+        # frontdoor through the native menu at the existing pointer instead.
+        wait_until(
+            lambda: has_state(krema.wait_for_item(name), "showing") and not krema.preview_visible(),
+            timeout=5,
+            message=f"{name!r} showing with preview closed before the native context menu",
+        )
+        assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
         before = {w.internal_id for w in krema.windows()}
-        inp.click(*kwin.cursor_pos(), button="right")
+        pointer = kwin.cursor_pos()
+        inp.click(*pointer, button="right")
         menu = wait_until(
             lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
             timeout=5,
@@ -180,7 +182,7 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
         )
         _record(krema, "edge-settings-frontdoor", {
             "edge": edge, "surface": list(surface), "rest_icon": list(rest),
-            "pointer_item": list(pointer_item), "menu": list(menu.client_geometry),
+            "pointer": list(pointer), "menu": list(menu.client_geometry),
         })
         krema.choose_context_menu_entry("Settings...", context_menu_entries(pinned=False, is_window=True))
         wait_until(

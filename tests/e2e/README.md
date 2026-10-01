@@ -193,7 +193,7 @@ duplicating their full procedures.
 | Section control/default/persistence | SET-016 | Real Behavior switch, ordered dock app names, pinned membership, accessible separator, and restart |
 | Pin/unpin and app lifecycle | CTX-007 | Running pinned apps retain one pinned slot; unpinned apps follow; live launch/close/group and empty-section transitions |
 | Zone drag policy | DND-006 | Real drags reorder within the source section, clamp cross-section moves without pinning, and allow free ordering when separation is off |
-| Boundary interactions | KBD-010, MOUSE-017, PREV-010 | Correct task activation/preview indices, non-focusable separator, hover geometry, and unchanged item input targets |
+| Boundary interactions | KBD-010, MOUSE-018, PREV-010 | Correct task activation/preview indices, non-focusable separator, hover geometry, and unchanged item input targets |
 
 The divider is an overlay, not a task or an extra equal-pitch item. Observe
 its accessible role/name and its placement between the current adjacent

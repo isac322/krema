@@ -297,6 +297,42 @@ void requestPublishDelegateGeometry(const QModelIndex &index, const QRect &geome
 void requestToggleGrouping(const QModelIndex &index);
 ```
 
+### Delegate geometry on Wayland
+
+The interface documents `geometry` as a screen-coordinate `QRect`, but
+`WaylandTasksModel::requestPublishDelegateGeometry()` ignores that argument.
+It casts `delegate` to `QQuickItem`, requires a parent item and a window with a
+live native Wayland surface, and reads the item's `x`, `y`, `width`, and
+`height`. It maps the top-left through `parentItem()->mapToScene()` and sends
+that surface-local rectangle with the window's `wl_surface` through
+`set_minimized_geometry()`. A rectangle alone, or an arbitrary `QObject`,
+does not publish a Wayland minimize target.
+
+Krema's `DockModel::publishDelegateGeometry(int, QObject *)` validates a
+window-task or group-parent index and forwards the actual item with `QRect{}`.
+Launcher and startup rows are rejected. Each production delegate owns a
+nonvisual geometry proxy whose visual parent is the dock root. The proxy uses
+the panel's visible resting position and the delegate's unscaled layout slot,
+not the panel's hidden slide position or icon zoom transform. This also gives
+tasks created while Auto Hide or Dodge Windows hides the dock a target at the
+slot they will occupy when it is revealed.
+
+Publication follows settled layout, task-role and group-membership changes,
+dock movement, resizing, and surface changes. The delegate's item-owned
+zero-interval timer defers initial publication; the dock-owned 50 ms timer
+debounces relayout. Neither timer polls, and hover transforms do not trigger
+per-frame geometry IPC. Destroying the owning QML tree cancels pending timer
+work; geometry callbacks must not survive dock or engine teardown.
+
+Publishing a group-parent index fans the same item and geometry out to every
+child window in `TaskGroupingProxyModel`. Republish when membership changes
+so a newly grouped window receives the shared resting-slot target.
+
+Verified against the Plasma 6.7 sources:
+[`AbstractTasksModelIface`](https://invent.kde.org/plasma/plasma-workspace/-/blob/Plasma/6.7/libtaskmanager/abstracttasksmodeliface.h),
+[`WaylandTasksModel`](https://invent.kde.org/plasma/plasma-workspace/-/blob/Plasma/6.7/libtaskmanager/waylandtasksmodel.cpp),
+and [`TaskGroupingProxyModel`](https://invent.kde.org/plasma/plasma-workspace/-/blob/Plasma/6.7/libtaskmanager/taskgroupingproxymodel.cpp).
+
 ### Child-targeted activation and minimization
 
 `makeModelIndex(row, childRow)` resolves an individual window in a group. Pass that child index to `requestToggleMinimized` to affect only that window. Krema's optional minimize action never sends this request to the group-parent index or performs a group-wide minimize.
@@ -441,5 +477,5 @@ bool canLaunchNewInstance(const AppData &appData);
 2. **Proxy chain**: Concatenate -> Filter -> Group -> Flatten -> Sort
 3. **Grouping**: `GroupApplications` groups by app; `groupInline` flattens groups; blacklists exclude apps
 4. **Launcher management**: Activity-scoped; null UUID = all activities; URL comparison ignores query strings
-5. **Geometry publishing**: `requestPublishDelegateGeometry` sends screen coordinates back to the compositor
+5. **Geometry publishing**: Wayland extracts a surface-local rectangle from the passed `QQuickItem`; the documented screen-coordinate `QRect` is not used by that backend
 6. **Border control**: `HasNoBorder` / `CanSetNoBorder` / `requestToggleNoBorder` added in KDE 6.4

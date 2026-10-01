@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""KBD-010, PREV-010 and MOUSE-017: real task-zone input consumers."""
+"""KBD-010, PREV-010 and MOUSE-018: real task-zone input consumers."""
 
 from __future__ import annotations
 
@@ -470,7 +470,7 @@ def _magnified_click(krema: Krema, names: tuple[str, ...], windows: dict[str, Te
 @pytest.mark.skipif(EXTENTS_IGNORE_SCALE, reason="expanded native AT-SPI hit rectangles require Qt >= 6.9")
 @pytest.mark.parametrize("edge", EDGES)
 @pytest.mark.parametrize("separate", SEPARATION)
-def test_mouse017_separation_modes_and_magnified_boundary_hits(krema: Krema, apps: TestWindows, edge: int, separate: bool) -> None:
+def test_mouse018_separation_modes_and_magnified_boundary_hits(krema: Krema, apps: TestWindows, edge: int, separate: bool) -> None:
     _start(krema, edge, separate=separate, zoom=1.6)
     windows = _matrix(apps, krema)
     _divider(krema, separate)

@@ -11,6 +11,7 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
+#include <QRect>
 #include <QScreen>
 
 Q_LOGGING_CATEGORY(lcModel, "krema.model")
@@ -290,6 +291,22 @@ int DockModel::childCount(int index) const
 QModelIndex DockModel::taskModelIndex(int index) const
 {
     return m_tasksModel->index(index, 0);
+}
+
+void DockModel::publishDelegateGeometry(int index, QObject *delegate)
+{
+    if (!delegate) {
+        return;
+    }
+
+    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (!idx.isValid()
+        || (!idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
+            && !idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool())) {
+        return;
+    }
+
+    m_tasksModel->requestPublishDelegateGeometry(idx, QRect{}, delegate);
 }
 
 QString DockModel::appId(int index) const

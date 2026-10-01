@@ -253,6 +253,14 @@ The issue #55 regression `QA-PREV-01` has recorded pre-fix and fixed results:
 the pre-fix run failed after a 33 ms entry, while the fixed run passed three
 fresh opens in one run. The fast path is tested separately from pixel waits.
 
+`MOUSE-017` is a native KWin test, not an Appium fixture. Its test-only
+scripted effect reads `EffectWindow.iconGeometry` independently of
+libtaskmanager. Initial publication, dock movement, icon resizing, hidden
+new-task/group creation, reveal, and teardown passed in the updated runtime.
+The old runtime failed the initial visible-task assertion with an empty target
+before reaching hidden cases; no old-runtime hidden-case result was recorded.
+Headless target assertions do not verify visible Magic Lamp or Squash rendering.
+
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
 parked and at the screen centre. SET-008 runs with two outputs. SET-012 runs
 its switch/fallback/persistence cases with two outputs and its
@@ -333,6 +341,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | MOUSE-014 | `test_02_mouse.py::test_mouse014_fast_hover_launcher_tooltip_healthy_control` | screenshot | pending; DRM capture required |
 | MOUSE-015 | `test_02_mouse.py::test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru` | KWin | pending |
 | MOUSE-016 | `test_02_mouse.py::test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies` (six policy cases) | KWin, AT-SPI | pending |
+| MOUSE-017 | `tests/kwin/test_delegate_geometry.cpp` (ctest `krema_delegate_geometry_tests`) | Independent KWin `EffectWindow.iconGeometry` | partial: initial target, move/resize, groups, teardown passed; hidden new-task/group and reveal pending; visible Magic Lamp/Squash animation manual |
 | PREV-008 | `test_03_preview.py::test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes` | KWin, AT-SPI, screenshot | pending; DRM capture required |
 | PREV-009 | `test_03_preview.py::test_prev009_explicit_group_pending_hide_retargets_after_reenter` | AT-SPI, screenshot | pending; DRM capture required |
 | DND-005 | `test_05_drag.py::test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state` (72 base scenarios: six policy pairs × 12 source/release cases, plus 24 held-left/right release-order controls) | KWin, AT-SPI, screenshot | pending; DRM capture required |
@@ -347,7 +356,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | CTX-007 | `test_09_task_zones.py::test_tzone003_grouped_instances_keep_one_pinned_slot_and_close_differently`, `test_tzone004_pin_and_unpin_use_real_context_menu_and_preserve_membership`; TZONE-002 for empty-section divider state | Real fixture windows/context menu input, ordered AT-SPI app names, separator state, saved pinned membership | native Tier 2 coverage; no DRM; installed Tier 3 unverified |
 | DND-006 | `test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both cross-boundary directions with separation on/off) | Real drags, ordered AT-SPI app names, saved pinned membership | native Tier 2 coverage; visual drop-indicator/drag ghost/paint unverified; installed Tier 3 unverified |
 | KBD-010 | `tests/appium/test_10_task_zone_input.py::test_kbd010_task_navigation_survives_native_launch_and_close` (four edges) | Real keys, AT-SPI item focus, native launch/close, KWin activation | native Tier 2 coverage; F12 is a delivery probe, not launch proof; painted-divider quality and KWin RPC unverified |
-| MOUSE-017 | `tests/appium/test_10_task_zone_input.py::test_mouse017_separation_modes_and_magnified_boundary_hits` (four edges × separation ON/OFF, `MaxZoomFactor=1.6`) | Real pointer hover, AT-SPI separator/item geometry, outward-neighbor reflow, exact native PID hit targets | native Tier 2 coverage; pixel/AA, overlap screenshots, and DRM unverified |
+| MOUSE-018 | `tests/appium/test_10_task_zone_input.py::test_mouse018_separation_modes_and_magnified_boundary_hits` (four edges × separation ON/OFF, `MaxZoomFactor=1.6`) | Real pointer hover, AT-SPI separator/item geometry, outward-neighbor reflow, exact native PID hit targets | native Tier 2 coverage; pixel/AA, overlap screenshots, and DRM unverified |
 | PREV-010 | `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` (horizontal three-thumbnail and vertical two-thumbnail invocations) | Actual grouped window IDs/titles, last-thumbnail selection, selected-window KWin activation, AT-SPI preview state | Strict feature coverage for partition/index/pin transitions. The vertical two-thumbnail case still exercises center-point input reachability while the existing 400 px native surface clips the wider popup; whole-popup/thumbnail containment is owned by the separate preview-surface fix. Image/RHI/DRM/default-timing unverified |
 The Tier 1 QML names are:
 `test_groupPreviewClickShowsPopupAndSuppressesTooltip`,

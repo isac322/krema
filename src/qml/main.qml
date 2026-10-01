@@ -32,6 +32,39 @@ Item {
 
     focus: true
 
+    // Dock movement and model relayout can emit several geometry changes.
+    // Debounce them until the stable slots settle; hover zoom transforms do
+    // not participate in this refresh.
+    function scheduleDelegateGeometryRefresh() {
+        if (delegateGeometryRefreshTimer)
+            delegateGeometryRefreshTimer.restart()
+    }
+
+    Timer {
+        id: delegateGeometryRefreshTimer
+        interval: 50
+        onTriggered: {
+            for (let i = 0; i < dockRepeater.count; ++i) {
+                let item = dockRepeater.itemAt(i)
+                if (item)
+                    item.publishDelegateGeometry()
+            }
+        }
+    }
+
+    Connections {
+        target: DockVisibility
+        function onDockVisibleChanged() {
+            root.scheduleDelegateGeometryRefresh()
+        }
+    }
+
+    onXChanged: scheduleDelegateGeometryRefresh()
+    onYChanged: scheduleDelegateGeometryRefresh()
+    onWidthChanged: scheduleDelegateGeometryRefresh()
+    onHeightChanged: scheduleDelegateGeometryRefresh()
+    Component.onCompleted: scheduleDelegateGeometryRefresh()
+
     function announceLaunch(name) {
         Accessible.announce(i18n("Starting %1", name), Accessible.Assertive)
     }
@@ -60,6 +93,12 @@ Item {
     // so forceActiveFocus() may fail if called before the window is active.
     Connections {
         target: root.Window.window
+        function onXChanged() { root.scheduleDelegateGeometryRefresh() }
+        function onYChanged() { root.scheduleDelegateGeometryRefresh() }
+        function onWidthChanged() { root.scheduleDelegateGeometryRefresh() }
+        function onHeightChanged() { root.scheduleDelegateGeometryRefresh() }
+        function onScreenChanged() { root.scheduleDelegateGeometryRefresh() }
+        function onVisibleChanged() { root.scheduleDelegateGeometryRefresh() }
         function onActiveChanged() {
             if (root.Window.window && root.Window.window.active
                     && (root.keyboardNavigating || root._dragActive) && !root.activeFocus) {
@@ -782,22 +821,40 @@ Item {
             : (DockSettings.iconSize + Kirigami.Units.largeSpacing * 2)
         color: "transparent"
 
+        // Rest slot coordinates stay at the visible panel position even
+        // while the actual panel is slid off-screen for AutoHide/Dodge.
+        readonly property real restEdgePos: {
+            let fp = DockView.floatingPadding
+            switch (DockView.edge) {
+            case 0: // Top
+                return fp
+            case 1: // Bottom
+                return parent.height - height - fp
+            case 2: // Left
+                return fp
+            case 3: // Right
+                return parent.width - width - fp
+            }
+            return 0
+        }
+        readonly property real restX: DockView.isVertical ? restEdgePos : (parent.width - width) / 2
+        readonly property real restY: DockView.isVertical ? (parent.height - height) / 2 : restEdgePos
+
         // Position: center on the non-edge axis, slide on the edge axis
-        x: DockView.isVertical ? _panelEdgePos : (parent.width - width) / 2
-        y: DockView.isVertical ? (parent.height - height) / 2 : _panelEdgePos
+        x: DockView.isVertical ? _panelEdgePos : restX
+        y: DockView.isVertical ? restY : _panelEdgePos
 
         property real _panelEdgePos: {
-            let fp = DockView.floatingPadding
             let sp = Kirigami.Units.largeSpacing
             switch (DockView.edge) {
             case 0: // Top
-                return DockVisibility.dockVisible ? fp : -height - sp
+                return DockVisibility.dockVisible ? restEdgePos : -height - sp
             case 1: // Bottom
-                return DockVisibility.dockVisible ? parent.height - height - fp : parent.height + sp
+                return DockVisibility.dockVisible ? restEdgePos : parent.height + sp
             case 2: // Left
-                return DockVisibility.dockVisible ? fp : -width - sp
+                return DockVisibility.dockVisible ? restEdgePos : -width - sp
             case 3: // Right
-                return DockVisibility.dockVisible ? parent.width - width - fp : parent.width + sp
+                return DockVisibility.dockVisible ? restEdgePos : parent.width + sp
             }
             return 0
         }
@@ -992,16 +1049,34 @@ Item {
             }
             DockVisibility.setPanelRect(left, top, right - left, bottom - top)
         }
-        onXChanged: reportPanelRect()
-        onYChanged: reportPanelRect()
-        onWidthChanged: reportPanelRect()
-        onHeightChanged: reportPanelRect()
+        onXChanged: {
+            reportPanelRect()
+            root.scheduleDelegateGeometryRefresh()
+        }
+        onYChanged: {
+            reportPanelRect()
+            root.scheduleDelegateGeometryRefresh()
+        }
+        onWidthChanged: {
+            reportPanelRect()
+            root.scheduleDelegateGeometryRefresh()
+        }
+        onHeightChanged: {
+            reportPanelRect()
+            root.scheduleDelegateGeometryRefresh()
+        }
 
         // Main icon layout (Flow switches between horizontal/vertical)
         Flow {
             id: dockRow
             flow: DockView.isVertical ? Flow.TopToBottom : Flow.LeftToRight
             spacing: DockSettings.iconSpacing
+
+            onXChanged: root.scheduleDelegateGeometryRefresh()
+            onYChanged: root.scheduleDelegateGeometryRefresh()
+            onImplicitWidthChanged: root.scheduleDelegateGeometryRefresh()
+            onImplicitHeightChanged: root.scheduleDelegateGeometryRefresh()
+            onPositioningComplete: root.scheduleDelegateGeometryRefresh()
 
             // Animate content extent to sync centering with panel size animation.
             property real animatedContentWidth: implicitWidth
@@ -1043,13 +1118,38 @@ Item {
                 id: dockRepeater
                 model: DockModel.tasksModel
                 property int layoutRevision: 0
-                onItemAdded: layoutRevision++
-                onItemRemoved: layoutRevision++
+                onCountChanged: root.scheduleDelegateGeometryRefresh()
+                onItemAdded: {
+                    layoutRevision++
+                    root.scheduleDelegateGeometryRefresh()
+                }
+                onItemRemoved: {
+                    layoutRevision++
+                    root.scheduleDelegateGeometryRefresh()
+                }
 
                 DockItem {
+                    id: taskDelegate
                     // index and model are injected by Repeater into
                     // DockItem's own required properties
 
+                    // This visual-parent-independent item is the geometry
+                    // target sent to libtaskmanager. Its QObject ownership
+                    // remains with this delegate's declarative object tree,
+                    // while parentItem is the dock root so its coordinates
+                    // are surface-local and unaffected by panel slide or
+                    // DockItem hover transforms.
+                    Item {
+                        id: delegateGeometryProxy
+                        parent: root
+                        visible: false
+                        x: dockPanel.restX + dockRow.x + taskDelegate.x
+                        y: dockPanel.restY + dockRow.y + taskDelegate.y
+                        width: taskDelegate.width
+                        height: taskDelegate.height
+                    }
+
+                    delegateGeometryTarget: delegateGeometryProxy
                     z: (root.hoveredIndex === index) ? 1 : 0
                     isKeyboardFocused: root.keyboardNavigating && root.hoveredIndex === index
                     iconSize: DockSettings.iconSize
@@ -1060,6 +1160,7 @@ Item {
                     zoomStyle: dockPanel.zoomStyle
                     onCurrentOffsetChanged: dockPanel.scheduleHoverUpdate()
                     onCurrentScaleChanged: dockPanel.scheduleHoverUpdate()
+                    onDelegateGeometryChanged: root.scheduleDelegateGeometryRefresh()
 
                     // Compute this item's rest center on the primary axis relative to the panel.
                     // For vertical docks, the primary axis is Y (remapped to mouseX).
@@ -1405,7 +1506,12 @@ Item {
         target: DockModel.tasksModel
         function onRowsInserted() {
             root._tryAutoPreview()
+            root.scheduleDelegateGeometryRefresh()
         }
+        function onRowsRemoved() { root.scheduleDelegateGeometryRefresh() }
+        function onRowsMoved() { root.scheduleDelegateGeometryRefresh() }
+        function onLayoutChanged() { root.scheduleDelegateGeometryRefresh() }
+        function onModelReset() { root.scheduleDelegateGeometryRefresh() }
     }
 
 }

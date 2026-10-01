@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Changing visibility mode while the Settings window was open now released or applied the dock's screen-space reservation immediately.
+- The README now lists the four available background styles and no longer advertises unsupported Semi-Transparent or Mica styles
+- Windows minimized with KWin's Magic Lamp or Squash effects now animate toward their Krema dock icon instead of an unrelated fallback position
 - The software-center description (Discover, GNOME Software) now lists the four available background styles and no longer advertises unsupported Mica or adaptive opacity
 - "Follow active screen" with the "Mouse position" trigger moved the dock: pushing the pointer against the dock edge of another monitor brought the dock there
 - Changing the icon size or screen edge resized and moved the dock immediately on distributions with LayerShellQt older than 6.4 (e.g. Debian 13, Ubuntu 25.04) instead of only after a restart

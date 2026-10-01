@@ -17,6 +17,17 @@ Rules that apply to every agent working on this repository, regardless of harnes
 - Documentation, manifests, and PR communication are in English.
 - When adding or removing a dependency (`find_package()` / `target_link_libraries()` in CMake), update `packaging/arch/PKGBUILD` (`depends` / `makedepends`) and the OBS packaging (`packaging/obs/krema.spec`, `packaging/obs/debian.control`) in the same change.
 
+## Visual Evidence for Pull Requests
+
+- Every agent MUST upload media evidence to the PR body or a PR comment for every visual change before requesting or conducting PR review (including internal agent review), marking the PR ready for review, or merging it.
+- Dynamic changes (animations, movement, interactive transitions, and live or real-time updates) MUST include a video of the changed behavior. Screenshots cannot replace that video. Use video whenever a change is not clearly static.
+- Purely static visual changes may use screenshots instead of video.
+- Capture the actual running implementation from the PR revision under review. The media MUST visibly demonstrate each changed appearance or behavior; logs, passing tests, mockups, and unrelated footage are not substitutes.
+- For dynamic changes, show the trigger or setup and the resulting motion or live update, not just the final state.
+- Use any suitable capture method within existing authorization and safety rules. If one method fails, try another available route (local, containerized, or remote); capture difficulty does not waive this requirement.
+- Open the uploaded media and confirm reviewers can view it and the change is clearly visible. Refresh evidence when subsequent commits alter the demonstrated appearance or behavior.
+- If no authorized capture route works, report the concrete blocker and required access; keep the visual work incomplete and the PR not ready for review until evidence is attached.
+
 ## Roadmap
 
 - `ROADMAP.md` tracks milestones; the current one is marked ⬅️. Work from the current milestone.

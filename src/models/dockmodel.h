@@ -79,6 +79,9 @@ public:
     /// Return a QModelIndex for use as DelegateModel.rootIndex.
     Q_INVOKABLE QModelIndex taskModelIndex(int index) const;
 
+    /// Publish the delegate geometry for a window task to KWin.
+    Q_INVOKABLE void publishDelegateGeometry(int index, QObject *delegate);
+
     /// Return the desktop entry name (AppId) for the task at @p index.
     Q_INVOKABLE QString appId(int index) const;
 

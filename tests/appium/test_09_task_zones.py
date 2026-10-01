@@ -152,11 +152,16 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
 
     _toggle_separation(krema, True)
     separated_order = [PINNED_A, PINNED_B, UNPINNED_B, UNPINNED_A]
-    wait_until(lambda: krema.item_names() == separated_order, message="ON mode preserves relative order while partitioning zones")
+    # Settings is itself an unpinned native task while its window is open.
+    wait_until(
+        lambda: [name for name in krema.item_names() if name in ALL_NAMES] == separated_order,
+        message="ON mode preserves fixture relative order while partitioning zones",
+    )
     _assert_partition(krema, separated_order)
     _wait_separator(krema)
     assert set(_launcher_ids(krema)) == original_membership
     close_settings(krema)
+    wait_until(lambda: krema.item_names() == separated_order, message="exact separated order once Settings closes")
 
     krema.restart()
     for name in task_zone_names:
@@ -179,12 +184,12 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
     for name in task_zone_names:
         krema.wait_for_item(name)
     switch = _open_behavior_switch(krema)
-    assert krema.item_names() == separated_order
     _assert_partition(krema, separated_order)
     _wait_no_separator(krema)
     assert set(_launcher_ids(krema)) == original_membership
     assert not has_state(switch, "checked"), "OFF separation preference must persist across restart"
     close_settings(krema)
+    wait_until(lambda: krema.item_names() == separated_order, message="exact OFF-mode order after restart once Settings closes")
 
 
 @pytest.mark.parametrize(

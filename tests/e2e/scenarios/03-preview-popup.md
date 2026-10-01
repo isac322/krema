@@ -2,6 +2,9 @@
 
 ## Features
 - preview-hover-open: Preview popup opens on mouse hover over grouped app
+- preview-explicit-click: Group1 opens a popup on click independently of hover
+- preview-click-target: The selected thumbnail activates/restores only its window
+- preview-pending-hide: Re-entry retargets the pending popup hide
 - preview-thumbnail-click: Click thumbnail to activate that window
 - preview-close-button: Close button on thumbnail closes the window
 - preview-multi-window: Multiple thumbnails shown for grouped windows
@@ -12,12 +15,21 @@
 
 ## Affected Files
 - src/qml/main.qml
+- src/config/krema.kcfg
+- src/models/dockactions.h
+- src/models/dockactions.cpp
 - src/qml/PreviewPopup.qml
 - src/qml/PreviewThumbnail.qml
 - src/shell/previewcontroller.h
 - src/shell/previewcontroller.cpp
 - src/models/dockmodel.h
 - src/models/dockmodel.cpp
+
+**Tier:** Tier 2 (Appium) for real pointer, AT-SPI, KWin, and PipeWire
+observations. Tier 1 QML tests cover tooltip suppression and popup lifecycle
+seams. Tier 3 reuses the Appium cases against installed packages.
+The existing keyboard preview and context-menu paths remain covered by
+scenarios 01 and 04; this file adds only the explicit mouse-preview path.
 
 ## QA coverage
 
@@ -53,7 +65,9 @@ the existing pixel/layout waits.
 - Each thumbnail button contains: `[button] "Close <Title>"`, `[label] "<Title>"]`
 - Live PipeWire thumbnails visible in screenshot
 
-**Verified in PoC:** Mouse hover on KCalc → "Preview for KCalc" popup with live thumbnail.
+**Historical PoC note:** Mouse hover on KCalc produced the `"Preview for
+KCalc"` popup with a live thumbnail.
+
 
 **Verification:** accessibility_tree (PopupMenu present with correct name), screenshot (popup with thumbnails)
 
@@ -101,8 +115,8 @@ the existing pixel/layout waits.
 
 **Limitation:** `list_windows` cannot verify which window is active (D-01).
 
-**Verified in PoC:** Thumbnail click at screen-converted coordinates activated window
-and closed preview.
+**Historical PoC note:** Thumbnail click at screen-converted coordinates
+activated a window and closed the preview.
 
 **Verification:** accessibility_tree (popup 0x0), screenshot (correct window in foreground)
 
@@ -236,3 +250,49 @@ outside-close tests retain that wait for layout and painted-pixel stability.
 **Verification:** accessibility_tree (announcement text), logs
 
 **Automated:** tests/appium/test_03_preview.py::test_prev007_opening_preview_announces_window_count
+
+---
+
+## TC PREV-008: Explicit group click shows all thumbnails
+
+**Precondition:** Grouped-window action `Show window previews`, hover previews
+disabled, and a grouped app with at least three child windows.
+
+**Steps:**
+1. Click the grouped dock item.
+2. Confirm every child title appears in the popup without activating the group.
+3. Click a minimized child thumbnail.
+4. Inspect the selected and unselected children after the popup closes.
+
+**Expected:**
+- One popup shows all child thumbnails.
+- The selected thumbnail activates and restores only its target.
+- Other children keep their existing minimized state.
+- Repeated explicit clicks keep one popup.
+
+**Verification:** AT-SPI popup and thumbnail state, KWin active/minimized
+state, and live thumbnail pixels. PipeWire/Screenshot2 checks require DRM/vgem.
+**Automated (Tier 2):** `tests/appium/test_03_preview.py::test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes`.
+
+---
+
+## TC PREV-009: Re-entering retargets a pending explicit-preview hide
+
+**Precondition:** Grouped-window action `Show window previews`; two grouped
+apps; the first popup is open and its hide delay is pending.
+
+**Steps:**
+1. Move from the first group toward the second group and let the first hide
+   remain pending.
+2. Re-enter the second group and click it.
+3. Wait beyond the first hide delay, then select a thumbnail in the second
+   popup.
+
+**Expected:**
+- The second explicit click retargets the visible popup.
+- The first pending hide does not close the second popup.
+- The selected second-group child activates and the popup closes.
+
+**Verification:** AT-SPI popup visibility, thumbnail titles, and KWin active
+state. PipeWire/Screenshot2 checks require DRM/vgem.
+**Automated (Tier 2):** `tests/appium/test_03_preview.py::test_prev009_explicit_group_pending_hide_retargets_after_reenter`.

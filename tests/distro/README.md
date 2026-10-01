@@ -53,11 +53,12 @@ for TARGET in fedora-43 ubuntu-26.04; do
 done
 ```
 
-The two-output leg runs SET-008 and SET-012's native switch,
+The two-output leg runs SET-008, SET-012's native switch,
 fallback-warning, disconnected-row removal, persistence, and Settings-lock
-checks. It explicitly deselects the three-output node. The three-output
-leg runs SET-012's primary-excluding subset, retained dock/preview
-surfaces, and shortcut-routing checks.
+checks, the SET-013 shared click-policy persistence case, and the VIS-008
+follow-active-screen preview-hold cases. It explicitly deselects the
+three-output node. The three-output leg runs SET-012's primary-excluding
+subset, retained dock/preview surfaces, and shortcut-routing checks.
 
 These commands build/install the target package as needed. To reuse an
 image already built for that target, add `KREMA_DISTRO_SKIP_IMAGE_BUILD=1`
@@ -323,9 +324,10 @@ artifacts:
 | `ubuntu-26.04` | 2 | `tests/appium/artifacts-distro-ubuntu-26.04-2out/junit.xml` | `distro-e2e-ubuntu-26.04-2out` |
 | `ubuntu-26.04` | 3 | `tests/appium/artifacts-distro-ubuntu-26.04-3out/junit.xml` | `distro-e2e-ubuntu-26.04-3out` |
 
-The main one-output run intentionally skips SET-008's two-output cases
-and SET-012's two- and three-output cases: they require a different
-output count. The matching two- and three-output legs cover those cases.
+The main one-output run intentionally skips SET-008's two-output cases,
+SET-012's two- and three-output cases, and the SET-013 and VIS-008
+two-output cases: they require a different output count. The matching
+two- and three-output legs cover those cases.
 All cases collected for the matching output count are expected to pass;
 no Krema bug is pinned with an xfail.
 Differences in distro libraries are handled in the harness rather than

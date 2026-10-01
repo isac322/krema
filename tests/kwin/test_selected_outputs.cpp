@@ -235,6 +235,16 @@ bool makePrimary(const QString &name)
 void requirePrimary(const QString &name)
 {
     auto *order = krema::OutputOrderMonitor::instance();
+    // A primary signal needs a real transition. Complete a different primary
+    // first when the requested output is already current.
+    if (order->primaryScreen() && order->primaryScreen()->name() == name) {
+        for (const auto &other : screenNames()) {
+            if (other != name) {
+                requirePrimary(other);
+                break;
+            }
+        }
+    }
     QSignalSpy changed(order, &krema::OutputOrderMonitor::primaryOutputChanged);
     REQUIRE(makePrimary(name));
     REQUIRE(QTest::qWaitFor(

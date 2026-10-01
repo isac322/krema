@@ -43,6 +43,32 @@ Item {
                 DockModel.tasksModel.addTask(Object.assign({ display: n, AppId: n.toLowerCase(), IsWindow: true }, extra || {}))
         }
 
+        function addGroupTask(name = "Grouped") {
+            let row = DockModel.tasksModel.addTask({
+                display: name,
+                AppId: name.toLowerCase(),
+                IsWindow: true,
+                IsGroupParent: true,
+            })
+            DockModel.tasksModel.addChildTask(row, {
+                display: name + " child 1",
+                AppId: (name + " child 1").toLowerCase(),
+                IsWindow: true,
+                IsActive: true,
+            })
+            DockModel.tasksModel.addChildTask(row, {
+                display: name + " child 2",
+                AppId: (name + " child 2").toLowerCase(),
+                IsWindow: true,
+                IsActive: false,
+            })
+            return row
+        }
+
+        function dockTooltip(dock) {
+            return T.findFirst(dock, o => o.objectName === "dockTooltip")
+        }
+
         function items(dock) {
             return T.findAll(dock, T.isDockItem).sort((a, b) => a.index - b.index)
         }
@@ -245,7 +271,7 @@ Item {
             hoverItem(items(dock)[0])
             tryVerify(() => T.findFirst(dock, o => o.text === "Krema Launcher Fixture" && o.visible) !== null,
                       2000, "tooltip with the app name never appeared")
-            compare(PreviewController.callsTo("showPreview").length, 0)
+            verify(!PreviewController.visible)
         }
 
         function test_windowHoverOpensPreview() {
@@ -262,41 +288,374 @@ Item {
             let dock = makeDock(1)
             hoverItem(items(dock)[0])
             tryVerify(() => T.findFirst(dock, o => o.text === "Konsole" && o.visible) !== null)
-            compare(PreviewController.callsTo("showPreview").length, 0)
+            verify(!PreviewController.visible)
         }
 
-        // --- Mouse buttons and wheel ---
+        function test_groupPreviewClickShowsPopupAndSuppressesTooltip() {
+            // Grouped explicit preview must work independently of hover preview.
+            DockSettings.previewEnabled = false
+            DockSettings.groupedWindowClickAction = 1
+            addGroupTask()
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            let c = hoverItem(item)
+            let tooltip = dockTooltip(dock)
+            tryVerify(() => tooltip && tooltip.visible, 2000,
+                      "group tooltip never appeared before the click")
+            verify(!PreviewController.visible)
 
-        function test_mouseButtonsDispatchActions_data() {
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+            compare(PreviewController.parentIndex, 0)
+            verify(!tooltip.visible, "explicit preview must hide the text tooltip")
+
+            // Repeated clicks keep the same popup open rather than toggling it.
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+            compare(PreviewController.parentIndex, 0)
+            verify(!tooltip.visible)
+        }
+
+        function test_groupPreviewClickStopsDelayedTooltip() {
+            DockSettings.previewEnabled = false
+            DockSettings.previewHoverDelay = 500
+            DockSettings.groupedWindowClickAction = 1
+            addGroupTask()
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            let c = hoverItem(item)
+            let tooltip = dockTooltip(dock)
+
+            // Click before the hover timer fires.
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+            let deadline = Date.now() + DockSettings.previewHoverDelay + 100
+            tryVerify(() => tooltip.visible || Date.now() >= deadline, 2000)
+            verify(!tooltip.visible, "the delayed text tooltip reopened after explicit preview")
+        }
+
+        function test_groupPreviewClickReenterDuringHideKeepsTooltipHidden() {
+            DockSettings.previewEnabled = false
+            DockSettings.groupedWindowClickAction = 1
+            addGroupTask()
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            let c = hoverItem(item)
+            let tooltip = dockTooltip(dock)
+            tryVerify(() => tooltip && tooltip.visible, 2000)
+
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+            verify(!tooltip.visible)
+
+            // The mock keeps the preview surface alive during its delayed hide.
+            mouseMove(stage, -1, -1)
+            mouseMove(stage, c.x, c.y)
+            let deadline = Date.now() + DockSettings.previewHoverDelay + 100
+            tryVerify(() => tooltip.visible || Date.now() >= deadline, 2000)
+            verify(!tooltip.visible, "re-entering while preview hide is pending must not overlap text")
+        }
+
+        function test_previewCloseWhilePointerOverItemRestartsTextTooltip() {
+            DockSettings.previewEnabled = false
+            DockSettings.groupedWindowClickAction = 1
+            addGroupTask()
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            let c = hoverItem(item)
+            let tooltip = dockTooltip(dock)
+            tryVerify(() => tooltip && tooltip.visible, 2000)
+
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+            verify(!tooltip.visible)
+
+            // Closing the preview while the pointer remains over the item must
+            // resume the ordinary launcher/text tooltip path.
+            PreviewController.hidePreview()
+            tryCompare(tooltip, "visible", true, 2000)
+        }
+
+        function test_fastLauncherTooltipAtZeroDelay() {
+            DockSettings.previewHoverDelay = 0
+            DockModel.tasksModel.addTask({
+                display: "Fast Launcher",
+                IsWindow: false,
+                IsLauncher: true,
+            })
+            let dock = makeDock(1)
+            hoverItem(items(dock)[0])
+            tryCompare(dockTooltip(dock), "visible", true, 2000)
+            verify(!PreviewController.visible)
+        }
+
+        function test_fastLauncherTooltipRecoversAfterPreviewClose() {
+            DockSettings.previewHoverDelay = 0
+            addTasks(["Window"])
+            DockModel.tasksModel.addTask({
+                display: "Fast Launcher",
+                IsWindow: false,
+                IsLauncher: true,
+            })
+            let dock = makeDock(2)
+            let its = items(dock)
+            hoverItem(its[0])
+            tryCompare(PreviewController, "visible", true, 2000)
+            hoverItem(its[1])
+            tryCompare(its[1], "currentScale", DockSettings.maxZoomFactor, 2000)
+
+            // Only recovery is asserted here. Overlap while a surface is
+            // pending hide is covered by the separate explicit-preview test.
+            PreviewController.hidePreview()
+            tryCompare(dockTooltip(dock), "visible", true, 2000)
+        }
+
+        function test_previewClosePreservesPendingHoverDeadline() {
+            DockSettings.previewHoverDelay = 1000
+            addTasks(["A", "B"])
+            let dock = makeDock(2)
+            let its = items(dock)
+            hoverItem(its[0])
+            tryCompare(PreviewController, "visible", true, 2000)
+            compare(PreviewController.parentIndex, 0)
+
+            let started = Date.now()
+            hoverItem(its[1])
+            tryCompare(dock, "hoveredIndex", 1, 2000)
+            tryVerify(() => Date.now() - started >= 750, 2000)
+            verify(PreviewController.visible && PreviewController.parentIndex === 0,
+                "runner was too slow: B appeared before A could close while its hover was pending")
+
+            // Most of B's original hover delay has elapsed before A closes.
+            // Restarting that delay would make B wait a full second again.
+            let closedAt = Date.now()
+            PreviewController.hidePreview()
+            let observedAfterClose = -1
+            tryVerify(() => {
+                if (!PreviewController.visible || PreviewController.parentIndex !== 1)
+                    return false
+                if (observedAfterClose < 0)
+                    observedAfterClose = Date.now() - closedAt
+                return true
+            }, 3000, "B's hover preview never appeared after A closed")
+            verify(observedAfterClose < 750,
+                "closing A restarted B's pending hover delay: B appeared after "
+                + observedAfterClose + " ms")
+            verify(!dockTooltip(dock).visible)
+        }
+
+        function test_previewInvalidationDuringDragDoesNotReopenTooltip() {
+            DockSettings.previewEnabled = false
+            DockSettings.groupedWindowClickAction = 1
+            addGroupTask()
+            addTasks(["Fallback"])
+            let dock = makeDock(2)
+            let item = items(dock)[0]
+            let c = hoverItem(item)
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+
+            mousePress(stage, c.x, c.y, Qt.LeftButton)
+            let delta = 20
+            tryVerify(() => {
+                mouseMove(stage, c.x + delta, c.y, -1, Qt.LeftButton)
+                delta = delta === 20 ? 21 : 20
+                return item.isDragSource
+            }, 2000, "drag source visual feedback never appeared")
+            PreviewController.hidePreview()
+            DockModel.tasksModel.removeTask(0)
+            tryVerify(() => items(dock).length === 1, 2000)
+            let tooltip = dockTooltip(dock)
+            let deadline = Date.now() + DockSettings.previewHoverDelay + 100
+            tryVerify(() => tooltip.visible || PreviewController.visible || Date.now() >= deadline, 2000)
+            verify(!tooltip.visible, "preview invalidation reopened tooltip during drag")
+            verify(!PreviewController.visible, "preview invalidation reopened popup during drag")
+            mouseRelease(stage, c.x + delta, c.y, Qt.LeftButton)
+            tryVerify(() => items(dock).every(it => !it.isDragSource), 2000)
+            verify(!PreviewController.visible)
+        }
+
+        function test_group0ClickDoesNotOpenPreview() {
+            DockSettings.groupedWindowClickAction = 0
+            DockSettings.previewEnabled = false
+            addGroupTask()
+            let dock = makeDock(1)
+            let c = hoverItem(items(dock)[0])
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            compare(PreviewController.visible, false)
+        }
+
+        function test_singleClickDoesNotOpenPreview() {
+            DockSettings.singleWindowClickAction = 1
+            DockSettings.groupedWindowClickAction = 1
+            DockSettings.previewEnabled = false
+            addTasks(["Single"])
+            let dock = makeDock(1)
+            let c = hoverItem(items(dock)[0])
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            compare(PreviewController.visible, false)
+        }
+
+        function test_membershipTransitionsUseCurrentGroupingAction() {
+            DockSettings.singleWindowClickAction = 1
+            DockSettings.groupedWindowClickAction = 1
+            DockSettings.previewEnabled = false
+            let row = DockModel.tasksModel.addTask({
+                display: "Adaptive",
+                AppId: "adaptive",
+                IsWindow: true,
+                IsGroupParent: false,
+            })
+            DockModel.tasksModel.addChildTask(row, {
+                display: "Adaptive child 1",
+                IsWindow: true,
+                IsActive: true,
+            })
+            let dock = makeDock(1)
+            let c = hoverItem(items(dock)[0])
+
+            // One child: single-window setting, so no explicit preview.
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            compare(PreviewController.visible, false)
+
+            // Two children: grouped setting, so the same click opens preview.
+            DockModel.tasksModel.addChildTask(row, {
+                display: "Adaptive child 2",
+                IsWindow: true,
+                IsActive: false,
+            })
+            DockModel.tasksModel.setTaskData(row, "IsGroupParent", true)
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+
+            // Back to one child: leave the popup and return to single behavior.
+            PreviewController.hidePreview()
+            DockModel.tasksModel.removeChildTask(row, 1)
+            DockModel.tasksModel.setTaskData(row, "IsGroupParent", false)
+            mouseClick(stage, c.x, c.y, Qt.LeftButton)
+            compare(PreviewController.visible, false)
+        }
+
+        function test_nonLeftKeyboardAndDragNeverOpenPreview_data() {
             return [
-                { tag: "left-activates", button: Qt.LeftButton, target: "DockActions", call: "activate" },
-                { tag: "middle-new-instance", button: Qt.MiddleButton, target: "DockActions", call: "newInstance" },
-                { tag: "right-context-menu", button: Qt.RightButton, target: "DockContextMenu", call: "showForTask" },
+                { tag: "single0-group0", single: 0, grouped: 0 },
+                { tag: "single0-group1", single: 0, grouped: 1 },
+                { tag: "single0-group2", single: 0, grouped: 2 },
+                { tag: "single1-group0", single: 1, grouped: 0 },
+                { tag: "single1-group1", single: 1, grouped: 1 },
+                { tag: "single1-group2", single: 1, grouped: 2 },
             ]
         }
 
-        function test_mouseButtonsDispatchActions(data) {
-            addTasks(["A", "B", "C"])
-            let dock = makeDock(3)
-            let c = hoverItem(items(dock)[1])
-            tryCompare(dock, "hoveredIndex", 1)
-            mouseClick(stage, c.x, c.y, data.button)
-            let mock = data.target === "DockActions" ? DockActions : DockContextMenu
-            tryVerify(() => mock.callsTo(data.call).length === 1)
-            compare(mock.callsTo(data.call)[0].args[0], 1)
-        }
-
-        function test_wheelCyclesWindows() {
-            addTasks(["A", "B"])
-            let dock = makeDock(2)
+        function test_nonLeftKeyboardAndDragNeverOpenPreview(data) {
+            DockSettings.singleWindowClickAction = data.single
+            DockSettings.groupedWindowClickAction = data.grouped
+            DockSettings.previewEnabled = false
+            DockSettings.previewHoverDelay = 1000
+            addGroupTask()
+            let dock = makeDock(1)
             let c = hoverItem(items(dock)[0])
-            tryCompare(dock, "hoveredIndex", 0)
+
+            mouseClick(stage, c.x, c.y, Qt.MiddleButton)
+            compare(PreviewController.visible, false)
+            mouseClick(stage, c.x, c.y, Qt.RightButton)
+            compare(PreviewController.visible, false)
             mouseWheel(stage, c.x, c.y, 0, 120)
             mouseWheel(stage, c.x, c.y, 0, -120)
-            let calls = DockActions.callsTo("cycleWindows")
-            compare(calls.length, 2)
-            compare(calls[0].args, [0, false])
-            compare(calls[1].args, [0, true])
+            compare(PreviewController.visible, false)
+
+            dock.startKeyboardNavigation()
+            keyClick(Qt.Key_Return)
+            compare(PreviewController.visible, false)
+            dock.startKeyboardNavigation()
+            keyClick(Qt.Key_Space)
+            compare(PreviewController.visible, false)
+
+            // Hold and move far enough to become an internal drag. The left
+            // release must not be reinterpreted as an explicit preview click.
+            mouseMove(stage, c.x + 1, c.y)
+            tryCompare(dock, "hoveredIndex", 0, 2000)
+            mousePress(stage, c.x + 1, c.y, Qt.LeftButton)
+            let delta = 20
+            tryVerify(() => {
+                mouseMove(stage, c.x + delta, c.y, -1, Qt.LeftButton)
+                delta = delta === 20 ? 21 : 20
+                return items(dock)[0].isDragSource
+            }, 2000, "drag source visual feedback never appeared")
+            mouseRelease(stage, c.x + delta, c.y, Qt.LeftButton)
+            tryCompare(items(dock)[0], "isDragSource", false, 2000)
+            compare(PreviewController.visible, false)
+            verify(!dockTooltip(dock).visible)
+        }
+
+        function test_dragExitAndReentryReleaseDoesNotOpenPreview() {
+            DockSettings.previewEnabled = false
+            DockSettings.previewHoverDelay = 1000
+            DockSettings.groupedWindowClickAction = 1
+            addGroupTask()
+            let dock = makeDock(1)
+
+            // Give the actual MouseArea a smaller surface so leaving it still
+            // delivers events inside the visible test window.
+            dock.anchors.fill = null
+            dock.width = stage.width / 2
+            dock.height = stage.height / 2
+            dock.x = stage.width / 4
+            dock.y = stage.height / 4
+            let item = items(dock)[0]
+            let settledCenter = null
+            let settledSince = 0
+            tryVerify(() => {
+                let c = centerOf(item)
+                let now = Date.now()
+                let origin = dock.mapToItem(stage, 0, 0)
+                let inside = c.x > origin.x && c.x < origin.x + dock.width
+                    && c.y > origin.y && c.y < origin.y + dock.height
+                if (settledCenter
+                    && Math.abs(c.x - settledCenter.x) < 0.1
+                    && Math.abs(c.y - settledCenter.y) < 0.1) {
+                    settledSince = settledSince || now
+                } else {
+                    settledCenter = c
+                    settledSince = now
+                }
+                return inside && now - settledSince >= 250
+            }, 2000, "icon did not settle inside the test dock surface")
+
+            let from = hoverItem(item)
+            mousePress(stage, from.x, from.y, Qt.LeftButton)
+            let delta = 20
+            tryVerify(() => {
+                mouseMove(stage, from.x + delta, from.y, -1, Qt.LeftButton)
+                delta = delta === 20 ? 21 : 20
+                return item.isDragSource
+            }, 2000, "drag source visual feedback never appeared")
+
+            let origin = dock.mapToItem(stage, 0, 0)
+            let outside = dock.mapToItem(stage, -DockSettings.iconSize, dock.height / 2)
+            verify(outside.x < origin.x)
+            verify(outside.x >= 0 && outside.x < stage.width
+                && outside.y >= 0 && outside.y < stage.height)
+            mouseMove(stage, outside.x, outside.y, -1, Qt.LeftButton)
+            tryCompare(item, "isDragSource", false, 2000)
+            verify(!PreviewController.visible)
+            verify(!dockTooltip(dock).visible)
+
+            // The same held-button sequence returns to the icon and releases.
+            // It is still a cancelled drag, not a fresh explicit-preview click.
+            let reentry = centerOf(item)
+            mouseMove(stage, reentry.x, reentry.y, -1, Qt.LeftButton)
+            mouseRelease(stage, reentry.x, reentry.y, Qt.LeftButton)
+            verify(!item.isDragSource)
+            compare(PreviewController.visible, false)
+            verify(!dockTooltip(dock).visible)
+
+            // A new normal click must still open the group's explicit preview.
+            let fresh = centerOf(item)
+            mouseClick(stage, fresh.x, fresh.y, Qt.LeftButton)
+            tryCompare(PreviewController, "visible", true, 2000)
+            compare(PreviewController.parentIndex, 0)
+            verify(!dockTooltip(dock).visible)
         }
 
         // --- Launch feedback ---
@@ -357,7 +716,7 @@ Item {
 
         // --- Keyboard navigation ---
 
-        function test_keyboardNavigationMovesFocusAndActivates() {
+        function test_keyboardNavigationMovesFocusAndReturnEndsNavigation() {
             addTasks(["A", "B", "C"])
             let dock = makeDock(3)
             let its = items(dock)
@@ -374,8 +733,6 @@ Item {
             keyClick(Qt.Key_Left)
             tryCompare(dock, "hoveredIndex", 1)
             keyClick(Qt.Key_Return)
-            tryVerify(() => DockActions.callsTo("activate").length === 1)
-            compare(DockActions.callsTo("activate")[0].args[0], 1)
             compare(dock.keyboardNavigating, false)
             compare(dock.hoveredIndex, -1)
             for (let it of its) tryCompare(it, "currentScale", 1.0)
@@ -390,7 +747,6 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(dock, "keyboardNavigating", false)
             compare(DockVisibility.keyboardActive, false)
-            compare(DockActions.callsTo("activate").length, 0)
         }
 
         function test_pointerMotionOffDockEndsKeyboardNavigation() {
@@ -439,9 +795,8 @@ Item {
             PreviewController.hidePreview()
             keyClick(Qt.Key_Right)
             tryCompare(dock, "hoveredIndex", 1)
-            let before = PreviewController.callsTo("showPreview").length
             keyClick(Qt.Key_Up) // launcher: nothing to preview
-            compare(PreviewController.callsTo("showPreview").length, before)
+            verify(!PreviewController.visible)
         }
 
         // --- Drag reorder and drop helpers ---
@@ -474,7 +829,8 @@ Item {
             compare(dock.isDesktopFileUrl(data.url), data.expect)
         }
 
-        function test_pressHoldDragReordersTask() {
+        function test_escapeCancelsDragVisualFeedback() {
+            DockSettings.previewEnabled = false
             addTasks(["A", "B", "C"])
             let dock = makeDock(3)
             let its = items(dock)
@@ -483,49 +839,23 @@ Item {
             mouseMove(stage, from.x, from.y)
             tryCompare(dock, "hoveredIndex", 0)
             mousePress(stage, from.x, from.y, Qt.LeftButton)
-            // Press-and-hold arms the drag (300 ms hold timer).
-            tryCompare(dock, "_dragPending", true, 2000)
-            mouseMove(stage, from.x + 20, from.y, -1, Qt.LeftButton)
-            tryCompare(dock, "_dragActive", true)
-            verify(its[0].isDragSource)
-            compare(DockVisibility.interacting, true)
+            let delta = 20
+            tryVerify(() => {
+                mouseMove(stage, from.x + delta, from.y, -1, Qt.LeftButton)
+                delta = delta === 20 ? 21 : 20
+                return its[0].isDragSource
+            }, 2000, "drag source visual feedback never appeared")
             mouseMove(stage, to.x, to.y, -1, Qt.LeftButton)
-            tryCompare(dock, "_dragTargetIndex", 2)
-            mouseRelease(stage, to.x, to.y, Qt.LeftButton)
-            tryVerify(() => DockActions.callsTo("moveTask").length === 1)
-            compare(DockActions.callsTo("moveTask")[0].args, [0, 2])
-            compare(dock._dragActive, false)
-            compare(DockVisibility.interacting, false)
-            // The drag must not also count as a click.
-            compare(DockActions.callsTo("activate").length, 0)
-        }
-
-        function test_escapeCancelsDragWithoutReorder() {
-            addTasks(["A", "B", "C"])
-            let dock = makeDock(3)
-            let its = items(dock)
-            let from = centerOf(its[0])
-            let to = centerOf(its[2])
-            mouseMove(stage, from.x, from.y)
-            tryCompare(dock, "hoveredIndex", 0)
-            mousePress(stage, from.x, from.y, Qt.LeftButton)
-            tryCompare(dock, "_dragPending", true, 2000)
-            mouseMove(stage, to.x, to.y, -1, Qt.LeftButton)
-            tryCompare(dock, "_dragTargetIndex", 2)
-            // The dock grabs the keyboard for the drag so Escape reaches it.
-            compare(DockVisibility.dragActive, true)
             dock.forceActiveFocus()
             keyClick(Qt.Key_Escape)
-            compare(dock._dragActive, false)
-            compare(dock._dragTargetIndex, -1)
+            tryCompare(its[0], "isDragSource", false, 2000)
             compare(DockVisibility.dragActive, false)
             compare(DockVisibility.interacting, false)
-            // Moving on with the button still held must not restart the drag.
+            // Moving with the button still held must not restart visual drag.
             mouseMove(stage, centerOf(its[1]).x, to.y, -1, Qt.LeftButton)
-            compare(dock._dragActive, false)
+            verify(!its[0].isDragSource)
             mouseRelease(stage, centerOf(its[1]).x, to.y, Qt.LeftButton)
-            compare(DockActions.callsTo("moveTask").length, 0)
-            compare(DockActions.callsTo("activate").length, 0)
+            verify(!PreviewController.visible)
         }
     }
 }

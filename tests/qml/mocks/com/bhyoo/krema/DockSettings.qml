@@ -20,6 +20,8 @@ QtObject {
     property real otherDesktopOpacity: 0.4
     property bool previewEnabled: true
     property int previewHoverDelay: 500
+    property int singleWindowClickAction: 0
+    property int groupedWindowClickAction: 0
     property int previewThumbnailSize: 200
     property bool shadowEnabled: false
     property int shadowElevation: 15
@@ -31,7 +33,7 @@ QtObject {
     property real shadowIntensity: 0.3
 
     // Restores every property listed in _resettable to its declared value.
-    readonly property var _resettable: ["iconSize", "iconSpacing", "maxZoomFactor", "zoomStyle", "zoomAnimationDuration", "iconScale", "cornerRadius", "attentionAnimation", "attentionAnimationDuration", "badgeDisplayMode", "otherDesktopOpacity", "previewEnabled", "previewHoverDelay", "previewThumbnailSize", "shadowEnabled", "shadowElevation", "shadowLightX", "shadowLightY", "shadowLightZ", "shadowLightRadius", "shadowColor", "shadowIntensity"]
+    readonly property var _resettable: ["iconSize", "iconSpacing", "maxZoomFactor", "zoomStyle", "zoomAnimationDuration", "iconScale", "cornerRadius", "attentionAnimation", "attentionAnimationDuration", "badgeDisplayMode", "otherDesktopOpacity", "previewEnabled", "previewHoverDelay", "singleWindowClickAction", "groupedWindowClickAction", "previewThumbnailSize", "shadowEnabled", "shadowElevation", "shadowLightX", "shadowLightY", "shadowLightZ", "shadowLightRadius", "shadowColor", "shadowIntensity"]
     property var _defaults: ({})
     Component.onCompleted: {
         for (const k of _resettable) _defaults[k] = this[k]

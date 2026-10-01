@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-012).
+"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-014).
 
 The real Kirigami/FormCard settings window is driven with real pointer and
 keyboard input (KWin fake-input) and located through AT-SPI. Every test
@@ -22,8 +22,9 @@ AT-SPI facts this relies on (probed in this harness):
 * The QColorDialog is a separate toplevel ``frame[@name='Choose tint color']``.
 
 SET-008 and SET-012 need two outputs and run in their own session:
-``KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py``.
-The SET-012 three-output subset test uses ``KREMA_E2E_OUTPUT_COUNT=3``.
+``KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs``.
+SET-013 also has a two-output shared-dock case; SET-012's subset test uses
+``KREMA_E2E_OUTPUT_COUNT=3``.
 """
 
 from __future__ import annotations
@@ -38,10 +39,11 @@ import pytest
 from krema_e2e import config as kcfg
 from krema_e2e import env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import SETTINGS_STACK_XPATH, TOOLBAR_XPATH, Krema, Rect, context_menu_entries, has_state, painted_rect
+from krema_e2e import preview as pv
+from krema_e2e.krema import PREVIEW_XPATH, SETTINGS_STACK_XPATH, TOOLBAR_XPATH, Krema, Rect, context_menu_entries, has_state, painted_rect
 from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
-from krema_e2e.windows import TestWindows
+from krema_e2e.windows import TestWindow, TestWindows
 
 SETTINGS = "//frame[@name='Settings']"
 SIDEBAR = SETTINGS + "/dialog//list_item"
@@ -76,6 +78,13 @@ def dock_surfaces(krema: Krema) -> list[kwin.Window]:
         and w.client_height > EDGE_TRIGGER_PX
     ]
     return sorted(out, key=lambda w: w.client_x)
+
+def _item_has_description(krema: Krema, name: str, part: str) -> bool:
+    item = krema.item_accessible(name)
+    if item is None:
+        return False
+    item.clear_cache()
+    return part in (item.description or "")
 
 
 def preview_surfaces(krema: Krema) -> list[kwin.Window]:
@@ -864,6 +873,311 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     assert float(krema.wait_for(duration_xpath).get_attribute("value")) == 0.0, "disabling zoom must preserve the duration"
 
 
+# ------------------------------------------------------------------- QA-CLK-002 / QA-CLK-011
+SINGLE_CLICK_ROW = "Single window click action"
+GROUPED_CLICK_ROW = "Grouped window click action"
+SINGLE_CLICK_CHOICES = ("Activate window", "Minimize active window")
+GROUPED_CLICK_CHOICES = ("Cycle through windows", "Show window previews", "Minimize active window")
+
+
+def click_item_on_output(krema: Krema, name: str, output_x: int = 0) -> None:
+    """Click the real item on one output; AT-SPI includes its horizontal offset."""
+    xpath = TOOLBAR_XPATH + f"/button[@name='{name}']"
+
+    def item_rect() -> Rect | None:
+        return next(
+            (
+                Rect.of(item)
+                for item in krema.find_all(xpath)
+                if has_state(item, "showing") and output_x <= Rect.of(item).center[0] < output_x + W
+            ),
+            None,
+        )
+
+    dock = wait_until(
+        lambda: next((d for d in dock_surfaces(krema) if d.client_x == output_x), None),
+        message=f"dock on output at {output_x}",
+    )
+    rect = wait_until(item_rect, message=f"{name} on output at {output_x}")
+    inp.move(rect.center[0], dock.client_y + rect.center[1])
+    rect = wait_stable(item_rect)
+    inp.click(rect.center[0], dock.client_y + rect.center[1])
+
+
+def visible_preview(krema: Krema):
+    """The shown popup, including when another output's popup is hidden first."""
+    return next(
+        (popup for popup in krema.find_all(PREVIEW_XPATH) if has_state(popup, "showing") and Rect.of(popup).width > 0),
+        None,
+    )
+
+
+def assert_click_action_effects(
+    krema: Krema,
+    single_action: int,
+    grouped_action: int,
+    solo: TestWindow,
+    alpha: TestWindow,
+    beta: TestWindow,
+    output_x: int = 0,
+) -> None:
+    """Observe KWin window state and the actual popup, not action dispatch."""
+    krema.move_away(close_preview=False)
+    wait_until(lambda: visible_preview(krema) is None, message="all output previews closed before the next click")
+    kwin.activate(solo.internal_id)
+    wait_until(solo.is_active, message="Solo active before its dock click")
+    click_item_on_output(krema, "Solo", output_x)
+    if single_action == 1:
+        wait_until(lambda: (w := solo.refresh()) is not None and w.minimized, message="active Solo minimized")
+        assert visible_preview(krema) is None, "the grouped preview choice must not apply to Solo"
+        click_item_on_output(krema, "Solo", output_x)
+        wait_until(
+            lambda: (w := solo.refresh()) is not None and w.active and not w.minimized,
+            message="minimized Solo restored and activated",
+        )
+    else:
+        holds(
+            lambda: (w := solo.refresh()) is not None and w.active and not w.minimized and visible_preview(krema) is None,
+            0.5,
+            "Activate window must keep the active single window unminimized",
+        )
+
+    krema.move_away()
+    for target in (alpha, beta, solo):
+        kwin.activate(target.internal_id)
+        wait_until(target.is_active, message=f"{target.title} active during MRU setup")
+        assert wait_stable(target.is_active, duration=0.5), f"{target.title} active during MRU setup"
+    wait_until(
+        lambda: _item_has_description(krema, "Solo", "Active")
+        and not _item_has_description(krema, env.TEST_APP_NAME, "Active"),
+        message="dock model to observe Solo backgrounding the group",
+    )
+    assert wait_stable(
+        lambda: _item_has_description(krema, "Solo", "Active")
+        and not _item_has_description(krema, env.TEST_APP_NAME, "Active"),
+        duration=0.5,
+    ), "dock model to observe Solo backgrounding the group"
+    if grouped_action == 0:
+        for target in (beta, alpha, beta):
+            click_item_on_output(krema, env.TEST_APP_NAME, output_x)
+            wait_until(target.is_active, message=f"group click cycles to {target.title}")
+            assert not alpha.refresh().minimized and not beta.refresh().minimized
+            assert visible_preview(krema) is None
+    elif grouped_action == 1:
+        click_item_on_output(krema, env.TEST_APP_NAME, output_x)
+        wait_until(lambda: visible_preview(krema), message="explicit grouped preview opens")
+        wait_until(
+            lambda: {
+                label.get_attribute("name")
+                for label in krema.find_all(pv.THUMB_XPATH + "/label")
+                if has_state(label, "showing")
+            }
+            == {"Alpha", "Beta"},
+            message="both group windows in the shown popup",
+        )
+        click_item_on_output(krema, env.TEST_APP_NAME, output_x)
+        assert visible_preview(krema) is not None and solo.is_active(), "repeated preview clicks must not activate a group child"
+        assert not alpha.refresh().minimized and not beta.refresh().minimized
+        if output_x == 0:
+            # The existing painted-popup oracle is limited to the primary output.
+            popup = visible_preview(krema)
+            pv.wait_on_screen(krema, popup)
+            target = pv.screen_rect(krema, krema.wait_for(pv.thumb_xpath("Alpha") + "[contains(@states, 'showing')]")).center
+            pv.glide_into(krema, target)
+            inp.click()
+            wait_until(alpha.is_active, message="chosen preview thumbnail activates Alpha")
+            wait_until(lambda: visible_preview(krema) is None, message="thumbnail activation closes the popup")
+    else:
+        kwin.activate(beta.internal_id)
+        wait_until(beta.is_active, message="Beta active before grouped minimize")
+        click_item_on_output(krema, env.TEST_APP_NAME, output_x)
+        wait_until(lambda: (w := beta.refresh()) is not None and w.minimized, message="only the active group child minimized")
+        assert not alpha.refresh().minimized and not solo.refresh().minimized
+        assert visible_preview(krema) is None
+        kwin.activate(beta.internal_id)
+        wait_until(beta.is_active, message="Beta restored for the next output or restart")
+    krema.move_away(close_preview=False)
+    wait_until(lambda: visible_preview(krema) is None, message="shown output preview closes after leaving")
+
+
+@pytest.mark.parametrize(
+    ("single_action", "grouped_action"),
+    [
+        pytest.param(
+            single,
+            grouped,
+            id=f"single-{single}-group-{grouped}",
+            marks=pytest.mark.kremarc(
+                {
+                    "PinnedLaunchers": [],
+                    "PreviewEnabled": False,
+                    "SingleWindowClickAction": 1 - single,
+                    "GroupedWindowClickAction": (grouped + 1) % 3,
+                }
+            ),
+        )
+        for single in range(2)
+        for grouped in range(3)
+    ],
+)
+def test_clk002_click_action_combinations_apply_live_persist_and_restore(
+    krema: Krema, apps: TestWindows, single_action: int, grouped_action: int
+) -> None:
+    alpha = apps.open("Alpha")
+    beta = apps.open("Beta")
+    solo = apps.open("Solo", app_id=env.TEST_APP2_ID)
+    krema.wait_for_item(env.TEST_APP_NAME)
+    open_settings(krema, "Solo")
+    open_page(krema, "Behavior")
+    original_group = (grouped_action + 1) % 3
+    assert current_choice(krema, SINGLE_CLICK_ROW) == SINGLE_CLICK_CHOICES[1 - single_action]
+    assert current_choice(krema, GROUPED_CLICK_ROW) == GROUPED_CLICK_CHOICES[original_group]
+    pid = krema.pid
+
+    choose(krema, SINGLE_CLICK_ROW, SINGLE_CLICK_CHOICES[single_action])
+    assert current_choice(krema, GROUPED_CLICK_ROW) == GROUPED_CLICK_CHOICES[original_group]
+    wait_until(
+        lambda: int(config_value(krema, "SingleWindowClickAction") or 0) == single_action
+        and int(config_value(krema, "GroupedWindowClickAction") or 0) == original_group,
+        message="the single choice saves without changing the grouped choice",
+    )
+    choose(krema, GROUPED_CLICK_ROW, GROUPED_CLICK_CHOICES[grouped_action])
+    assert current_choice(krema, SINGLE_CLICK_ROW) == SINGLE_CLICK_CHOICES[single_action]
+    wait_until(
+        lambda: int(config_value(krema, "SingleWindowClickAction") or 0) == single_action
+        and int(config_value(krema, "GroupedWindowClickAction") or 0) == grouped_action,
+        message="both independent click choices saved",
+    )
+    close_settings(krema)
+    assert_click_action_effects(krema, single_action, grouped_action, solo, alpha, beta)
+    assert krema.pid == pid, "both choices must take effect without restarting the dock"
+
+    krema.restart()
+    open_settings(krema, "Solo")
+    open_page(krema, "Behavior")
+    assert current_choice(krema, SINGLE_CLICK_ROW) == SINGLE_CLICK_CHOICES[single_action]
+    assert current_choice(krema, GROUPED_CLICK_ROW) == GROUPED_CLICK_CHOICES[grouped_action]
+    close_settings(krema)
+    assert_click_action_effects(krema, single_action, grouped_action, solo, alpha, beta)
+
+
+@pytest.mark.outputs(2)
+@pytest.mark.kremarc(
+    {"PinnedLaunchers": [], "PreviewEnabled": False, "MonitorMode": 0, "SingleWindowClickAction": 0, "GroupedWindowClickAction": 0}
+)
+def test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them(krema: Krema, apps: TestWindows) -> None:
+    alpha = apps.open("Alpha")
+    beta = apps.open("Beta")
+    solo = apps.open("Solo", app_id=env.TEST_APP2_ID)
+    open_settings(krema, "Solo")
+    open_page(krema, "Behavior")
+    choose(krema, SINGLE_CLICK_ROW, SINGLE_CLICK_CHOICES[1])
+    choose(krema, GROUPED_CLICK_ROW, GROUPED_CLICK_CHOICES[1])
+    choose(krema, "Monitor mode", "All monitors")
+    wait_until(lambda: mapped_dock_xs(krema) == [0, W], message="both All monitors docks mapped")
+    close_settings(krema)
+    for output_x in (0, W):
+        assert_click_action_effects(krema, 1, 1, solo, alpha, beta, output_x)
+
+    open_settings(krema, "Solo")
+    open_page(krema, "Behavior")
+    choose(krema, GROUPED_CLICK_ROW, GROUPED_CLICK_CHOICES[2])
+    assert current_choice(krema, SINGLE_CLICK_ROW) == SINGLE_CLICK_CHOICES[1]
+    wait_until(
+        lambda: config_value(krema, "SingleWindowClickAction") == "1" and config_value(krema, "GroupedWindowClickAction") == "2",
+        message="shared independent settings saved",
+    )
+    close_settings(krema)
+    for output_x in (0, W):
+        assert_click_action_effects(krema, 1, 2, solo, alpha, beta, output_x)
+
+    open_settings(krema, "Solo")
+    open_page(krema, "Behavior")
+    choose(krema, "Monitor mode", "Primary monitor only")
+    wait_until(lambda: mapped_dock_xs(krema) == [0], message="secondary dock removed")
+    choose(krema, "Monitor mode", "All monitors")
+    wait_until(lambda: mapped_dock_xs(krema) == [0, W], message="secondary dock recreated")
+    assert current_choice(krema, SINGLE_CLICK_ROW) == SINGLE_CLICK_CHOICES[1]
+    assert current_choice(krema, GROUPED_CLICK_ROW) == GROUPED_CLICK_CHOICES[2]
+    close_settings(krema)
+    assert_click_action_effects(krema, 1, 2, solo, alpha, beta, W)
+
+
+@pytest.mark.parametrize(
+    ("hover_enabled", "grouped_action"),
+    [
+        pytest.param(
+            hover,
+            grouped,
+            id=f"hover-{int(hover)}-group-{grouped}",
+            marks=pytest.mark.kremarc(
+                {
+                    "PinnedLaunchers": [],
+                    "PreviewEnabled": not hover,
+                    "PreviewThumbnailSize": 200,
+                    "PreviewHoverDelay": 500,
+                    "PreviewHideDelay": 200,
+                    "GroupedWindowClickAction": (grouped + 1) % 3,
+                }
+            ),
+        )
+        for hover in (False, True)
+        for grouped in range(3)
+    ],
+)
+def test_clk011_preview_controls_follow_hover_and_explicit_group_choice(
+    krema: Krema, apps: TestWindows, hover_enabled: bool, grouped_action: int
+) -> None:
+    apps.open("Alpha")
+    apps.open("Beta")
+    apps.open("Solo", app_id=env.TEST_APP2_ID)
+    open_settings(krema, "Solo")
+    open_page(krema, "Behavior")
+    choose(krema, GROUPED_CLICK_ROW, GROUPED_CLICK_CHOICES[grouped_action])
+    open_page(krema, "Window Preview")
+    switch_xpath = f"{SETTINGS}//check_box[@name='Show window previews on hover']"
+    switch = scroll_into_view(krema, switch_xpath)
+    click_el(krema, switch)
+    wait_until(lambda: has_state(krema.wait_for(switch_xpath), "checked") == hover_enabled, message="hover previews changed")
+    wait_until(
+        lambda: (config_value(krema, "PreviewEnabled") or "true").lower() == str(hover_enabled).lower(),
+        message="hover preview setting saved",
+    )
+
+    preview_controls_enabled = hover_enabled or grouped_action == 1
+    for label, enabled, key in (
+        ("Thumbnail width (px)", preview_controls_enabled, "PreviewThumbnailSize"),
+        ("Hide delay (ms)", preview_controls_enabled, "PreviewHideDelay"),
+        ("Hover delay (ms)", hover_enabled, "PreviewHoverDelay"),
+    ):
+        xpath = f"{SETTINGS}//list_item[label[@name='{label}']]//spin_button"
+        spin = scroll_into_view(krema, xpath)
+        assert has_state(spin, "enabled") == enabled, f"{label} availability must match how previews can be opened"
+        if enabled:
+            old_value = float(spin.get_attribute("value"))
+            click_el(krema, spin)
+            inp.key("up")
+            step = 20 if key == "PreviewThumbnailSize" else 50
+            wait_until(lambda: float(spin.get_attribute("value")) == old_value + step, message=f"{label} changed through the UI")
+            wait_until(lambda: int(config_value(krema, key) or 0) == int(old_value + step), message=f"{label} saved")
+    close_settings(krema)
+
+    krema.hover_item(env.TEST_APP_NAME)
+    if not preview_controls_enabled:
+        holds(lambda: not krema.preview_visible(), 0.8, "disabled hover previews must not open on a group")
+        return
+    if not hover_enabled:
+        holds(lambda: not krema.preview_visible(), 0.8, "explicit preview mode must not enable hover previews")
+        krema.click_item(env.TEST_APP_NAME)
+    wait_until(krema.preview_visible, message="preview opens through the enabled interaction")
+    wait_until(lambda: set(pv.thumb_titles(krema)) == {"Alpha", "Beta"}, message="group preview children")
+    width = wait_stable(lambda: Rect.of(krema.wait_for(pv.thumb_xpath("Alpha") + "/label")).width)
+    assert width == 220, f"UI-selected thumbnail width was not applied to the real popup: {width}"
+    started = time.monotonic()
+    inp.move(W // 2, 20)
+    wait_until(lambda: not krema.preview_visible(), message="popup closes using its UI-selected hide delay")
+    elapsed = time.monotonic() - started
+    assert elapsed >= 0.25 * 0.95, f"popup closed before the selected 250 ms hide delay: {elapsed:.3f}s"
 # ------------------------------------------------------------------- SET-012
 @pytest.mark.outputs(2)
 @pytest.mark.no_krema_autostart

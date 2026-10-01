@@ -32,6 +32,7 @@ public:
     enum AdditionalRoles {
         AppId = Qt::UserRole + 1,
         IsWindow,
+        IsGroupParent,
         IsStartup,
         IsLauncher,
         IsActive,
@@ -72,6 +73,7 @@ public:
 
     Q_INVOKABLE int addTask(const QVariantMap &roles);
     Q_INVOKABLE int addChildTask(int parentRow, const QVariantMap &roles);
+    Q_INVOKABLE void removeChildTask(int parentRow, int childRow);
     Q_INVOKABLE void setTaskData(int row, const QString &roleName, const QVariant &value);
     Q_INVOKABLE void removeTask(int row);
     Q_INVOKABLE void reset();

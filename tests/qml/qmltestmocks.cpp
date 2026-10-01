@@ -96,6 +96,16 @@ int MockTasksModel::addChildTask(int parentRow, const QVariantMap &roles)
     return child->row();
 }
 
+void MockTasksModel::removeChildTask(int parentRow, int childRow)
+{
+    QStandardItem *parentItem = item(parentRow);
+    if (!parentItem) {
+        qWarning("MockTasksModel: removeChildTask on missing row %d", parentRow);
+        return;
+    }
+    parentItem->removeRow(childRow);
+}
+
 void MockTasksModel::setTaskData(int row, const QString &roleName, const QVariant &value)
 {
     const int role = roleForName(roleName);
@@ -177,7 +187,8 @@ QVariantMap ZoomLayoutEngine::zoomLayout(int count,
                                          qreal minEdge,
                                          qreal maxEdge) const
 {
-    // Same mapping as DockView::zoomLayout: unknown styles fall back to Parabolic.
+    // Same mapping as DockView::zoomLayout: unknown styles fall back to
+    // Parabolic.
     const auto zoomStyle = style == static_cast<int>(krema::ZoomStyle::InPlace) ? krema::ZoomStyle::InPlace : krema::ZoomStyle::Parabolic;
     const krema::DockZoomLayout layout = krema::computeDockZoom(count,
                                                                 restStart,
@@ -213,11 +224,7 @@ void registerMockTypes()
 {
     // The mocks/ import path carries a type-less qmldir for these URIs, which
     // shadows the real (installed) plugins so only these registrations are used.
-    qmlRegisterUncreatableType<MockAbstractTasksModel>("org.kde.taskmanager",
-                                                       0,
-                                                       1,
-                                                       "AbstractTasksModel",
-                                                       QStringLiteral("Role enum holder"));
+    qmlRegisterUncreatableType<MockAbstractTasksModel>("org.kde.taskmanager", 0, 1, "AbstractTasksModel", QStringLiteral("Role enum holder"));
     qmlRegisterType<MockScreencastingRequest>("org.kde.taskmanager", 0, 1, "ScreencastingRequest");
     qmlRegisterType<MockPipeWireSourceItem>("org.kde.pipewire", 0, 1, "PipeWireSourceItem");
     qmlRegisterType<MockTasksModel>("krema.test", 1, 0, "MockTasksModel");

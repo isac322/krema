@@ -586,13 +586,11 @@ Item {
                 }
                 root._dragActive = false
                 root._dragPending = false
-                root._dragWasActive = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
                 DockVisibility.setDragActive(false)
             } else if (root._dragPending) {
                 root._dragPending = false
-                root._dragWasActive = false
                 root._dragSourceIndex = -1
                 root._dragTargetIndex = -1
                 dragHoldTimer.stop()
@@ -610,12 +608,14 @@ Item {
         // press, drag and click target the item actually under the pointer.
         // Keyboard navigation keeps its focused item as the target.
         onPressed: function(mouse) {
+            // Preserve drag suppression while any other button remains held.
+            if (mouse.buttons === mouse.button)
+                root._dragWasActive = false
             if (!root.keyboardNavigating)
                 root.trackPointer(mouse.x, mouse.y)
             if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
                 root._dragStartX = mouse.x
                 root._dragStartY = mouse.y
-                root._dragWasActive = false
                 dragHoldTimer.restart()
             }
         }
@@ -647,14 +647,27 @@ Item {
         // Click handling: uses hoveredIndex from scaled hit testing
         // so clicks work correctly on zoomed icons
         onClicked: function(mouse) {
-            // Suppress click if drag was active during this press cycle
-            if (root._dragWasActive) {
-                root._dragWasActive = false
-                return
-            }
+            // Suppress clicks for the entire held-button cycle after a drag.
+            if (root._dragWasActive) return
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
-                DockActions.activate(root.hoveredIndex)
+                let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
+                let isWindow = DockModel.tasksModel.data(
+                    idx, TaskManager.AbstractTasksModel.IsWindow)
+                let isGroup = DockModel.tasksModel.data(
+                    idx, TaskManager.AbstractTasksModel.IsGroupParent)
+                if (isWindow && isGroup && DockSettings.groupedWindowClickAction === 1) {
+                    tooltipItem.show = false
+                    tooltipTimer.stop()
+                    let item = dockRepeater.itemAt(root.hoveredIndex)
+                    if (item) root.showPreviewForItem(root.hoveredIndex, item)
+                } else if (isWindow && (isGroup
+                           ? DockSettings.groupedWindowClickAction === 2
+                           : DockSettings.singleWindowClickAction === 1)) {
+                    DockActions.activateOrMinimize(root.hoveredIndex)
+                } else {
+                    DockActions.activate(root.hoveredIndex)
+                }
             } else if (mouse.button === Qt.MiddleButton) {
                 DockActions.newInstance(root.hoveredIndex)
             } else if (mouse.button === Qt.RightButton) {
@@ -1205,6 +1218,10 @@ Item {
                 dockPanel.mouseY = -1
                 root._zoomActive = false
                 DockVisibility.setHovered(false)
+            } else if (!PreviewController.visible && root.hoveredIndex >= 0
+                       && !root.keyboardNavigating && !root._dragActive) {
+                // Resume a stopped tooltip without delaying a pending hover.
+                tooltipTimer.start()
             }
         }
     }
@@ -1224,8 +1241,8 @@ Item {
                 // Window task → show preview popup
                 let item = dockRepeater.itemAt(root.hoveredIndex)
                 if (item) root.showPreviewForItem(root.hoveredIndex, item)
-            } else {
-                // Launcher-only → show text tooltip
+            } else if (!PreviewController.visible) {
+                // Hover previews disabled or launcher-only → show text tooltip
                 tooltipItem.show = true
             }
         }
@@ -1318,7 +1335,7 @@ Item {
 
     // Auto-trigger preview when a hovered launcher's window appears.
     // Reacts to TasksModel row insertion — more responsive than polling.
-    // _tryAutoPreview() honours the "Enable window preview" setting.
+    // _tryAutoPreview() honours the hover-preview setting.
     Connections {
         target: DockModel.tasksModel
         function onRowsInserted() {

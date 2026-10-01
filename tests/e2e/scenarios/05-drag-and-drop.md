@@ -2,12 +2,14 @@
 
 ## Features
 - dnd-reorder: Drag dock items to reorder position
+- dnd-click-policy-isolation: Drag release preserves window state for all six click-policy pairs
 - dnd-pin-on-drop: Dropping an item at a new position pins it
 - dnd-visual-feedback: Visual feedback during drag (placeholder, opacity change)
 - dnd-file-drop: Drop file onto app icon to open with that app
 
 ## Affected Files
 - src/qml/main.qml
+- src/config/krema.kcfg
 - src/qml/DockItem.qml
 - src/models/dockactions.h
 - src/models/dockactions.cpp
@@ -15,6 +17,13 @@
 - src/models/dockmodel.cpp
 - src/shell/dockvisibilitycontroller.h
 - src/shell/dockvisibilitycontroller.cpp
+
+**Tier:** Tier 2 (Appium) for real drag input and KWin state. Tier 1 QML
+tests cover the shared `main.qml` drag and hit-testing seam. Tier 3 reuses
+the Appium cases against installed packages.
+Keyboard Escape cancellation, context-menu actions, and middle/right input
+remain unchanged; the added contract checks drag release state only.
+
 
 ---
 
@@ -42,8 +51,9 @@ NOT `mouse_drag` (which doesn't support hold delay).
 - AT-SPI button order reflects new arrangement
 - The window that was active before the drag is active again (the dock holds keyboard interactivity only while dragging)
 
-**Verified in PoC:** Dolphin moved from position 1 to position 3.
-AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc].
+**Historical PoC note:** Dolphin moved from position 1 to position 3, and
+AT-SPI reported the reordered buttons.
+
 
 **Verification:** accessibility_tree (button order changed), screenshot (drag ghost visible during drag)
 
@@ -86,7 +96,8 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 - Drop indicator: 2px wide highlight-colored line at insertion point
 - Other items: base scale (zoom disabled during drag)
 
-**Verified in PoC:** Ghost icon and reduced-opacity source item visible in screenshot.
+**Historical PoC note:** Earlier capture showed the ghost icon and reduced
+opacity source item.
 
 **Verification:** screenshot (ghost icon + opacity change + drop indicator line)
 
@@ -114,3 +125,35 @@ AT-SPI confirmed order change: [Konsole, Kate, Dolphin, 시스템 설정, KCalc]
 **Automated:** tests/appium/test_05_drag.py::test_dnd_004_drag_released_outside_dock_keeps_order (drag outside the dock; unpinned task, since dragging a pinned launcher out of the dock unpins it by design)
 
 **Automated:** tests/appium/test_05_drag.py::test_dnd_004_escape_cancels_drag (Escape while dragging; the dock grabs layer-shell keyboard interactivity for the drag)
+
+---
+
+## TC DND-005: Drag release preserves window state across click policies
+
+**Precondition:** Run the six policy pairs:
+`single0-group0`, `single0-group1`, `single0-group2`, `single1-group0`,
+`single1-group1`, and `single1-group2`. Use grouped `Alpha`/`Beta`, single
+`Solo`, and unrelated `Focus` fixture windows.
+
+**Steps:**
+1. Start a real drag from a grouped or single dock item.
+2. Release inside the dock, outside the dock, and after leaving and
+   re-entering the dock.
+3. Compare every fixture window's active/minimized state with the pre-drag
+   map, and inspect the popup state.
+
+**Expected:**
+- The base matrix has 72 scenarios (six policy pairs × 12 source/release
+  cases); the separate held-left/right release-order controls are not included
+  in that base count.
+- Drag hit testing follows the current zoomed item bounds.
+- Release does not invoke a configured minimize, activation, or explicit
+  preview action.
+- No preview popup opens after a drag release.
+
+**Verification:** KWin active/minimized state for every fixture window,
+AT-SPI item geometry, and popup visibility. Visual drag capture requires the
+existing DRM/vgem path.
+**Automated (Tier 2):** `tests/appium/test_05_drag.py::test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state`
+(six policy pairs × 12 source/release cases = 72 base scenarios, plus 24
+held-left/right release-order controls).

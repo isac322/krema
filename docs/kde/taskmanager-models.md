@@ -280,6 +280,14 @@ void requestPublishDelegateGeometry(const QModelIndex &index, const QRect &geome
 void requestToggleGrouping(const QModelIndex &index);
 ```
 
+### Child-targeted activation and minimization
+
+`makeModelIndex(row, childRow)` resolves an individual window in a group. Pass that child index to `requestToggleMinimized` to affect only that window. Krema's optional minimize action never sends this request to the group-parent index or performs a group-wide minimize.
+
+`DockActions::activateOrMinimize(int)` minimizes a valid active window only when `IsMinimizable` is true and `IsMinimized` is false. Other single windows follow the existing activation path. For groups, each click finds the current active child; if it cannot be minimized, that same child is activated. With no active child, `requestActivate` targets the existing most-recently-used entry child, restoring it if minimized.
+
+`DockActions::activate(int)` remains the default left-click action and the activation path for keyboard and accessibility input. Grouped activation still enters through the existing most-recently-used child and cycles in model order when a child is active. Mouse-wheel cycling remains unchanged.
+
 ---
 
 ## TaskFilterProxyModel Q_PROPERTIES

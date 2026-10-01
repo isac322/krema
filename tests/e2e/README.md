@@ -1,10 +1,17 @@
-# E2E Test Scenarios
+# E2E test scenarios
 
-Accessibility-first end-to-end test scenarios for Krema dock.
-The 48 original TCs below are automated in `tests/appium/` (AT-SPI harness running a
-real KWin session); MOUSE-008 and VIS-007 are covered by `tests/kwin` ctests. See the coverage matrix in
-`tests/appium/README.md`. The kwin-mcp workflow in this document remains
-useful for exploratory QA and for one-off manual checks.
+Accessibility-first end-to-end test scenarios for the Krema dock. The
+scenario checklists are automated by the Tier 2 `tests/appium/` harness in a
+real KWin session. MOUSE-008 and VIS-007 also have Tier 2 KWin ctests. Tier 3
+reuses the Appium scenarios against installed distro packages. See
+`tests/appium/README.md` for the coverage matrix and current run status.
+The kwin-mcp workflow remains useful for exploratory QA and one-off manual
+checks.
+
+The Issue 54 click-policy additions are documented as consumer observations,
+not source-text or mock-call checks. New rows stay pending until the parent
+runs the source-built and installed suites.
+
 
 ## Convention
 
@@ -38,6 +45,26 @@ Human-readable identifiers for functional areas. Used to:
 
 Source file paths that, when modified, may require re-running the scenario.
 This enables the "changed file → affected scenario" lookup in the Stop hook.
+### Test tiers
+
+- **Tier 1:** `tests/qml/` loads production QML headlessly with mocked
+  backends and checks consumer-visible QML state.
+- **Tier 2:** `tests/appium/` drives a source-built dock in a real KWin
+  session. `tests/kwin` ctests use the same virtual-compositor model-state
+  boundary.
+- **Tier 3:** `tests/distro/` runs the Tier 2 Appium scenarios against Krema
+  installed from each distro package.
+
+Two-output cases require the existing command:
+
+```sh
+KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs
+```
+
+The `outputs(2)` marker selects the existing multi-screen cases; a one-output
+session skips them. The scenarios use the existing `krema_e2e` helpers and
+retain their documented AT-SPI, EIS, QMenu, coordinate, and DRM/vgem limits.
+
 
 ## Execution Guide
 
@@ -170,19 +197,19 @@ Quick reference: which scenarios to re-run when a source file changes.
 
 | Changed File | Re-run Scenarios |
 |---|---|
-| `src/qml/main.qml` | 01, 02, 03, 05, 07 |
+| `src/qml/main.qml` | 01, 02, 03, 04, 05, 06, 07 |
 | `src/qml/DockItem.qml` | 01, 02, 05 |
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03 |
 | `src/shell/dockshell.*` | 01, 06 |
 | `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
-| `src/models/dockactions.*` | 02, 04, 05 |
+| `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
 | `src/models/launcherentrytracker.*` | 01 |
 | `src/qml/settings/*` | 06 |
-| `src/config/krema.kcfg` | 06 |
+| `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
 | `src/app/application.*` | 01, 06 |
@@ -194,3 +221,10 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/shell/edgetrigger.*` | 06 |
 | `src/shell/outputordermonitor.*` | 02, 03, 06, 07 |
 | `src/platform/dockplatform.*` | 01, 07 |
+
+`src/qml/main.qml` maps to all seven scenario files because it owns the dock
+input dispatch. Issue 54 changes only the left-click policy branch. Keyboard
+activation, context-menu actions, middle/right clicks, wheel cycling, drag
+handling, visibility, and settings lifecycle keep their existing contracts;
+the affected scenario files record those preservation checks without
+duplicating their full procedures.

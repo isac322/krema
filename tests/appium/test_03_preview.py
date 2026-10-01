@@ -16,10 +16,9 @@ import warnings
 import pytest
 from PIL import Image
 
-from krema_e2e import env, kwin
+from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e import preview as pv
-from krema_e2e.config import launcher
 from krema_e2e.krema import Krema, Rect, has_state
 from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.waits import wait_until
@@ -226,7 +225,7 @@ def test_prev004_delete_key_closes_focused_thumbnail_window(krema: Krema, apps: 
     assert krema.preview_visible(), "preview must stay open while windows remain"
 
 
-@pytest.mark.kremarc({"PinnedLaunchers": [launcher(env.TEST_APP_ID)]})
+@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher(env.TEST_APP_ID)]})
 def test_prev004_closing_last_window_closes_preview_and_returns_to_dock(krema: Krema, apps: TestWindows) -> None:
     apps.open("Solo", app_id=env.TEST_APP_ID)
     wait_until(lambda: len(krema.items()) == 1 and krema.item_names() != [APP], message=lambda: f"launcher to show the window ({krema.item_names()})")
@@ -390,3 +389,120 @@ def test_prev007_opening_preview_announces_window_count(krema: Krema, apps: Test
         wait_until(lambda: expected in announcements.messages(), message=lambda: f"announcement {expected!r} (got {announcements.messages()})")
     finally:
         announcements.close()
+
+
+# --------------------------------------------------------------- PREV-008/009
+def _configure_explicit_preview(krema: Krema, hide_delay: int = 200, max_zoom: float | None = None) -> None:
+    """Use GroupedWindowClickAction=1 while keeping hover previews opt-in."""
+    settings = {
+        "PinnedLaunchers": [],
+        "PreviewEnabled": False,
+        "PreviewHideDelay": hide_delay,
+        "SingleWindowClickAction": 0,
+        "GroupedWindowClickAction": 1,
+    }
+    if max_zoom is not None:
+        settings["MaxZoomFactor"] = max_zoom
+    krema.write_config(settings)
+    krema.restart()
+    wait_until(
+        lambda: krema.read_config().get("General", {}).get("GroupedWindowClickAction") == "1",
+        message="explicit group-preview policy persisted",
+    )
+
+
+def test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes(
+    krema: Krema, apps: TestWindows
+) -> None:
+    """Group action 1 is a popup action: it does not activate the group."""
+    _require_capture()
+    _configure_explicit_preview(krema)
+    alpha, beta, gamma = _open_group(apps, ["Alpha", "Beta", "Gamma"], ["#d02020", "#2020d0", "#20a020"])
+    krema.wait_for_item(APP)
+    for child in (beta, gamma):
+        kwin.set_minimized(child.internal_id, True)
+    wait_until(
+        lambda: all((w := child.refresh()) is not None and w.minimized for child in (beta, gamma)),
+        message="unselected children to be minimized before explicit preview",
+    )
+    kwin.activate(alpha.internal_id)
+    wait_until(alpha.is_active, message="first grouped child to become active")
+    krema.move_away(close_preview=False)
+
+    krema.click_item(APP)
+    wait_until(krema.preview_visible, message="explicit group click to show its popup")
+    popup = krema.preview_popup()
+    assert popup is not None and has_state(popup, "showing")
+    wait_until(lambda: set(pv.thumb_titles(krema)) == {"Alpha", "Beta", "Gamma"}, message="all grouped thumbnails")
+    pv.wait_on_screen(krema, popup)
+    _wait_thumbnail_color(krema, "Alpha", pv.is_red, "prev008-explicit-alpha")
+    assert alpha.is_active(), "showing the popup must not activate a different child"
+
+    # Repeated explicit clicks are idempotent: one visible popup with the same
+    # thumbnail set, rather than a second popup or an activation.
+    krema.click_item(APP)
+    wait_until(krema.preview_visible, message="repeated explicit click to keep popup visible")
+    assert set(pv.thumb_titles(krema)) == {"Alpha", "Beta", "Gamma"}
+    assert alpha.is_active()
+
+    pv.glide_into(krema, _thumb_center(krema, "Beta"))
+    inp.click()
+    wait_until(
+        lambda: (w := beta.refresh()) is not None and w.active and not w.minimized,
+        message=lambda: f"selected minimized child Beta to restore and activate (active: {kwin.active_window()})",
+    )
+    wait_until(lambda: not krema.preview_visible(), message="selected thumbnail to close popup")
+    assert (w := gamma.refresh()) is not None and w.minimized, "unselected minimized child must remain minimized"
+
+
+def test_prev009_explicit_group_pending_hide_retargets_after_reenter(
+    krema: Krema, apps: TestWindows
+) -> None:
+    """An explicit second-group click cancels a pending first-group hide."""
+    _require_capture()
+    _configure_explicit_preview(krema, hide_delay=1000, max_zoom=1.0)
+    _open_group(apps, ["Alpha", "Beta"])
+    other = apps.open("Other A", app_id=env.TEST_APP2_ID)
+    apps.open("Other B", app_id=env.TEST_APP2_ID)
+    krema.wait_for_item(APP)
+    krema.wait_for_item(env.TEST_APP2_NAME)
+    krema.move_away(close_preview=False)
+    krema.click_item(APP)
+    wait_until(krema.preview_visible, message="explicit first-group popup to show")
+    wait_until(lambda: set(pv.thumb_titles(krema)) == {"Alpha", "Beta"}, message="first-group thumbnails")
+    pv.wait_on_screen(krema, krema.preview_popup())
+
+    # Re-enter along the bottom edge, below the preview surface. Resolve the
+    # target geometry before leaving the popup: once the pointer leaves the
+    # first group, the configured hide timer is already running, so a
+    # settled_item_center() lookup here would consume that budget on a slow
+    # AT-SPI session.
+    target_x, target_y = krema.item_center(env.TEST_APP2_NAME)
+    edge_y = env.SCREEN_HEIGHT - 1
+    reentry_started = time.monotonic()
+    inp.move_path(
+        [
+            *inp.line((env.SCREEN_WIDTH // 2, edge_y), (target_x, edge_y), 3),
+            *inp.line((target_x, edge_y), (target_x, target_y), 3),
+        ],
+        step_ms=40,
+    )
+    reentry_elapsed = time.monotonic() - reentry_started
+    assert reentry_elapsed < 1.0, f"re-entry path exceeded the configured 1000 ms hide delay ({reentry_elapsed:.3f}s)"
+    assert krema.preview_visible(), "first popup closed before the configured hide delay"
+    assert set(pv.thumb_titles(krema)) == {"Alpha", "Beta"}, "hover disabled must not retarget the popup"
+    inp.click()
+    wait_until(
+        lambda: krema.preview_visible() and set(pv.thumb_titles(krema)) == {"Other A", "Other B"},
+        message="explicit click to retarget the second group",
+    )
+    pv.wait_on_screen(krema, krema.preview_popup())
+    _assert_stays(
+        lambda: krema.preview_visible() and set(pv.thumb_titles(krema)) == {"Other A", "Other B"},
+        1.2,
+        "pending first-group hide dismissed or retargeted the second-group popup",
+    )
+    pv.glide_into(krema, _thumb_center(krema, "Other A"))
+    inp.click()
+    wait_until(other.is_active, message="retargeted second-group thumbnail to activate its child")
+    wait_until(lambda: not krema.preview_visible(), message="retargeted selection to close popup")

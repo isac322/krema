@@ -193,6 +193,20 @@
       <default>200</default>
     </entry>
 
+    <entry name="SingleWindowClickAction" type="Int">
+      <label>Single window click action</label>
+      <default>0</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+
+    <entry name="GroupedWindowClickAction" type="Int">
+      <label>Grouped window click action</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+
     <entry name="AttentionAnimation" type="Int">
       <label>Attention animation style (0=None, 1=Bounce, 2=Wiggle, 3=Pulse, 4=Glow, 5=DotColor, 6=Blink)</label>
       <default>2</default>

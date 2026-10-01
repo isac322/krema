@@ -248,6 +248,14 @@ pre-fix and fixed results: the pre-fix run failed after a 33 ms entry, while
 the fixed run passed three fresh opens in one run. The fast path is tested
 separately from pixel waits.
 
+`MOUSE-017` is a native KWin test, not an Appium fixture. Its test-only
+scripted effect reads `EffectWindow.iconGeometry` independently of
+libtaskmanager. Initial publication, dock movement, icon resizing, hidden
+new-task/group creation, reveal, and teardown passed in the updated runtime.
+The old runtime failed the initial visible-task assertion with an empty target
+before reaching hidden cases; no old-runtime hidden-case result was recorded.
+Headless target assertions do not verify visible Magic Lamp or Squash rendering.
+
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
 parked and at the screen centre. SET-008 runs with two outputs. SET-012 runs
 its switch/fallback/persistence cases with two outputs and its
@@ -328,6 +336,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | MOUSE-014 | `test_02_mouse.py::test_mouse014_fast_hover_launcher_tooltip_healthy_control` | screenshot | pending; DRM capture required |
 | MOUSE-015 | `test_02_mouse.py::test_mouse015_unconfigured_defaults_keep_single_active_and_group_cycle_mru` | KWin | pending |
 | MOUSE-016 | `test_02_mouse.py::test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies` (six policy cases) | KWin, AT-SPI | pending |
+| MOUSE-017 | `tests/kwin/test_delegate_geometry.cpp` (ctest `krema_delegate_geometry_tests`) | Independent KWin `EffectWindow.iconGeometry` | partial: initial target, move/resize, groups, teardown passed; hidden new-task/group and reveal pending; visible Magic Lamp/Squash animation manual |
 | PREV-008 | `test_03_preview.py::test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes` | KWin, AT-SPI, screenshot | pending; DRM capture required |
 | PREV-009 | `test_03_preview.py::test_prev009_explicit_group_pending_hide_retargets_after_reenter` | AT-SPI, screenshot | pending; DRM capture required |
 | PREV-011 | `test_11_preview_surface.py::test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts` (Left, Right, horizontal control) | Entire popup/thumbnail containment in KWin native surface, real last-thumbnail input, exact PID/internalId, wrong underlying-client negative, live grow/shrink/reuse, transparent-area pass-through | pass: source-built and Fedora 43 installed RPM; no DRM or pixel proof |

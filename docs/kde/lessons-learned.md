@@ -315,7 +315,24 @@ See [the verified API and build dependencies](wayland-layer-shell.md#publishing-
 
 **Key lesson:** Keep the Qt GUI responsive during external compositor commands; do not infer a specific child semantic dependency from a blocked wait.
 
-## 17. Size the preview surface from the popup's laid-out extent (2026-10, vertical grouped preview)
+## 17. Own deferred geometry work in the QML tree (2026-10, issue #14)
+
+**Symptom:** Changing monitor mode with Settings open destroyed a dock while
+its deferred geometry callbacks were still pending. The callbacks reported
+`DockVisibility is not defined` or an invalid function context.
+
+**Fix:** Replace the geometry path's `Qt.callLater()` callbacks with an
+item-owned zero-interval timer and a dock-owned 50 ms relayout debounce.
+Restart them only on relevant layout or model changes; owner teardown cancels
+pending work. Keep the geometry proxy owned by its delegate even though its
+visual parent is the dock root.
+
+**Key lesson:** Deferring work until layout settles does not make that work
+safe across engine teardown. Give callbacks the same lifetime as the items
+they read. A single-shot debounce is not polling and must not be restarted by
+hover-animation frames.
+
+## 18. Size the preview surface from the popup's laid-out extent (2026-10, vertical grouped preview)
 
 **Symptom:** A grouped preview on a left or right dock could lay out a thumbnail row wider than the native preview surface. The compositor clipped the last thumbnail, and a click at that location could reach the window underneath.
 

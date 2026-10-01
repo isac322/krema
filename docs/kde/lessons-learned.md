@@ -300,7 +300,7 @@ See [the verified API and build dependencies](wayland-layer-shell.md#publishing-
 - Keep fast-entry regression coverage separate from layout/paint waits needed for precise thumbnail and close-button clicks.
 - A 500 ms visible hold tests pointer acceptance beyond the existing hide delay; it does not prove stationary-pointer recovery or every possible timing race.
 
-## 16. Keep Qt event dispatch alive while waiting for a compositor helper (2026-10, CI run 36792560667)
+## 16. Keep Qt event dispatch alive while waiting for a compositor helper (2026-10, native virtual-output stress)
 
 **Symptom:** In the configured 30-repeat combined virtual-output batch, 18 repetitions passed; the 19th repetition timed out in `runKscreenDoctor` at the existing 15-second deadline (seed `2418441708`).
 

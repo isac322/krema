@@ -389,5 +389,56 @@ app.
 parameterizations.
 
 The dedicated normal-hover pending-deadline and drag-time invalidation seams
-are Tier 1 QML checks, not additional Appium fixtures. See the named QML
-tests in `tests/appium/README.md`.
+are Tier 1 QML checks, not additional Appium fixtures. See the named QML tests
+in `tests/appium/README.md`.
+
+---
+
+## TC MOUSE-017: Minimize effects target the dock icon geometry
+
+**Precondition:** A running window is visible in the dock. For visual
+verification, enable KWin's Magic Lamp or Squash minimize effect in a real
+Plasma Wayland session. Use an independent KWin `EffectWindow.iconGeometry`
+probe to check the target rectangle.
+
+**Steps:**
+1. Record the dock item's resting screen rectangle with the pointer away from
+   the dock.
+2. Minimize the window from its title bar and observe its target.
+3. Hover the dock item, then move the pointer away. Check that zoom does not
+   change the published resting-slot target.
+4. Move the dock to another edge and change icon size. After layout settles,
+   record the new target and minimize again.
+5. Select Auto Hide and let the dock hide. Without revealing it, open a new
+   application window so a new task appears. Confirm the dock remains hidden
+   and the new window already has a nonempty minimize target.
+6. Minimize that window while the dock is hidden. Reveal the dock and compare
+   the recorded target with the new item's revealed resting slot.
+7. Hide the dock again, then open a second window of the same application to
+   form or extend a group. Check that every group child has the group's current
+   resting-slot target before reveal. Minimize a child, reveal the dock, and
+   compare its target with the group's slot.
+8. Repeat steps 5–7 in Dodge Windows mode, keeping an overlapping window in
+   place so the dock stays hidden during task creation and grouping.
+
+**Expected:**
+- KWin receives the unscaled resting layout slot associated with the correct
+  dock surface, including for tasks or group children created while hidden.
+- Hidden targets use the panel's visible resting position, not its slid-out
+  position, a zero rectangle, or an unrelated fallback.
+- Magic Lamp or Squash contracts toward the matching Krema item. Revealing the
+  dock confirms the target at the current resting slot after relayout.
+- Dock movement, icon-size changes, and group membership refresh the target.
+  Hover zoom does not publish transient transforms or per-frame geometry IPC.
+
+**Verification:** KWin `EffectWindow.iconGeometry` and the visible minimize
+animation in a real Plasma Wayland session. The visual effect requires KWin
+animations and is not rendered by the headless compositor probe.
+**Automated (Tier 2):** `tests/kwin/test_delegate_geometry.cpp` (ctest
+`krema_delegate_geometry_tests`).
+
+**Recorded coverage:** The native compositor test passed for initial
+publication, dock movement, icon resizing, grouped windows, and teardown.
+Hidden new-task/group and reveal checks remain pending for the updated
+runtime. The headless probe checks compositor state, not visible Magic Lamp
+or Squash rendering; visual verification remains manual.

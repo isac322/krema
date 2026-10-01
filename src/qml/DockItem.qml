@@ -98,6 +98,7 @@ Item {
 
     // === Notification (transient attention) ===
     // Sources: Window.IsDemandingAttention, LauncherEntry urgent, SNI NeedsAttention, badgeCount increase
+
     // → _triggerAttention() → auto-stops after attentionAnimationDuration. Suppressed by DND.
     //
     // API support matrix:
@@ -217,25 +218,66 @@ Item {
     //   - noOpDetectionTimer fires (already-active app, no new window in 5s → no-op)
     //   - maxLaunchTimer fires (30s absolute safety net)
 
+    readonly property bool _isWindow: model.IsWindow ?? false
     readonly property bool _isStartup: model.IsStartup ?? false
     readonly property bool _isActive: model.IsActive ?? false
     readonly property int _childCount: model.ChildCount || 0
-
     // Virtual desktop opacity: mode 1 (DimOtherDesktops) dims icons on other desktops
     // DockModel.currentDesktop is a reactive dependency — triggers re-evaluation on desktop switch
     readonly property bool _isOnCurrentDesktop: {
         let _dep = DockModel.currentDesktop
         return DockModel.isOnCurrentDesktop(index)
+
     }
     opacity: (DockModel.virtualDesktopMode === 1 && !_isOnCurrentDesktop) ? DockSettings.otherDesktopOpacity : 1.0
     Behavior on opacity { NumberAnimation { duration: 150 } }
     property int _prevChildCount: 0
+
+    property bool _delegateGeometryReady: false
+    // The bridge reads this item for its stable layout slot. Production
+    // delegates replace the default with a nonvisual rest-slot proxy; keeping
+    // the self default makes isolated DockItem fixtures representative.
+    property Item delegateGeometryTarget: dockItem
+    // Publish only the stable layout slot, never the transient zoom transform.
+    // Deferring lets the Flow finish placing this delegate before libtaskmanager
+    // extracts its geometry from the QQuickItem.
+    function publishDelegateGeometry() {
+        if (!_delegateGeometryReady || !_isWindow || !delegateGeometryTarget
+                || delegateGeometryTarget.width <= 0 || delegateGeometryTarget.height <= 0)
+            return
+        DockModel.publishDelegateGeometry(index, delegateGeometryTarget)
+    }
+
+    function scheduleDelegateGeometryPublication() {
+        if (_delegateGeometryReady)
+            delegateGeometryTimer.restart()
+    }
+
+    // An item-owned debounce is cancelled on teardown, unlike Qt.callLater
+    // callbacks which can outlive the dock's QML context during a mode change.
+    Timer {
+        id: delegateGeometryTimer
+        interval: 0
+        onTriggered: dockItem.publishDelegateGeometry()
+    }
+
+    // Position changes may be animated by the Flow. Let the dock debounce
+    // those changes before refreshing all settled delegate slots.
+    signal delegateGeometryChanged()
+
+    onIndexChanged: scheduleDelegateGeometryPublication()
+    onXChanged: delegateGeometryChanged()
+    onYChanged: delegateGeometryChanged()
+    onWidthChanged: scheduleDelegateGeometryPublication()
+    onHeightChanged: scheduleDelegateGeometryPublication()
 
     property bool _noOpOverride: false
     property bool _waitingForWindow: false
     property int _childCountAtLaunch: 0
 
     // --- State change handlers ---
+
+    on_IsWindowChanged: scheduleDelegateGeometryPublication()
 
     on_IsStartupChanged: {
         if (_isStartup) {
@@ -276,6 +318,7 @@ Item {
             maxLaunchTimer.stop()
         }
         _prevChildCount = _childCount
+        scheduleDelegateGeometryPublication()
     }
 
     // --- Timers ---
@@ -384,6 +427,8 @@ Item {
     Component.onCompleted: {
         _prevChildCount = _childCount
         currentScale = zoomScale    // best guess pre-layout
+        _delegateGeometryReady = true
+        scheduleDelegateGeometryPublication()
         Qt.callLater(function() {
             currentScale = zoomScale  // correct value after layout
             _zoomAnimReady = true

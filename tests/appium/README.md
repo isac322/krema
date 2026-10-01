@@ -249,11 +249,6 @@ named automated nodes assert on the AT-SPI tree (states, names, geometry),
 the KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
 screenshots, or AT-SPI events. Existing pass statuses reflect the recorded
 suite results. Issue 54 rows remain `pending` until the parent completes Tier 2
-and packaged Tier 3 QA. Task-section results are recorded below: `test_09`
-passed 13/13, while `test_10` executed 14 cases across two invocations with
-13 passes and one known vertical PREV-010 reachability failure. Named
-reservation checks have a recorded source-built Tier 2 pass below; that run
-does not establish installed-package, pixel, or unexercised manual coverage.
 The issue #55 regression `QA-PREV-01` has recorded pre-fix and fixed results:
 the pre-fix run failed after a 33 ms entry, while the fixed run passed three
 fresh opens in one run. The fast path is tested separately from pixel waits.

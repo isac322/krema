@@ -16,10 +16,12 @@ QtObject {
     property int iconCacheVersion: 0
 
     // Production DockView::zoomLayout (krema::computeDockZoom), not a copy.
-    function zoomLayout(count, restStart, iconSize, spacing, restBackgroundStart, restBackgroundEnd,
-                        maxZoomFactor, style, active, cursor, minEdge, maxEdge) {
-        return ZoomLayoutEngine.zoomLayout(count, restStart, iconSize, spacing, restBackgroundStart,
-                                           restBackgroundEnd, maxZoomFactor, style, active, cursor,
+    function zoomLayout(count, restStart, iconSize, spacing, boundary, boundaryGap,
+                        restBackgroundStart, restBackgroundEnd, maxZoomFactor, style,
+                        active, cursor, minEdge, maxEdge) {
+        return ZoomLayoutEngine.zoomLayout(count, restStart, iconSize, spacing, boundary,
+                                           boundaryGap, restBackgroundStart, restBackgroundEnd,
+                                           maxZoomFactor, style, active, cursor,
                                            minEdge, maxEdge)
     }
 

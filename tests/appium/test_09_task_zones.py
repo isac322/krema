@@ -33,6 +33,7 @@ PINNED_A, PINNED_B = "Pinned A", "Pinned B"
 UNPINNED_A, UNPINNED_B = "Unpinned A", "Unpinned B"
 PINNED_IDS = (env.TEST_APP_ID, env.TEST_APP2_ID)
 ALL_NAMES = (PINNED_A, PINNED_B, UNPINNED_A, UNPINNED_B)
+REST_ICON_SPACING = 4  # default DockSettings.iconSpacing in the fixture
 SEPARATE_SWITCH = "//frame[@name='Settings']//check_box[@name='Separate pinned and running apps']"
 SEPARATOR = "//separator[@name='Pinned and running apps separator']"
 
@@ -218,7 +219,7 @@ def test_tzone001_live_toggle_orders_visible_tasks_and_persists(
 def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
     krema: Krema, apps: TestWindows, edge: int
 ) -> None:
-    """The separator is an accessible, orientation-aware overlay, not a task."""
+    """The separator is an accessible, allocated slot, not a task."""
     _configure(krema, edge=edge, separate=True)
     _open_matrix(apps, krema)
     # The stock helper parks at (screenWidth/2, 20), which is still inside a
@@ -249,13 +250,22 @@ def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
     after = krema.screen_rect(krema.wait_for_item(UNPINNED_A))
     if edge in (config.EDGE_TOP, config.EDGE_BOTTOM):
         assert rect.height > rect.width
+        left_gap = rect.x - (before.x + before.width)
+        right_gap = after.x - (rect.x + rect.width)
+        assert abs(left_gap - REST_ICON_SPACING) <= 1, f"pinned/separator gap was {left_gap}px: {before} {rect}"
+        assert abs(right_gap - REST_ICON_SPACING) <= 1, f"separator/running gap was {right_gap}px: {rect} {after}"
         assert before.x + before.width <= rect.center[0] <= after.x
     else:
         assert rect.width > rect.height
+        top_gap = rect.y - (before.y + before.height)
+        bottom_gap = after.y - (rect.y + rect.height)
+        assert abs(top_gap - REST_ICON_SPACING) <= 1, f"pinned/separator gap was {top_gap}px: {before} {rect}"
+        assert abs(bottom_gap - REST_ICON_SPACING) <= 1, f"separator/running gap was {bottom_gap}px: {rect} {after}"
         assert before.y + before.height <= rect.center[1] <= after.y
 
     # At maximum zoom the two adjacent delegates remain real hit targets; the
-    # overlay must not steal pointer input or disappear while either is hovered.
+    # allocated separator slot must not steal pointer input or disappear while
+    # either is hovered.
     for name in (PINNED_B, UNPINNED_A):
         krema.hover_item(name)
         wait_until(lambda: krema.screen_rect(krema.wait_for_item(name)).width >= 48, message=f"{name} hover target")

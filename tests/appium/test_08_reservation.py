@@ -142,40 +142,43 @@ def _geometry(krema: Krema, win: TestWindow, edge: int, reserved: bool, stage: s
 
 
 def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM) -> None:
-    if not has_state(krema.wait_for_item(name), "showing"):
-        if edge == config.EDGE_BOTTOM:
-            reveal_dock(krema, name)
-        else:
-            trigger = {
-                config.EDGE_TOP: (env.SCREEN_WIDTH // 2, 0),
-                config.EDGE_LEFT: (0, env.SCREEN_HEIGHT // 2),
-                config.EDGE_RIGHT: (env.SCREEN_WIDTH - 1, env.SCREEN_HEIGHT // 2),
-            }[edge]
-            inp.move(*trigger)
-            _wait_shown_at_edge(krema, name)
-    if edge in (config.EDGE_LEFT, config.EDGE_RIGHT):
+    if edge != config.EDGE_BOTTOM:
         from krema_e2e.krema import context_menu_entries
 
-        # Keep the revealed dock shown while approaching its actual item.
-        # The shared settings helper parks away before measuring rest, which
-        # can re-hide a vertical AutoHide/Dodge dock during this frontdoor.
-        surface = krema.surface_rect("dock")
-        assert surface is not None
-        rest = krema.screen_rect(krema.wait_for_item(name))
-        start_x = surface.x if edge == config.EDGE_LEFT else surface.x + surface.width - 1
-        inp.move_path(
-            [(start_x, rest.center[1]), *inp.line((start_x, rest.center[1]), rest.center, 5)],
-            40,
+        # Leave any existing preview before revealing off-centre. The shared
+        # settings helper's bottom-specific park lies inside a top dock.
+        _park()
+        wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed before approaching the edge dock")
+        trigger = {
+            config.EDGE_TOP: (60, 0),
+            config.EDGE_LEFT: (0, 60),
+            config.EDGE_RIGHT: (env.SCREEN_WIDTH - 1, 60),
+        }[edge]
+        inp.move(*trigger)
+        _wait_shown_at_edge(krema, name)
+        surface, rest = wait_stable(
+            lambda: (krema.surface_rect("dock"), krema.screen_rect(krema.wait_for_item(name)))
         )
-        pointer_item = krema.screen_rect(krema.wait_for_item(name))
+        assert surface is not None and surface.contains(*rest.center)
+        wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed at the off-centre reveal point")
+        near = (trigger[0], rest.center[1]) if edge == config.EDGE_TOP else (rest.center[0], trigger[1])
+        inp.move_path([trigger, near, *inp.line(near, rest.center, 5)], 40)
+
+        def pointer_on_item():
+            item = krema.wait_for_item(name)
+            rect = krema.screen_rect(item)
+            cursor = kwin.cursor_pos()
+            return rect if has_state(item, "showing") and rect.contains(*cursor) and not krema.preview_visible() else None
+
+        pointer_item = wait_until(pointer_on_item, timeout=5, message=f"native pointer on {name!r} with preview closed")
         before = {w.internal_id for w in krema.windows()}
-        inp.click(*krema.screen_rect(krema.wait_for_item(name)).center, button="right")
+        inp.click(*kwin.cursor_pos(), button="right")
         menu = wait_until(
             lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
             timeout=5,
-            message=f"real context menu of {name!r} on selected vertical edge",
+            message=f"real context menu of {name!r} on selected edge",
         )
-        _record(krema, "vertical-settings-frontdoor", {
+        _record(krema, "edge-settings-frontdoor", {
             "edge": edge, "surface": list(surface), "rest_icon": list(rest),
             "pointer_item": list(pointer_item), "menu": list(menu.client_geometry),
         })
@@ -183,11 +186,13 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
         wait_until(
             lambda: next((w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
             timeout=15,
-            message="Settings window opened through the real vertical dock context menu",
+            message="Settings window opened through the real edge dock context menu",
         )
         _park()
         wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed before driving Settings")
     else:
+        if not has_state(krema.wait_for_item(name), "showing"):
+            reveal_dock(krema, name)
         open_settings(krema, name)
     open_page(krema, "Behavior")
 
@@ -263,7 +268,7 @@ def test_vis009_already_maximized_window_reflows_on_live_reservation_toggle(
     maximize(win)  # The only maximize request in the entire test.
     initial = _geometry(krema, win, edge, True, "startup-on")
     pid = krema.pid
-    _behavior(krema)
+    _behavior(krema, edge=edge)
     _reserve(krema, False)
     off = _geometry(krema, win, edge, False, "live-off-settings-open")
     assert off["window"] == initial["window"] and off["frame"] != initial["frame"]
@@ -313,7 +318,7 @@ def test_vis009_live_icon_size_and_floating_update_maximized_consumer(krema: Kre
     maximize(win)
     initial = _geometry(krema, win, edge, True, "initial-size-flat")
     pid = krema.pid
-    _behavior(krema)
+    _behavior(krema, edge=edge)
     open_page(krema, "Appearance")
     spin = scroll_into_view(krema, f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
     click_el(krema, spin)

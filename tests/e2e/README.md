@@ -154,6 +154,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 |---|---|
 | `src/qml/main.qml` | 01, 02, 03, 04, 05, 06, 07 |
 | `src/qml/DockItem.qml` | 01, 02, 05, 06 |
+| `src/utils/zoomcalculator.h` | 01, 02, 05, 06, 07 |
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03 |
@@ -195,11 +196,14 @@ duplicating their full procedures.
 | Zone drag policy | DND-006 | Real drags reorder within the source section, clamp cross-section moves without pinning, and allow free ordering when separation is off |
 | Boundary interactions | KBD-010, MOUSE-018, PREV-010 | Correct task activation/preview indices, non-focusable separator, hover geometry, and unchanged item input targets |
 
-The divider is an overlay, not a task or an extra equal-pitch item. Observe
-its accessible role/name and its placement between the current adjacent
-item centres during horizontal/vertical layout and hover. Paint and visual
-zoom checks need DRM/vgem capture; ordered app names, KWin geometry, real
-input, and persistence checks must still run without it.
+The divider reserves a dedicated primary-axis stroke slot outside the task
+model, not an extra equal-pitch item or keyboard stop. Observe its accessible
+role/name, one normal icon spacing on each side at rest, and its placement
+between the current adjacent visual edges during horizontal/vertical layout
+and hover. Paint and visual zoom checks need DRM/vgem capture; ordered app
+names, KWin geometry, real input, and persistence checks must still run
+without it. Under edge-bounded Parabolic zoom or InPlace overlap, disclose
+that visual clearance can be smaller than the nominal spacing.
 
 These rows describe acceptance checks, not recorded successes. The exact
 automated nodes and run status are maintained in `tests/appium/README.md`.

@@ -91,14 +91,19 @@ public:
 
     /// Dock zoom layout for QML (see krema::computeDockZoom).
     /// @p style is a krema::ZoomStyle int (0=Parabolic, 1=InPlace);
-    /// unknown values fall back to Parabolic. minEdge/maxEdge bound the grown
-    /// background (pass -Infinity/Infinity for no bound).
+    /// unknown values fall back to Parabolic. @p boundary is the first item
+    /// in the second zone, or -1 when no separator is present. @p boundaryGap
+    /// is the fixed extra primary-axis gap inserted before it.
+    /// minEdge/maxEdge bound the grown background (pass -Infinity/Infinity for
+    /// no bound).
     /// Returns keys: scales, offsets (QVariantList of double), leadingGrowth
     /// and trailingGrowth (double).
     Q_INVOKABLE QVariantMap zoomLayout(int count,
                                        qreal restStart,
                                        qreal iconSize,
                                        qreal spacing,
+                                       int boundary,
+                                       qreal boundaryGap,
                                        qreal restBackgroundStart,
                                        qreal restBackgroundEnd,
                                        qreal maxZoomFactor,

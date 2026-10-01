@@ -3,7 +3,7 @@
 ## Features
 - dnd-reorder: Drag dock items to reorder position
 - dnd-click-policy-isolation: Drag release preserves window state for all six click-policy pairs
-- dnd-pin-on-drop: Dropping an item at a new position pins it when separation is off; separation on keeps the task in its source zone
+- dnd-pin-membership: Reordering preserves pinned membership; enabled separation clamps drops to the source zone
 - dnd-visual-feedback: Visual feedback during drag (placeholder, opacity change)
 - dnd-file-drop: Drop file onto app icon to open with that app
 - dnd-task-zones: Separation constrains drags to the source zone and preserves free reorder when disabled

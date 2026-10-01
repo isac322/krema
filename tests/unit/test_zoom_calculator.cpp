@@ -102,7 +102,7 @@ constexpr krema::ZoomStyle kStyles[] = {krema::ZoomStyle::Parabolic, krema::Zoom
 krema::DockZoomLayout
 zoomAt(double cursor, double maxZoom, krema::ZoomStyle style = krema::ZoomStyle::Parabolic, bool active = true, double minEdge = -kInf, double maxEdge = kInf)
 {
-    return krema::computeDockZoom(kCount, kRestStart, kIconSize, kSpacing, kBgStart, kBgEnd, maxZoom, style, active, cursor, minEdge, maxEdge);
+    return krema::computeDockZoom(kCount, kRestStart, kIconSize, kSpacing, -1, 0.0, kBgStart, kBgEnd, maxZoom, style, active, cursor, minEdge, maxEdge);
 }
 
 double restCentre(int i)
@@ -229,6 +229,8 @@ TEST_CASE("Dock zoom rest state", "[zoom][layout]")
                                                        kRestStart,
                                                        kIconSize,
                                                        kSpacing,
+                                                       -1,
+                                                       0.0,
                                                        kBgStart,
                                                        kBgEnd,
                                                        1.6,
@@ -244,6 +246,46 @@ TEST_CASE("Dock zoom rest state", "[zoom][layout]")
         }
     }
 }
+TEST_CASE("Separator boundary reserves a fixed rest gap", "[zoom][layout]")
+{
+    constexpr int boundary = 4;
+    constexpr double boundaryGap = 5.0;
+    constexpr double boundaryRestCentre = kRestStart + boundary * kPitch + boundaryGap + kIconSize / 2.0;
+    const auto inPlace = krema::computeDockZoom(kCount,
+                                                kRestStart,
+                                                kIconSize,
+                                                kSpacing,
+                                                boundary,
+                                                boundaryGap,
+                                                kBgStart,
+                                                kBgEnd + boundaryGap,
+                                                1.6,
+                                                krema::ZoomStyle::InPlace,
+                                                true,
+                                                boundaryRestCentre,
+                                                -kInf,
+                                                kInf);
+    REQUIRE_THAT(inPlace.scales[static_cast<std::size_t>(boundary)], WithinAbs(1.6, 1e-12));
+    REQUIRE_THAT(inPlace.offsets[static_cast<std::size_t>(boundary)], WithinAbs(0.0, 1e-12));
+    REQUIRE(inPlace.offsets[static_cast<std::size_t>(boundary - 1)] == 0.0);
+
+    const auto noBoundary = krema::computeDockZoom(kCount,
+                                                   kRestStart,
+                                                   kIconSize,
+                                                   kSpacing,
+                                                   -1,
+                                                   0.0,
+                                                   kBgStart,
+                                                   kBgEnd,
+                                                   1.6,
+                                                   krema::ZoomStyle::InPlace,
+                                                   true,
+                                                   boundaryRestCentre,
+                                                   -kInf,
+                                                   kInf);
+    REQUIRE(inPlace.scales[static_cast<std::size_t>(boundary)] > noBoundary.scales[static_cast<std::size_t>(boundary)]);
+}
+
 
 TEST_CASE("Parabolic zoom scales along the Gaussian curve", "[zoom][layout]")
 {

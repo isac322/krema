@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added independent left-click choices for single and grouped windows: optional active-window minimization or grouped previews, with activation and grouped cycling kept as defaults
 - Added "Selected monitors" in Behavior settings so users could keep docks on chosen outputs, retain disconnected selections, and use a temporary primary-display dock until a selected monitor returned
 - Added an enabled-by-default "Reserve screen space" setting for Always visible mode, so maximized windows avoid the dock while Auto hide and Dodge windows retain their existing behavior.
-- Added an optional "Separate pinned and running apps" setting, keeping pinned apps together before unpinned running apps and keeping cross-boundary drags in their section without pinning or unpinning.
+- Added an optional "Separate pinned and running apps" setting, keeping pinned apps together before unpinned running apps, reserving a themed separator slot with normal icon spacing on each side, and keeping cross-boundary drags in their section without pinning or unpinning.
 
 ### Changed
 

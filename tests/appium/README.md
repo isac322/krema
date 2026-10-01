@@ -249,6 +249,7 @@ named automated nodes assert on the AT-SPI tree (states, names, geometry),
 the KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
 screenshots, or AT-SPI events. Existing pass statuses reflect the recorded
 suite results. Issue 54 rows remain `pending` until the parent completes Tier 2
+and packaged Tier 3 QA.
 The issue #55 regression `QA-PREV-01` has recorded pre-fix and fixed results:
 the pre-fix run failed after a 33 ms entry, while the fixed run passed three
 fresh opens in one run. The fast path is tested separately from pixel waits.
@@ -356,7 +357,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | CTX-007 | `test_09_task_zones.py::test_tzone003_grouped_instances_keep_one_pinned_slot_and_close_differently`, `test_tzone004_pin_and_unpin_use_real_context_menu_and_preserve_membership`; TZONE-002 for empty-section divider state | Real fixture windows/context menu input, ordered AT-SPI app names, separator state, saved pinned membership | native Tier 2 coverage; no DRM; installed Tier 3 unverified |
 | DND-006 | `test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both cross-boundary directions with separation on/off) | Real drags, ordered AT-SPI app names, saved pinned membership | native Tier 2 coverage; visual drop-indicator/drag ghost/paint unverified; installed Tier 3 unverified |
 | KBD-010 | `tests/appium/test_10_task_zone_input.py::test_kbd010_task_navigation_survives_native_launch_and_close` (four edges) | Real keys, AT-SPI item focus, native launch/close, KWin activation | native Tier 2 coverage; F12 is a delivery probe, not launch proof; painted-divider quality and KWin RPC unverified |
-| MOUSE-018 | `tests/appium/test_10_task_zone_input.py::test_mouse018_separation_modes_and_magnified_boundary_hits` (four edges × separation ON/OFF, `MaxZoomFactor=1.6`) | Real pointer hover, AT-SPI separator/item geometry, outward-neighbor reflow, exact native PID hit targets | native Tier 2 coverage; pixel/AA, overlap screenshots, and DRM unverified |
+| MOUSE-018 | `tests/appium/test_10_task_zone_input.py::test_mouse018_separation_modes_and_magnified_boundary_hits` (four edges × separation ON/OFF, `MaxZoomFactor=1.6`) | Real pointer hover, AT-SPI separator/item geometry, outward-neighbor reflow, exact native PID hit targets | native Tier 2 coverage; rest separator clearance is measured in TZONE-002 to iconSpacing ±1 px on all four edges; pixel/AA, overlap screenshots, and DRM unverified |
 | PREV-010 | `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` (horizontal three-thumbnail and vertical two-thumbnail invocations) | Actual grouped window IDs/titles, last-thumbnail selection, selected-window KWin activation, AT-SPI preview state | Strict feature coverage for partition/index/pin transitions. The vertical two-thumbnail case still exercises center-point input reachability while the existing 400 px native surface clips the wider popup; whole-popup/thumbnail containment is owned by the separate preview-surface fix. Image/RHI/DRM/default-timing unverified |
 The Tier 1 QML names are:
 `test_groupPreviewClickShowsPopupAndSuppressesTooltip`,

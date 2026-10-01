@@ -18,26 +18,18 @@ IsDemandingAttention, /**< Task is demanding attention. */
 - KWin이 EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` 상태로부터 전달
 - `model.IsDemandingAttention`으로 QML에서 직접 접근 가능 (이미 DockModel에서 노출)
 
-### 1.2 SmartLauncherItem (Badge/Progress/Urgent)
+### 1.2 LauncherEntryTracker (Badge/Progress/Urgent)
 
-```
-// /usr/lib/qt6/qml/org/kde/plasma/private/taskmanager/taskmanagerplugin.qmltypes
-Component {
-    name: "SmartLauncher::Item"
-    exports: ["org.kde.plasma.private.taskmanager/SmartLauncherItem 254.0"]
+Krema는 C++ `LauncherEntryTracker` (`src/models/launcherentrytracker.h`)를 사용한다. Unity
+Launcher API (`com.canonical.Unity.LauncherEntry` D-Bus)를 직접 수신하는 자체 구현으로,
+앱이 보낸 `count`/`countVisible`/`progress`/`progressVisible`/`urgent` 상태를 launcher URL을
+키로 노출한다.
 
-    Property { name: "count";           type: "int";  isReadonly: true }
-    Property { name: "countVisible";    type: "bool"; isReadonly: true }
-    Property { name: "progress";        type: "int";  isReadonly: true }
-    Property { name: "progressVisible"; type: "bool"; isReadonly: true }
-    Property { name: "urgent";          type: "bool"; isReadonly: true }
-}
-```
-
-- `count`/`countVisible`: 앱이 보고한 배지 숫자 (예: 읽지 않은 메시지 3개)
-- `progress`/`progressVisible`: 0-100 진행률 (예: 다운로드 62%)
-- `urgent`: 긴급 상태 (IsDemandingAttention과 별개의 D-Bus 기반 경로)
-- 데이터 소스: Unity Launcher API (`com.canonical.Unity.LauncherEntry` D-Bus), KStatusNotifierItem
+원래는 `org.kde.plasma.private.taskmanager`의 QML `SmartLauncherItem`을 썼으나,
+Plasma 6.6에서 그 private 모듈이 task manager applet 플러그인 안으로 컴파일돼 외부
+프로세스에서는 import 불가. `LauncherEntryTracker`는 동일 upstream backend 의미론을
+포팅한 것이며, QML에서 `LauncherEntryTracker.count(launcherUrl)` 등으로 읽는다
+(`DockItem.qml`).
 
 ### 1.3 Attention 트리거 조건 (Plasma 참조)
 
@@ -339,7 +331,7 @@ ShaderEffect {
 | **C++ 래핑** | DockModel에서 SmartLauncher 래핑하여 role 추가 | 안정적 API, 캐싱 가능 | 구현 복잡도 높음 |
 | **D-Bus 직접 구현** | `com.canonical.Unity.LauncherEntry` 모니터링 | 완전한 제어 | 많은 보일러플레이트 |
 
-> **2026-09 업데이트:** 첫 번째 방식은 Plasma 6.6에서 깨졌다 (모듈이 task manager applet 플러그인으로 들어가 외부 프로세스에서 import 불가). Krema는 세 번째 방식(`LauncherEntryTracker`, C++)으로 구현했다. `notification-badge-approaches.md` 참조.
+> **2026-09 업데이트:** 첫 번째 방식은 Plasma 6.6에서 깨졌다 (모듈이 task manager applet 플러그인으로 들어가 외부 프로세스에서 import 불가). Krema는 세 번째 방식(`LauncherEntryTracker`, C++)으로 구현했다. `notification-badges.md`와 `lessons-learned.md` §13 참조.
 
 ### 4.2 Plasma Task Manager의 SmartLauncherItem 사용 패턴
 
@@ -430,10 +422,9 @@ Rectangle {
 
 ### 4.5 권장
 
-**방식 B (SmartLauncherItem + 단순 Badge)**로 시작.
-- private API이지만 Plasma 6 동안 안정적이고, Plasma 자체가 사용하는 API
+**방식 C**: `LauncherEntryTracker` (C++) + 단순 Badge. 방식 A/B는 SmartLauncherItem QML 모듈이
+Plasma 6.6부터 외부 import 불가라 폐기.
 - BadgeEffect (아이콘 잘라내기)는 시각적으로 좋지만 필수는 아님
-- 이후 필요하면 BadgeEffect 추가 또는 C++ 래핑으로 마이그레이션
 
 ---
 
@@ -444,7 +435,7 @@ Rectangle {
 |------|------|
 | `/usr/include/taskmanager/abstracttasksmodel.h` | IsDemandingAttention role 정의 |
 | `/usr/include/KF6/KWindowSystem/netwm_def.h` | DemandsAttention EWMH 상태 |
-| `/usr/lib/qt6/qml/org/kde/plasma/private/taskmanager/taskmanagerplugin.qmltypes` | SmartLauncherItem API |
+| `/usr/lib/qt6/qml/org/kde/plasma/private/taskmanager/taskmanagerplugin.qmltypes` | SmartLauncherItem API (Plasma ≤ 6.5 전용) |
 | `/usr/lib/qt6/qml/org/kde/graphicaleffects/BadgeEffect.qml` | 배지 셰이더 래퍼 |
 
 ### Plasma Task Manager 참조 구현
@@ -460,3 +451,4 @@ Rectangle {
 |------|------|
 | `src/qml/DockItem.qml` | launch bounce (재사용 가능), 인디케이터 점 |
 | `src/models/taskiconprovider.h` | 아이콘 제공 (badge 오버레이 시 참조) |
+| `src/models/launcherentrytracker.h` | Unity LauncherEntry 수신 (count/progress/urgent) |

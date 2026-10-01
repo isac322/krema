@@ -18,7 +18,7 @@
 - [x] Multi-distro packaging setup (Arch, RPM, DEB, OBS)
 - [x] TasksModel C++ initialization (classBegin/componentComplete)
 - [x] TaskIconProvider (QIcon::fromTheme → QML Image)
-- [x] Dock visibility modes — 4 types (AlwaysVisible, AlwaysHidden, DodgeWindows, SmartHide)
+- [x] Dock visibility modes — 3 types (AlwaysVisible, AutoHide, DodgeWindows, with a DodgeActiveOnly option)
 - [x] QML slide/fade animations (hide/show)
 
 ---
@@ -88,7 +88,7 @@ Introduces Kirigami/KDE Plasma APIs across QML UI for enhanced native integratio
   - [x] Visibility mode selection (radio buttons)
   - [x] Dock position selection
   - [x] Background opacity slider
-  - [ ] Background style selection → moved to M7
+  - [x] Background style selection (delivered in M7)
 - [x] "Settings..." entry in dock context menu
 
 ---
@@ -108,13 +108,10 @@ Preview popup showing window thumbnails on mouse hover.
 
 Visual refinement and polish.
 
-- [x] Additional background styles
-  - [x] Semi-transparent
+- [x] Additional background styles (alongside Panel Inherit)
   - [x] Transparent
-  - [x] Tinted (custom color + opacity)
+  - [x] Tinted (custom color or system color + opacity)
   - [x] Acrylic / Frosted Glass (blur + noise texture)
-  - [x] Mica (system accent color based)
-  - [x] Adaptive Opacity (switch to opaque when windows overlap)
 - [x] Attention-demanding animations
   - [x] Six animation styles (Bounce, Wiggle, Pulse, Glow, Dot color, Blink)
   - [x] Badge count display (Number, Dot, Off modes)
@@ -191,8 +188,8 @@ Extensible widget architecture.
 - [ ] Plasmoid hosting feasibility study
 - [ ] Liquid Glass background effect (multi-layer refraction)
 - [ ] App menu / trash can widgets
-- [ ] CI pipeline (GitHub Actions)
-- [ ] Comprehensive test suite (Catch2)
+- [x] CI pipeline (GitHub Actions)
+- [x] Comprehensive test suite (Catch2 unit/integration/KWin, Qt Quick Test QML, selenium-webdriver-at-spi E2E)
 
 ---
 
@@ -203,13 +200,13 @@ Extensible widget architecture.
 | Language | C++23 |
 | Desktop Environment | **KDE Plasma 6** (Wayland only) |
 | UI Framework | Qt 6.8+ / Qt Quick |
-| KDE Frameworks | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, GlobalAccel) |
-| KDE Plasma Libraries | LibTaskManager, LayerShellQt, KPipeWire |
+| KDE Frameworks | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, DBusAddons, GlobalAccel, IconThemes) |
+| KDE Plasma Libraries | LibTaskManager, LibNotificationManager, LayerShellQt, KPipeWire |
 | Additional KDE Libraries | Kirigami, Kirigami Addons, KColorScheme, KService, KCrash, KXmlGui |
 | Rendering | QRhi (automatic Vulkan/OpenGL selection) |
 | Build System | CMake + ECM + Ninja |
-| Packaging | CPack (Arch/RPM/DEB), OBS |
-| Testing | Catch2 3.x |
+| Packaging | PKGBUILD (AUR), OBS (RPM/DEB) |
+| Testing | Catch2 3.x, Qt Quick Test, selenium-webdriver-at-spi (E2E) |
 | License | GPL-3.0-or-later |
 
 ## Minimum Requirements
@@ -236,7 +233,7 @@ Extensible widget architecture.
 │  ┌──────────┐  ┌───────────────────┐    │
 │  │ DockModel│  │DockVisibility     │    │
 │  │(LibTask  │  │Controller         │    │
-│  │ Manager) │  │(4 visibility modes)│    │
+│  │ Manager) │  │(3 visibility modes)│    │
 │  └──────────┘  └───────────────────┘    │
 │  ┌──────────────┐ ┌────────────────┐    │
 │  │ DockSettings │ │TaskIconProvider│    │
@@ -250,8 +247,8 @@ Extensible widget architecture.
 │     DockView (QQuickView)                │
 │  ┌───────────────┐ ┌────────────────┐   │
 │  │ BackgroundStyle│ │KWindowEffects  │   │
-│  │(6 styles+     │ │(blur/contrast) │   │
-│  │ adaptive)     │ │                │   │
+│  │(4 styles)     │ │(blur/contrast) │   │
+│  │               │ │                │   │
 │  └───────────────┘ └────────────────┘   │
 ├─────────────────────────────────────────┤
 │   WaylandDockPlatform (LayerShellQt)     │

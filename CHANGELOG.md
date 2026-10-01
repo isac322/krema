@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The README now lists the four available background styles and no longer advertises unsupported Semi-Transparent or Mica styles
+- The software-center description (Discover, GNOME Software) now lists the four available background styles and no longer advertises unsupported Mica or adaptive opacity
 - Always Visible mode reserved screen space, so maximized windows ended above the dock instead of extending underneath it
 - "Follow active screen" with the "Mouse position" trigger moved the dock: pushing the pointer against the dock edge of another monitor brought the dock there
 - Changing the icon size or screen edge resized and moved the dock immediately on distributions with LayerShellQt older than 6.4 (e.g. Debian 13, Ubuntu 25.04) instead of only after a restart

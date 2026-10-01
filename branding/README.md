@@ -21,6 +21,14 @@ Every committed SVG is self-contained: all text is baked to paths (usvg + the
 pinned Noto Sans file), so assets render identically on any machine without the
 font installed. Logo masters contain no text at all.
 
+PNGs here and the binary site assets in `website/` (images, video, fonts) are
+stored in Git LFS (see `.gitattributes`). Run `git lfs install` once before
+cloning, or `git lfs pull` in an existing clone, to get the real files instead of
+pointers. Link them from outside the repository with
+`https://media.githubusercontent.com/media/isac322/krema/master/<path>`;
+`raw.githubusercontent.com` serves the pointer, not the image. The app icons in
+`src/icons/` are build inputs and stay out of LFS.
+
 ## Asset index
 
 ### `logo/` — SVG masters

@@ -1,0 +1,13 @@
+# Binary marketing and website assets live in Git LFS. Only the Pages
+# workflow checks them out (`lfs: true`); every other workflow and the
+# package sources (OBS tar_scm, COPR rpkg, GitHub tarballs) get pointers.
+#
+# Build inputs stay out of LFS: src/icons/*.png is installed by CMake and
+# must be real files in every source checkout and release tarball.
+branding/**/*.png filter=lfs diff=lfs merge=lfs -text
+website/**/*.png filter=lfs diff=lfs merge=lfs -text
+website/**/*.ico filter=lfs diff=lfs merge=lfs -text
+website/**/*.webp filter=lfs diff=lfs merge=lfs -text
+website/**/*.webm filter=lfs diff=lfs merge=lfs -text
+website/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
+website/**/*.woff2 filter=lfs diff=lfs merge=lfs -text

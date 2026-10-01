@@ -101,7 +101,7 @@ git push origin vx.y.z
 Search engines index release pages, so write them for users. Read the keyword tiers in `marketing/strategy.md` and the previous release (`gh release view <previous tag>`) for style.
 
 ```markdown
-![Krema release notes](https://raw.githubusercontent.com/isac322/krema/master/branding/social/release-banner.png)
+![Krema release notes](https://media.githubusercontent.com/media/isac322/krema/master/branding/social/release-banner.png)
 
 Krema vx.y.z <one or two sentences on the user-facing value, with primary keywords such as "KDE Plasma 6 dock", "Wayland", "parabolic zoom">.
 

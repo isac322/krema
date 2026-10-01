@@ -26,13 +26,13 @@ Settings, About, or Quit behavior.
 ## TC CTX-001: Right-Click Opens Context Menu
 
 **Precondition:** Dock visible with a running app.
-**Limitation:** QMenu is NOT exposed in AT-SPI (kwin-mcp D-06). All menu interactions
-use screenshot-based coordinate estimation.
+**Note:** The native QMenu is not in the AT-SPI tree (README pattern 7). Choose
+entries with the keyboard (Down/Return) or by position on a screenshot.
 **Steps:**
-1. Show dock and move mouse to target item (see dock show sequence in README)
-2. `mouse_click(x, y, button="right")` on a dock item (screen coordinates)
+1. Show dock and move the pointer to the target item (README "Showing a hidden dock for mouse tests")
+2. Right-click the dock item
 3. Wait 300ms
-4. `screenshot` — verify context menu visible
+4. Screenshot — verify context menu visible
 
 **Expected:**
 - Native KDE context menu appears (QMenu / Breeze styled)
@@ -40,7 +40,7 @@ use screenshot-based coordinate estimation.
 - Menu items (top to bottom): AppName, Pin/Unpin, New Instance, Close,
   separator, Settings..., About Krema, Quit
 
-**Menu item coordinate estimation** (from PoC, approximate y-offsets from menu top):
+**Menu item positions** (approximate y-offsets from menu top):
 - AppName: +0px
 - Pin to Dock / Unpin: +25px
 - New Instance: +57px
@@ -97,17 +97,17 @@ use screenshot-based coordinate estimation.
 
 **Precondition:** App already running (e.g., kcalc).
 **Steps:**
-1. `list_windows` — count app windows
-2. Right-click on the app's dock item
+1. Count the app's windows in the window list
+2. Right-click the app's dock item
 3. Click "New Instance"
 4. Wait 2000ms
-5. `list_windows` — verify window count increased
+5. Check the window list — window count increased
 
 **Expected:**
 - New app window launched
 - Bounce animation on dock icon
 
-**Verification:** list_windows (count +1)
+**Verification:** window list (count +1)
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx004_new_instance_launches_another_window
 
 ---
@@ -116,18 +116,18 @@ use screenshot-based coordinate estimation.
 
 **Precondition:** App with 2+ open windows.
 **Steps:**
-1. `list_windows` — note app windows
-2. Right-click on the app's dock item
+1. Note the app's windows in the window list
+2. Right-click the app's dock item
 3. Click "Close"
 4. Wait 1000ms
-5. `list_windows` — verify all windows of that app are closed
+5. Check the window list — all windows of that app are closed
 
 **Expected:**
 - All windows of the app are closed
 - If app was pinned, icon remains (no indicator)
 - If app was not pinned, icon removed
 
-**Verification:** list_windows (no windows for that app)
+**Verification:** window list (no windows for that app)
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx005_close_closes_every_window_of_an_unpinned_app, tests/appium/test_04_context_menu.py::test_ctx005_close_keeps_a_pinned_app_without_indicator
 
 ---
@@ -137,22 +137,18 @@ use screenshot-based coordinate estimation.
 **Precondition:** Dock visible.
 **Steps:**
 1. Right-click on any dock item (CTX-001 steps)
-2. `screenshot` — identify "Settings..." position in menu
-3. `mouse_click` at "Settings..." y-offset (~+123px from menu top)
-4. Wait 1500ms (settings window creation)
-5. `list_windows` — find settings window (krema window count increases)
-6. `screenshot` — verify settings dialog
-7. `find_ui_elements query="Icon size"` — verify FormCard elements in AT-SPI
+2. Choose "Settings..." (keyboard, or click its position on a screenshot)
+3. Wait 1500ms (settings window creation)
+4. Check the window list — a krema settings window appears
+5. Screenshot — verify settings dialog
+6. Check the AT-SPI tree for the "Icon size" control
 
 **Expected:**
 - Kirigami-based settings dialog opens as separate window
 - Contains pages: Appearance, Behavior, Window Preview, About Krema, About KDE
 - FormCard-based layout with sliders, spinboxes, comboboxes
-- Settings UI accessibility is covered by the automated AT-SPI checks below.
+- Settings UI is fully accessible via AT-SPI
 
-**Historical PoC note:** Earlier checks found the `"Icon size"` label and
-`"Zoom factor"` slider with Increase/Decrease actions.
-
-**Verification:** list_windows (krema window count +1), find_ui_elements (FormCard widgets), screenshot (dialog layout)
+**Verification:** window list (krema window count +1), AT-SPI (FormCard widgets), screenshot (dialog layout)
 
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx006_settings_entry_opens_the_settings_window

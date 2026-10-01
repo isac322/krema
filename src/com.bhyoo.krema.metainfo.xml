@@ -13,9 +13,8 @@
       integration with KDE Plasma desktop features.
     </p>
     <p>
-      Choose from six background styles — transparent, tinted, acrylic frosted glass,
-      Mica (system accent color based), and adaptive opacity that responds to
-      overlapping windows. Full keyboard navigation (Meta+Alt+D) and AT-SPI screen
+      Choose from four background styles — panel inherit, transparent, tinted, and
+      acrylic frosted glass. Full keyboard navigation (Meta+Alt+D) and AT-SPI screen
       reader support ensure the dock is accessible to all users.
     </p>
     <p>
@@ -31,15 +30,15 @@
   <url type="vcs-browser">https://github.com/isac322/krema</url>
   <screenshots>
     <screenshot type="default">
-      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/isac322/krema/master/branding/screenshots/dock-zoom.png</image>
+      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/master/branding/screenshots/dock-zoom.png</image>
       <caption>Parabolic zoom magnifies the icon under the pointer</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/isac322/krema/master/branding/screenshots/dock-overview.png</image>
+      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/master/branding/screenshots/dock-overview.png</image>
       <caption>Pinned launchers and running apps on the Plasma desktop</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1920" height="1080">https://raw.githubusercontent.com/isac322/krema/master/branding/screenshots/settings.png</image>
+      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/master/branding/screenshots/settings.png</image>
       <caption>Kirigami settings for size, zoom, background and behavior</caption>
     </screenshot>
   </screenshots>
@@ -104,12 +103,12 @@
     </release>
     <release version="0.4.0" date="2026-02-24">
       <description>
-        <p>Six background styles (transparent, tinted, acrylic frosted glass, Mica, and adaptive opacity), and comprehensive keyboard accessibility with AT-SPI screen reader support.</p>
+        <p>Comprehensive keyboard accessibility with AT-SPI screen reader support.</p>
       </description>
     </release>
     <release version="0.3.0" date="2026-02-24">
       <description>
-        <p>Window previews via PipeWire, multi-window preview list, and Settings UI improvements.</p>
+        <p>Four background styles (panel inherit, transparent, tinted, and acrylic frosted glass), window previews via PipeWire, multi-window preview list, and Settings UI improvements.</p>
       </description>
     </release>
     <release version="0.2.1" date="2026-02-23">

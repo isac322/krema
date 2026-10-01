@@ -1,7 +1,7 @@
 # Notification Badges for All Apps
 
-Research for Krema M8+ feature: showing notification badges/counts on dock icons for apps that
-do NOT support the Unity Launcher API.
+Reference for Krema's notification badges: showing badges/counts on dock icons, including apps
+that do NOT support the Unity Launcher API.
 
 **Headers**: `/usr/include/notificationmanager/`
 **Package**: `plasma-workspace` (`PW::LibNotificationManager`)
@@ -9,296 +9,58 @@ do NOT support the Unity Launcher API.
 
 ---
 
-## Problem Statement
+## Sources in Krema
 
-Krema currently uses two badge sources:
-1. `model.IsDemandingAttention` — EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` (boolean, all apps)
-2. `SmartLauncherItem` — Unity Launcher API `com.canonical.Unity.LauncherEntry` (count, few apps)
+Krema combines four badge sources:
+1. `LauncherEntryTracker` (C++) — Unity Launcher API `com.canonical.Unity.LauncherEntry` (exact count, progress, urgent)
+2. `NotificationTracker` (C++) — unread notifications via `RegisterWatcher` (per `desktop-entry`)
+3. `NotificationTracker` (C++) — SNI `NeedsAttention` (boolean)
+4. `model.IsDemandingAttention` — EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` (boolean, all apps)
 
-Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux.
-This document covers additional sources.
+Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux, so
+sources 2–4 cover the rest.
 
 ---
 
-## Approach 1: WatchedNotificationsModel (Recommended)
+## Approach 1: RegisterWatcher (Notification Watcher)
 
 ### Architecture
 
-Plasma's notification system uses a layered architecture:
-
 ```
 App → Notify() → org.freedesktop.Notifications (plasmashell owns it)
-                        ↓ broadcasts to watchers
-              RegisterWatcher() → WatchedNotificationsModel (passive)
+                        ↓ forwards to every registered watcher
+              RegisterWatcher() → Krema NotificationTracker (passive)
                                         ↓
-                          Notifications (QSortFilterProxy)
-                                        ↓
-                              QML views (badge counts)
+                          per-desktop-entry unread counts → QML (badge counts)
 ```
 
-`WatchedNotificationsModel` is a **passive watcher** — it does NOT need to own the D-Bus service.
-It calls `org.kde.NotificationManager.RegisterWatcher()` on startup and receives all notifications
-as broadcast calls from the server.
+A watcher is **passive**: it does NOT own the notification service. It calls
+`org.kde.NotificationManager.RegisterWatcher()` and plasmashell then calls `Notify()` on it for
+every new notification. `WatchedNotificationsModel` (QML only, no installed C++ header) uses the
+same protocol.
 
-### WatchedNotificationsModel: C++ vs QML Availability
+### `Notifications` proxy does NOT work in external apps
 
-**IMPORTANT**: `WatchedNotificationsModel` has **NO installed C++ public header** in
-`/usr/include/notificationmanager/`. It is exposed only via the QML module
-`org.kde.notificationmanager`. The C++ class `NotificationManager::AbstractNotificationsModel`
-(its base) also has no public header.
+`NotificationManager::Notifications` created from C++ stays at 0 rows. Its source model connects
+to the in-process `Server::self()`, which is never the real D-Bus server outside plasmashell.
+Use `RegisterWatcher` (C++) or `WatchedNotificationsModel` (QML) instead.
 
-- **QML use**: Fully supported — use `NotificationManager.WatchedNotificationsModel` directly.
-- **C++ use**: See critical bug note below — `Notifications` proxy does NOT use `WatchedNotificationsModel`.
+### Protocol (implemented in `src/models/notificationtracker.cpp`)
 
-### CRITICAL BUG: Notifications Proxy Does NOT Use WatchedNotificationsModel (Verified via Binary Analysis)
+1. Register an object at **`/NotificationWatcher`** with interface **`org.kde.NotificationWatcher`**
+   (`registerObject(..., ExportScriptableSlots)`, plus `Q_CLASSINFO("D-Bus Interface", ...)`).
+   The server hardcodes this path/interface; `/org/freedesktop/Notifications` never receives calls.
+2. Call `RegisterWatcher()` on `org.freedesktop.Notifications` `/org/freedesktop/Notifications`,
+   interface `org.kde.NotificationManager`. The unique bus name (`:1.xxx`) is enough.
+3. The server calls `Notify` with signature `ususssasa{sv}i`: the server-assigned `id` comes
+   FIRST (unlike the spec's `Notify`, where `replaces_id` is first and returns the id).
+4. `NotificationClosed(uint id, uint reason)` arrives as a **broadcast signal** on
+   `org.freedesktop.Notifications`, not as a directed call — subscribe with `QDBusConnection::connect()`.
+5. Call `UnRegisterWatcher()` on shutdown.
 
-**SYMPTOM**: `NotificationManager::Notifications` created from C++ stays at 0 rows even after
-`notify-send` fires. The `rowsInserted` signal is never emitted.
-
-**ROOT CAUSE** (confirmed via disassembly of `/usr/lib/libnotificationmanager.so`):
-
-```
-Notifications::componentComplete()
-  → Private::update()
-    → NotificationsModel::createNotificationsModel()   // singleton factory
-      → new NotificationsModel()
-        → connect(Server::self().notificationAdded, this, onNotificationAdded)
-        → connect(Server::self().notificationReplaced, ...)
-        → connect(Server::self().notificationRemoved, ...)
-```
-
-`NotificationsModel` connects to **`Server::self()`** — the in-process notification server
-singleton. In an external app like Krema, `Server::self()` exists but `Server::init()` is never
-called, so `Server::self()` is never the real D-Bus server. All `notify-send` / application
-notifications go to plasmashell's `Server`, which is in a **different process**.
-
-The `WatchedNotificationsModel` exists as a separate class (symbol:
-`NotificationManager::WatchedNotificationsModel::WatchedNotificationsModel()`) but is **not** used
-by `Notifications::componentComplete()` in the current implementation.
-
-**WHAT DOES NOT WORK:**
-```cpp
-// This stays at 0 rows forever — connects to in-process Server::self(), not plasmashell's server
-auto *model = new NotificationManager::Notifications(this);
-auto *ps = static_cast<QQmlParserStatus*>(model);
-ps->classBegin();
-model->setShowNotifications(true);
-ps->componentComplete();
-// model->rowCount() == 0 always, rowsInserted never fires
-```
-
-**CORRECT APPROACH: Custom D-Bus Watcher (see below)**
-**IMPORTANT: Read `notification-watcher-protocol.md` for the correct path/interface — the code below has been verified.**
-
-### WatchedNotificationsModel QML API (from qmltypes)
-
-```
-namespace: NotificationManager
-QML type: WatchedNotificationsModel
-Prototype: NotificationManager::AbstractNotificationsModel → QAbstractListModel
-
-Properties:
-  bool valid [readonly, notify: validChanged]
-    - true when connected to the D-Bus notification server
-    - false if plasmashell is not running or registration failed
-
-Methods:
-  void expire(uint notificationId)
-  void close(uint notificationId)
-  void invokeDefaultAction(uint notificationId)
-
-Signals:
-  validChanged(bool valid)
-```
-
-### QML Usage (Simplest)
-
-```qml
-import org.kde.notificationmanager as NotificationManager
-
-// Passive watcher model — does not conflict with plasmashell's notification server
-NotificationManager.WatchedNotificationsModel {
-    id: watchedModel
-    // valid: true when successfully connected to the notification server
-}
-
-// Count unread notifications per app
-function unreadCountForApp(desktopEntry) {
-    let count = 0;
-    for (let i = 0; i < watchedModel.rowCount(); i++) {
-        const idx = watchedModel.index(i, 0);
-        const entry = watchedModel.data(idx, NotificationManager.Notifications.DesktopEntryRole);
-        const expired = watchedModel.data(idx, NotificationManager.Notifications.ExpiredRole);
-        const read = watchedModel.data(idx, NotificationManager.Notifications.ReadRole);
-        if (entry === desktopEntry && !expired && !read) {
-            count++;
-        }
-    }
-    return count;
-}
-```
-
-### Using the Notifications Proxy Model (Preferred)
-
-```qml
-import org.kde.notificationmanager as NotificationManager
-
-// Proxy model with filtering/sorting — sits on top of WatchedNotificationsModel
-NotificationManager.Notifications {
-    id: notificationsModel
-    showNotifications: true
-    showJobs: false
-    showExpired: false
-
-    // Filter to a specific app
-    // Note: no built-in per-app filter property — use QSortFilterProxyModel in C++
-    // or iterate in QML
-}
-```
-
-### C++ Usage (BROKEN — DO NOT USE)
-
-```cpp
-// WARNING: This does NOT work for receiving external notifications.
-// NotificationsModel connects to in-process Server::self(), not plasmashell.
-// Use the custom D-Bus watcher approach instead (see below).
-
-#include <notificationmanager/notifications.h>
-
-auto *model = new NotificationManager::Notifications(this);
-auto *ps = static_cast<QQmlParserStatus*>(model);
-ps->classBegin();
-model->setShowNotifications(true);
-model->setShowExpired(true);
-ps->componentComplete();
-// model->rowCount() will always be 0 — never receives external notify-send
-```
-
-### Correct C++ Implementation: Custom D-Bus Watcher
-
-The `WatchedNotificationsModel` works by:
-1. Registering a D-Bus object at `/org/freedesktop/Notifications` on this app's session bus connection
-2. Calling `org.kde.NotificationManager.RegisterWatcher()` on plasmashell's service
-3. Plasmashell then calls `Notify()` on all registered watchers whenever a notification arrives
-4. Calling `org.kde.NotificationManager.UnRegisterWatcher()` on shutdown
-
-This can be implemented directly in C++ without any private headers:
-
-```cpp
-// notificationwatcher.h
-#include <QDBusAbstractAdaptor>
-#include <QDBusConnection>
-#include <QDBusMessage>
-#include <QObject>
-#include <QVariantMap>
-
-class NotificationWatcher : public QObject
-{
-    Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.freedesktop.Notifications")
-
-public:
-    explicit NotificationWatcher(QObject *parent = nullptr);
-    ~NotificationWatcher() override;
-
-    // D-Bus slot: called by plasmashell for each new notification
-    // Signature MUST match exactly — plasmashell is the caller
-    Q_SCRIPTABLE uint Notify(const QString &appName,
-                             uint replacesId,
-                             const QString &appIcon,
-                             const QString &summary,
-                             const QString &body,
-                             const QStringList &actions,
-                             const QVariantMap &hints,
-                             int expireTimeout);
-
-    // D-Bus slot: called by plasmashell when a notification is closed
-    Q_SCRIPTABLE void NotificationClosed(uint id, uint reason);
-
-Q_SIGNALS:
-    void notificationReceived(uint id, const QString &appName, const QString &desktopEntry,
-                              const QString &summary, const QVariantMap &hints);
-    void notificationClosed(uint id, uint reason);
-
-private:
-    bool m_registered = false;
-};
-
-// notificationwatcher.cpp
-NotificationWatcher::NotificationWatcher(QObject *parent)
-    : QObject(parent)
-{
-    // Step 1: Register D-Bus object at /NotificationWatcher with org.kde.NotificationWatcher.
-    // CRITICAL: The server calls /NotificationWatcher with org.kde.NotificationWatcher interface,
-    // NOT /org/freedesktop/Notifications with org.freedesktop.Notifications (verified by D-Bus trace).
-    const bool ok = QDBusConnection::sessionBus().registerObject(
-        QStringLiteral("/NotificationWatcher"),
-        QStringLiteral("org.kde.NotificationWatcher"),
-        this,
-        QDBusConnection::ExportScriptableSlots
-    );
-    if (!ok) {
-        qWarning() << "NotificationWatcher: Failed to register D-Bus object";
-        return;
-    }
-
-    // Step 2: Call RegisterWatcher() to subscribe to notifications from plasmashell
-    QDBusMessage msg = QDBusMessage::createMethodCall(
-        QStringLiteral("org.freedesktop.Notifications"),
-        QStringLiteral("/org/freedesktop/Notifications"),
-        QStringLiteral("org.kde.NotificationManager"),
-        QStringLiteral("RegisterWatcher")
-    );
-    QDBusConnection::sessionBus().asyncCall(msg);
-    m_registered = true;
-}
-
-NotificationWatcher::~NotificationWatcher()
-{
-    if (m_registered) {
-        QDBusMessage msg = QDBusMessage::createMethodCall(
-            QStringLiteral("org.freedesktop.Notifications"),
-            QStringLiteral("/org/freedesktop/Notifications"),
-            QStringLiteral("org.kde.NotificationManager"),
-            QStringLiteral("UnRegisterWatcher")
-        );
-        QDBusConnection::sessionBus().asyncCall(msg);
-        QDBusConnection::sessionBus().unregisterObject(
-            QStringLiteral("/org/freedesktop/Notifications")
-        );
-    }
-}
-
-uint NotificationWatcher::Notify(const QString &appName, uint replacesId,
-                                 const QString &appIcon, const QString &summary,
-                                 const QString &body, const QStringList &actions,
-                                 const QVariantMap &hints, int expireTimeout)
-{
-    // Extract desktop-entry hint — this is the key for matching to dock items
-    const QString desktopEntry = hints.value(QStringLiteral("desktop-entry")).toString();
-    Q_EMIT notificationReceived(replacesId > 0 ? replacesId : 0, appName, desktopEntry, summary, hints);
-    return 0; // Watchers return 0 (server assigns the real ID)
-}
-
-void NotificationWatcher::NotificationClosed(uint id, uint reason)
-{
-    Q_EMIT notificationClosed(id, reason);
-}
-```
-
-**Key details from binary analysis + live D-Bus trace (verified 2026-02-28):**
-
-- Plasmashell calls `Notify(uint id, QString appName, uint replacesId, ...)` on the watcher — note
-  the `id` is the FIRST argument (different from the D-Bus spec where `replaces_id` is second and
-  apps pass 0 for new notifications). This is the server-assigned notification ID.
-- `NotificationClosed(uint id, uint reason)` is sent as a **broadcast signal** on
-  `org.freedesktop.Notifications`, NOT as a directed call to watchers. Must subscribe with
-  `QDBusConnection::connect()`.
-- `UnRegisterWatcher()` must be called on shutdown to avoid stale watcher entries.
-- Only NEW notifications (after registration) are received — no historical notifications.
-- The watcher does NOT need to own a well-known service name — unique bus name (`:1.xxx`) suffices.
-
-See `docs/kde/notification-watcher-protocol.md` for complete protocol documentation and test evidence.
+Only notifications sent after registration are received. `RegisterWatcher` needs plasmashell
+(owner of `org.freedesktop.Notifications`). Quick check: `qdbus6 <krema-bus-name> /NotificationWatcher`
+must list `org.kde.NotificationWatcher.Notify`.
 
 ### Key Roles Available
 
@@ -326,21 +88,23 @@ This is how apps identify themselves to the notification server.
 - **Discord**: May or may not send `desktop-entry` (varies by version/platform)
 - **Electron apps**: Typically send `app_name` but may omit `desktop-entry` hint
 
-**Badge count derivation**: `unread = rows where desktopEntry matches AND !expired AND !read`
+**Badge count derivation**: `NotificationTracker` counts notification IDs per desktop entry from
+`Notify()` until `NotificationClosed` (or `clearUnreadNotifications()` when the app is activated).
 
 This is NOT the same as the app-reported badge count from Unity API, but it's the best
-approximation available for all apps.
+approximation available for all apps. When the `desktop-entry` hint is missing,
+`NotificationTracker` falls back to `app_name` (normalized through KService).
 
 ### Feasibility Assessment
 
 | Factor | Assessment |
 |--------|-----------|
-| Implementation effort | Medium — QML-first, simple |
+| Implementation effort | Medium — D-Bus watcher in C++ |
 | Gives badge COUNT | Yes (unread notification count, not app-reported) |
-| Works for all apps | Only apps that use `org.freedesktop.Notifications` AND send `desktop-entry` hint |
+| Works for all apps | Only apps that use `org.freedesktop.Notifications` |
 | Privacy concerns | Low — reading already-delivered notifications |
 | Permission requirements | None — passive watcher |
-| Requires plasmashell | Yes — `valid` property is false without a notification server |
+| Requires plasmashell | Yes — no `RegisterWatcher` without Plasma's notification server |
 
 ### Settings Integration
 
@@ -466,7 +230,7 @@ The `org.freedesktop.Notifications` interface only exposes these signals:
 
 You cannot subscribe to intercept `Notify()` calls without being the server or using `RegisterWatcher()`.
 
-**The correct approach is `WatchedNotificationsModel` (Approach 1).**
+**The correct approach is `RegisterWatcher` (Approach 1).**
 
 ---
 
@@ -501,59 +265,50 @@ active: task.smartLauncherItem && task.smartLauncherItem.countVisible
 **Plasma does NOT use `WatchedNotificationsModel` in the task manager.**
 That is used only by the notification bell applet and notification history.
 
-The `SmartLauncherItem` does check `NotificationManager::Settings::badgesInTaskManager()` and
-`badgeBlacklistedApplications()` at runtime — confirming settings integration exists.
+`SmartLauncherItem` checks `NotificationManager::Settings::badgesInTaskManager()` and
+`badgeBlacklistedApplications()` at runtime. Since Plasma 6.6 it is compiled into the task
+manager applet plugin and cannot be imported by other processes; Krema's `LauncherEntryTracker`
+ports its backend semantics and applies the same settings.
 
 ---
 
-## Recommended Architecture for Krema
+## Krema's Architecture
 
 ### Badge Source Priority
 
 ```
-Priority  Source                          Count    Coverage
---------  -----                           -----    --------
-1 (best)  SmartLauncherItem.count         Exact    KDE apps, Slack (Unity API)
-2         WatchedNotificationsModel        Unread#  All apps using libnotify
-3         SNI NeedsAttention              Boolean  Discord, Telegram, tray apps
-4         IsDemandingAttention (existing) Boolean  X11 urgency hint apps
+Priority  Source                                     Count    Coverage
+--------  ------                                     -----    --------
+1 (best)  LauncherEntryTracker.count                 Exact    KDE apps, Slack (Unity API)
+2         NotificationTracker.unreadCount            Unread#  Apps using org.freedesktop.Notifications
+3         NotificationTracker.sniNeedsAttention      Boolean  Discord, Telegram, tray apps
+4         IsDemandingAttention                       Boolean  X11 urgency hint apps
 ```
 
-### Combined Badge Logic (QML sketch)
+### Combined Badge Logic (`src/qml/DockItem.qml`)
 
 ```qml
-// In DockItem.qml
-readonly property int badgeCount: {
-    // Priority 1: Unity API exact count
-    if (smartLauncherItem && smartLauncherItem.countVisible) {
-        return smartLauncherItem.count;
+readonly property int _badgeCount: {
+    let _rev = NotificationTracker.revision  // reactive dependency
+    if (_launcherCountVisible)               // 1st: Unity API exact count
+        return _launcherCount
+    if (_appId.length > 0) {                 // 2nd: unread notification count
+        let n = NotificationTracker.unreadCount(_appId)
+        if (n > 0) return n
     }
-    // Priority 2: Unread notification count
-    if (notifBadgeCount > 0) {
-        return notifBadgeCount;
-    }
-    // Priority 3+4: Boolean dot — handled by attentionState
-    return 0;
+    return 0
 }
 
-readonly property bool attentionState: {
-    return model.IsDemandingAttention ||
-           (smartLauncherItem && smartLauncherItem.urgent) ||
-           sniNeedsAttention ||
-           notifBadgeCount > 0;
+readonly property bool _isDemandingAttention: {
+    let _rev = NotificationTracker.revision
+    return (model.IsDemandingAttention ?? false)
+        || _launcherUrgent
+        || (_appId.length > 0 && NotificationTracker.sniNeedsAttention(_appId))
 }
 ```
 
-### Per-App Notification Count Model (C++)
-
-For efficiency, create a C++ model that:
-1. Uses `NotificationManager::Notifications` as source
-2. Groups by `DesktopEntryRole`
-3. Counts non-expired, non-read rows per app
-4. Exposes `Q_INVOKABLE int unreadCountForApp(const QString &desktopEntry)`
-5. Emits `countChanged(desktopEntry, newCount)` signal
-
-This avoids QML-side iteration over all notifications per dock item.
+Both trackers are C++ singletons with a `revision` property for reactive QML bindings and
+`Q_INVOKABLE` lookups, so QML never iterates notifications per dock item.
 
 ---
 
@@ -564,7 +319,7 @@ This avoids QML-side iteration over all notifications per dock item.
 find_package(LibNotificationManager REQUIRED)
 
 # Link target
-target_link_libraries(krema PRIVATE PW::LibNotificationManager)
+target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
 
 # Headers are at: /usr/include/notificationmanager/
 ```
@@ -572,7 +327,7 @@ target_link_libraries(krema PRIVATE PW::LibNotificationManager)
 **CMake target**: `PW::LibNotificationManager`
 **CMake find_package name**: `LibNotificationManager`
 **Config file**: `/usr/lib/cmake/LibNotificationManager/LibNotificationManagerConfig.cmake`
-**Shared library**: `/usr/lib/libnotificationmanager.so.6.5.5` (soname: `libnotificationmanager.so.1`)
+**Shared library**: `libnotificationmanager.so` (soname: `libnotificationmanager.so.1`)
 **Qt minimum version required by config**: `Qt6 6.9.0`
 
 **INTERFACE_LINK_LIBRARIES** (pulled in transitively via `find_dependency`):
@@ -590,9 +345,9 @@ target_link_libraries(krema PRIVATE PW::LibNotificationManager)
 
 ## Privacy and Permission Concerns
 
-- **WatchedNotificationsModel**: Reads notification content (summary, body, app name).
-  This is the same data the notification bell applet reads. No special permissions needed.
-  Consider NOT storing notification bodies — only counts per desktop entry.
+- **Notification watcher**: Receives notification content (summary, body, app name) — the same
+  data the notification bell applet reads. No special permissions needed.
+  `NotificationTracker` stores only notification IDs per desktop entry, not bodies.
 
 - **SNI monitoring**: Only reads app name, status, and icon. No sensitive data.
 
@@ -605,26 +360,23 @@ target_link_libraries(krema PRIVATE PW::LibNotificationManager)
 
 0. **`Notifications` proxy is broken for external apps** — `Notifications::componentComplete()`
    creates `NotificationsModel` which connects to in-process `Server::self()`, not plasmashell's
-   server. Use the custom D-Bus watcher (see above) or `WatchedNotificationsModel` via QML instead.
-   Verified via binary analysis of `/usr/lib/libnotificationmanager.so` (Plasma 6.5.5).
+   server. Use the D-Bus watcher (see above) or `WatchedNotificationsModel` via QML instead.
 
-1. **`desktop-entry` hint is optional** — apps that don't send it cannot be correlated.
-   `app_name` (the first argument to `Notify()`) is always present but may differ from desktop file stem.
-   The `WatchedNotificationsModel` uses `DesktopEntryRole` from the `desktop-entry` hint.
+1. **`desktop-entry` hint is optional** — apps that don't send it cannot be correlated exactly.
+   `app_name` is always present but may differ from the desktop file stem; `NotificationTracker`
+   falls back to it.
 
-2. **No server ownership** — `WatchedNotificationsModel.valid` can be false if no notification
-   server is running (edge case — plasmashell always runs on KDE Plasma).
+2. **Requires plasmashell** — without Plasma's notification server there is no `RegisterWatcher`.
 
-3. **"Unread" definition** — `NotificationManager::Notifications` marks a notification as read
-   when the user interacts with it or when `setLastRead()` is called. The dock needs to
-   cooperate with the notification bell applet for consistent read state.
+3. **"Unread" is dock-managed** — Krema clears an app's count when it is focused, from the
+   context menu, or when its SNI returns to `Active`; it does not share read state with the
+   notification bell applet.
 
 4. **Electron apps** (Discord, VS Code, etc.) — Notification behavior varies by Electron version.
-   Older versions may send `app_name` without `desktop-entry`. In that case, fallback to
-   matching `app_name` against known desktop entries via `KService`.
+   Older versions may send `app_name` without `desktop-entry`.
 
-5. **SNI ID matching** — Not standardized. Heuristic matching (case-insensitive substring)
-   may produce false positives for similarly-named apps.
+5. **SNI ID matching** — Not standardized. Heuristic matching may produce false positives for
+   similarly-named apps.
 
 ---
 

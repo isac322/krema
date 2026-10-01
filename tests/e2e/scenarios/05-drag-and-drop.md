@@ -30,20 +30,20 @@ remain unchanged; the added contract checks drag release state only.
 ## TC DND-001: Drag Reorder Dock Items
 
 **Precondition:** Dock visible with 3+ items.
-**Important:** Krema drag requires press-hold (300ms) then move (10px+).
-Use `mouse_button_down` + sleep + `mouse_move` + `mouse_button_up` sequence,
-NOT `mouse_drag` (which doesn't support hold delay).
+**Important:** Krema drag requires press-hold (300ms) then move (10px+). Press,
+hold, move and release as separate pointer events; an instant drag without the
+hold delay does not start a Krema drag.
 **Steps:**
-1. Show dock and note item order via `accessibility_tree`
-2. `mouse_move` to first item center (screen coordinates)
+1. Show dock and note item order in the AT-SPI tree
+2. Move the pointer to the first item center
 3. Wait 300ms
-4. `mouse_button_down(x, y)` — press on first item
+4. Press the left button on the first item
 5. Wait 400ms (hold timer 300ms + buffer)
-6. `mouse_move(x + 80, y)` — drag to third item position (>10px threshold)
-7. `screenshot` — verify drag ghost and drop indicator visible
-8. `mouse_button_up(x + 80, y)` — drop
+6. Move the pointer 80px right, to the third item position (>10px threshold)
+7. Screenshot — verify drag ghost and drop indicator visible
+8. Release the button
 9. Wait 300ms
-10. `accessibility_tree` — verify item order changed
+10. Check the AT-SPI tree — item order changed
 
 **Expected:**
 - During drag: ghost icon follows cursor (opacity 0.8), drop indicator line appears
@@ -51,11 +51,7 @@ NOT `mouse_drag` (which doesn't support hold delay).
 - AT-SPI button order reflects new arrangement
 - The window that was active before the drag is active again (the dock holds keyboard interactivity only while dragging)
 
-**Historical PoC note:** Dolphin moved from position 1 to position 3, and
-AT-SPI reported the reordered buttons.
-
-
-**Verification:** accessibility_tree (button order changed), screenshot (drag ghost visible during drag)
+**Verification:** AT-SPI (button order changed), screenshot (drag ghost visible during drag)
 
 **Automated:** tests/appium/test_05_drag.py::test_dnd_001_drag_reorders_dock_items
 
@@ -65,10 +61,10 @@ AT-SPI reported the reordered buttons.
 
 **Precondition:** DND-001 completed (items reordered).
 **Steps:**
-1. Note current item order via `screenshot`
+1. Note current item order (screenshot)
 2. Restart krema
 3. Wait 2000ms for startup
-4. `screenshot` — verify order preserved
+4. Screenshot — verify order preserved
 
 **Expected:**
 - Pin order saved to KConfig
@@ -84,20 +80,17 @@ AT-SPI reported the reordered buttons.
 
 **Precondition:** Dock with multiple items, visible.
 **Steps:**
-1. `mouse_button_down` on a dock item (screen coordinates)
+1. Press the left button on a dock item
 2. Wait 400ms (hold timer)
-3. `mouse_move` slowly to the right (>10px, step by step)
-4. `screenshot` — capture mid-drag state
-5. `mouse_button_up` at new position
+3. Move the pointer slowly to the right (>10px, step by step)
+4. Screenshot — capture mid-drag state
+5. Release the button at the new position
 
 **Expected:**
 - Dragged item: opacity reduced at original position
 - Ghost icon: follows cursor at 80% opacity (Image with source icon)
 - Drop indicator: 2px wide highlight-colored line at insertion point
 - Other items: base scale (zoom disabled during drag)
-
-**Historical PoC note:** Earlier capture showed the ghost icon and reduced
-opacity source item.
 
 **Verification:** screenshot (ghost icon + opacity change + drop indicator line)
 
@@ -109,11 +102,11 @@ opacity source item.
 
 **Precondition:** Dock with multiple items.
 **Steps:**
-1. `screenshot` — capture initial order
+1. Screenshot — capture initial order
 2. Start dragging an item
-3. `keyboard_key Escape` or drag outside dock area
+3. Press Escape, or release outside the dock area
 4. Wait 300ms
-5. `screenshot` — verify original order restored
+5. Screenshot — verify original order restored
 
 **Expected:**
 - Item returns to original position

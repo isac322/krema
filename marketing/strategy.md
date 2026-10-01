@@ -66,12 +66,11 @@
 
 Before any public announcement:
 
-- [ ] All M7 items complete (attention animations, icon normalization)
-- [ ] Screenshots added to README and metainfo.xml
-- [ ] Demo video or GIF recorded
-- [ ] OBS packages building and installable for all target distros
-- [ ] Feature catalog updated (`marketing/briefs/features.md`)
-- [ ] Competitive analysis updated (`marketing/briefs/competitive.md`)
+- [x] All M7 and M8 items complete (attention animations, icon normalization, multi-monitor)
+- [x] Screenshots added to README and metainfo.xml
+- [x] Demo videos recorded (website feature clips)
+- [x] OBS packages building and installable for all target distros
+- [x] Positioning manifest current (`marketing/positioning.yml`)
 - [ ] Blog post drafted (origin story + features)
 - [ ] Reddit posts drafted for r/kde, r/linux, r/unixporn
 - [ ] KDE Discuss announcement drafted
@@ -92,7 +91,7 @@ Before any public announcement:
 
 ### GitHub Repository
 - [x] Description with primary keywords
-- [x] 14 relevant topics
+- [x] 16 relevant topics
 - [x] Homepage URL set
 - [x] README with badges, features, installation
 - [x] LICENSE file
@@ -103,9 +102,11 @@ Before any public announcement:
 - [x] metainfo.xml with keywords element
 - [x] .desktop file with Keywords field
 - [x] Expanded multi-paragraph description in metainfo.xml
+- [x] Screenshots in metainfo.xml (for KDE Discover)
+
+### Website & Social
+- [x] Dedicated website (https://krema.bhyoo.com/, deployed via GitHub Pages)
+- [x] OpenGraph / social media preview images (`branding/social/`)
 
 ### Future
-- [ ] Screenshots in metainfo.xml (for KDE Discover)
-- [ ] GitHub Pages or dedicated website
 - [ ] Blog with SEO-optimized articles
-- [ ] OpenGraph / social media preview images

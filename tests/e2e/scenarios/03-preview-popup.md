@@ -11,6 +11,7 @@
 - preview-single-window: Single thumbnail for single-window app
 - preview-mouse-leave-close: Preview closes when mouse leaves
 - preview-live-thumbnail: PipeWire-based live window thumbnails
+- preview-fast-pointer-entry: Pointer entering a popup reported visible by AT-SPI keeps it open past the hide delay
 
 ## Affected Files
 - src/qml/main.qml
@@ -30,6 +31,20 @@ seams. Tier 3 reuses the Appium cases against installed packages.
 The existing keyboard preview and context-menu paths remain covered by
 scenarios 01 and 04; this file adds only the explicit mouse-preview path.
 
+## QA coverage
+
+| Case | Path covered | Automated test |
+|---|---|---|
+| QA-PREV-01 | Fast entry at AT-SPI visibility, current popup/KWin coordinates, visibility past the existing hide delay | `test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` |
+| PREV-003 / PREV-004 | Thumbnail activation and precise close-button input after layout/paint stability | `test_prev003_clicking_a_thumbnail_activates_that_window`, `test_prev004_close_button_closes_that_window` |
+| PREV-004 | Keyboard Delete closes the focused window | `test_prev004_delete_key_closes_focused_thumbnail_window` |
+| PREV-005 | Pointer leave closes outside the popup; configured hide delay is respected | `test_prev005_preview_closes_when_pointer_leaves`, `test_prev005_close_on_leave_is_delayed` |
+| PREV-005 | A neighbouring task row re-centres the dock without reopening a preview under a stale pointer position | `test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving` |
+
+All tests are in `tests/appium/test_03_preview.py`. The new QA-PREV-01 test
+records both sides: the pre-fix run failed after a 33 ms entry, while the fixed
+run passed three fresh opens. Its fast path complements, rather than replaces,
+the existing pixel/layout waits.
 
 ---
 
@@ -162,6 +177,42 @@ Direct jump to a distant point will trigger hidePreviewDelayed immediately.
 **Verification:** accessibility_tree (popup 0x0, no `showing`)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev005_preview_closes_when_pointer_leaves, tests/appium/test_03_preview.py::test_prev005_close_on_leave_is_delayed
+
+---
+
+## QA-PREV-01: Fast Pointer Entry After AT-SPI Visibility
+
+**Precondition:** A running app with one or more windows. Dock visible.
+**Steps:**
+1. Before hovering, look up the in-process AT-SPI popup and its already mapped
+   KWin preview surface, avoiding webdriver tree lookups in the timed path.
+2. Hover the running app's dock item and poll the popup every 5 ms until it has
+   `showing` and `visible` states and a non-zero rect inside that surface.
+3. Convert the current popup centre to screen coordinates using the KWin
+   surface origin; do not wait for settled geometry or painted pixels.
+4. Move there immediately, followed by one short motion within the same rect.
+   Both input events must finish within 190 ms of the first observed visibility
+   to exercise the recorded visibility-to-first-frame race window.
+5. Keep the pointer there and assert that the popup remains visible for another
+   500 ms, beyond the hide delay.
+6. Repeat three fresh preview opens.
+
+**Expected:**
+- The current popup/surface coordinate is valid when derived from AT-SPI and
+  KWin geometry.
+- Fast pointer entry from the dock reaches the popup's active input region.
+- The popup remains visible past the hide delay while the pointer rests inside.
+
+**Verification:** AT-SPI `showing`/`visible` states and geometry, KWin preview
+surface geometry, real pointer input, and a bounded visibility hold. This
+covers the fast AT-SPI-visible-to-pointer-entry path only; it does not claim
+stationary-pointer recovery or that every timing race is eliminated.
+
+**Note:** This regression intentionally does not call
+`preview.wait_on_screen`: the existing thumbnail-click, close-button, and
+outside-close tests retain that wait for layout and painted-pixel stability.
+
+**Automated:** tests/appium/test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry
 
 ---
 

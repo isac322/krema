@@ -22,6 +22,11 @@ BuildRequires:  extra-cmake-modules >= 6.0.0
 # Qt 6
 BuildRequires:  cmake(Qt6Core) >= 6.8.0
 BuildRequires:  cmake(Qt6Gui) >= 6.8.0
+%if 0%{?suse_version}
+BuildRequires:  qt6-gui-private-devel >= 6.8.0
+%else
+BuildRequires:  qt6-qtbase-private-devel >= 6.8.0
+%endif
 BuildRequires:  cmake(Qt6Widgets) >= 6.8.0
 BuildRequires:  cmake(Qt6DBus) >= 6.8.0
 BuildRequires:  cmake(Qt6Quick) >= 6.8.0

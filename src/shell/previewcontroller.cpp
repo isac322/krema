@@ -14,12 +14,16 @@
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
+#include <wayland-client.h>
+
 #include <cmath>
 
+#include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QQmlEngine>
 #include <QQuickView>
 #include <QScreen>
+#include <qpa/qplatformnativeinterface.h>
 
 Q_LOGGING_CATEGORY(lcPreview, "krema.shell.preview")
 
@@ -104,7 +108,9 @@ void PreviewController::initialize()
 
     // Block all meaningful input with a 1x1 region in the top-left corner.
     // IMPORTANT: QRegion() / QRegion(0,0,0,0) is empty → clears mask → accepts ALL input!
-    m_previewView->setMask(QRegion(0, 0, 1, 1));
+    const QRegion hiddenInputRegion(0, 0, 1, 1);
+    m_previewView->setMask(hiddenInputRegion);
+    m_inputRegion = hiddenInputRegion;
 
     // Pre-show the surface so compositor has it mapped and ready for input routing.
     // The 1x1 mask above prevents it from intercepting any meaningful input.
@@ -581,33 +587,60 @@ void PreviewController::recalcContentPosition()
     }
 }
 
+void PreviewController::commitInputRegion()
+{
+    if (!m_previewView) {
+        return;
+    }
+
+    auto *nativeInterface = QGuiApplication::platformNativeInterface();
+    if (!nativeInterface) {
+        return;
+    }
+
+    auto *surface = static_cast<wl_surface *>(nativeInterface->nativeResourceForWindow(QByteArrayLiteral("surface"), m_previewView.get()));
+    if (surface) {
+        // setMask() leaves the Wayland input region pending. Publish it now,
+        // rather than waiting for the next rendered frame.
+        wl_surface_commit(surface);
+    }
+}
+
 void PreviewController::updateInputRegion()
 {
     if (!m_previewView) {
         return;
     }
 
+    QRegion inputRegion;
     if (!m_visible) {
         // Hidden: block all meaningful input with a 1x1 region in the corner.
         // IMPORTANT: empty QRegion (including QRegion(0,0,0,0)) clears the mask,
         // which makes the entire surface accept ALL input — the opposite of intended!
-        m_previewView->setMask(QRegion(0, 0, 1, 1));
+        inputRegion = QRegion(0, 0, 1, 1);
+    } else {
+        // Input region = the visible popup only. The surface is 400 px deep and
+        // spans the whole dock axis; any transparent part in the region would take
+        // pointer focus (e.g. when KWin re-picks focus after a window closes) and
+        // the surface HoverHandler would then end preview keyboard navigation.
+        PreviewInputRegionParams params{};
+        params.surfaceWidth = m_previewView->width();
+        params.surfaceHeight = m_previewView->height();
+        params.contentX = m_contentX;
+        params.contentY = m_contentY;
+        params.contentWidth = m_contentWidth;
+        params.contentHeight = m_contentHeight;
+        params.edge = static_cast<int>(m_dockView->platform()->edge());
+        inputRegion = computePreviewInputRegion(params);
+    }
+
+    if (inputRegion == m_inputRegion) {
         return;
     }
 
-    // Input region = the visible popup only. The surface is 400 px deep and
-    // spans the whole dock axis; any transparent part in the region would take
-    // pointer focus (e.g. when KWin re-picks focus after a window closes) and
-    // the surface HoverHandler would then end preview keyboard navigation.
-    PreviewInputRegionParams params{};
-    params.surfaceWidth = m_previewView->width();
-    params.surfaceHeight = m_previewView->height();
-    params.contentX = m_contentX;
-    params.contentY = m_contentY;
-    params.contentWidth = m_contentWidth;
-    params.contentHeight = m_contentHeight;
-    params.edge = static_cast<int>(m_dockView->platform()->edge());
-    m_previewView->setMask(computePreviewInputRegion(params));
+    m_previewView->setMask(inputRegion);
+    m_inputRegion = inputRegion;
+    commitInputRegion();
 }
 
 } // namespace krema

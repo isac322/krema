@@ -321,6 +321,32 @@ def test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving(krem
     _assert_stays(lambda: not krema.preview_visible(), 3.0, "preview reopened with the pointer away from the dock")
 
 
+# ---------------------------------------------------------------- QA-PREV-01
+
+
+@pytest.mark.kremarc({"PinnedLaunchers": [], "PreviewHideDelay": 200})
+def test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry(krema: Krema, apps: TestWindows) -> None:
+    """QA-PREV-01: enter at AT-SPI visibility without waiting for pixels."""
+    _open_group(apps, ["Alpha", "Beta"])
+    krema.wait_for_item(APP)
+    krema.move_away()
+
+    # Repeat fresh opens so the check remains bounded while exercising the
+    # short AT-SPI-visible-to-pointer-entry window on each open.
+    for attempt in range(3):
+        rect, elapsed = pv.fast_pointer_entry(krema, APP)
+        detail = f"attempt {attempt + 1}: popup {rect}, entry after {elapsed:.3f}s"
+        # Keep entry within the recorded visibility-to-first-frame race window.
+        # The hide timer starts later, when the pointer leaves the dock.
+        assert elapsed < 0.190, f"{detail}: missed the fast-entry window"
+        _assert_stays(
+            krema.preview_visible,
+            0.5,
+            f"{detail}: preview closed after fast pointer entry",
+        )
+        krema.move_away()
+
+
 # ---------------------------------------------------------------- PREV-006
 
 

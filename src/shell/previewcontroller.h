@@ -7,6 +7,7 @@
 
 #include <QModelIndex>
 #include <QObject>
+#include <QRegion>
 #include <QTimer>
 
 class KremaSettings;
@@ -134,7 +135,9 @@ Q_SIGNALS:
 
 private:
     void updateInputRegion();
+    void commitInputRegion();
     void applyEdgeLayout();
+
     void recalcContentPosition();
     void doShow();
     void doHide();
@@ -146,6 +149,7 @@ private:
     DockView *m_dockView;
     KremaSettings *m_settings;
     std::unique_ptr<QQuickView> m_previewView;
+    QRegion m_inputRegion;
 
     bool m_visible = false;
     bool m_previewHovered = false;

@@ -237,19 +237,22 @@ a click activates a window, hover zooms, the Focus Dock shortcut focuses a
 dock button, and ScreenShot2 captures the rendered dock.
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
-automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.
-Each scenario's **Automated:** lines refer to the tests below. Every row
+automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`. Each
+scenario's `**Automated:**` lines point back to the tests below. Every row
 has concrete assertions on the AT-SPI tree (states, names, geometry), the
-KWin window list, the `kremarc` file, ScreenShot2 pixel analysis, or AT-SPI
-events. Existing pass rows are historical baseline records; Issue 54 rows
-remain `pending` until the parent completes Tier 2 and packaged Tier 3 QA.
+KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
+screenshots, or AT-SPI events. Existing pass statuses reflect the recorded
+suite results. Issue 54 rows remain `pending` until the parent completes Tier 2
+and packaged Tier 3 QA. The issue #55 regression `QA-PREV-01` has recorded
+pre-fix and fixed results: the pre-fix run failed after a 33 ms entry, while
+the fixed run passed three fresh opens in one run. The fast path is tested
+separately from pixel waits.
 
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
-parked and at the screen centre; `SET-008` needs a two-output session
-(`KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`).
-`SET-012` runs switch/fallback/persistence cases with two outputs and its
-primary-excluding subset/shortcut case with three outputs. `SET-013` and
-`VIS-008` also have two-output cases. Use the commands in Running above.
+parked and at the screen centre. SET-008 runs with two outputs. SET-012 runs
+its switch/fallback/persistence cases with two outputs and its
+primary-excluding subset/shortcut case with three outputs. SET-013 and VIS-008
+also have two-output cases; use the commands in Running above.
 SET-008 is also covered by `tests/integration/test_settings_lifecycle.cpp`
 (ctest `krema_integration_tests`).
 
@@ -288,6 +291,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | PREV-005 | `test_03_preview.py::test_prev005_preview_closes_when_pointer_leaves`, `test_prev005_close_on_leave_is_delayed`, `test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving` | AT-SPI | pass |
 | PREV-006 | `test_03_preview.py::test_prev006_single_window_preview` | screenshot, AT-SPI | pass |
 | PREV-007 | `test_03_preview.py::test_prev007_opening_preview_announces_window_count` | AT-SPI event | pass |
+| QA-PREV-01 | `test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` | AT-SPI, KWin, real input | pass (pre-fix failed at 33 ms; fixed 1/1) |
 | CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`, `test_ctx001_about_krema_is_the_fifth_entry`, `test_ctx001_quit_is_the_last_entry` | KWin | pass |
 | CTX-002 | `test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes` | AT-SPI, kremarc | pass |
 | CTX-003 | `test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app`, `test_ctx003_unpinned_running_app_stays_until_it_closes` | AT-SPI, kremarc | pass |
@@ -386,6 +390,8 @@ that proof.
 No Krema bug is currently pinned with an xfail. Tests marked `outputs(2)`
 or `outputs(3)` are intentionally skipped when the session has a different
 output count because the exact number of displays is a test precondition.
+Issue #55 is covered by `QA-PREV-01`: the baseline failed after a 33 ms
+entry, while the fixed run passed three fresh opens in one run.
 
 To pin a newly found bug, write the test for the correct behavior and mark
 it `@pytest.mark.xfail(strict=True, reason="krema bug: ...")` (or put the
@@ -727,19 +733,30 @@ diff or scan the whole screen, checks over the whole preview surface or the
 Settings window, artifact-only shots and the failure screenshot capture the
 full screen.
 
-Tests that move the pointer onto a preview popup right after opening it call
+Thumbnail-click, close-button, and outside-close tests still call
 `preview.wait_on_screen(krema, popup)` first (PREV-003, PREV-004 close
 button, PREV-005), so they need capture as well. AT-SPI reports the popup
-as shown as soon as krema's QML shows it, but its input region reaches KWin
-only with the preview surface's next commit, the same commit that first
-draws it (see Investigations 4). The popup also grows while its rows arrive
-(it starts at 17x38), and each size change sets a new input region. So the
-oracle first waits until the popup's AT-SPI rect and KWin's preview surface
-agree and stay unchanged for 0.3 s (the layout has no timer or animation),
-then checks that screenshot pixels inside that final rect, where no other
-KWin window covers it, are no longer the empty black desktop: the popup has
-painted its opaque background at its final geometry. Callers read their
-glide target after this.
+as shown before its rows finish layout; it starts at 17x38 and grows as
+they arrive. The helper originally also guarded against the delayed
+input-region commit described in Investigation 4. It remains useful for
+stable layout and thumbnail geometry: the popup's AT-SPI rect and KWin's
+preview surface must agree and stay unchanged for 0.3 s (the layout has
+no timer or animation).
+The helper then checks that screenshot pixels inside that final rect, where
+no other KWin window covers it, are no longer the empty black desktop: the
+popup has painted its opaque background at its final geometry. Callers read
+their glide target after this.
+
+`QA-PREV-01` intentionally exercises the faster AT-SPI-visible-to-pointer-entry
+path. Before hovering, `preview.fast_pointer_entry` looks up the in-process
+AT-SPI popup and its already mapped KWin surface. It then polls `showing`,
+`visible`, and current popup extents every 5 ms without serializing the whole
+webdriver tree. As soon as those extents fit inside the surface, it enters
+the popup centre and sends one short in-popup motion without waiting for
+painted pixels. Three fresh opens must each finish entry within 190 ms of
+the first observed visibility, within the recorded visibility-to-first-frame
+race window, and stay visible for another 500 ms. This does not claim
+stationary-pointer recovery or that every timing race is eliminated.
 
 ## Investigations
 
@@ -816,31 +833,35 @@ How to use the menu anyway, as implemented in `Krema`:
   Choosing "Settings..." opened "Settings — Krema", whose AT-SPI frame
   (`name="Settings"`) matches the KWin client geometry.
 
-### 4. Does the preview take the pointer as soon as AT-SPI shows it? No, only once it is on screen.
+### 4. Historical issue #55: AT-SPI visibility preceded the input-region commit.
 
-`PreviewController::doShow()` sets the popup's input region through
-`updateInputRegion()` → `QWindow::setMask()`
-(`src/shell/previewcontroller.cpp`). Qt's Wayland backend sends
-`wl_surface.set_input_region` without a commit. The region is
-double-buffered state, so it applies with the preview surface's next
-commit: the first frame that draws the popup. On the first open after a
-krema start that commit came 100-190 ms after `set_input_region`
+In the pre-fix investigation, `PreviewController::doShow()` set the popup's
+input region through `updateInputRegion()` → `QWindow::setMask()`
+(`src/shell/previewcontroller.cpp`). Qt's Wayland backend sent
+`wl_surface.set_input_region` without a commit. This double-buffered state
+applied with the preview surface's next commit: the first frame that drew
+the popup. On the first open after a krema start that commit came 100-190 ms
+after `set_input_region`
 (`WAYLAND_DEBUG=client`). AT-SPI showed the popup at once. A pointer
 flicked onto the popup in between received no `wl_pointer.enter`. KWin did
 not send one when the region later appeared under the resting pointer, so
 the dock's 200 ms hide timer closed the preview
 (`Hide timer fired, previewHovered: false`). Flicks 10-40 ms after AT-SPI
 showed the popup closed it in 12 of 22 runs; flicks 200 ms or more after
-never did. A user cannot aim at a popup before it is drawn, so tests wait for
-it on screen (`preview.wait_on_screen`).
+never did. Screenshot-dependent PREV tests therefore continue to wait for
+the drawn popup with `preview.wait_on_screen`; `QA-PREV-01` intentionally
+exercises the earlier AT-SPI-visible-to-pointer-entry path by deriving a
+current AT-SPI/KWin coordinate and entering it without a pixel wait.
 
-## Proposed application changes
+## Preview input-region regression (issue #55)
 
-One is open. Committing the preview surface right after each `setMask` in
-`PreviewController::updateInputRegion` (`wl_surface_commit` on the surface
-from `QPlatformNativeInterface`, which needs `Qt6::GuiPrivate`) would apply
-the input region together with AT-SPI visibility (Investigations 4). It is
-not applied; the suite waits for the drawn popup instead.
+`QA-PREV-01` covers the approved fast AT-SPI-visible-to-pointer-entry path:
+the exact popup-only input region must take the pointer before the existing
+hide delay expires. It does not widen that region, change the delay, or test
+stationary-pointer recovery. `preview.wait_on_screen` remains in the other
+PREV tests for layout and paint stability, not as a substitute for this path.
+The recorded pre-fix run failed after a 33 ms entry; the fixed run passed three
+fresh opens in one run. The test does not claim that every timing race is gone.
 
 The Focus Dock default in `src/app/application.cpp` (`focusDockAction`) is
 Meta+Alt+D, clear of KWin's "Move Mouse to Focus" (Meta+F5).

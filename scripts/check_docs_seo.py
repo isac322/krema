@@ -3,7 +3,7 @@
 check_docs_seo.py — Automated documentation-SEO consistency checker for Krema.
 
 Validates that key documentation files contain expected SEO keywords and
-positioning language from .claude/positioning.yml.
+positioning language from marketing/positioning.yml.
 
 Exit code:
     0  — all checks passed
@@ -39,14 +39,6 @@ REQUIRED_TERMS: list[tuple[str, list[str]]] = [
             "plasma",
             "wayland",
             "launcher",
-        ],
-    ),
-    (
-        ".claude/agents/docs-seo.md",
-        [
-            "spiritual successor",
-            "KDE Plasma 6",
-            "positioning.yml",
         ],
     ),
 ]
@@ -157,9 +149,7 @@ def main() -> int:
         for phrase in r.forbidden:
             print(f"    - FORBIDDEN: {phrase!r} (use 'spiritual successor' instead)")
 
-    print(
-        "\nRun `/check-docs-seo` or the @docs-seo agent in Claude Code to review and update."
-    )
+    print("\nUpdate the files above to match marketing/positioning.yml.")
     return 1
 
 

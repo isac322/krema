@@ -196,7 +196,7 @@ QStringList savedSelection()
     return KSharedConfig::openConfig(QStringLiteral("kremarc"))->group(QStringLiteral("General")).readEntry(QStringLiteral("SelectedOutputs"), QStringList());
 }
 
-bool runKscreenDoctor(const QString &arg)
+bool runKscreenDoctor(const QStringList &args)
 {
     const auto tool = QStandardPaths::findExecutable(QStringLiteral("kscreen-doctor"));
     if (tool.isEmpty()) {
@@ -206,12 +206,14 @@ bool runKscreenDoctor(const QString &arg)
     env.remove(QStringLiteral("QT_WAYLAND_SHELL_INTEGRATION"));
     QProcess process;
     process.setProcessEnvironment(env);
-    process.start(tool, {arg});
+    process.start(tool, args);
     if (!process.waitForFinished(kTimeoutMs)) {
         return false;
     }
     if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        qWarning("kscreen-doctor %s failed: %s", qUtf8Printable(arg), qUtf8Printable(QString::fromUtf8(process.readAllStandardError())));
+        qWarning("kscreen-doctor %s failed: %s",
+                 qUtf8Printable(args.join(QLatin1Char(' '))),
+                 qUtf8Printable(QString::fromUtf8(process.readAllStandardError())));
         return false;
     }
     return true;
@@ -219,17 +221,59 @@ bool runKscreenDoctor(const QString &arg)
 
 bool makePrimary(const QString &name)
 {
-    // As in test_primary_output: force a real priority transition before
-    // promoting the requested output, so KWin republishes output order.
-    for (const auto &other : screenNames()) {
-        if (other != name) {
-            if (!runKscreenDoctor(QStringLiteral("output.%1.priority.1").arg(other))) {
-                return false;
-            }
+    // A lone priority.1 command can normalize the existing ranks without
+    // changing the primary when another output already has rank 0. Demote
+    // the current incumbent and promote an alternate in one compositor
+    // transaction first, then promote the requested output.
+    auto *order = krema::OutputOrderMonitor::instance();
+    auto *currentPrimary = order->primaryScreen();
+    if (!currentPrimary) {
+        return false;
+    }
+    const QStringList names = screenNames();
+    if (names.size() < 2) {
+        return false;
+    }
+    const QString incumbent = currentPrimary->name();
+    QString other;
+    for (const auto &candidate : names) {
+        if (candidate != name) {
+            other = candidate;
             break;
         }
     }
-    return runKscreenDoctor(QStringLiteral("output.%1.priority.1").arg(name));
+    if (other.isEmpty()) {
+        return false;
+    }
+
+    QStringList transition;
+    if (incumbent == other) {
+        transition = {QStringLiteral("output.%1.priority.1").arg(other)};
+    } else {
+        transition = {
+            QStringLiteral("output.%1.priority.%2").arg(incumbent).arg(names.size()),
+            QStringLiteral("output.%1.priority.1").arg(other),
+        };
+    }
+    if (!runKscreenDoctor(transition)) {
+        return false;
+    }
+    // Process exit does not mean this client has adopted the new primary.
+    if (!QTest::qWaitFor(
+            [&] {
+                return order->primaryScreen() && order->primaryScreen()->name() == other;
+            },
+            kTimeoutMs)) {
+        return false;
+    }
+    if (!runKscreenDoctor({QStringLiteral("output.%1.priority.1").arg(name)})) {
+        return false;
+    }
+    return QTest::qWaitFor(
+        [&] {
+            return order->primaryScreen() && order->primaryScreen()->name() == name;
+        },
+        kTimeoutMs);
 }
 
 void requirePrimary(const QString &name)
@@ -413,11 +457,11 @@ TEST_CASE(
     requireDocksOn(*manager, {selected});
     QPointer<krema::DockShell> removed = manager->shells().first();
     const auto restoreOutput = qScopeGuard([&] {
-        runKscreenDoctor(QStringLiteral("output.%1.enable").arg(selected));
+        runKscreenDoctor({QStringLiteral("output.%1.enable").arg(selected)});
         makePrimary(originalPrimary);
     });
 
-    REQUIRE(runKscreenDoctor(QStringLiteral("output.%1.disable").arg(selected)));
+    REQUIRE(runKscreenDoctor({QStringLiteral("output.%1.disable").arg(selected)}));
     REQUIRE(QTest::qWaitFor(
         [&] {
             return screenNamed(selected) == nullptr;
@@ -433,7 +477,7 @@ TEST_CASE(
     CHECK(savedSelection() == QStringList{selected});
     QPointer<krema::DockShell> fallback = manager->shells().first();
 
-    REQUIRE(runKscreenDoctor(QStringLiteral("output.%1.enable").arg(selected)));
+    REQUIRE(runKscreenDoctor({QStringLiteral("output.%1.enable").arg(selected)}));
     REQUIRE(QTest::qWaitFor(
         [&] {
             return screenNamed(selected) != nullptr;
@@ -469,7 +513,7 @@ TEST_CASE(
     QSignalSpy firstDestroyed(first, &QObject::destroyed);
     QSignalSpy secondDestroyed(second, &QObject::destroyed);
     const auto restoreOutput = qScopeGuard([&] {
-        runKscreenDoctor(QStringLiteral("output.%1.enable").arg(originalPrimary));
+        runKscreenDoctor({QStringLiteral("output.%1.enable").arg(originalPrimary)});
         makePrimary(originalPrimary);
     });
 
@@ -482,7 +526,7 @@ TEST_CASE(
     requireRetained(second, selected.last());
     requireDocksOn(*manager, selected);
 
-    REQUIRE(runKscreenDoctor(QStringLiteral("output.%1.disable").arg(originalPrimary)));
+    REQUIRE(runKscreenDoctor({QStringLiteral("output.%1.disable").arg(originalPrimary)}));
     REQUIRE(QTest::qWaitFor(
         [&] {
             return screenNamed(originalPrimary) == nullptr;
@@ -493,7 +537,7 @@ TEST_CASE(
     requireRetained(first, selected.first());
     requireRetained(second, selected.last());
 
-    REQUIRE(runKscreenDoctor(QStringLiteral("output.%1.enable").arg(originalPrimary)));
+    REQUIRE(runKscreenDoctor({QStringLiteral("output.%1.enable").arg(originalPrimary)}));
     REQUIRE(QTest::qWaitFor(
         [&] {
             return screenNamed(originalPrimary) != nullptr;
@@ -588,9 +632,12 @@ TEST_CASE(
         kTimeoutMs));
     CHECK(manager->shellAtCursor() == first);
     manager->shellAtCursor()->focusDock();
+    // Navigation starts synchronously; wait for KWin and QML keyboard focus
+    // before sending Escape.
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return first->view()->rootObject()->property("keyboardNavigating").toBool();
+            return first->view()->isActive() && first->view()->rootObject()->hasActiveFocus()
+                && first->view()->rootObject()->property("keyboardNavigating").toBool();
         },
         kTimeoutMs));
     CHECK_FALSE(second->view()->rootObject()->property("keyboardNavigating").toBool());

@@ -302,13 +302,13 @@ See [the verified API and build dependencies](wayland-layer-shell.md#publishing-
 
 ## 16. Keep Qt event dispatch alive while waiting for a compositor helper (2026-10, CI run 36792560667)
 
-**Symptom:** In the configured 30-repeat combined virtual-output batch, 18 repetitions passed and the 19th `runKscreenDoctor` invocation reached its existing 15-second deadline (seed `2418441708`).
+**Symptom:** In the configured 30-repeat combined virtual-output batch, 18 repetitions passed; the 19th repetition timed out in `runKscreenDoctor` at the existing 15-second deadline (seed `2418441708`).
 
 **Verified Qt API (Qt 6.10.3):**
 - A fresh `QProcess` enters `Starting` before `start()` returns; startup failure ends in `NotRunning` with `QProcess::FailedToStart`, distinct from a normally started process that exits nonzero. Verified for Qt 6.10.3 with `/usr/include/qt6/QtCore/qprocess.h` and the native process contract probe.
 - `QTest::qWaitFor(predicate, timeout)` dispatches `QEventLoop::AllEvents` and sends posted `QEvent::DeferredDelete` events while checking the predicate. Verified in `/usr/include/qt6/QtCore/qtestsupport_core.h`.
 
-**Wait-path defect:** Blocking `QProcess::waitForFinished()` does not dispatch the queued Qt GUI work needed while the compositor command runs. The observed timeout demonstrates the wait failure; the exact KWin backend cause remains unproven.
+**Wait-path defect:** A blocking `QProcess::waitForFinished()` does not dispatch queued Qt GUI work while the compositor command runs. The observed timeout demonstrates the wait failure; the exact KWin backend cause remains unproven.
 
 **Required fix:** After starting the process, wait once for `QProcess::NotRunning` with `QTest::qWaitFor` and the existing 15-second deadline. Reject `FailedToStart`, then preserve the existing normal-exit and nonzero-exit diagnostics.
 

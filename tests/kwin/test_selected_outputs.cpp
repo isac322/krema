@@ -207,7 +207,13 @@ bool runKscreenDoctor(const QStringList &args)
     QProcess process;
     process.setProcessEnvironment(env);
     process.start(tool, args);
-    if (!process.waitForFinished(kTimeoutMs)) {
+    // Keep Qt GUI event dispatch alive while the compositor command runs.
+    if (!QTest::qWaitFor(
+            [&] {
+                return process.state() == QProcess::NotRunning;
+            },
+            kTimeoutMs)
+        || process.error() == QProcess::FailedToStart) {
         return false;
     }
     if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {

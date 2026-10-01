@@ -270,7 +270,20 @@ def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
         krema.hover_item(name)
         wait_until(lambda: krema.screen_rect(krema.wait_for_item(name)).width >= 48, message=f"{name} hover target")
         assert _separator(krema) is not None
-        assert kwin_cursor_is_on_item(krema, name)
+        # Older Qt reports unscaled AT-SPI extents during hover. Observe the
+        # real consumer at the existing pointer instead of inferring a hit box.
+        target = next(window for window in apps.open_windows if window.title == name)
+        active = kwin.active_window()
+        assert active is not None and (active.pid, active.internal_id) != (target.pid, target.internal_id), (
+            f"{name!r} must differ from the active client before the boundary hit: {active}"
+        )
+        point = kwin.cursor_pos()
+        inp.click(*point)
+        wait_until(
+            lambda: (active := kwin.active_window()) is not None
+            and (active.pid, active.internal_id) == (target.pid, target.internal_id),
+            message=f"same-pointer boundary click activates exact {name!r} native client",
+        )
     krema.move_away()
 
     # Removing the unpinned zone leaves no boundary; removing every task does
@@ -287,13 +300,6 @@ def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
     _configure(krema, edge=edge, separate=True, pinned=())
     wait_until(lambda: krema.item_names() == [], message="empty task model to have no dock items")
     _wait_no_separator(krema)
-
-
-def kwin_cursor_is_on_item(krema: Krema, name: str) -> bool:
-    """Check the real pointer hit point after a zoomed hover."""
-    from krema_e2e import kwin
-
-    return krema.screen_rect(krema.wait_for_item(name)).contains(*kwin.cursor_pos())
 
 
 def test_tzone003_grouped_instances_keep_one_pinned_slot_and_close_differently(

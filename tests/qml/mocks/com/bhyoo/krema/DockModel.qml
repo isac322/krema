@@ -13,8 +13,9 @@ QtObject {
     property int currentDesktop: 1
     // 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     property int virtualDesktopMode: 0
-    // Production DockModel exposes the current pinned/unpinned boundary.
-    readonly property int pinnedTaskCount: 0
+    // Fixtures supply prepartitioned task rows and their pinned boundary;
+    // production DockModel's sorting is exercised by the model/native suites.
+    property int pinnedTaskCount: 0
     property var delegateGeometryRequests: []
 
     function _role(i, name) { return tasksModel.get(i, name) }
@@ -49,6 +50,7 @@ QtObject {
         tasksModel.reset()
         currentDesktop = 1
         virtualDesktopMode = 0
+        pinnedTaskCount = 0
         resetDelegateGeometryRequests()
     }
 }

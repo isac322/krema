@@ -246,46 +246,107 @@ TEST_CASE("Dock zoom rest state", "[zoom][layout]")
         }
     }
 }
-TEST_CASE("Separator boundary reserves a fixed rest gap", "[zoom][layout]")
-{
-    constexpr int boundary = 4;
-    constexpr double boundaryGap = 5.0;
-    constexpr double boundaryRestCentre = kRestStart + boundary * kPitch + boundaryGap + kIconSize / 2.0;
-    const auto inPlace = krema::computeDockZoom(kCount,
-                                                kRestStart,
-                                                kIconSize,
-                                                kSpacing,
-                                                boundary,
-                                                boundaryGap,
-                                                kBgStart,
-                                                kBgEnd + boundaryGap,
-                                                1.6,
-                                                krema::ZoomStyle::InPlace,
-                                                true,
-                                                boundaryRestCentre,
-                                                -kInf,
-                                                kInf);
-    REQUIRE_THAT(inPlace.scales[static_cast<std::size_t>(boundary)], WithinAbs(1.6, 1e-12));
-    REQUIRE_THAT(inPlace.offsets[static_cast<std::size_t>(boundary)], WithinAbs(0.0, 1e-12));
-    REQUIRE(inPlace.offsets[static_cast<std::size_t>(boundary - 1)] == 0.0);
 
-    const auto noBoundary = krema::computeDockZoom(kCount,
-                                                   kRestStart,
-                                                   kIconSize,
-                                                   kSpacing,
-                                                   -1,
-                                                   0.0,
-                                                   kBgStart,
-                                                   kBgEnd,
-                                                   1.6,
-                                                   krema::ZoomStyle::InPlace,
-                                                   true,
-                                                   boundaryRestCentre,
-                                                   -kInf,
-                                                   kInf);
-    REQUIRE(inPlace.scales[static_cast<std::size_t>(boundary)] > noBoundary.scales[static_cast<std::size_t>(boundary)]);
+TEST_CASE("Separated parabolic zoom keeps its fixed boundary gap and bounded motion", "[zoom][layout][separator]")
+{
+    constexpr int count = 6;
+    constexpr int boundary = 3;
+    constexpr double extra = kSpacing + 1.0;
+    constexpr double restEnd = kRestStart + count * kPitch - kSpacing + extra;
+    constexpr double backgroundEnd = restEnd + kBackgroundMargin;
+    constexpr double rowCentre = (kBgStart + backgroundEnd) / 2.0;
+    const auto centre = [](int i) {
+        return kRestStart + i * kPitch + kIconSize / 2.0 + (i >= boundary ? extra : 0.0);
+    };
+    const auto calculate = [](double cursor, double minEdge, double maxEdge, bool active, krema::ZoomStyle style) {
+        return krema::
+            computeDockZoom(count, kRestStart, kIconSize, kSpacing, boundary, extra, kBgStart, backgroundEnd, 1.6, style, active, cursor, minEdge, maxEdge);
+    };
+
+    SECTION("Rest and InPlace preserve actual rest centres without translations")
+    {
+        for (const auto style : kStyles) {
+            const auto rest = calculate(centre(boundary), -kInf, kInf, false, style);
+            REQUIRE(rest.leadingGrowth == 0.0);
+            REQUIRE(rest.trailingGrowth == 0.0);
+            for (int i = 0; i < count; ++i) {
+                REQUIRE(rest.scales[static_cast<std::size_t>(i)] == 1.0);
+                REQUIRE(rest.offsets[static_cast<std::size_t>(i)] == 0.0);
+            }
+        }
+        const auto inPlace = calculate(centre(boundary), kBgStart, backgroundEnd, true, krema::ZoomStyle::InPlace);
+        for (int i = 0; i < count; ++i) {
+            REQUIRE(inPlace.offsets[static_cast<std::size_t>(i)] == 0.0);
+            REQUIRE_THAT(inPlace.scales[static_cast<std::size_t>(i)],
+                         WithinAbs(krema::parabolicZoomFactor(centre(i) - centre(boundary), kIconSize, 1.6), 1e-12));
+        }
+    }
+
+    SECTION("Full positional room leaves normal gaps and a twice-spaced stroke slot")
+    {
+        for (double cursor : {centre(boundary - 1), rowCentre, centre(boundary)}) {
+            const auto layout = calculate(cursor, -kInf, kInf, true, krema::ZoomStyle::Parabolic);
+            const auto mirrored = calculate(2.0 * rowCentre - cursor, -kInf, kInf, true, krema::ZoomStyle::Parabolic);
+            REQUIRE_THAT(layout.leadingGrowth, WithinAbs(mirrored.trailingGrowth, 1e-9));
+            for (int i = 1; i < count; ++i) {
+                const auto previous = static_cast<std::size_t>(i - 1);
+                const auto current = static_cast<std::size_t>(i);
+                const double trailing = centre(i - 1) + layout.offsets[previous] + kIconSize * layout.scales[previous] / 2.0;
+                const double leading = centre(i) + layout.offsets[current] - kIconSize * layout.scales[current] / 2.0;
+                REQUIRE_THAT(leading - trailing, WithinAbs(kSpacing + (i == boundary ? extra : 0.0), 1e-9));
+            }
+        }
+    }
+
+    SECTION("Tight surface bounds preserve full scales and continuous contained positional slots")
+    {
+        constexpr double roomL = 10.0;
+        constexpr double roomR = 15.0;
+        const auto cursors = positions(centre(boundary - 2), centre(boundary + 1));
+        auto previous = calculate(cursors.front(), kBgStart - roomL, backgroundEnd + roomR, true, krema::ZoomStyle::Parabolic);
+        for (double cursor : cursors) {
+            const auto free = calculate(cursor, -kInf, kInf, true, krema::ZoomStyle::Parabolic);
+            const auto layout = calculate(cursor, kBgStart - roomL, backgroundEnd + roomR, true, krema::ZoomStyle::Parabolic);
+            REQUIRE(layout.scales == free.scales);
+            REQUIRE(layout.leadingGrowth <= roomL + 1e-9);
+            REQUIRE(layout.trailingGrowth <= roomR + 1e-9);
+            const double share = (layout.leadingGrowth + layout.trailingGrowth) / (free.leadingGrowth + free.trailingGrowth);
+            const auto positionalWidth = [&layout, share](int i) {
+                return kIconSize * (1.0 + (layout.scales[static_cast<std::size_t>(i)] - 1.0) * share);
+            };
+            const double first = centre(0) + layout.offsets.front() - positionalWidth(0) / 2.0;
+            const double last = centre(count - 1) + layout.offsets.back() + positionalWidth(count - 1) / 2.0;
+            REQUIRE(first >= kRestStart - roomL - 1e-9);
+            REQUIRE(last <= restEnd + roomR + 1e-9);
+            const double before = centre(boundary - 1) + layout.offsets[boundary - 1] + positionalWidth(boundary - 1) / 2.0;
+            const double after = centre(boundary) + layout.offsets[boundary] - positionalWidth(boundary) / 2.0;
+            REQUIRE_THAT(after - before, WithinAbs(kSpacing + extra, 1e-9));
+            for (int i = 0; i < count; ++i) {
+                const auto index = static_cast<std::size_t>(i);
+                REQUIRE(std::abs(layout.offsets[index] - previous.offsets[index]) < 0.5);
+                REQUIRE(std::abs(layout.scales[index] - previous.scales[index]) < 0.02);
+            }
+            previous = layout;
+        }
+    }
 }
 
+TEST_CASE("Absent separator zones retain the ordinary zoom layout", "[zoom][layout][separator]")
+{
+    for (const auto style : kStyles) {
+        for (int boundary : {-1, kCount}) {
+            for (double cursor : {restCentre(0), kRowCentre, restCentre(kCount - 1)}) {
+                const auto ordinary = zoomAt(cursor, 1.6, style);
+                const auto absent = krema::
+                    computeDockZoom(kCount, kRestStart, kIconSize, kSpacing, boundary, kSpacing + 1.0, kBgStart, kBgEnd, 1.6, style, true, cursor, -kInf, kInf);
+                REQUIRE(absent.scales == ordinary.scales);
+                REQUIRE(absent.offsets == ordinary.offsets);
+                REQUIRE(absent.leadingGrowth == ordinary.leadingGrowth);
+                REQUIRE(absent.trailingGrowth == ordinary.trailingGrowth);
+            }
+        }
+    }
+}
 
 TEST_CASE("Parabolic zoom scales along the Gaussian curve", "[zoom][layout]")
 {

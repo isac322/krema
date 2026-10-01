@@ -95,6 +95,79 @@ Item {
             mouseMove(stage, c.x, c.y)
             return c
         }
+        function dockEdges() {
+            return [
+                { tag: "top", edge: 0 },
+                { tag: "bottom", edge: 1 },
+                { tag: "left", edge: 2 },
+                { tag: "right", edge: 3 },
+            ]
+        }
+
+        // Painted delegate bounds include Scale/Translate, unlike Flow x/y.
+        function drawnBounds(item, target = stage) {
+            let near = item.mapToItem(target, 0, 0)
+            let far = item.mapToItem(target, item.width, item.height)
+            return { x: near.x, y: near.y, width: far.x - near.x, height: far.y - near.y }
+        }
+
+        function primaryNear(rect) {
+            return DockView.isVertical ? rect.y : rect.x
+        }
+
+        function primaryExtent(rect) {
+            return DockView.isVertical ? rect.height : rect.width
+        }
+
+        function secondaryCenter(rect) {
+            return DockView.isVertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2
+        }
+
+        function addSeparatedTasks() {
+            addTasks(["Pinned A", "Pinned B"], { IsLauncher: true })
+            addTasks(["Running A", "Running B"])
+            DockModel.pinnedTaskCount = 2
+        }
+
+        function separatorOf(dock) {
+            return T.findFirst(dock, o => o.objectName === "taskZonesSeparator")
+        }
+
+        function verifyRestProxies(dock, its, restBounds) {
+            for (let i = 0; i < its.length; ++i) {
+                let proxy = drawnBounds(its[i].delegateGeometryTarget, dock)
+                fuzzyCompare(proxy.x, restBounds[i].x, 1e-6)
+                fuzzyCompare(proxy.y, restBounds[i].y, 1e-6)
+                fuzzyCompare(proxy.width, restBounds[i].width, 1e-6)
+                fuzzyCompare(proxy.height, restBounds[i].height, 1e-6)
+            }
+            // A minimize/restore consumer receives the painted REST slot,
+            // including separation, never the transient hover translation.
+            tryVerify(() => {
+                return its.every((it, index) => {
+                    let requests = DockModel.delegateGeometryRequests.filter(r => r.index === index)
+                    if (requests.length === 0) return false
+                    let actual = requests[requests.length - 1].geometry
+                    let expected = restBounds[index]
+                    return Math.abs(actual.x - expected.x) < 1e-6
+                        && Math.abs(actual.y - expected.y) < 1e-6
+                        && Math.abs(actual.width - expected.width) < 1e-6
+                        && Math.abs(actual.height - expected.height) < 1e-6
+                })
+            }, 3000, "published window targets did not match the allocated rest slots")
+        }
+
+        function verifySeparatorClearance(dock, its) {
+            let before = drawnBounds(its[1])
+            let after = drawnBounds(its[2])
+            let separator = drawnBounds(separatorOf(dock))
+            fuzzyCompare(primaryExtent(separator), 1, 1e-6)
+            fuzzyCompare(primaryNear(separator) - primaryNear(before) - primaryExtent(before),
+                         DockSettings.iconSpacing, 0.51)
+            fuzzyCompare(primaryNear(after) - primaryNear(separator) - primaryExtent(separator),
+                         DockSettings.iconSpacing, 0.51)
+        }
+
 
         // --- Layout from settings ---
 
@@ -168,6 +241,151 @@ Item {
             tryCompare(its[1], "y", its[0].y + 48 + 4)
             verify(DockVisibility.panelRect.x < stage.width / 2, "left dock panel must sit on the left")
         }
+        function test_separatedLayoutToggleKeepsSpacingAndSecondaryCenter_data() {
+            return dockEdges()
+        }
+
+        function test_separatedLayoutToggleKeepsSpacingAndSecondaryCenter(data) {
+            DockView.edge = data.edge
+            DockSettings.iconSize = 32
+            DockSettings.iconSpacing = 7
+            DockSettings.maxZoomFactor = 1
+            DockSettings.previewEnabled = false
+            addSeparatedTasks()
+            let dock = makeDock(4)
+            let its = items(dock)
+            let ordinary = its.map(it => drawnBounds(it))
+            let ordinarySpan = primaryNear(ordinary[3]) + primaryExtent(ordinary[3]) - primaryNear(ordinary[0])
+            compare(ordinarySpan, 4 * 32 + 3 * 7)
+            verify(!separatorOf(dock).visible)
+
+            DockSettings.separateLaunchers = true
+            tryVerify(() => {
+                let before = drawnBounds(its[1])
+                let after = drawnBounds(its[2])
+                let first = drawnBounds(its[0])
+                let last = drawnBounds(its[3])
+                return Math.abs(primaryNear(after) - primaryNear(before) - primaryExtent(before) - 15) < 1e-6
+                    && Math.abs((primaryNear(first) + primaryNear(last) + primaryExtent(last)) / 2
+                        - (DockView.isVertical ? stage.height : stage.width) / 2) < 1e-6
+            }, 3000, "separated row did not settle into its centered stroke slot")
+            verify(separatorOf(dock).visible)
+            verifySeparatorClearance(dock, its)
+            let resting = its.map(it => drawnBounds(it, dock))
+            verifyRestProxies(dock, its, resting)
+            for (let i = 0; i < its.length; ++i)
+                fuzzyCompare(secondaryCenter(drawnBounds(its[i])), secondaryCenter(ordinary[i]), 1e-6)
+
+            // The nearest-drop midpoint and trailing hit edge both move with
+            // the running zone. Raw Flow coordinates select the wrong task.
+            dock._dragSourceIndex = 2
+            let a = drawnBounds(its[2], dock)
+            let b = drawnBounds(its[3], dock)
+            let midpoint = (primaryNear(a) + primaryExtent(a) / 2
+                + primaryNear(b) + primaryExtent(b) / 2) / 2
+            compare(dock.computeDropIndex(midpoint - 1), 2)
+            compare(dock.computeDropIndex(midpoint + 1), 3)
+            if (!DockView.isVertical) {
+                let panelBounds = drawnBounds(its[2], its[2].parent.parent)
+                compare(dock.computeExternalDropIndex(panelBounds.x + panelBounds.width - 1), 2)
+                compare(dock.computeExternalDropIndex(panelBounds.x - 1), -1)
+            }
+            let drawn = drawnBounds(its[2])
+            let point = DockView.isVertical
+                ? Qt.point(drawn.x + drawn.width / 2, drawn.y + drawn.height - 1)
+                : Qt.point(drawn.x + drawn.width - 1, drawn.y + drawn.height / 2)
+            mouseMove(stage, point.x, point.y)
+            tryCompare(dock, "hoveredIndex", 2)
+            mouseMove(stage, -1, -1)
+
+            DockSettings.separateLaunchers = false
+            tryVerify(() => {
+                let first = drawnBounds(its[0])
+                let last = drawnBounds(its[3])
+                return Math.abs(primaryNear(last) + primaryExtent(last) - primaryNear(first) - ordinarySpan) < 1e-6
+                    && Math.abs(primaryNear(first) - primaryNear(ordinary[0])) < 1e-6
+            }, 3000, "ordinary row did not return after disabling separation")
+            verify(!separatorOf(dock).visible)
+            for (let i = 0; i < its.length; ++i)
+                fuzzyCompare(secondaryCenter(drawnBounds(its[i])), secondaryCenter(ordinary[i]), 1e-6)
+        }
+
+        function test_singleZoneAndEmptyModelHaveNoSeparatorSlot_data() {
+            return [
+                { tag: "no-pinned", edge: 1, count: 4, pinned: 0 },
+                { tag: "only-pinned-vertical", edge: 2, count: 4, pinned: 4 },
+                { tag: "empty-model", edge: 1, count: 0, pinned: 0 },
+            ]
+        }
+
+        function test_singleZoneAndEmptyModelHaveNoSeparatorSlot(data) {
+            DockView.edge = data.edge
+            DockSettings.iconSize = 32
+            DockSettings.iconSpacing = 7
+            DockSettings.maxZoomFactor = 1
+            for (let i = 0; i < data.count; ++i)
+                addTasks(["Task " + i], { IsLauncher: i < data.pinned })
+            DockModel.pinnedTaskCount = data.pinned
+            let dock = makeDock(data.count)
+            let its = items(dock)
+            let ordinary = its.map(it => drawnBounds(it))
+            DockSettings.separateLaunchers = true
+            wait(Kirigami.Units.longDuration + 50)
+            verify(!separatorOf(dock).visible)
+            for (let i = 0; i < its.length; ++i) {
+                let actual = drawnBounds(its[i])
+                fuzzyCompare(primaryNear(actual), primaryNear(ordinary[i]), 1e-6)
+                fuzzyCompare(secondaryCenter(actual), secondaryCenter(ordinary[i]), 1e-6)
+            }
+            let expected = Math.max(data.count === 0 ? 0 : data.count * 32 + (data.count - 1) * 7,
+                                    0) + Kirigami.Units.largeSpacing * 2
+            expected = Math.max(expected, Kirigami.Units.gridUnit * 6)
+            tryVerify(() => Math.abs(primaryExtent(DockVisibility.panelRect) - expected) <= 1)
+        }
+
+        function test_separatedParabolicHoverPreservesGapAndRestProxy_data() {
+            return dockEdges()
+        }
+
+        function test_separatedParabolicHoverPreservesGapAndRestProxy(data) {
+            DockView.edge = data.edge
+            DockSettings.iconSize = 32
+            DockSettings.iconSpacing = 7
+            DockSettings.separateLaunchers = true
+            DockSettings.previewEnabled = false
+            addSeparatedTasks()
+            let dock = makeDock(4)
+            let its = items(dock)
+            let resting = its.map(it => drawnBounds(it, dock))
+            verifyRestProxies(dock, its, resting)
+            // Qt's synthetic pointer uses integer coordinates, while the
+            // centered odd-width row has half-pixel rest centres. A rounded
+            // cursor must follow the Gaussian, not be treated as its peak.
+            let restCenter = centerOf(its[2])
+            let cursor = Qt.point(Math.round(restCenter.x), Math.round(restCenter.y))
+            mouseMove(stage, cursor.x, cursor.y)
+            tryCompare(dock, "hoveredIndex", 2)
+            let panel = its[2].parent.parent
+            let distance = panel.zoomCursor - its[2].itemCenterX
+            verify(Math.abs(distance) <= 0.5, "actual cursor left the rounded rest-centre pixel")
+            let sigma = DockSettings.iconSize * 1.2
+            let expectedScale = 1 + (DockSettings.maxZoomFactor - 1)
+                * Math.exp(-distance * distance / (sigma * sigma))
+            tryVerify(() => Math.abs(its[2].currentScale - expectedScale) < 1e-9,
+                      2000, "rounded pointer did not reach its expected Gaussian scale")
+            verifySeparatorClearance(dock, its)
+            verifyRestProxies(dock, its, resting)
+            let drawn = drawnBounds(its[2])
+            let point = Qt.point(drawn.x + drawn.width / 2, drawn.y + drawn.height / 2)
+            mouseClick(stage, point.x, point.y, Qt.LeftButton)
+            let activations = DockActions.callsTo("activate")
+            compare(activations[activations.length - 1].args[0], 2)
+            mouseMove(stage, -1, -1)
+            for (let it of its)
+                tryCompare(it, "currentOffset", 0)
+            verifyRestProxies(dock, its, resting)
+        }
+
 
         // --- Pointer-driven zoom through main.qml's hit testing ---
 
@@ -813,6 +1031,64 @@ Item {
             compare(dock.computeDropIndex(-1000), 0)
             compare(dock.computeDropIndex(100000), 3)
         }
+        function test_separatedDragIndicatorUsesRunningRestSlots_data() {
+            return dockEdges()
+        }
+
+        function test_separatedDragIndicatorUsesRunningRestSlots(data) {
+            DockView.edge = data.edge
+            DockSettings.iconSize = 32
+            DockSettings.iconSpacing = 7
+            DockSettings.maxZoomFactor = 1
+            DockSettings.separateLaunchers = true
+            DockSettings.previewEnabled = false
+            addSeparatedTasks()
+            let dock = makeDock(4)
+            let its = items(dock)
+            for (let direction of [{ from: 2, to: 3 }, { from: 3, to: 2 }]) {
+                // The last drag ended at the next source without updating
+                // hover. Leave the dock first so re-entry delivers a genuine
+                // motion event instead of repeating an identical cursor point.
+                mouseMove(stage, stage.width / 2, stage.height / 2)
+                tryCompare(dock, "hoveredIndex", -1)
+                let source = its[direction.from]
+                tryCompare(source, "currentScale", 1)
+                tryCompare(source, "currentOffset", 0)
+                let sourceCenter = centerOf(source)
+                let targetCenter = centerOf(its[direction.to])
+                let from = Qt.point(Math.round(sourceCenter.x), Math.round(sourceCenter.y))
+                let to = Qt.point(Math.round(targetCenter.x), Math.round(targetCenter.y))
+                mouseMove(stage, from.x, from.y)
+                tryCompare(dock, "hoveredIndex", direction.from)
+                mousePress(stage, from.x, from.y, Qt.LeftButton)
+                // Model a real hold: the production gesture arms at 300 ms,
+                // then movement beyond its 10 px threshold starts the drag.
+                wait(350)
+                mouseMove(stage, from.x + (DockView.isVertical ? 0 : 12),
+                          from.y + (DockView.isVertical ? 12 : 0), -1, Qt.LeftButton)
+                tryCompare(source, "isDragSource", true)
+                mouseMove(stage, to.x, to.y, -1, Qt.LeftButton)
+                let indicator = null
+                tryVerify(() => {
+                    indicator = T.findFirst(dock, o => o.visible && o.color !== undefined
+                        && primaryExtent(o) === 2
+                        && (DockView.isVertical ? o.width : o.height) === DockSettings.iconSize)
+                    return indicator !== null
+                }, 2000, "real running-zone drag did not draw an insertion indicator")
+                let targetBounds = drawnBounds(its[direction.to], dock)
+                let marker = drawnBounds(indicator, dock)
+                let expected = direction.to > direction.from
+                    ? primaryNear(targetBounds) + primaryExtent(targetBounds) + DockSettings.iconSpacing / 2
+                    : primaryNear(targetBounds) - DockSettings.iconSpacing / 2
+                fuzzyCompare(primaryNear(marker) + primaryExtent(marker) / 2, expected, 1e-6)
+                dock.forceActiveFocus()
+                keyClick(Qt.Key_Escape)
+                tryCompare(source, "isDragSource", false)
+                mouseRelease(stage, to.x, to.y, Qt.LeftButton)
+                verify(!indicator.visible)
+            }
+        }
+
 
         function test_isDesktopFileUrl_data() {
             return [

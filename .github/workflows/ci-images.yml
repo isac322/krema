@@ -106,6 +106,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
           sparse-checkout: tests/distro/targets.tsv
           sparse-checkout-cone-mode: false
 
@@ -151,6 +152,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
 
       - name: Log in to ghcr.io
         env:
@@ -235,6 +237,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
 
       - name: Log in to ghcr.io
         env:
@@ -273,6 +276,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
 
       - name: Log in to ghcr.io
         env:
@@ -322,6 +326,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
 
       - name: Delete untagged and superseded versions
         env:

@@ -11,7 +11,7 @@
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
 - settings-tint-color: Custom tint color selection
-- settings-background-style: Background style selection (transparent, semi-transparent, tinted, acrylic, mica)
+- settings-background-style: Background style selection (Panel Inherit, Transparent, Tinted, Acrylic)
 
 ## Affected Files
 - src/qml/settings/AppearancePage.qml
@@ -53,27 +53,24 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Dock visible.
 **Steps:**
-1. Right-click dock item → context menu appears (screenshot)
-2. Click "Settings..." at estimated menu coordinates (~+123px from menu top)
+1. Right-click a dock item → context menu appears
+2. Choose "Settings..."
 3. Wait 1500ms (settings window creation)
-4. `list_windows` — verify krema window count increased
-5. `find_ui_elements query="Icon size" app_name="krema"` — verify AT-SPI access
-6. `screenshot` — verify settings dialog
+4. Check the window list — krema window count increased
+5. Check the AT-SPI tree for the "Icon size" control
+6. Screenshot — verify settings dialog
 7. Right-click the dock again → "Settings..." while the dialog is open
-8. `list_windows` — verify there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
+8. Check the window list — there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
 
 **Expected:**
-- Settings dialog opens as separate window ("설정 — Krema" title)
+- Settings dialog opens as separate window ("Settings — Krema" title, localized)
 - Left sidebar: Appearance, Behavior, Window Preview, About Krema, About KDE
 - Appearance page shown by default
 - FormCard layout with spinboxes, sliders, comboboxes
 - All controls accessible via AT-SPI (labels, sliders with Increase/Decrease)
 - Choosing "Settings..." again raises the same window; the dock stays shown while it is open
 
-**Historical PoC note:** Earlier checks found the `"Icon size"` label and
-`"Zoom factor"` slider with Increase/Decrease actions in AT-SPI.
-
-**Verification:** list_windows (window count +1), find_ui_elements (FormCard widgets), screenshot
+**Verification:** window list (window count +1), AT-SPI (FormCard widgets), screenshot
 **Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown (English session: title "Settings — Krema"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
 
 ---
@@ -82,14 +79,14 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Settings dialog open, Appearance page active.
 **Steps:**
-1. `screenshot` of dock — capture baseline icon size
-2. In settings, find icon size slider
-3. Change icon size (e.g., increase by moving slider right)
+1. Screenshot of dock — capture baseline icon size
+2. In settings, find the "Icon size" spin box
+3. Change icon size (e.g., increase it)
 4. Wait 300ms
-5. `screenshot` of dock — verify icon size changed
+5. Screenshot of dock — verify icon size changed
 
 **Expected:**
-- Dock icons resize in real-time as slider moves
+- Dock icons resize in real-time as the value changes
 - No restart required
 - Zoom proportions adjust accordingly (the Parabolic zoom style keeps icons separated while scaling)
 
@@ -103,11 +100,11 @@ and task-section rows check their real controls and consumer effects.
 **Precondition:** Settings dialog open, Behavior page.
 **Steps:**
 1. Current visibility mode: AlwaysVisible
-2. Select "Auto Hide" radio button
+2. Select "Auto hide" in the "Visibility mode" combo
 3. Wait 500ms
 4. Move mouse to center of screen (away from dock)
 5. Wait for hide timer
-6. `screenshot` — verify dock is hidden
+6. Screenshot — verify dock is hidden
 
 **Expected:**
 - Dock hides when mouse moves away
@@ -123,10 +120,10 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Settings dialog open, Appearance page.
 **Steps:**
-1. `screenshot` of dock — capture current background
-2. Change background style from current to "Acrylic / Frosted Glass"
+1. Screenshot of dock — capture current background
+2. Change background style from current to "Acrylic"
 3. Wait 500ms
-4. `screenshot` of dock — verify background changed
+4. Screenshot of dock — verify background changed
 
 **Expected:**
 - Dock background changes to acrylic/blur effect
@@ -152,7 +149,7 @@ and task-section rows check their real controls and consumer effects.
 - All settings restored from KConfig
 - Dock appearance matches the saved settings
 
-**Verification:** accessibility_tree (slider values), screenshot (visual match)
+**Verification:** AT-SPI (control values), screenshot (visual match)
 **Automated:** tests/appium/test_06_settings.py::test_set005_changed_settings_persist_across_restart
 
 ---
@@ -161,9 +158,9 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Settings dialog open, Behavior page. Dock currently at Bottom.
 **Steps:**
-1. Select "Top" position
+1. Select "Top" in the "Screen edge" combo
 2. Wait 500ms
-3. `screenshot` — verify dock moved to top of screen
+3. Screenshot — verify dock moved to top of screen
 
 **Expected:**
 - Dock repositions to top edge of screen
@@ -183,7 +180,7 @@ and task-section rows check their real controls and consumer effects.
 2. Click to open color dialog
 3. Select a different color
 4. Confirm selection
-5. `screenshot` — verify dock background uses new tint color
+5. Screenshot — verify dock background uses new tint color
 
 **Expected:**
 - Dock background tint color changes to selected color
@@ -200,10 +197,10 @@ and task-section rows check their real controls and consumer effects.
 **Steps:**
 1. Select "All monitors" in "Monitor mode"
 2. Wait 500ms
-3. `list_windows` — verify Krema is still running and one dock window exists per output
-4. `screenshot` — verify the settings dialog is still open and docks on both outputs are shown
+3. Check the window list — Krema is still running and one dock window exists per output
+4. Screenshot — the settings dialog is still open and docks on both outputs are shown
 5. Right-click the dock on the second output → "Settings..."
-6. `list_windows` — verify there is still exactly one settings window
+6. Check the window list — there is still exactly one settings window
 7. Select "Primary monitor only", then close the settings dialog
 8. Move the mouse away from the dock and wait for the hide delay
 
@@ -220,7 +217,7 @@ and task-section rows check their real controls and consumer effects.
 
 **Automated:** `tests/integration/test_settings_lifecycle.cpp` (ctest `krema_integration_tests`)
 
-**Verification:** list_windows (window counts), screenshot (dialog + docks)
+**Verification:** window list (window counts), screenshot (dialog + docks)
 **Automated (E2E, run with `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py`):** tests/appium/test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings, ::test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen, ::test_set008_follow_active_shortcuts_act_on_the_shown_dock (Toggle Dock and Focus Dock; the dock is moved with the Focus trigger), ::test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen (pointer at the second output's bottom edge). Meta+N is not checked end to end: activating entry N has no per-dock observable result and remains covered by the integration test.
 
 ---
@@ -236,7 +233,7 @@ and task-section rows check their real controls and consumer effects.
 - Krema exits normally both times (exit status 0, no crash report)
 - No Settings window remains after exit
 
-**Verification:** process exit status, `list_windows`
+**Verification:** process exit status, window list
 **Automated:** tests/appium/test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly (Fedora 43 image only; the Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
 
 ---
@@ -245,13 +242,13 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0.
 **Steps:**
-1. `find_ui_elements query="Zoom style" app_name="krema"` — locate the combo box
+1. Find the "Zoom style" combo box in the AT-SPI tree
 2. Verify the combo offers exactly two entries, "Parabolic - neighbors move aside" and "In place - icons overlap", and is set to "Parabolic - neighbors move aside" by default
-3. `mouse_move` to a middle dock item, wait 200ms, `screenshot` — neighbours are pushed aside and the dock background grows
+3. Move the pointer to a middle dock item, wait 200ms, take a screenshot — neighbours are pushed aside and the dock background grows
 4. Select "In place - icons overlap", wait 500ms
-5. `mouse_move` away and back to the middle dock item, wait 200ms
-6. `screenshot` + `accessibility_tree app_name="krema"` — icons magnify in place without moving; bounding-box centres unchanged, magnified icons may overlap
-7. `read_file ~/.config/kremarc` (or `accessibility_tree` after reopening) — verify `ZoomStyle=1` persisted
+5. Move the pointer away and back to the middle dock item, wait 200ms
+6. Screenshot and AT-SPI bounding boxes — icons magnify in place without moving; bounding-box centres unchanged, magnified icons may overlap
+7. Check `~/.config/kremarc` (or the combo after reopening Settings) — `ZoomStyle=1` persisted
 8. Select "Parabolic - neighbors move aside", verify `ZoomStyle=0` persisted (or the key is removed as the default)
 9. Set "Zoom factor" slider to 1.0 — verify the combo becomes disabled
 10. Restore zoom factor > 1.0
@@ -263,7 +260,7 @@ and task-section rows check their real controls and consumer effects.
 - Setting persists to `kremarc` as `ZoomStyle` (0 = Parabolic, 1 = In place)
 - Combo is disabled while zoom factor is 1.0 (no zoom to lay out)
 
-**Verification:** find_ui_elements (combo entries/state/enabled), screenshot (Parabolic vs In place zoom), accessibility_tree (item bounding-box centres), kremarc (`ZoomStyle` key)
+**Verification:** AT-SPI (combo entries/state/enabled, item bounding-box centres), screenshot (Parabolic vs In place zoom), kremarc (`ZoomStyle` key)
 **Automated:** tests/appium/test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists
 
 ---
@@ -285,7 +282,7 @@ and task-section rows check their real controls and consumer effects.
 - The duration control is disabled while zoom factor is 1.0
 - The selected duration remains 250 ms after restart
 
-**Verification:** find_ui_elements (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
+**Verification:** AT-SPI (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
 **Automated:** `tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the default, 25 ms steps, persistence, zero value, and disabled state. `tests/qml/tst_dockitem_zoom.qml::test_zeroDurationSnapsInAndOut` and `test_customDurationUsesConfiguredTimeline` cover snapping and animation timing in both styles. The live-dock 500 ms screenshot checks remain manual.
 
 ---

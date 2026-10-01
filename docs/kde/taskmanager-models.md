@@ -1,6 +1,6 @@
 # KDE TaskManager Models
 
-> Source: `/usr/include/taskmanager/` headers (plasma-workspace 6.5.5)
+> Source: `/usr/include/taskmanager/` headers (plasma-workspace 6)
 
 ## Model Hierarchy
 

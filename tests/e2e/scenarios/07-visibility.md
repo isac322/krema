@@ -6,7 +6,7 @@
 - vis-explicit-preview-hold: Repeated explicit previews release visibility holds after close
 - vis-auto-hide: Dock hides after timeout, shows on mouse approach
 - vis-dodge-windows: Dock hides when windows overlap its area
-- vis-smart-hide: Dock hides when active window overlaps its area
+- vis-smart-hide: Dodge windows with "Only dodge active window": dock hides when the active window overlaps its area
 - vis-keyboard-lock: Keyboard navigation prevents auto-hide
 - vis-screen-edge-trigger: Mouse at screen edge triggers dock show
 - vis-show-desktop: Show Desktop (Meta+D) hides app windows but not the dock
@@ -35,13 +35,13 @@ unchanged; VIS-008 checks only release of the explicit-preview hold.
 
 **Precondition:** Visibility mode set to AlwaysVisible and `Reserve screen space` enabled (the default).
 **Steps:**
-1. `screenshot` — verify dock visible
+1. Screenshot — verify dock visible
 2. Maximize a window (e.g., kcalc)
 3. Wait 500ms
-4. `screenshot` — verify dock still visible
-5. Move mouse to center of screen
+4. Screenshot — verify dock still visible
+5. Move the pointer to the center of the screen
 6. Wait 2000ms
-7. `screenshot` — verify dock still visible
+7. Screenshot — verify dock still visible
 
 **Expected:**
 - Dock remains visible at all times
@@ -61,12 +61,12 @@ geometry in all states; screenshot when capture is available.
 
 **Precondition:** Visibility mode set to AutoHide. Mouse NOT on dock.
 **Steps:**
-1. `mouse_move` to dock area to show it
+1. Move the pointer to the dock area to show it
 2. Wait 300ms — dock should be visible
-3. `screenshot` — verify visible
-4. `mouse_move` to center of screen (away from dock)
+3. Screenshot — verify visible
+4. Move the pointer to the center of the screen (away from dock)
 5. Wait for hide timeout (typically 1-2 seconds)
-6. `screenshot` — verify dock hidden (slid off screen)
+6. Screenshot — verify dock hidden (slid off screen)
 
 **Expected:**
 - Dock hides with slide animation after timeout
@@ -81,24 +81,20 @@ geometry in all states; screenshot when capture is available.
 ## TC VIS-003: Auto-Hide Mode — Show on Edge Approach
 
 **Precondition:** VIS-002 completed (dock hidden in AutoHide mode).
-**Limitation:** Screen edge trigger does NOT work in kwin-mcp (EIS input does not
-reach layer-shell trigger strip). Use D-Bus workaround.
 **Steps:**
-1. `dbus_call invokeShortcut("focus-dock")` — force show dock
-2. Wait 500ms
-3. `mouse_move` to dock area (screen coordinates) — switch to mouse mode
-4. `screenshot` — verify dock slides back in
+1. Move the pointer to the dock's screen edge (the bottom 1-2 px for a bottom dock)
+2. Wait for the show delay
+3. Screenshot — verify dock slides back in
+4. Move the pointer away from the dock
 
 **Expected:**
-- Dock shows with slide-in animation
-- Dock remains visible while mouse is in dock area (setHovered triggers)
+- Pointer in the edge trigger strip shows the dock with slide-in animation
+- Pointer just above the trigger strip leaves the dock hidden
+- Dock remains visible while the pointer is in the dock area (setHovered triggers), and hides again after it leaves
 
-**Note:** This TC tests the workaround path only. True edge-trigger behavior
-cannot be verified in kwin-mcp due to D-08.
+**Verification:** screenshot / AT-SPI `showing` (dock visible after edge approach)
 
-**Verification:** screenshot (dock visible after D-Bus show)
-
-**Automated:** tests/appium/test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach (real fake-input pointer to the bottom-edge trigger strip; the D-08 limitation above does not apply to this harness)
+**Automated:** tests/appium/test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach (real fake-input pointer to the bottom-edge trigger strip)
 
 ---
 
@@ -106,13 +102,13 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Precondition:** Visibility mode set to DodgeWindows. One app window open but not overlapping dock.
 **Steps:**
-1. `screenshot` — verify dock visible (no overlap)
+1. Screenshot — verify dock visible (no overlap)
 2. Move/resize window to overlap dock area
 3. Wait 500ms
-4. `screenshot` — verify dock hidden
+4. Screenshot — verify dock hidden
 5. Move window away from dock area
 6. Wait 500ms
-7. `screenshot` — verify dock visible again
+7. Screenshot — verify dock visible again
 
 **Expected:**
 - Dock hides when ANY window overlaps its area
@@ -124,16 +120,16 @@ cannot be verified in kwin-mcp due to D-08.
 
 ---
 
-## TC VIS-005: Smart Hide Mode
+## TC VIS-005: Dodge Active Window Only (Smart Hide)
 
-**Precondition:** Visibility mode set to SmartHide. Two app windows open.
+**Precondition:** Visibility mode set to Dodge windows with "Only dodge active window" on. Two app windows open.
 **Steps:**
 1. Activate window that does NOT overlap dock
 2. Wait 500ms
-3. `screenshot` — verify dock visible
+3. Screenshot — verify dock visible
 4. Activate window that DOES overlap dock area
 5. Wait 500ms
-6. `screenshot` — verify dock hidden
+6. Screenshot — verify dock hidden
 
 **Expected:**
 - Dock hides only when the ACTIVE window overlaps its area
@@ -149,15 +145,15 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Precondition:** Visibility mode set to AutoHide. Dock currently hidden.
 **Steps:**
-1. Trigger Meta+Alt+D (keyboard navigation entry)
+1. Press Meta+Alt+D (keyboard navigation entry)
 2. Wait 500ms
-3. `screenshot` — verify dock is visible
+3. Screenshot — verify dock is visible
 4. Wait 5 seconds (longer than auto-hide timeout)
-5. `screenshot` — verify dock STILL visible (keyboard lock active)
-6. `keyboard_key Escape` (exit keyboard nav)
-7. `mouse_move` away from dock
+5. Screenshot — verify dock STILL visible (keyboard lock active)
+6. Press Escape (exit keyboard nav)
+7. Move the pointer away from dock
 8. Wait for hide timeout
-9. `screenshot` — verify dock hides after keyboard nav ends
+9. Screenshot — verify dock hides after keyboard nav ends
 
 **Expected:**
 - Dock forced visible during keyboard navigation regardless of visibility mode
@@ -173,11 +169,11 @@ cannot be verified in kwin-mcp due to D-08.
 
 **Precondition:** Visibility mode set to AlwaysVisible. One app window open (e.g., kcalc).
 **Steps:**
-1. `screenshot` — verify dock and app window visible
-2. `dbus_call org.kde.KWin /KWin org.kde.KWin.showDesktop true` (same path as Meta+D)
+1. Screenshot — verify dock and app window visible
+2. Press Meta+D (or call `org.kde.KWin.showDesktop true` on `/KWin`, the same path)
 3. Wait 500ms
-4. `screenshot` — verify app window hidden, dock still visible
-5. `dbus_call org.kde.KWin /KWin org.kde.KWin.showDesktop false`
+4. Screenshot — verify app window hidden, dock still visible
+5. Leave Show Desktop (Meta+D again, or `showDesktop false`)
 
 **Expected:**
 - KWin treats the dock surface as a Dock (layer-shell namespace `dock`), so Show Desktop leaves it on screen like a Plasma panel (#16)

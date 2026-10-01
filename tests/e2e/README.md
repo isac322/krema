@@ -1,12 +1,11 @@
 # E2E test scenarios
 
-Accessibility-first end-to-end test scenarios for the Krema dock. The
-scenario checklists are automated by the Tier 2 `tests/appium/` harness in a
-real KWin session. MOUSE-008 and VIS-007 also have Tier 2 KWin ctests. Tier 3
-reuses the Appium scenarios against installed distro packages. See
-`tests/appium/README.md` for the coverage matrix and current run status.
-The kwin-mcp workflow remains useful for exploratory QA and one-off manual
-checks.
+Accessibility-first end-to-end test scenarios for the Krema dock. The scenarios
+are the human-readable oracle for the automated tests: each TC lists them on its
+`**Automated:**` lines. The Tier 2 `tests/appium/` harness runs them in a real
+KWin session; MOUSE-008 and VIS-007 also have Tier 2 KWin ctests. Tier 3 reuses
+the Appium scenarios against installed distro packages. See
+`tests/appium/README.md` for the coverage matrix and how to run the suite.
 
 The Issue 54 click-policy additions are documented as consumer observations,
 not source-text or mock-call checks. New rows stay pending until the parent
@@ -16,7 +15,6 @@ rule: document real KWin frame geometry and real app/input outcomes, and
 leave new coverage pending until its run is recorded. Missing DRM capture
 does not prevent the reservation geometry, settings, lifecycle, or drag
 checks; painted-divider and pixel checks need a capture-capable session.
-
 
 ## Convention
 
@@ -37,7 +35,7 @@ Each scenario file follows this structure:
 **Steps:**
 1. ...
 **Expected:** ...
-**Verification:** accessibility_tree / screenshot / find_ui_elements
+**Verification:** AT-SPI state / screenshot / window list / kremarc
 ```
 
 ### Feature IDs
@@ -49,7 +47,8 @@ Human-readable identifiers for functional areas. Used to:
 ### Affected Files
 
 Source file paths that, when modified, may require re-running the scenario.
-This enables the "changed file → affected scenario" lookup in the Stop hook.
+This enables the "changed file → affected scenario" lookup (see the mapping below).
+
 ### Test tiers
 
 - **Tier 1:** `tests/qml/` loads production QML headlessly with mocked
@@ -70,34 +69,13 @@ The `outputs(2)` marker selects the existing multi-screen cases; a one-output
 session skips them. The scenarios use the existing `krema_e2e` helpers and
 retain their documented AT-SPI, EIS, QMenu, coordinate, and DRM/vgem limits.
 
+## Notes for Running Scenarios
 
-## Execution Guide
+The steps describe user actions and observable results, so they can be
+followed by hand in a Plasma 6 Wayland session or read as the spec for an
+automated test.
 
-### Environment Setup
-
-```bash
-# Start kwin-mcp session (800x600 for visual verification)
-session_start screen_width=800 screen_height=600
-  app_command="/home/bhyoo/projects/c++/krema/build/dev/bin/krema"
-
-# Launch test apps
-launch_app command="kcalc"
-```
-
-Note: `krema` is not in PATH — use the full build path.
-
-### Verification Tools
-
-| Tool | Use When |
-|------|----------|
-| `accessibility_tree` | Checking AT-SPI roles, names, states (focused, expanded) |
-| `find_ui_elements` | Searching for specific UI elements by name/role |
-| `screenshot` | Visual verification (zoom, animations, layout) |
-| `keyboard_key` | Simulating key presses |
-| `mouse_click` / `mouse_move` | Mouse interactions |
-| `dbus_call` | Triggering global shortcuts (focus-dock) |
-
-### AT-SPI State Reference (Verified via PoC)
+### AT-SPI State Reference
 
 Key states used in assertions:
 - `focused` — element has keyboard focus (string `"focused"` in states list)
@@ -107,7 +85,7 @@ Key states used in assertions:
 - `sensitive` — element accepts user interaction
 - `active` — frame/window is the active window
 
-### AT-SPI Structure for Krema (Verified)
+### AT-SPI Structure for Krema
 
 ```
 [application] "krema"
@@ -126,12 +104,12 @@ Key states used in assertions:
 
 ### Important Patterns
 
-1. **Global shortcuts**: `keyboard_key "super+alt+d"` does NOT trigger KGlobalAccel in
-   kwin-mcp (EIS limitation). Use D-Bus `invokeShortcut` instead:
+1. **Focus Dock shortcut**: Meta+Alt+D triggers the `focus-dock` global action.
+   Where synthetic key presses do not reach KGlobalAccel, invoke the action
+   over D-Bus instead:
    ```
-   dbus_call service="org.kde.kglobalaccel" path="/component/krema"
-     interface="org.kde.kglobalaccel.Component" method="invokeShortcut"
-     args=["string:focus-dock"]
+   busctl --user call org.kde.kglobalaccel /component/krema \
+     org.kde.kglobalaccel.Component invokeShortcut s focus-dock
    ```
 
 2. **Preview popup hidden state**: The popup menu element stays in the tree with
@@ -144,57 +122,29 @@ Key states used in assertions:
 4. **Parabolic zoom in AT-SPI**: The focused item has a larger bounding box than
    neighbors (e.g., 83x88 vs 64x68). Can be used to verify zoom is active.
 
-5. **AT-SPI coordinates are surface-local**: Bounding boxes from `accessibility_tree`
-   are relative to the Wayland surface, not the screen. For bottom-anchored surfaces:
+5. **AT-SPI coordinates are surface-local**: AT-SPI bounding boxes are relative
+   to the Wayland surface, not the screen. Add the surface's screen position
+   (from KWin) to get screen coordinates. For a bottom-anchored surface:
    ```
    screen_y = (screen_height - surface_height) + surface_y
    ```
-   Example: Preview surface 800x400, screen 800x600 → offset = 200.
-   Close button at surface (494, 230) → screen (494, 430).
 
-6. **Screen edge trigger does not work**: Mouse movement to screen edge does not
-   trigger dock show in AutoHide/SmartHide. Use D-Bus `focus-dock` then `mouse_move`
-   to dock area to switch to mouse mode while keeping dock visible.
+6. **Showing a hidden dock for mouse tests**: In AutoHide or Dodge windows mode,
+   move the pointer to the dock's screen edge to reveal the dock, then onto the
+   target item. Alternatively, trigger Focus Dock (shows the dock in keyboard
+   mode), wait ~500 ms, then move the pointer onto the dock: pointer motion
+   cancels keyboard mode while the hover keeps the dock visible.
 
-7. **Dock show sequence for mouse tests**: When dock is hidden (SmartHide/AutoHide):
-   ```
-   dbus_call invokeShortcut("focus-dock")    # show dock (enters keyboard mode)
-   sleep 500ms
-   mouse_move(icon_x, dock_y)                # move to dock (cancels keyboard mode)
-   sleep 300ms                                # wait for hover to register
-   ```
-
-8. **QMenu context menu not in AT-SPI**: Native QMenu (right-click) does not appear
-   in `accessibility_tree`. Use screenshot to estimate menu item coordinates.
+7. **QMenu context menu not in AT-SPI**: The native QMenu (right-click) is a
+   `Qt::Popup` window, which Qt does not expose in the AT-SPI tree. Navigate it
+   with the keyboard (Down/Return) or locate entries on a screenshot.
    Menu items are in fixed order: AppName, Pin/Unpin, New Instance, Close,
    separator, Settings..., About Krema, Quit.
 
-9. **Dock-to-preview mouse transition**: Moving mouse from dock to preview popup
-   must be gradual (step by step, 20px increments). Direct jump from dock to
-   preview area causes preview to close (hidePreviewDelayed triggers).
-
-10. **AT-SPI bus instability**: Avoid `accessibility_tree` without `app_name` filter.
-    If AT-SPI bus fails, restart the session.
-
-### Session Size
-
-Always use **800x600** — dock elements are large enough for visual verification.
-
-## Known kwin-mcp limitations
-
-These are limitations of the kwin-mcp session (EIS input, its own compositor
-view), not of the scenarios: the `tests/appium/` harness handles each as
-noted.
-
-| Mechanism | kwin-mcp limitation | kwin-mcp workaround | In tests/appium |
-|-----------|---------------------|---------------------|-----------------|
-| Screen edge trigger | EIS mouse does not trigger layer-shell edge zones | D-Bus `focus-dock` | Real fake-input pointer reaches the edge strip (`test_vis003_auto_hide_shows_on_screen_edge_approach`) |
-| Active window identification | `list_windows` shows no active/focused state | AT-SPI `active` state on frames (unreliable) | `kwin.active_window()` via KWin scripting (`evaluate`) |
-| QMenu items | Native QMenu not in AT-SPI tree | Screenshot coordinate-based clicks | KWin popup window + keyboard navigation over `context_menu_entries()` order |
-| Close button click (22x22) | Very small target with coordinate conversion | Keyboard Delete key | Clicked directly: screen coordinates from the AT-SPI rect plus the surface's KWin position (`test_prev004_close_button_closes_that_window`) |
-| Tooltip AT-SPI | Tooltips are `Accessible.ignored: true` by design | Screenshot-only verification | Screenshot diff: the tooltip is the only pixel change (`test_mouse004_tooltip_shows_app_name_on_hover`) |
-
-See `docs/kwin-mcp-issues.md` for detailed issue descriptions and workaround instructions.
+8. **Dock-to-preview mouse transition**: Moving the pointer from the dock to the
+   preview popup must be gradual (step by step, ~20px increments). A direct jump
+   from the dock to the preview area lets the preview close (hidePreviewDelayed
+   triggers).
 
 ## File-to-Scenario Mapping
 

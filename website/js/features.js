@@ -271,7 +271,7 @@
     $('.sp-th-raise', ths[0]).focus();
   });
 
-  /* ---------- keyboard walk (Keyboard first, Meta+F5) ---------- */
+  /* ---------- keyboard walk (Keyboard first, Meta+Alt+D) ---------- */
   let walkStart = -1;
   let ringOn = null;
   let ringTimer = 0;

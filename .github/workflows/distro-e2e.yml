@@ -96,6 +96,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
           sparse-checkout: tests/distro/targets.tsv
           sparse-checkout-cone-mode: false
 
@@ -135,6 +136,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          lfs: false
 
       # Public package: pulls also work anonymously, so a failed login (a
       # fork's token) only costs the rate limit, never the run.

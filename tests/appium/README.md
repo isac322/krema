@@ -866,7 +866,8 @@ Each result below was reproduced in this harness (KWin 6.7.5, Qt 6.10, KF 6.30).
 
 ### 1. Does fake-input pointer at the bottom screen edge trigger auto-hide show? Yes.
 
-`docs/kwin-mcp-issues.md` D-08 does not reproduce here. The test used
+EIS-based remote input was earlier reported not to reach the layer-shell
+trigger strip; the fake-input pointer here does. The test used
 `VisibilityMode=1` (AutoHide) and one window. With the pointer away, the
 dock item is hidden: AT-SPI `showing=false`, and the item rect is pushed
 below the 108 px surface (`y=120`). Pointer moves had these results:
@@ -921,7 +922,7 @@ After a right-click, KWin maps a new krema window: the popup, with
 `normal_window=False`, 128x183 at the cursor. A walk of the whole desktop
 tree finds no menu, `Pin to Dock` or `Quit` entries. `QAccessibleApplication`
 builds its children from `topLevelWindows()` and skips `Qt::Popup` windows,
-so a QMenu is never a child of the application. D-06 is Qt behavior, not a
+so a QMenu is never a child of the application. This is Qt behavior, not a
 bus problem.
 
 How to use the menu anyway, as implemented in `Krema`:

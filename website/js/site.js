@@ -85,12 +85,16 @@
     });
   });
 
-  // Star count: one GitHub API request, cached for an hour per tab session.
-  // Chips stay hidden unless a real count arrives; the CTAs read fine without one.
+  // Star count: at most one GitHub API request per hour per browser. The count
+  // is kept in localStorage; a stale count is shown while a refresh is due or
+  // when the request fails. Unauthenticated API calls share a 60/hour limit per
+  // IP, so after a 403/429 no request is made until the limit resets.
+  // Chips stay hidden unless a count (live or cached) exists.
   const chips = document.querySelectorAll("[data-stars]");
   if (chips.length) {
     const KEY = "krema:stars";
-    const TTL = 60 * 60 * 1000;
+    const FRESH = 60 * 60 * 1000;
+    const RETRY = 10 * 60 * 1000;
     const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
     const setState = (state) => {
@@ -115,32 +119,56 @@
 
     let cached = null;
     try {
-      cached = JSON.parse(sessionStorage.getItem(KEY) ?? "null");
+      cached = JSON.parse(localStorage.getItem(KEY) ?? "null");
     } catch {
       cached = null;
     }
+    const save = (value) => {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(value));
+      } catch {
+        // Storage may be unavailable (private mode); the count still shows.
+      }
+    };
+    // js/star.js reads the cached count once this is set: no request pending.
+    const settle = () => chips.forEach((chip) => { chip.dataset.settled = ""; });
+    const hasCount = cached && Number.isInteger(cached.n);
+    const now = Date.now();
 
-    if (cached && Number.isInteger(cached.n) && Date.now() - cached.t < TTL) {
+    if (hasCount && now - cached.t < FRESH) {
       show(cached.n);
+      settle();
+    } else if (cached && cached.retryAt > now) {
+      if (hasCount) show(cached.n);
+      else setState("failed");
+      settle();
     } else {
       // Lay the chips out invisibly so the arriving count causes no layout shift.
-      setState("pending");
+      if (hasCount) show(cached.n);
+      else setState("pending");
       const abort = new AbortController();
       const timer = window.setTimeout(() => abort.abort(), 8000);
       fetch("https://api.github.com/repos/isac322/krema", { signal: abort.signal })
-        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+        .then((res) => {
+          if (res.ok) return res.json();
+          const reset = Number(res.headers.get("x-ratelimit-reset")) * 1000;
+          const limited = (res.status === 403 || res.status === 429) && reset > Date.now();
+          return Promise.reject({ retryAt: limited ? reset : Date.now() + RETRY });
+        })
         .then((data) => {
           const n = data.stargazers_count;
           if (!Number.isInteger(n)) throw new Error("no stargazers_count");
-          try {
-            sessionStorage.setItem(KEY, JSON.stringify({ n, t: Date.now() }));
-          } catch {
-            // Storage may be unavailable (private mode); the count still shows.
-          }
+          save({ n, t: Date.now() });
           show(n);
         })
-        .catch(() => setState("failed"))
-        .finally(() => window.clearTimeout(timer));
+        .catch((err) => {
+          save({ ...(hasCount ? cached : {}), retryAt: err && err.retryAt ? err.retryAt : Date.now() + RETRY });
+          if (!hasCount) setState("failed");
+        })
+        .finally(() => {
+          window.clearTimeout(timer);
+          settle();
+        });
     }
   }
 })();

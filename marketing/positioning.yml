@@ -3,20 +3,25 @@
 # All documentation and SEO files derive from this manifest.
 # Increment manifest_version when making deliberate positioning changes.
 
-manifest_version: "1.1.0"
+manifest_version: "1.2.0"
 
 product:
   name: Krema
   tagline: "A lightweight dock for KDE Plasma 6"
   one_liner: "A lightweight, high-performance dock for KDE Plasma 6 — spiritual successor to Latte Dock."
   meta_description: "Krema is a lightweight dock for KDE Plasma 6 with parabolic zoom, PipeWire window previews, and native Plasma integration."
+  elevator_pitch: >-
+    Krema is the dock KDE Plasma 6 users have been waiting for since Latte Dock
+    was discontinued. Built from scratch with C++23 and KDE Frameworks 6, it
+    delivers smooth parabolic zoom, live PipeWire window previews, and deep native
+    integration with the Plasma desktop, using Kirigami and KDE color schemes.
   latte_dock_relation: "spiritual successor"  # ONLY this phrase — never "replacement", "fork", or "clone"
   language: C++23
   frameworks:
     - Qt 6
     - KDE Frameworks 6
     - Kirigami
-  background_style_count: 7
+  background_style_count: 4
   attention_animation_count: 6
   visibility_mode_count: 3
 
@@ -131,13 +136,59 @@ target_audience:
     - "Linux customizers (r/unixporn) seeking aesthetic desktop setups"
     - "macOS converts looking for familiar dock behavior on Linux"
 
+value_propositions:
+  - audience: "Former Latte Dock users"
+    headline: "Your dock is back."
+    points:
+      - "Picks up where Latte Dock left off, purpose-built for Plasma 6"
+      - "Familiar parabolic zoom, drag-and-drop, smart visibility modes"
+      - "Kirigami-based settings dialog"
+  - audience: "KDE Plasma enthusiasts"
+    headline: "A dock that speaks Plasma."
+    points:
+      - "Uses KDE's own frameworks: Kirigami, KConfig, KColorScheme, KGlobalAccel"
+      - "Respects Plasma theme colors, global shortcuts, and desktop conventions"
+      - "Window previews powered by PipeWire, the same stack Plasma uses"
+  - audience: "Performance-conscious users"
+    headline: "Lightweight by design."
+    points:
+      - "GPU-accelerated rendering via QRhi (Vulkan/OpenGL)"
+      - "Wayland-native via Layer Shell, no X11 compatibility hacks"
+      - "Lazy resource allocation; GPU resources released when the dock is hidden"
+  - audience: "Customizers (r/unixporn)"
+    headline: "Make it yours."
+    points:
+      - "4 background styles: panel inherit, transparent, tinted, acrylic frosted glass"
+      - "Configurable icon size, zoom, spacing, and dock position"
+      - "Icon size normalization for uniform icons across themes"
+  - audience: "Accessibility-minded users"
+    headline: "A dock for everyone."
+    points:
+      - "Full keyboard navigation (Meta+Alt+D to focus, arrow keys, Enter/Escape)"
+      - "AT-SPI screen reader support with accessible names and announcements"
+      - "Visual focus ring following KDE accessibility guidelines"
+
+competitors:
+  - name: Latte Dock
+    status: "Discontinued; no Plasma 6 support"
+  - name: Plank
+    status: "GTK-based, no Wayland support"
+  - name: KDE default panel
+    status: "Plasma 6 and Wayland, but no parabolic zoom"
+
 differentiators:
   - "Only actively maintained dock with parabolic zoom for Plasma 6"
   - "Wayland-native from day one — no X11 legacy code"
   - "Deep KDE integration — built WITH KDE libraries, not just running on KDE"
   - "PipeWire-based window previews — modern, efficient, Plasma-native"
-  - "6 background styles including acrylic frosted glass and Mica"
+  - "4 background styles including acrylic frosted glass"
   - "Full keyboard accessibility with AT-SPI screen reader support"
+
+tone:
+  - "Enthusiastic but not hype-y — let features speak for themselves"
+  - "Technical credibility — name specific technologies (PipeWire, Layer Shell, QRhi)"
+  - "Community-first — open source, contributions welcome, built for the KDE community"
+  - "Respectful of Latte Dock — 'spiritual successor', not 'replacement'"
 
 drift_detection:
   metainfo_keyword_max_divergence: 2
@@ -149,4 +200,3 @@ drift_detection:
     - src/com.bhyoo.krema.desktop.in
     - packaging/arch/PKGBUILD
     - marketing/strategy.md
-    - marketing/positioning.md

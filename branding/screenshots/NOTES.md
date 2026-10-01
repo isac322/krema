@@ -15,7 +15,7 @@ The current PNGs come from the GPU session in `branding/clips/` (`stills.sh`, KW
 ## Environment
 
 - Container: `fedora:44` (linux/arm64, running under OrbStack on macOS)
-- Krema: built from this repository's working tree (branch `feat/brand-identity`, base commit `33b0cfb` plus uncommitted brand-identity changes), version string 0.7.0. The build installs the hicolor `com.bhyoo.krema` app icon and sets it as the window icon. The `copr` target installs `krema` from COPR `isac322/krema` instead.
+- Krema: built from this repository's working tree, including the brand identity from PR #32. The build installs the hicolor `com.bhyoo.krema` app icon and sets it as the window icon. The `copr` target installs `krema` from COPR `isac322/krema` instead.
 - KDE: KWin 6.7.5, plasma-workspace 6.7.5, Breeze (Fedora defaults: Breeze Light apps, Breeze icons, Noto Sans)
 - Wallpaper: Roast Contours (`branding/wallpaper/roast-contours.png`) for the current PNGs; `regen/capture.sh` still sets Plasma's stock `Next`. The default Plasma panel is removed so Krema is the only dock.
 - Resolution: 1920×1080 at scale 1
@@ -64,7 +64,7 @@ Call failed: Screenshot got cancelled
 (org.kde.KWin.ScreenShot2.Error.Cancelled)
 ```
 
-KWin's EIS remote-input interface (the one kwin-mcp uses) also failed in this setup with `RuntimeError: No pointer device available from EIS`. Running KWin as an X11-windowed compositor on Xvfb avoids both problems: the composited output is an ordinary X window that scrot can grab, and xdotool drives input.
+KWin's EIS remote-input interface also failed in this setup with `RuntimeError: No pointer device available from EIS`, so it cannot drive input here either. Running KWin as an X11-windowed compositor on Xvfb avoids both problems: the composited output is an ordinary X window that scrot can grab, and xdotool drives input.
 
 ## Limitations
 

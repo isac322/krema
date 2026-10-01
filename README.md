@@ -233,6 +233,8 @@ just configure    # cmake --preset dev
 just build        # cmake --build --preset dev
 just test         # ctest --preset dev
 just run          # run krema
+just dev-desktop  # add a launcher and app icon for build/dev/bin/krema to ~/.local/share
+just package      # Arch: build and install a package from this checkout
 ```
 
 `just test` also runs the GUI integration tests on a private, headless `kwin_wayland --virtual` compositor when `kwin_wayland` and `dbus-run-session` are installed; your session and settings are not touched.

@@ -41,13 +41,17 @@ def _contains(outer: Rect, inner: Rect) -> bool:
     )
 
 
-def _assert_popup_inside(krema: Krema, titles: list[str], stage: str) -> tuple[Rect, Rect]:
+def _assert_popup_inside(krema: Krema, titles: list[str], stage: str, *, shrinking_from: int | None = None) -> tuple[Rect, Rect]:
     wait_until(lambda: pv.thumb_titles(krema) == titles, message=f"exact thumbnail order {titles}")
 
     def geometry() -> tuple[Rect, Rect, list[Rect]] | None:
         surface = krema.surface_rect("preview")
         popup = krema.preview_popup()
         if surface is None or popup is None:
+            return None
+        # Containment alone also accepts the larger surface from before a
+        # shrink. Wait for KWin's asynchronous configure before recording it.
+        if shrinking_from is not None and surface.width >= shrinking_from:
             return None
         popup_rect = pv.screen_rect(krema, popup)
         thumbs = [krema.find(pv.thumb_xpath(title)) for title in titles]
@@ -60,7 +64,8 @@ def _assert_popup_inside(krema: Krema, titles: list[str], stage: str) -> tuple[R
 
     surface, popup, thumbs = wait_until(
         geometry,
-        message=f"entire popup and all {len(titles)} thumbnails to fit the native preview surface",
+        message=f"entire popup and all {len(titles)} thumbnails to fit the native preview surface"
+        + (f" after its width shrinks below {shrinking_from}px" if shrinking_from is not None else ""),
     )
     assert all(_contains(popup, rect) for rect in thumbs)
     _record(krema, stage, native_surface=surface._asdict(), popup=popup._asdict(), thumbnails=[rect._asdict() for rect in thumbs], titles=titles)
@@ -193,10 +198,15 @@ def test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts(
 
     # Reuse the popup through group->single and regrow without restarting Krema.
     _open(krema, windows, "three-before-shrink")
+    vertical = edge in (config.EDGE_LEFT, config.EDGE_RIGHT)
     apps.close(windows.pop())
-    shrunk_two, _ = _assert_popup_inside(krema, list(TITLES[:2]), "two-shrunk")
+    shrunk_two, _ = _assert_popup_inside(
+        krema, list(TITLES[:2]), "two-shrunk", shrinking_from=three_surface.width if vertical else None
+    )
     apps.close(windows.pop())
-    single_surface, _ = _assert_popup_inside(krema, [TITLES[0]], "single-shrunk")
+    single_surface, _ = _assert_popup_inside(
+        krema, [TITLES[0]], "single-shrunk", shrinking_from=shrunk_two.width if vertical else None
+    )
     if edge in (config.EDGE_LEFT, config.EDGE_RIGHT):
         assert single_surface.width < shrunk_two.width < three_surface.width
     windows.extend(apps.open(title, app_id=env.TEST_APP_ID) for title in TITLES[1:])

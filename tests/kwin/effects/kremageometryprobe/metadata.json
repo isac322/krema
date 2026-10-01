@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Id": "kremageometryprobe",
+        "Name": "Krema delegate geometry probe",
+        "Description": "Test-only: observes KWin window icon geometry and dock surface geometry",
+        "EnabledByDefault": false,
+        "License": "GPL"
+    },
+    "X-KDE-Ordering": 60,
+    "X-Plasma-API": "javascript"
+}

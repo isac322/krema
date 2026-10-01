@@ -53,6 +53,10 @@ Item {
             verify(publication !== null, "delegate geometry was not published")
             compare(publication.index, item.index)
             verify(publication.isWindow)
+            compare(publication.geometry.x, item.x)
+            compare(publication.geometry.y, item.y)
+            compare(publication.geometry.width, item.width)
+            compare(publication.geometry.height, item.height)
         }
 
         function init() {

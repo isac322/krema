@@ -30,6 +30,12 @@ QtObject {
             isWindow: !!_role(i, "IsWindow"),
             isGroupParent: !!_role(i, "IsGroupParent"),
             childCount: _role(i, "ChildCount") || 0,
+            geometry: {
+                x: delegate.x,
+                y: delegate.y,
+                width: delegate.width,
+                height: delegate.height,
+            },
         }])
     }
 

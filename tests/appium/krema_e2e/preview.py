@@ -4,10 +4,11 @@
 pointer paths from a dock item into the popup, thumbnail pixel oracle, and an
 AT-SPI ``object:announcement`` listener for ``Accessible.announce``.
 
-The preview is its own layer-shell surface (full width, 400 px deep, anchored
-above the dock); ``krema.screen_rect(el, "preview")`` converts its elements to
-screen coordinates. The webdriver does not support element-relative lookups,
-so everything here is an absolute XPath.
+The preview is its own layer-shell surface, anchored above or beside the dock.
+Its depth is at least 400 px and grows from the popup's laid-out extent when a
+grouped thumbnail row needs more room. ``krema.screen_rect(el, "preview")``
+converts its elements to screen coordinates. The webdriver does not support
+element-relative lookups, so everything here is an absolute XPath.
 """
 
 from __future__ import annotations

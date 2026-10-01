@@ -232,6 +232,24 @@ the explicit commit is only for later mask changes. Unchanged regions do
 not generate extra commits. Keep the input region limited to the popup:
 expanding it or increasing the hide delay does not fix publication order.
 
+### Tracking the preview content extent
+
+The existing size APIs were rechecked in the installed E2E image headers:
+`/usr/include/LayerShellQt/window.h` exposes `setDesiredSize(const QSize&)`
+and `desiredSizeChanged()`; `/usr/include/qt6/QtGui/qwindow.h` exposes
+`setWidth(int)`, `setHeight(int)`, and `resize(const QSize&)`.
+
+`PreviewController::setContentSize()` receives the actual QML popup extent.
+Apply the edge layout before publishing the new input mask: vertical previews
+need the popup's width, not the fixed 400px reserve adequate for its height on
+a horizontal dock. Keep the existing double anchors along the dock axis and
+limit perpendicular depth by the output extent minus the dock-side margin
+and any reserved panel bar.
+
+The thumbnail row remains unbounded. Groups wider than the available output
+can still be clipped; this sizing fix does not add wrapping or scrolling.
+
+
 Verified sources:
 - [Qt 6.8 QtWayland window implementation](https://github.com/qt/qtwayland/blob/v6.8.0/src/client/qwaylandwindow.cpp) (`setMask`, `updateInputRegion`)
 - [Qt 6.8 native surface lookup](https://github.com/qt/qtwayland/blob/v6.8.0/src/client/qwaylandnativeinterface.cpp) (`nativeResourceForWindow`)

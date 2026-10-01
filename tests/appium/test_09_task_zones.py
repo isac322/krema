@@ -349,10 +349,16 @@ def _drag_from_rest(
     dock = krema.surface_rect("dock")
     assert dock is not None and not dock.contains(*park)
     inp.move(*park)
-    icon_size = int(krema.read_config().get("General", {}).get("IconSize", "48"))
+    settings = krema.read_config().get("General", {})
+    icon_size = int(settings.get("IconSize", "48"))
+    edge = int(settings.get("Edge", config.EDGE_BOTTOM))
+    vertical = edge in (config.EDGE_LEFT, config.EDGE_RIGHT)
     wait_until(
-        lambda: all(krema.screen_rect(item).width == icon_size for item in krema.items()),
-        message="bottom dock to return to unzoomed drag geometry",
+        lambda: all(
+            (krema.screen_rect(item).height if vertical else krema.screen_rect(item).width) == icon_size
+            for item in krema.items()
+        ),
+        message="dock to return to unzoomed drag geometry",
     )
     bounds = wait_stable(
         lambda: {name: krema.screen_rect(krema.wait_for_item(name)) for name in (source, target)},

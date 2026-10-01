@@ -255,6 +255,20 @@ bool DockActions::moveTask(int fromIndex, int toIndex)
         return false;
     }
 
+    if (m_model->separateLaunchers()) {
+        // Clamp a cross-zone drop to the nearest task in the source zone.
+        // Query membership rather than a cached boundary so a pending
+        // pin/unpin reconciliation cannot accidentally cross the boundary.
+        const bool pinned = m_model->isPinned(fromIndex);
+        const int step = toIndex > fromIndex ? -1 : 1;
+        while (toIndex != fromIndex && m_model->isPinned(toIndex) != pinned) {
+            toIndex += step;
+        }
+        if (fromIndex == toIndex) {
+            return false;
+        }
+    }
+
     const bool ok = tasksModel->move(fromIndex, toIndex);
     if (ok) {
         tasksModel->syncLaunchers();

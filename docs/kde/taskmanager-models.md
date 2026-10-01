@@ -67,6 +67,23 @@ Source model switches dynamically in `updateGroupInline()`:
 - Suitable for geometry-based visibility checks
 - Krema creates separate instance: `new TaskManager::WindowTasksModel(this)`
 
+### Krema Task-Zone Policy
+
+Krema keeps one `TaskManager::TasksModel` for the dock task list. Its existing configuration remains application grouping, manual sorting, `hideActivatedLaunchers=true`, `launchInPlace=true`, and the native `separateLaunchers=false` setting. The native option separates launcher-model entries; it does not define Krema's pinned-membership boundary.
+
+Krema's `DockModel` adds the dock-specific policy:
+
+```cpp
+bool separateLaunchers() const;
+void setSeparateLaunchers(bool separate);
+int pinnedTaskCount() const;
+Q_PROPERTY(int pinnedTaskCount READ pinnedTaskCount NOTIFY pinnedTaskCountChanged)
+```
+
+When the policy is enabled, pinned applications occupy the first zone, including a pinned application that has running windows. Unpinned running tasks follow in the second zone. `pinnedTaskCount` exposes the boundary to the QML layout. The separator is presentation-only; it does not add an input region or accept pointer events.
+
+Partition reconciliation is signal-driven, queued, coalesced, and guarded against re-entry. It uses the existing model move and launcher-order synchronization APIs after task lifecycle changes rather than replacing the model or creating a second proxy. Reordering remains available within each zone. A cross-zone drag is clamped to the source zone and never pins or unpins an application implicitly. With the policy disabled, the dock preserves its existing free-reorder behavior.
+
 ---
 
 ## Roles — AbstractTasksModel::AdditionalRoles

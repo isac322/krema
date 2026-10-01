@@ -12,6 +12,7 @@
 - preview-mouse-leave-close: Preview closes when mouse leaves
 - preview-live-thumbnail: PipeWire-based live window thumbnails
 - preview-fast-pointer-entry: Pointer entering a popup reported visible by AT-SPI keeps it open past the hide delay
+- preview-task-index: Preview thumbnails keep their actual task order after pinned/running partitioning
 
 ## Affected Files
 - src/qml/main.qml
@@ -40,11 +41,14 @@ scenarios 01 and 04; this file adds only the explicit mouse-preview path.
 | PREV-004 | Keyboard Delete closes the focused window | `test_prev004_delete_key_closes_focused_thumbnail_window` |
 | PREV-005 | Pointer leave closes outside the popup; configured hide delay is respected | `test_prev005_preview_closes_when_pointer_leaves`, `test_prev005_close_on_leave_is_delayed` |
 | PREV-005 | A neighbouring task row re-centres the dock without reopening a preview under a stale pointer position | `test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving` |
+| PREV-001 / VIS-009 | Reservation ON/OFF and four-edge inward popup geometry relative to the resting dock item, including Floating ON; geometry-only coverage with no DRM thumbnail-pixel assertion | `tests/appium/test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` |
 
-All tests are in `tests/appium/test_03_preview.py`. The new QA-PREV-01 test
-records both sides: the pre-fix run failed after a 33 ms entry, while the fixed
-run passed three fresh opens. Its fast path complements, rather than replaces,
-the existing pixel/layout waits.
+Existing preview behavior tests are in `tests/appium/test_03_preview.py`. The
+reservation preservation regression is in
+`tests/appium/test_08_reservation.py`. The new QA-PREV-01 test records both
+sides: the pre-fix run failed after a 33 ms entry, while the fixed run passed
+three fresh opens. Its fast path complements, rather than replaces, the
+existing pixel/layout waits.
 
 ---
 
@@ -72,6 +76,7 @@ KCalc"` popup with a live thumbnail.
 **Verification:** accessibility_tree (PopupMenu present with correct name), screenshot (popup with thumbnails)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails
+**Automated (reservation regression, native Tier 2 coverage):** `tests/appium/test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` (geometry-only; no DRM thumbnail-pixel assertion)
 
 ---
 
@@ -296,3 +301,25 @@ apps; the first popup is open and its hide delay is pending.
 **Verification:** AT-SPI popup visibility, thumbnail titles, and KWin active
 state. PipeWire/Screenshot2 checks require DRM/vgem.
 **Automated (Tier 2):** `tests/appium/test_03_preview.py::test_prev009_explicit_group_pending_hide_retargets_after_reenter`.
+
+---
+
+## TC PREV-010: Preview Thumbnails Match Task Order After Partitioning
+
+**Precondition:** Enable `Separate pinned and running apps`. Use a grouped app with at least three open windows, and keep another pinned running app and another unpinned running app present so both task zones are populated.
+
+**Steps:**
+1. Use `list_windows` to record the grouped app's window titles and stable window identifiers in task order.
+2. Open the grouped app's preview from its dock item after the dock has settled.
+3. Read the thumbnail titles and their left-to-right order from `accessibility_tree`.
+4. Select the second thumbnail, then repeat with the last thumbnail after reopening the preview.
+5. Pin or unpin a different running app, wait for the dock partition to reconcile, and reopen the grouped preview.
+
+**Expected:**
+- The preview contains one thumbnail for each current window of the grouped app.
+- Thumbnail order matches the actual task/window order recorded from KWin, not the app's position relative to the pinned/running divider.
+- Selecting a thumbnail activates that exact window and closes the preview; it never activates an adjacent task or a different child in the group.
+- Repartitioning another app leaves the grouped app's thumbnail count, order, and click targets correct, with no duplicate thumbnail.
+
+**Verification:** AT-SPI thumbnail names and order, KWin window identifiers/active state after each selection, and popup visibility after the partition update.
+**Automated (strict feature coverage):** `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` keeps three-thumbnail horizontal coverage and uses a two-thumbnail vertical fixture to prove index-1 remapping, exact native activation, and different-app pin/unpin repartition. The vertical popup remains wider than the existing 400 px native surface, so this feature check asserts center-point input reachability rather than whole-rect containment; the separate preview-surface fix owns strict whole-popup and whole-thumbnail containment. Image/RHI/DRM and default timing remain unverified.

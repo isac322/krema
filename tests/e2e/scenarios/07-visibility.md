@@ -2,6 +2,7 @@
 
 ## Features
 - vis-always-visible: Dock always shown regardless of windows
+- vis-reserve-screen-space: Optional Always Visible reservation reflows maximized windows live on all four edges
 - vis-explicit-preview-hold: Repeated explicit previews release visibility holds after close
 - vis-auto-hide: Dock hides after timeout, shows on mouse approach
 - vis-dodge-windows: Dock hides when windows overlap its area
@@ -17,6 +18,8 @@
 - src/platform/waylanddockplatform.cpp
 - src/shell/dockview.h
 - src/shell/dockview.cpp
+- src/app/application.cpp
+- src/qml/settings/BehaviorPage.qml
 - src/qml/main.qml
 - src/config/krema.kcfg
 **Tier:** Tier 2 (Appium) for real visibility, KWin, and multi-output state.
@@ -30,7 +33,7 @@ unchanged; VIS-008 checks only release of the explicit-preview hold.
 
 ## TC VIS-001: Always Visible Mode
 
-**Precondition:** Visibility mode set to AlwaysVisible.
+**Precondition:** Visibility mode set to AlwaysVisible and `Reserve screen space` enabled (the default).
 **Steps:**
 1. `screenshot` — verify dock visible
 2. Maximize a window (e.g., kcalc)
@@ -42,9 +45,12 @@ unchanged; VIS-008 checks only release of the explicit-preview hold.
 
 **Expected:**
 - Dock remains visible at all times
-- Windows do not cover the dock (layer-shell exclusive zone)
+- With reservation enabled, maximized windows stop before the visible panel
+  bar. Disabling reservation keeps the dock shown but allows windows to use
+  that screen space; see VIS-009.
 
-**Verification:** screenshot (dock visible in all states)
+**Verification:** AT-SPI dock visibility and KWin maximized frame/output
+geometry in all states; screenshot when capture is available.
 
 **Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window
 **Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
@@ -209,3 +215,81 @@ two-output screen placement. Visual popup checks require DRM/vgem capture.
 
 Run the multi-screen cases with:
 `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs`.
+
+---
+
+## TC VIS-009: Optional reservation reflows maximized windows on every edge
+
+**Precondition:** A real KWin session with one output and no other panel
+reserving space. Launch a fixture window, maximize it in KWin, and verify
+its maximized state and frame geometry. Use `Always visible`. Keep this
+same maximized window alive throughout each toggle.
+
+**Steps:**
+1. Open Settings → Behavior. At the bottom edge, toggle `Reserve screen
+   space` off and on. Record the output bounds and the existing fixture's
+   settled frame bounds after each toggle, with the window identity and
+   maximized state.
+2. With reservation off, verify the frame reaches the output's bottom edge.
+   With it on, verify the frame ends before the resting panel bar, including
+   the floating gap when enabled. Verify the dock remains visible in both
+   states; do not accept a maximize-command echo as the result.
+3. Repeat on the top, left, and right edges using the real `Screen edge`
+   control. For top/left, compare the fixture frame's leading edge with the
+   output's leading edge; for bottom/right, compare its trailing edge.
+4. Repeat each edge with floating mode off and on. Change icon size in
+   Appearance while reservation is enabled and verify the existing maximized
+   frame updates to the current panel-bar thickness. Move the pointer away
+   before sampling; hover zoom/tooltip surface space is not reserved.
+5. Disable reservation, restart Krema, and observe the same maximized
+   fixture using the full output. Enable reservation, restart again, and
+   verify the saved setting restores reserved geometry. Check the Behavior
+   switch state after each restart.
+6. Save each reservation value in turn and switch through `Auto hide` and
+   `Dodge windows`. Close Settings and move the pointer away. Verify the
+   maximized frame can use the full output in both modes; reveal the dock
+   and verify visibility/overlap behavior remains unchanged.
+7. Return to `Always visible`. Verify the saved reservation value applies
+   immediately and the switch reappears with the same state.
+
+**Expected:**
+- Turning reservation off/on expands/shrinks an already-maximized window
+  in the live session; no window restore/remaximize or Krema restart is
+  needed for the toggle itself.
+- All four edges reserve only the current resting panel bar and floating
+  gap, not the full zoom/tooltip surface.
+- The chosen reservation setting survives restart independently of edge,
+  floating mode, icon size, and visibility mode.
+- Auto Hide and Dodge Windows reserve no space with either saved value.
+
+**Verification:** KWin maximized state, window identity, output/frame bounds,
+AT-SPI settings/dock state, and `kremarc`. Save geometry samples and assert
+their actual differences; source calls, sent commands, and configuration
+values alone are insufficient. Screenshots may supplement these checks.
+Missing DRM/ScreenShot2 capture must not skip the geometry/input/persistence
+path; report only the pixel checks as unavailable.
+**Automated (Tier 2, native run passed):**
+`tests/appium/test_08_reservation.py::test_vis009_reservation_off_maximized_window_uses_full_output`,
+`test_vis009_already_maximized_window_reflows_on_live_reservation_toggle`,
+and `test_vis009_live_icon_size_and_floating_update_maximized_consumer`
+each run on top, bottom, left, and right edges.
+`test_vis009_reservation_off_and_on_persist_and_reflow_existing_window_after_restart`
+covers restart in both states on the bottom edge.
+`test_vis009_visibility_policy_ignores_and_retains_reservation_preference`
+covers Auto Hide/Dodge Windows on all four edges with both saved reservation
+values, including full-output geometry while Settings is open, hidden-dock
+geometry after it closes, and restored Always Visible geometry.
+`test_vis009_fresh_config_default_reserves_screen_space_for_maximized_consumer`
+covers the initially absent reservation key, checked native control,
+positive reserved workarea, both hidden-mode rows, and restored Always
+Visible behavior on the bottom edge.
+`reservation-geometry.jsonl` records actual fixture/window identities,
+frame/workarea/output bounds, and resting icon/surface bounds for reserved
+states. No test requires screenshots. SET-015 maps the native control;
+four-edge restart combinations beyond the bottom-edge node remain manual
+acceptance checks.
+
+These checks establish the frame/workarea/input/AT-SPI contract without
+requiring screenshots or live PipeWire thumbnails. Installed-package Tier 3,
+other-edge restart combinations beyond the bottom-edge node, and the user's
+original desktop root cause remain unverified.

@@ -291,12 +291,15 @@ Item {
     // Compares mouse X with each icon's center X (including the source so
     // that dropping near the original position keeps the item in place).
     function computeDropIndex(globalMousePos) {
+        const separate = DockSettings.separateLaunchers
+        const sourcePinned = separate && DockModel.isPinned(root._dragSourceIndex)
         if (DockView.isVertical) {
             let panelRelY = globalMousePos - dockPanel.y
             let items = []
             for (let i = 0; i < dockRepeater.count; i++) {
                 let item = dockRepeater.itemAt(i)
                 if (!item) continue
+                if (separate && DockModel.isPinned(i) !== sourcePinned) continue
                 items.push({ idx: i, cx: item.y + item.height / 2 + dockRow.y })
             }
             if (items.length === 0) return -1
@@ -313,6 +316,7 @@ Item {
             for (let i = 0; i < dockRepeater.count; i++) {
                 let item = dockRepeater.itemAt(i)
                 if (!item) continue
+                if (separate && DockModel.isPinned(i) !== sourcePinned) continue
                 items.push({ idx: i, cx: item.x + item.width / 2 + dockRow.x })
             }
             if (items.length === 0) return -1
@@ -628,10 +632,11 @@ Item {
                 if (root._dragTargetIndex >= 0 && root._dragTargetIndex !== root._dragSourceIndex) {
                     let item = dockRepeater.itemAt(root._dragSourceIndex)
                     let name = item ? item.displayName : ""
-                    DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)
-                    Accessible.announce(
-                        i18n("Moved %1 to position %2", name, root._dragTargetIndex + 1),
-                        Accessible.Polite)
+                    if (DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)) {
+                        Accessible.announce(
+                            i18n("Moved %1 to position %2", name, root._dragTargetIndex + 1),
+                            Accessible.Polite)
+                    }
                 }
                 // Reset drag state
                 root._dragActive = false
@@ -1037,6 +1042,9 @@ Item {
             Repeater {
                 id: dockRepeater
                 model: DockModel.tasksModel
+                property int layoutRevision: 0
+                onItemAdded: layoutRevision++
+                onItemRemoved: layoutRevision++
 
                 DockItem {
                     // index and model are injected by Repeater into
@@ -1064,6 +1072,63 @@ Item {
                     isExternalDropTarget: externalDropArea.containsDrag
                                           && externalDropArea.dropTargetIndex === index
                 }
+            }
+        }
+
+        // Overlay the existing inter-icon gap, never participate in Flow or
+        // input geometry. Follow the two delegates' current transformed edges,
+        // including model-move transitions and both zoom styles.
+        Rectangle {
+            id: taskZonesSeparator
+            objectName: "taskZonesSeparator"
+            z: -0.5
+            readonly property int boundary: DockModel.pinnedTaskCount
+            readonly property bool hasBoundary: DockSettings.separateLaunchers
+                && boundary > 0 && boundary < dockRepeater.count
+            readonly property var pinnedItem: {
+                let revision = dockRepeater.layoutRevision
+                let count = dockRepeater.count
+                return hasBoundary ? dockRepeater.itemAt(boundary - 1) : null
+            }
+            readonly property var runningItem: {
+                let revision = dockRepeater.layoutRevision
+                let count = dockRepeater.count
+                return hasBoundary ? dockRepeater.itemAt(boundary) : null
+            }
+            readonly property real primaryCenter: {
+                if (!pinnedItem || !runningItem) return 0
+                let pinnedExtent = DockView.isVertical ? pinnedItem.height : pinnedItem.width
+                let runningExtent = DockView.isVertical ? runningItem.height : runningItem.width
+                let pinnedEdge = pinnedItem.itemCenterX + pinnedItem.currentOffset
+                    + pinnedExtent * pinnedItem.currentScale / 2
+                let runningEdge = runningItem.itemCenterX + runningItem.currentOffset
+                    - runningExtent * runningItem.currentScale / 2
+                return (pinnedEdge + runningEdge) / 2
+            }
+            readonly property real secondaryCenter: {
+                if (!pinnedItem || !runningItem) return 0
+                let pinnedSpan = root._secondarySpan(pinnedItem, pinnedItem.currentScale)
+                let runningSpan = root._secondarySpan(runningItem, runningItem.currentScale)
+                return (pinnedSpan.near + pinnedSpan.far + runningSpan.near + runningSpan.far) / 4
+            }
+            readonly property real thickness: Math.max(1, Kirigami.Units.smallSpacing / 4)
+            readonly property real length: Math.min(DockSettings.iconSize, Kirigami.Units.gridUnit * 2)
+            visible: hasBoundary && pinnedItem !== null && runningItem !== null
+            width: DockView.isVertical ? length : thickness
+            height: DockView.isVertical ? thickness : length
+            x: (DockView.isVertical ? secondaryCenter : primaryCenter) - width / 2
+            y: (DockView.isVertical ? primaryCenter : secondaryCenter) - height / 2
+            color: Kirigami.Theme.textColor
+            opacity: 0.6
+            Accessible.role: Accessible.Separator
+            Accessible.name: i18n("Pinned and running apps separator")
+            Accessible.ignored: !visible
+
+            Connections {
+                target: DockModel.tasksModel
+                function onLayoutChanged() { dockRepeater.layoutRevision++ }
+                function onRowsMoved() { dockRepeater.layoutRevision++ }
+                function onModelReset() { dockRepeater.layoutRevision++ }
             }
         }
 

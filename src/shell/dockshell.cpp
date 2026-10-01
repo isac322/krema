@@ -125,6 +125,14 @@ void DockShell::connectSettingsSignals()
         Q_EMIT m_view->floatingPaddingChanged();
     });
 
+    // Screen-space reservation is global; reflow both the dock and open preview.
+    connect(s, &KremaSettings::ReserveScreenSpaceChanged, this, [this]() {
+        m_view->updateSize();
+        // Exclusive-zone state is double-buffered; publish it when the dock is idle.
+        m_view->update();
+        m_previewController->updateEdge();
+    });
+
     // Shadow: no surface resize needed — shadow renders within available space
     // and naturally clips at surface boundaries (QML ShaderEffect computes its own margin)
 
@@ -149,6 +157,8 @@ void DockShell::connectSettingsSignals()
     });
     connect(ss, &ScreenSettings::visibilityModeChanged, this, [this]() {
         m_view->visibilityController()->setMode(static_cast<DockPlatform::VisibilityMode>(m_screenSettings->visibilityMode()));
+        // Publish the double-buffered zone while interaction keeps the dock visible.
+        m_view->update();
     });
     connect(s, &KremaSettings::DodgeActiveOnlyChanged, this, [this]() {
         m_view->visibilityController()->setDodgeActiveOnly(m_settings->dodgeActiveOnly());

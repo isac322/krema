@@ -1440,3 +1440,45 @@ def test_set012_selected_subset_preserves_docks_and_routes_shortcuts(krema: Krem
     assert mapped_dock_xs(krema) == [W, 2 * W]
     inp.key("Escape")
     wait_until(lambda: krema.focused_item() is None, message="Escape leaves selected dock keyboard navigation")
+
+
+# ------------------------------------------------------------------- SET-015
+RESERVE_SWITCH = f"{SETTINGS}//check_box[@name='Reserve screen space']"
+
+
+@pytest.mark.parametrize(
+    "reserved",
+    [
+        pytest.param(False, marks=pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": kcfg.ALWAYS_VISIBLE, "ReserveScreenSpace": False}), id="off"),
+        pytest.param(True, marks=pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": kcfg.ALWAYS_VISIBLE, "ReserveScreenSpace": True}), id="on"),
+    ],
+)
+def test_set015_reservation_switch_is_native_conditional_and_autosaves(
+    krema: Krema, apps: TestWindows, reserved: bool
+) -> None:
+    apps.open("Alpha")
+    krema.wait_for_item("Alpha")
+    open_settings(krema)
+    open_page(krema, "Behavior")
+    switch = scroll_into_view(krema, RESERVE_SWITCH)
+    assert has_state(switch, "checked") == reserved
+    assert "Toggle" in atspi_actions(krema, "check box", "Reserve screen space")
+    pid = krema.pid
+    click_el(krema, switch)
+    wait_until(
+        lambda: has_state(krema.wait_for(RESERVE_SWITCH), "checked") == (not reserved),
+        message="reservation switch toggled",
+    )
+    wait_until(
+        lambda: kcfg.as_bool(config_value(krema, "ReserveScreenSpace") or "true") == (not reserved),
+        message="reservation change autosaved before Settings closes",
+    )
+    for mode in ("Auto hide", "Dodge windows"):
+        choose(krema, "Visibility mode", mode)
+        assert not any(has_state(row, "showing") for row in krema.find_all(RESERVE_SWITCH)), (
+            f"reservation switch must not be available in {mode}"
+        )
+        assert kcfg.as_bool(config_value(krema, "ReserveScreenSpace") or "true") == (not reserved)
+    choose(krema, "Visibility mode", "Always visible")
+    assert has_state(scroll_into_view(krema, RESERVE_SWITCH), "checked") == (not reserved)
+    assert krema.pid == pid, "changing visibility policy must not restart Krema or discard the reservation preference"

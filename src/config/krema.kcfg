@@ -70,6 +70,11 @@
       <default>0</default>
     </entry>
 
+    <entry name="ReserveScreenSpace" type="Bool">
+      <label>Reserve screen space for the dock</label>
+      <default>true</default>
+    </entry>
+
     <entry name="DodgeActiveOnly" type="Bool">
       <label>Only dodge the active window (false = dodge all overlapping windows)</label>
       <default>false</default>
@@ -271,6 +276,11 @@
     <entry name="PinnedLaunchers" type="StringList">
       <label>Pinned launcher URLs</label>
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>
+    </entry>
+
+    <entry name="SeparateLaunchers" type="Bool">
+      <label>Separate pinned and running applications</label>
+      <default>false</default>
     </entry>
   </group>
 </kcfg>

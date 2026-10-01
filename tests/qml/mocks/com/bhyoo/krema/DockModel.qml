@@ -13,6 +13,8 @@ QtObject {
     property int currentDesktop: 1
     // 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     property int virtualDesktopMode: 0
+    // Production DockModel exposes the current pinned/unpinned boundary.
+    readonly property int pinnedTaskCount: 0
 
     function _role(i, name) { return tasksModel.get(i, name) }
     function isPinned(i) { return !!_role(i, "IsLauncher") }

@@ -7,6 +7,7 @@
 - ctx-settings: Open settings dialog from menu
 - ctx-quit: Quit Krema from menu
 - ctx-app-name: App name shown as header in menu
+- ctx-task-zones: Pin and unpin live tasks between zones without duplicate dock items
 
 ## Affected Files
 - src/models/dockcontextmenu.h
@@ -16,6 +17,10 @@
 - src/qml/main.qml
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
+- src/config/krema.kcfg
+- src/models/dockmodel.h
+- src/models/dockmodel.cpp
+
 **Tier:** Tier 2 (Appium/KWin). The left-click policy settings do not change
 right-click menu contents, entry ordering, Pin/Unpin, New Instance, Close,
 Settings, About, or Quit behavior.
@@ -156,3 +161,25 @@ use screenshot-based coordinate estimation.
 **Verification:** list_windows (krema window count +1), find_ui_elements (FormCard widgets), screenshot (dialog layout)
 
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx006_settings_entry_opens_the_settings_window
+
+---
+
+## TC CTX-007: Pin and Unpin Reconciles the Task Zone
+
+**Precondition:** Enable `Separate pinned and running apps`. Start one unpinned running app and keep at least one pinned running app in the dock.
+
+**Steps:**
+1. Record the ordered dock buttons and identify the pinned/running boundary.
+2. Right-click the unpinned app and choose `Pin to Dock`.
+3. Wait for the dock to settle, then inspect the ordered buttons and the app's accessible description.
+4. Right-click the same running app and choose `Unpin from Dock`.
+5. Wait for the dock to settle, then close all windows of that app and inspect the dock again.
+
+**Expected:**
+- Pinning the running app moves its single existing button into the pinned zone; it does not add a second button or change the app's running state.
+- Unpinning moves that same button into the unpinned running zone while the window remains open.
+- Closing the now-unpinned app removes its button; no stale pinned launcher or duplicate task remains.
+- The divider and every neighboring task retain a stable order after each reconciliation.
+
+**Verification:** AT-SPI ordered button names/descriptions and KWin window state after Pin, Unpin, and Close; persisted pin membership in the configuration.
+**Automated (native Tier 2 coverage):** `tests/appium/test_09_task_zones.py::test_tzone003_grouped_instances_keep_one_pinned_slot_and_close_differently`, `tests/appium/test_09_task_zones.py::test_tzone004_pin_and_unpin_use_real_context_menu_and_preserve_membership` (no DRM or painted-divider claim)

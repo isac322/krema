@@ -191,6 +191,7 @@ not start `Build & tests`.
 | `<test id>/failure.png`, `atspi-tree.xml`, `kwin-windows.json`, `kremarc` | written when a test fails |
 | `<test id>/slide-samples.txt` | VIS-002/VIS-003: time and y of every dock item sample taken while the panel slid |
 | `<test id>/thumbnail-focus.txt` | KBD-006: focus ring vs other thumbnail blue pixel counts, one line per screenshot until the ring was painted |
+| `<test id>/reservation-geometry.jsonl` | VIS-009: observed KWin fixture ID/frame/workarea/full-output bounds and resting AT-SPI icon/dock-surface bounds for reserved states |
 | `test-windows.log` | fixture window output, including received key presses |
 | `krema-build.log`, `cmake-configure.log` | krema build |
 | `kactivitymanagerd.log` | activity manager output, only when the image has it (Tier 3; see below) |
@@ -237,16 +238,25 @@ a click activates a window, hover zooms, the Focus Dock shortcut focuses a
 dock button, and ScreenShot2 captures the rendered dock.
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
-automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`. Each
-scenario's `**Automated:**` lines point back to the tests below. Every row
-has concrete assertions on the AT-SPI tree (states, names, geometry), the
-KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
+automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.
+`test_08_reservation.py` adds the real maximized-window geometry checks.
+`test_09_task_zones.py` adds real pinned/running ordering, lifecycle,
+separator accessibility/geometry, and zone-drag checks.
+`test_10_task_zone_input.py` adds native boundary-input checks for task-zone
+keyboard traversal, magnified hit targets, and grouped-preview retargeting.
+Each scenario's `**Automated:**` lines point back to the tests below. Rows with
+named automated nodes assert on the AT-SPI tree (states, names, geometry),
+the KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
 screenshots, or AT-SPI events. Existing pass statuses reflect the recorded
 suite results. Issue 54 rows remain `pending` until the parent completes Tier 2
-and packaged Tier 3 QA. The issue #55 regression `QA-PREV-01` has recorded
-pre-fix and fixed results: the pre-fix run failed after a 33 ms entry, while
-the fixed run passed three fresh opens in one run. The fast path is tested
-separately from pixel waits.
+and packaged Tier 3 QA. Task-section results are recorded below: `test_09`
+passed 13/13, while `test_10` executed 14 cases across two invocations with
+13 passes and one known vertical PREV-010 reachability failure. Named
+reservation checks have a recorded source-built Tier 2 pass below; that run
+does not establish installed-package, pixel, or unexercised manual coverage.
+The issue #55 regression `QA-PREV-01` has recorded pre-fix and fixed results:
+the pre-fix run failed after a 33 ms entry, while the fixed run passed three
+fresh opens in one run. The fast path is tested separately from pixel waits.
 
 `KBD-009` runs three VisibilityMode variants; `KBD-007` runs the pointer
 parked and at the screen centre. SET-008 runs with two outputs. SET-012 runs
@@ -284,7 +294,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state` | screenshot | pass |
 | MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`; existing cycle/no-launch cases plus Issue 54 click-minimize cases) | KWin | baseline pass; Issue 54 cases pending |
 | MOUSE-009 | `test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them` | AT-SPI, screenshot | pass |
-| PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails` | AT-SPI, screenshot | pass |
+| PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails`; `test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` (four edges × reservation off/on, floating on; geometry/title only, no DRM) | AT-SPI, screenshot for original thumbnail case; KWin popup/surface/item geometry and real hover for reservation regression | baseline pass; reservation geometry regression 8/8 native Tier 2 pass; current thumbnail pixels/DRM and installed Tier 3 unverified |
 | PREV-002 | `test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row` | AT-SPI | pass |
 | PREV-003 | `test_03_preview.py::test_prev003_clicking_a_thumbnail_activates_that_window` | KWin, AT-SPI | pass |
 | PREV-004 | `test_03_preview.py::test_prev004_close_button_closes_that_window`, `test_prev004_delete_key_closes_focused_thumbnail_window`, `test_prev004_closing_last_window_closes_preview_and_returns_to_dock` | KWin, AT-SPI | pass |
@@ -336,6 +346,14 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | CLK-012 | `test_07_visibility.py::test_clk012_repeated_explicit_preview_releases_visibility_hold` (six cases), `test_clk012_repeated_explicit_preview_releases_follow_active_screen_hold` (four `outputs(2)` cases) | KWin, AT-SPI, screenshot | pending; DRM capture required |
 | KWIN-CLK | `tests/kwin/test_grouped_activation.cpp` ctest `krema_grouped_activation_tests`: seven named click-minimize/default/membership cases | KWin model state | pending |
 | QML-CLK | `tests/qml/tst_dock_main.qml`: 12 named popup, tooltip, membership, group0, single, and non-left/drag consumer cases | QML consumer state | pending |
+| SET-015 | `test_06_settings.py::test_set015_reservation_switch_is_native_conditional_and_autosaves` (native switch, autosave, mode-dependent visibility); VIS-009 for geometry/restart | AT-SPI switch, unchanged process, `kremarc`; KWin geometry in VIS-009 | native Tier 2 coverage; installed Tier 3 unverified |
+| VIS-009 | `test_08_reservation.py::test_vis009_reservation_off_maximized_window_uses_full_output`, `test_vis009_already_maximized_window_reflows_on_live_reservation_toggle`, `test_vis009_live_icon_size_and_floating_update_maximized_consumer`, `test_vis009_visibility_policy_ignores_and_retains_reservation_preference`, `test_vis009_fresh_config_default_reserves_screen_space_for_maximized_consumer` (four edges, both saved preferences for mode changes; fresh default also verifies the AT-SPI description `Maximized windows avoid the dock`, checked/showing states, and no stored reservation key); `test_vis009_reservation_off_and_on_persist_and_reflow_existing_window_after_restart` (bottom) | Real KWin maximized state/frame/workarea/output bounds, window identity, and edge-aware dock geometry | native Tier 2 coverage; no DRM; installed Tier 3 unverified |
+| SET-016 | `test_09_task_zones.py::test_tzone001_live_toggle_orders_visible_tasks_and_persists` (four edges, live on/off, ON/OFF restarts), `test_tzone007_fresh_default_separation_is_off` | AT-SPI switch/ordered items/separator, real app windows, `kremarc` | native Tier 2 coverage; no DRM; installed Tier 3 unverified |
+| CTX-007 | `test_09_task_zones.py::test_tzone003_grouped_instances_keep_one_pinned_slot_and_close_differently`, `test_tzone004_pin_and_unpin_use_real_context_menu_and_preserve_membership`; TZONE-002 for empty-section divider state | Real fixture windows/context menu input, ordered AT-SPI app names, separator state, saved pinned membership | native Tier 2 coverage; no DRM; installed Tier 3 unverified |
+| DND-006 | `test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both cross-boundary directions with separation on/off) | Real drags, ordered AT-SPI app names, saved pinned membership | native Tier 2 coverage; visual drop-indicator/drag ghost/paint unverified; installed Tier 3 unverified |
+| KBD-010 | `tests/appium/test_10_task_zone_input.py::test_kbd010_task_navigation_survives_native_launch_and_close` (four edges) | Real keys, AT-SPI item focus, native launch/close, KWin activation | native Tier 2 coverage; F12 is a delivery probe, not launch proof; painted-divider quality and KWin RPC unverified |
+| MOUSE-017 | `tests/appium/test_10_task_zone_input.py::test_mouse017_separation_modes_and_magnified_boundary_hits` (four edges × separation ON/OFF, `MaxZoomFactor=1.6`) | Real pointer hover, AT-SPI separator/item geometry, outward-neighbor reflow, exact native PID hit targets | native Tier 2 coverage; pixel/AA, overlap screenshots, and DRM unverified |
+| PREV-010 | `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` (horizontal three-thumbnail and vertical two-thumbnail invocations) | Actual grouped window IDs/titles, last-thumbnail selection, selected-window KWin activation, AT-SPI preview state | Strict feature coverage for partition/index/pin transitions. The vertical two-thumbnail case still exercises center-point input reachability while the existing 400 px native surface clips the wider popup; whole-popup/thumbnail containment is owned by the separate preview-surface fix. Image/RHI/DRM/default-timing unverified |
 The Tier 1 QML names are:
 `test_groupPreviewClickShowsPopupAndSuppressesTooltip`,
 `test_groupPreviewClickStopsDelayedTooltip`,
@@ -385,13 +403,97 @@ ScreenShot2/PipeWire observations and installed-package Tier 3 runs require
 the existing DRM/vgem environment. OrbStack's QPainter path cannot provide
 that proof.
 
+### Screen-reservation and task-section contracts
+
+Run the native reservation-control and real maximized-window checks against
+the current source build:
+
+```sh
+KREMA_E2E_SKIP_BUILD=1 tests/appium/run-e2e.sh \
+    test_06_settings.py::test_set015_reservation_switch_is_native_conditional_and_autosaves \
+    test_08_reservation.py -rs
+```
+
+`KREMA_E2E_SKIP_BUILD=1` reuses the existing image, not the source binary;
+the runner still builds the changed source incrementally. This command
+does not cover task-section acceptance checks. Off/live-toggle, icon-size/floating, and Auto Hide/Dodge Windows cases run on all four edges.
+The matrix covers both saved reservation preferences with Settings open and after it closes, restoration to AlwaysVisible, restart persistence/reflow, the fresh-config default reservation case, and the supplemental hover-preview geometry cases.
+Each geometry test writes
+`reservation-geometry.jsonl` with
+observed KWin frame/workarea/full-output bounds and fixture identity, plus
+resting AT-SPI icon/surface geometry when reserved.
+The supplemental hover-preview node in `test_08_reservation.py` checks the
+actual popup and preview surface sit inward of the resting dock icon on
+each edge with reservation off/on and floating enabled. It checks the
+fixture title and visible popup geometry without DRM; live thumbnail pixels
+are not exercised by this node.
+
+
+Run the task-section suite separately:
+
+```sh
+KREMA_E2E_SKIP_BUILD=1 tests/appium/run-e2e.sh test_09_task_zones.py -rs
+```
+
+The live-switch and separator-geometry nodes run on all four edges.
+The lifecycle/context-menu and drag nodes use the bottom edge. Both
+cross-boundary drag directions are checked with separation on/off, and both
+preferences are checked across restart. TZONE-007 separately checks the
+unchecked native switch with a fresh configuration; the other nodes'
+explicitly configured false preference is not proof of that default.
+
+`SET-015`/`VIS-009` must inspect the existing maximized fixture window's
+settled KWin frame geometry before and after each real settings toggle.
+Sending a maximize command, reading `ReserveScreenSpace`, or checking a
+source setter is not evidence that KWin changed the usable area. The
+four-edge matrix compares the correct leading/trailing output edge, includes
+floating gap and changed icon size, and checks Auto Hide/Dodge Windows with
+both saved values. Restart checks observe restored switch state and frame
+bounds, not just the saved key.
+
+`SET-016`/`CTX-007` observe pinned membership and visual app order throughout
+launch, close, grouping, pin, unpin, and restart. Running pinned apps stay in
+their pinned slots with one icon per app; an empty section hides the divider.
+`DND-006` uses actual drags in both directions: separation on permits
+within-section ordering and clamps cross-section moves without auto-pinning;
+separation off restores free ordering. The assertions cover nearest-valid
+source-zone positions and membership; visual drop-indicator/drag ghost/paint
+remain unverified.
+
+`KBD-010` covers launch/close and focus traversal on all four edges; F12 is a
+delivery probe, not launch proof. `PREV-010` keeps three-thumbnail horizontal
+coverage and uses a two-thumbnail vertical fixture to prove index-1
+remapping, exact native activation, and the other-app pin/unpin transitions.
+The vertical popup remains wider than the existing 400 px native surface, so
+the feature check is center-point input reachability rather than whole-rect
+containment. The separate preview-surface fix owns whole-popup and
+whole-thumbnail containment for this vertical case.
+These checks do not establish divider paint/AA, preview image/RHI content,
+DRM capture, installed-package Tier 3, or KWin RPC behavior. Preview input uses
+configured `PreviewHideDelay=1500`, `PreviewHoverDelay=500`, and
+`MaxZoomFactor=1`; default timing remains unverified.
+
+Without DRM, run the geometry, AT-SPI, real-input, lifecycle, and persistence
+checks and record their outcomes. Report divider paint, pixel hover/zoom,
+and capture-dependent preview checks separately as unavailable; do not skip
+the geometry suite because ScreenShot2 fails. A headless geometry result
+does not establish painted-divider quality or the root cause in the user's
+original desktop environment. Tier 3 status remains pending until the same
+checks run against an installed package.
+
 ## Known krema bugs
 
-No Krema bug is currently pinned with an xfail. Tests marked `outputs(2)`
-or `outputs(3)` are intentionally skipped when the session has a different
-output count because the exact number of displays is a test precondition.
-Issue #55 is covered by `QA-PREV-01`: the baseline failed after a 33 ms
-entry, while the fixed run passed three fresh opens in one run.
+The feature suite does not pin the existing vertical preview-surface clipping
+with an xfail. `PREV-010` keeps strict partition/index/pin-transition coverage
+with a two-thumbnail vertical fixture and checks the selected thumbnail's
+center point; the popup and thumbnail can still extend beyond the existing
+400 px native surface. The separate preview-surface fix owns strict
+whole-popup/whole-thumbnail containment for grouped vertical previews and
+must remove this limitation from the contract when fixed.
+Tests marked `outputs(2)` or `outputs(3)` are intentionally skipped when the
+session has a different output count because the exact number of displays is a
+test precondition.
+Issue #55 is covered by `QA-PREV-01`.
 
 To pin a newly found bug, write the test for the correct behavior and mark
 it `@pytest.mark.xfail(strict=True, reason="krema bug: ...")` (or put the

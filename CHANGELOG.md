@@ -13,15 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added a "Zoom animation duration" setting in Appearance for Parabolic and In place hover zoom, with a range of 0 to 1000 ms (default 100 ms, an unscaled baseline that preserves the normal-speed zoom feel); Plasma animation scaling still applies, and 0 ms makes the zoom snap instantly
 - Added independent left-click choices for single and grouped windows: optional active-window minimization or grouped previews, with activation and grouped cycling kept as defaults
 - Added "Selected monitors" in Behavior settings so users could keep docks on chosen outputs, retain disconnected selections, and use a temporary primary-display dock until a selected monitor returned
+- Added an enabled-by-default "Reserve screen space" setting for Always visible mode, so maximized windows avoid the dock while Auto hide and Dodge windows retain their existing behavior.
+- Added an optional "Separate pinned and running apps" setting, keeping pinned apps together before unpinned running apps and keeping cross-boundary drags in their section without pinning or unpinning.
 
 ### Changed
 
 - The default Focus Dock shortcut moved from Meta+F5 to Meta+Alt+D: Meta+F5 belongs to KWin's "Move Mouse to Focus", so it never reached the dock and was left unbound on Plasma older than 6.7. Setups still on the old default switched automatically
 
 ### Fixed
-
 - The README now lists the four available background styles and no longer advertises unsupported Semi-Transparent or Mica styles
-- Always Visible mode reserved screen space, so maximized windows ended above the dock instead of extending underneath it
+- Changing visibility mode while the Settings window was open now released or applied the dock's screen-space reservation immediately.
 - "Follow active screen" with the "Mouse position" trigger moved the dock: pushing the pointer against the dock edge of another monitor brought the dock there
 - Changing the icon size or screen edge resized and moved the dock immediately on distributions with LayerShellQt older than 6.4 (e.g. Debian 13, Ubuntu 25.04) instead of only after a restart
 - Clicking a dock icon worked when the icon had just appeared or moved under a resting pointer; the click was previously ignored or went to the wrong icon

@@ -3,9 +3,10 @@
 ## Features
 - dnd-reorder: Drag dock items to reorder position
 - dnd-click-policy-isolation: Drag release preserves window state for all six click-policy pairs
-- dnd-pin-on-drop: Dropping an item at a new position pins it
+- dnd-pin-on-drop: Dropping an item at a new position pins it when separation is off; separation on keeps the task in its source zone
 - dnd-visual-feedback: Visual feedback during drag (placeholder, opacity change)
 - dnd-file-drop: Drop file onto app icon to open with that app
+- dnd-task-zones: Separation constrains drags to the source zone and preserves free reorder when disabled
 
 ## Affected Files
 - src/qml/main.qml
@@ -157,3 +158,25 @@ existing DRM/vgem path.
 **Automated (Tier 2):** `tests/appium/test_05_drag.py::test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state`
 (six policy pairs × 12 source/release cases = 72 base scenarios, plus 24
 held-left/right release-order controls).
+
+---
+
+## TC DND-006: Task-Zone Drag Boundaries
+
+**Precondition:** Populate both zones with at least two pinned tasks and two unpinned running tasks. Run the check once with `Separate pinned and running apps` enabled and once with it disabled.
+
+**Steps:**
+1. With separation enabled, drag a pinned task to another position within the pinned zone and release.
+2. Drag that pinned task toward the unpinned zone and release beyond the divider.
+3. Drag an unpinned running task within its own zone, then drag it toward the pinned zone and release beyond the divider.
+4. After each release, inspect the drop indicator, ordered dock buttons, and each app's pin membership.
+5. Disable separation and repeat one pinned-to-unpinned and one unpinned-to-pinned drag.
+
+**Expected:**
+- With separation enabled, within-zone drags reorder only tasks in the source zone.
+- A cross-boundary release clamps to the nearest valid position in the source zone; the drop indicator and any accessible drag announcement identify that clamped position.
+- Cross-boundary dragging with separation enabled does not auto-pin or unpin the task, and no duplicate item appears.
+- With separation disabled, the existing free reorder behavior permits the cross-zone moves without an artificial boundary.
+
+**Verification:** AT-SPI item order and drag feedback, persisted pin membership, and the post-release task order for both option states.
+**Automated (native Tier 2 coverage):** `tests/appium/test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `tests/appium/test_09_task_zones.py::test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both pinned-to-running and running-to-pinned directions; exact nearest-valid source-zone positions and membership asserted; visual drop-indicator/drag ghost/paint remain unverified)

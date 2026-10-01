@@ -261,7 +261,7 @@ def test_vis001_always_visible_dock_stays_shown_over_a_maximized_window(krema: K
         assert item_diff < 8, f"dock item pixels changed ({item_diff:.1f}) with the pointer away"
 
 
-@pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.ALWAYS_VISIBLE})
+@pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.ALWAYS_VISIBLE, "ReserveScreenSpace": True})
 def test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows(krema: Krema, apps: TestWindows) -> None:
     win = apps.open("Reserve", width=400, height=300)
     krema.wait_for_item("Reserve")

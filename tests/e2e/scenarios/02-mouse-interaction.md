@@ -11,6 +11,7 @@
 - mouse-wheel-cycle: Scroll wheel cycles windows of grouped app; it never launches a pinned app that isn't running
 - mouse-drag-reorder: Drag to reorder dock items
 - mouse-indicator-dots: Running app indicator dots
+- mouse-task-zones: Adjacent pinned and unpinned items keep correct hover, click, and zoom behavior
 
 ## Affected Files
 - src/qml/main.qml
@@ -404,3 +405,25 @@ parameterizations.
 The dedicated normal-hover pending-deadline and drag-time invalidation seams
 are Tier 1 QML checks, not additional Appium fixtures. See the named QML
 tests in `tests/appium/README.md`.
+
+---
+
+## TC MOUSE-017: Boundary Hover, Click, and Zoom Respect Task Zones
+
+**Precondition:** Enable `Separate pinned and running apps` with at least two pinned items and two unpinned running items. Use the existing parabolic zoom style and a visible dock.
+
+**Steps:**
+1. Record the ordered dock buttons and their centres from `accessibility_tree`.
+2. Hover the last pinned item, then the first unpinned item, using gradual pointer movement so each hover is observable.
+3. For each item, record its zoomed bounds and the centres of both adjacent items.
+4. Click each boundary-adjacent item once and inspect the active window.
+5. Disable separation and repeat the hover and click checks with the same apps.
+
+**Expected:**
+- Hovering either boundary-adjacent item magnifies that item and reflows its neighbours without changing task membership or creating a duplicate.
+- A click activates the item under the pointer, not the item on the other side of the boundary.
+- Zoomed bounds and current centres remain the hit-test geometry used by the visible dock; the separator does not intercept pointer input.
+- With separation disabled, the existing free layout and click behaviour remain available without a task-zone clamp.
+
+**Verification:** AT-SPI button geometry and names before/during hover, KWin active window after each click, and ordered membership after toggling the option.
+**Automated (native Tier 2; rerunnable 8-case coverage):** `tests/appium/test_10_task_zone_input.py::test_mouse017_separation_modes_and_magnified_boundary_hits` covers all four edges with separation ON/OFF at `MaxZoomFactor=1.6`, including outward-neighbor reflow, magnified bounds, and enlarged-only hit targeting of the exact native PIDs. Pixel/AA, overlap screenshots, and DRM claims are not made.

@@ -11,6 +11,11 @@ checks.
 The Issue 54 click-policy additions are documented as consumer observations,
 not source-text or mock-call checks. New rows stay pending until the parent
 runs the source-built and installed suites.
+The screen-reservation and pinned/running-section additions follow the same
+rule: document real KWin frame geometry and real app/input outcomes, and
+leave new coverage pending until its run is recorded. Missing DRM capture
+does not prevent the reservation geometry, settings, lifecycle, or drag
+checks; painted-divider and pixel checks need a capture-capable session.
 
 
 ## Convention
@@ -198,7 +203,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | Changed File | Re-run Scenarios |
 |---|---|
 | `src/qml/main.qml` | 01, 02, 03, 04, 05, 06, 07 |
-| `src/qml/DockItem.qml` | 01, 02, 05 |
+| `src/qml/DockItem.qml` | 01, 02, 05, 06 |
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03 |
@@ -208,15 +213,15 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
 | `src/models/launcherentrytracker.*` | 01 |
-| `src/qml/settings/*` | 06 |
+| `src/qml/settings/*` | 06, 07 |
 | `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
-| `src/app/application.*` | 01, 06 |
+| `src/app/application.*` | 01, 06, 07 |
 | `src/qml/SettingsDialog.qml` | 06 |
 | `src/shell/settingswindow.*` | 06, 07 |
-| `src/shell/dockview.*` | 02, 07 |
-| `src/models/dockmodel.*` | 02, 03 |
+| `src/shell/dockview.*` | 02, 06, 07 |
+| `src/models/dockmodel.*` | 01, 02, 03, 04, 05, 06 |
 | `src/shell/multidockmanager.*` | 02, 03, 06, 07 |
 | `src/shell/edgetrigger.*` | 06 |
 | `src/shell/outputordermonitor.*` | 02, 03, 06, 07 |
@@ -228,3 +233,23 @@ activation, context-menu actions, middle/right clicks, wheel cycling, drag
 handling, visibility, and settings lifecycle keep their existing contracts;
 the affected scenario files record those preservation checks without
 duplicating their full procedures.
+
+### Screen reservation and pinned/running sections
+
+| Contract | Scenario | Required observation |
+|---|---|---|
+| Reservation control/default/persistence | SET-015 | Real Behavior switch, saved value, same maximized KWin window reflows live and after Krema restart |
+| Reservation geometry | VIS-001, VIS-009 | Maximized frame/output bounds on all four edges, floating off/on, current icon size, reservation off/on, and no reservation in Auto Hide/Dodge Windows |
+| Section control/default/persistence | SET-016 | Real Behavior switch, ordered dock app names, pinned membership, accessible separator, and restart |
+| Pin/unpin and app lifecycle | CTX-007 | Running pinned apps retain one pinned slot; unpinned apps follow; live launch/close/group and empty-section transitions |
+| Zone drag policy | DND-006 | Real drags reorder within the source section, clamp cross-section moves without pinning, and allow free ordering when separation is off |
+| Boundary interactions | KBD-010, MOUSE-017, PREV-010 | Correct task activation/preview indices, non-focusable separator, hover geometry, and unchanged item input targets |
+
+The divider is an overlay, not a task or an extra equal-pitch item. Observe
+its accessible role/name and its placement between the current adjacent
+item centres during horizontal/vertical layout and hover. Paint and visual
+zoom checks need DRM/vgem capture; ordered app names, KWin geometry, real
+input, and persistence checks must still run without it.
+
+These rows describe acceptance checks, not recorded successes. The exact
+automated nodes and run status are maintained in `tests/appium/README.md`.

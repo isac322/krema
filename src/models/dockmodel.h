@@ -28,6 +28,7 @@ class DockModel : public QObject
 
     Q_PROPERTY(TaskManager::TasksModel *tasksModel READ tasksModel CONSTANT)
     Q_PROPERTY(QStringList pinnedLaunchers READ pinnedLaunchers WRITE setPinnedLaunchers NOTIFY pinnedLaunchersChanged)
+    Q_PROPERTY(int pinnedTaskCount READ pinnedTaskCount NOTIFY pinnedTaskCountChanged)
     Q_PROPERTY(int virtualDesktopMode READ virtualDesktopMode WRITE setVirtualDesktopMode NOTIFY virtualDesktopModeChanged)
     Q_PROPERTY(QVariant currentDesktop READ currentDesktop NOTIFY currentDesktopChanged)
 
@@ -41,6 +42,11 @@ public:
 
     [[nodiscard]] QStringList pinnedLaunchers() const;
     void setPinnedLaunchers(const QStringList &launchers);
+
+    /// Keep pinned applications (including their windows) before unpinned tasks.
+    [[nodiscard]] bool separateLaunchers() const;
+    void setSeparateLaunchers(bool separate);
+    [[nodiscard]] int pinnedTaskCount() const;
 
     /// Virtual desktop display mode: 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     [[nodiscard]] int virtualDesktopMode() const;
@@ -78,10 +84,18 @@ public:
 
 Q_SIGNALS:
     void pinnedLaunchersChanged();
+    void pinnedTaskCountChanged();
     void virtualDesktopModeChanged();
     void currentDesktopChanged();
 
 private:
+    void scheduleTaskPartition();
+    void reconcileTaskPartition();
+
+    bool m_separateLaunchers = false;
+    bool m_partitionPending = false;
+    bool m_reconcilingPartition = false;
+    int m_pinnedTaskCount = 0;
     int m_virtualDesktopMode = 0;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
     std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;

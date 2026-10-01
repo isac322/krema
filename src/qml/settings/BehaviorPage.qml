@@ -42,6 +42,18 @@ FormCard.FormCardPage {
             visible: DockSettings.visibilityMode === 2
         }
 
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.visibilityMode === 0
+        }
+
+        FormCard.FormSwitchDelegate {
+            text: i18n("Reserve screen space")
+            description: i18n("Maximized windows avoid the dock")
+            checked: DockSettings.reserveScreenSpace
+            onToggled: DockSettings.reserveScreenSpace = checked
+            visible: DockSettings.visibilityMode === 0
+        }
+
         FormCard.FormDelegateSeparator {}
 
         FormCard.FormComboBoxDelegate {
@@ -57,6 +69,15 @@ FormCard.FormCardPage {
             onActivated: function(index) {
                 DockSettings.edge = index
             }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.FormSwitchDelegate {
+            text: i18n("Separate pinned and running apps")
+            description: i18n("Pinned apps, including running apps, stay together; unpinned running apps appear after the divider.")
+            checked: DockSettings.separateLaunchers
+            onToggled: DockSettings.separateLaunchers = checked
         }
 
         FormCard.FormDelegateSeparator {}

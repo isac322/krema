@@ -18,6 +18,18 @@ Q_LOGGING_CATEGORY(lcModel, "krema.model")
 namespace krema
 {
 
+namespace
+{
+bool isPinnedTask(const QModelIndex &index, const QStringList &launchers)
+{
+    if (!index.isValid()) {
+        return false;
+    }
+    const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    return url.isValid() && launchers.contains(url.toString());
+}
+} // namespace
+
 DockModel::DockModel(QObject *parent)
     : QObject(parent)
     , m_tasksModel(std::make_unique<TaskManager::TasksModel>(this))
@@ -87,6 +99,24 @@ DockModel::DockModel(QObject *parent)
         m_tasksModel->setActivity(m_activityInfo->currentActivity());
     });
 
+    // Defer sorting until the source model has finished its current change.
+    // Our own moves emit layout signals synchronously; ignore those while
+    // reconciling so they cannot recursively queue another sorting pass.
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsMoved, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &QAbstractItemModel::modelReset, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &QAbstractItemModel::layoutChanged, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &TaskManager::TasksModel::launcherListChanged, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+        if (roles.isEmpty() || roles.contains(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon)
+            || roles.contains(TaskManager::AbstractTasksModel::LauncherUrl) || roles.contains(TaskManager::AbstractTasksModel::HasLauncher)
+            || roles.contains(TaskManager::AbstractTasksModel::IsGroupParent)) {
+            scheduleTaskPartition();
+        }
+    });
+    scheduleTaskPartition();
+
     // Debug logging for model row changes
     connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, [this]() {
         qCDebug(lcModel) << "Model rows after insert:" << m_tasksModel->rowCount();
@@ -124,6 +154,85 @@ void DockModel::setPinnedLaunchers(const QStringList &launchers)
     Q_EMIT pinnedLaunchersChanged();
 }
 
+bool DockModel::separateLaunchers() const
+{
+    return m_separateLaunchers;
+}
+
+void DockModel::setSeparateLaunchers(bool separate)
+{
+    if (m_separateLaunchers == separate) {
+        return;
+    }
+    m_separateLaunchers = separate;
+    scheduleTaskPartition();
+}
+
+int DockModel::pinnedTaskCount() const
+{
+    return m_pinnedTaskCount;
+}
+
+void DockModel::scheduleTaskPartition()
+{
+    if (!m_separateLaunchers && m_pinnedTaskCount == 0) {
+        return;
+    }
+    if (m_partitionPending || m_reconcilingPartition) {
+        return;
+    }
+    m_partitionPending = true;
+    QMetaObject::invokeMethod(
+        this,
+        [this] {
+            m_partitionPending = false;
+            reconcileTaskPartition();
+        },
+        Qt::QueuedConnection);
+}
+
+void DockModel::reconcileTaskPartition()
+{
+    if (!m_separateLaunchers) {
+        if (m_pinnedTaskCount != 0) {
+            m_pinnedTaskCount = 0;
+            Q_EMIT pinnedTaskCountChanged();
+        }
+        return;
+    }
+
+    m_reconcilingPartition = true;
+    const QStringList launchers = m_tasksModel->launcherList();
+    int pinnedCount = 0;
+    bool moved = false;
+    bool moveFailed = false;
+    const int count = m_tasksModel->rowCount();
+    // Insertion into the next pinned slot preserves both zones' relative
+    // order. Classify each row once; already partitioned rows need no move.
+    for (int row = 0; row < count; ++row) {
+        if (!isPinnedTask(m_tasksModel->index(row, 0), launchers)) {
+            continue;
+        }
+        if (row != pinnedCount && !moveFailed) {
+            if (m_tasksModel->move(row, pinnedCount)) {
+                moved = true;
+            } else {
+                qCWarning(lcModel) << "Could not move pinned task" << row << "to" << pinnedCount;
+                moveFailed = true;
+            }
+        }
+        ++pinnedCount;
+    }
+    if (moved) {
+        m_tasksModel->syncLaunchers();
+    }
+    m_reconcilingPartition = false;
+    if (m_pinnedTaskCount != pinnedCount) {
+        m_pinnedTaskCount = pinnedCount;
+        Q_EMIT pinnedTaskCountChanged();
+    }
+}
+
 QString DockModel::iconName(int index) const
 {
     const QModelIndex idx = m_tasksModel->index(index, 0);
@@ -157,13 +266,7 @@ bool DockModel::isDesktopFile(const QUrl &url) const
 
 bool DockModel::isPinned(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
-    if (!idx.isValid()) {
-        return false;
-    }
-
-    const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
-    return url.isValid() && m_tasksModel->launcherList().contains(url.toString());
+    return isPinnedTask(m_tasksModel->index(index, 0), m_tasksModel->launcherList());
 }
 
 QVariantList DockModel::windowIds(int index) const

@@ -219,6 +219,7 @@ Item {
     //   - maxLaunchTimer fires (30s absolute safety net)
 
     readonly property bool _isWindow: model.IsWindow ?? false
+    readonly property bool _canPublishDelegateGeometry: model.IsWindow || model.IsGroupParent || false
     readonly property bool _isStartup: model.IsStartup ?? false
     readonly property bool _isActive: model.IsActive ?? false
     readonly property int _childCount: model.ChildCount || 0
@@ -242,7 +243,7 @@ Item {
     // Deferring lets the Flow finish placing this delegate before libtaskmanager
     // extracts its geometry from the QQuickItem.
     function publishDelegateGeometry() {
-        if (!_delegateGeometryReady || !_isWindow || !delegateGeometryTarget
+        if (!_delegateGeometryReady || !_canPublishDelegateGeometry || !delegateGeometryTarget
                 || delegateGeometryTarget.width <= 0 || delegateGeometryTarget.height <= 0)
             return
         DockModel.publishDelegateGeometry(index, delegateGeometryTarget)

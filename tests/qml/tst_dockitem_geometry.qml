@@ -52,7 +52,7 @@ Item {
         function comparePublication(publication, item) {
             verify(publication !== null, "delegate geometry was not published")
             compare(publication.index, item.index)
-            verify(publication.isWindow)
+            verify(publication.isWindow || publication.isGroupParent)
             compare(publication.geometry.x, item.x)
             compare(publication.geometry.y, item.y)
             compare(publication.geometry.width, item.width)
@@ -259,7 +259,7 @@ Item {
 
         function test_geometryPublicationRefreshesGroupParentForNewChildren() {
             let item = makeRow([{
-                display: "Kate", IsWindow: true, IsGroupParent: true, ChildCount: 2,
+                display: "Kate", IsWindow: false, IsGroupParent: true, ChildCount: 2,
             }]).itemAt(0)
             tryVerify(() => latestPublication(0) !== null)
             settleGeometryCallbacks()

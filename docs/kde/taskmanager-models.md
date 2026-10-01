@@ -292,12 +292,13 @@ that surface-local rectangle with the window's `wl_surface` through
 does not publish a Wayland minimize target.
 
 Krema's `DockModel::publishDelegateGeometry(int, QObject *)` validates a
-window-task index and forwards the actual item with `QRect{}`. Each production
-delegate owns a nonvisual geometry proxy whose visual parent is the dock root.
-The proxy uses the panel's visible resting position and the delegate's
-unscaled layout slot, not the panel's hidden slide position or icon zoom
-transform. This also gives tasks created while Auto Hide or Dodge Windows
-hides the dock a target at the slot they will occupy when it is revealed.
+window-task or group-parent index and forwards the actual item with `QRect{}`.
+Launcher and startup rows are rejected. Each production delegate owns a
+nonvisual geometry proxy whose visual parent is the dock root. The proxy uses
+the panel's visible resting position and the delegate's unscaled layout slot,
+not the panel's hidden slide position or icon zoom transform. This also gives
+tasks created while Auto Hide or Dodge Windows hides the dock a target at the
+slot they will occupy when it is revealed.
 
 Publication follows settled layout, task-role and group-membership changes,
 dock movement, resizing, and surface changes. The delegate's item-owned

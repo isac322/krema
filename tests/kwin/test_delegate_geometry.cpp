@@ -211,7 +211,8 @@ int taskRow(const QSet<QString> &titles)
     auto *tasks = app().model->tasksModel();
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const auto index = tasks->index(row, 0);
-        if (!index.data(TaskManager::AbstractTasksModel::IsWindow).toBool()) {
+        if (!index.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
+            && !index.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
             continue;
         }
         QSet<QString> found;

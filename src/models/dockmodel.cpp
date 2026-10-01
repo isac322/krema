@@ -197,7 +197,9 @@ void DockModel::publishDelegateGeometry(int index, QObject *delegate)
     }
 
     const QModelIndex idx = m_tasksModel->index(index, 0);
-    if (!idx.isValid() || !idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()) {
+    if (!idx.isValid()
+        || (!idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
+            && !idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool())) {
         return;
     }
 

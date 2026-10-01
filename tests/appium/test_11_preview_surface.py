@@ -41,10 +41,14 @@ def _contains(outer: Rect, inner: Rect) -> bool:
     )
 
 
-def _assert_popup_inside(krema: Krema, titles: list[str], stage: str, *, shrinking_from: int | None = None) -> tuple[Rect, Rect]:
-    wait_until(lambda: pv.thumb_titles(krema) == titles, message=f"exact thumbnail order {titles}")
+def _assert_popup_inside(krema: Krema, titles: list[str], stage: str, *, shrinking_from: int | None = None) -> tuple[Rect, Rect, str]:
+    expected_titles = set(titles)
 
-    def geometry() -> tuple[Rect, Rect, list[Rect]] | None:
+    def geometry() -> tuple[Rect, Rect, list[tuple[str, Rect]]] | None:
+        displayed_titles = pv.thumb_titles(krema)
+        displayed_set = set(displayed_titles)
+        if len(displayed_titles) != len(titles) or len(displayed_set) != len(titles) or displayed_set != expected_titles:
+            return None
         surface = krema.surface_rect("preview")
         popup = krema.preview_popup()
         if surface is None or popup is None:
@@ -54,40 +58,44 @@ def _assert_popup_inside(krema: Krema, titles: list[str], stage: str, *, shrinki
         if shrinking_from is not None and surface.width >= shrinking_from:
             return None
         popup_rect = pv.screen_rect(krema, popup)
-        thumbs = [krema.find(pv.thumb_xpath(title)) for title in titles]
+        thumbs = [krema.find(pv.thumb_xpath(title)) for title in displayed_titles]
         if any(thumb is None for thumb in thumbs):
             return None
-        rectangles = [pv.screen_rect(krema, thumb) for thumb in thumbs]
-        if not _contains(surface, popup_rect) or not all(_contains(surface, rect) for rect in rectangles):
+        rectangles = sorted(
+            ((title, pv.screen_rect(krema, thumb)) for title, thumb in zip(displayed_titles, thumbs, strict=True)),
+            key=lambda thumbnail: thumbnail[1].x,
+        )
+        if not _contains(surface, popup_rect) or not all(_contains(surface, rect) for _, rect in rectangles):
             return None
         return surface, popup_rect, rectangles
 
     surface, popup, thumbs = wait_until(
         geometry,
-        message=f"entire popup and all {len(titles)} thumbnails to fit the native preview surface"
+        message=f"exact thumbnail membership and entire popup with all {len(titles)} thumbnails to fit the native preview surface"
         + (f" after its width shrinks below {shrinking_from}px" if shrinking_from is not None else ""),
     )
-    assert all(_contains(popup, rect) for rect in thumbs)
-    _record(krema, stage, native_surface=surface._asdict(), popup=popup._asdict(), thumbnails=[rect._asdict() for rect in thumbs], titles=titles)
-    return surface, thumbs[-1]
+    assert all(_contains(popup, rect) for _, rect in thumbs)
+    _record(krema, stage, native_surface=surface._asdict(), popup=popup._asdict(), thumbnails=[rect._asdict() for _, rect in thumbs], titles=[title for title, _ in thumbs])
+    last_title, last_thumb = thumbs[-1]
+    return surface, last_thumb, last_title
 
 
-def _open(krema: Krema, windows: list[TestWindow], stage: str) -> tuple[Rect, Rect]:
+def _open(krema: Krema, windows: list[TestWindow], stage: str) -> tuple[Rect, Rect, str]:
     item = env.TEST_APP_NAME if len(windows) > 1 else windows[0].title
     pv.open_by_hover(krema, item)
     return _assert_popup_inside(krema, [window.title for window in windows], stage)
 
 
-def _select_last(krema: Krema, windows: list[TestWindow], underlying: TestWindow, stage: str) -> None:
+def _select_last(krema: Krema, windows: list[TestWindow], underlying: TestWindow, stage: str) -> TestWindow:
     kwin.activate(underlying.internal_id)
     wait_until(underlying.is_active, message="wrong underlying client active before preview selection")
     krema.move_away()
-    surface, last_thumb = _open(krema, windows, stage)
+    surface, last_thumb, last_title = _open(krema, windows, stage)
     point = last_thumb.center
     before = underlying.refresh()
     assert before is not None and before.active
     assert Rect(before.x, before.y, before.width, before.height).contains(*point)
-    expected = windows[-1]
+    expected = next(window for window in windows if window.title == last_title)
     assert before.pid != expected.pid and before.internal_id != expected.internal_id
     assert surface.contains(*point)
     pv.glide_into(krema, point)
@@ -100,12 +108,13 @@ def _select_last(krema: Krema, windows: list[TestWindow], underlying: TestWindow
     )
     assert active.pid == expected.pid and active.title == expected.title
     assert active.pid != underlying.pid and not underlying.is_active()
-    _record(krema, f"{stage}-activation", before=asdict(before), expected_pid=expected.pid, expected_internal_id=expected.internal_id, point=point, active=asdict(active))
+    _record(krema, f"{stage}-activation", before=asdict(before), observed_last_title=last_title, expected_pid=expected.pid, expected_internal_id=expected.internal_id, point=point, active=asdict(active))
     wait_until(lambda: not krema.preview_visible(), message="preview to close after last-thumbnail activation")
+    return expected
 
 
-def _transparent_passthrough(krema: Krema, windows: list[TestWindow], underlying: TestWindow) -> None:
-    surface, _ = _open(krema, windows, "transparent-pass-through")
+def _transparent_passthrough(krema: Krema, windows: list[TestWindow], underlying: TestWindow, selected: TestWindow) -> None:
+    surface, _, _ = _open(krema, windows, "transparent-pass-through")
     popup = pv.screen_rect(krema, krema.preview_popup())
     clients = [window for window in kwin.windows() if not window.minimized]
     preview_ids = [
@@ -141,7 +150,7 @@ def _transparent_passthrough(krema: Krema, windows: list[TestWindow], underlying
     inp.move(*point)
     cursor = wait_until(lambda: (position if (position := kwin.cursor_pos()) == point else None), message="native pointer at transparent pass-through point")
     before = kwin.active_window()
-    assert before is not None and before.pid == windows[-1].pid and before.internal_id == windows[-1].internal_id
+    assert before is not None and before.pid == selected.pid and before.internal_id == selected.internal_id
     assert before.pid != underlying.pid and before.internal_id != underlying.internal_id
     clients = [window for window in kwin.windows() if not window.minimized]
     client = next(window for window in clients if window.internal_id == underlying.internal_id)
@@ -185,13 +194,13 @@ def test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts(
         "w.setMaximize(true, true); report(true);"
     )
     krema.wait_for_item(env.TEST_APP_NAME)
-    two_surface, _ = _open(krema, windows, "two-initial")
+    two_surface, _, _ = _open(krema, windows, "two-initial")
     _select_last(krema, windows, underlying, "two-last")
     _open(krema, windows, "two-before-growth")
 
     # Grow while open: size must follow the content callback, not only doShow.
     windows.append(apps.open(TITLES[2], app_id=env.TEST_APP_ID))
-    three_surface, _ = _assert_popup_inside(krema, list(TITLES), "three-grown")
+    three_surface, _, _ = _assert_popup_inside(krema, list(TITLES), "three-grown")
     if edge in (config.EDGE_LEFT, config.EDGE_RIGHT):
         assert three_surface.width > two_surface.width
     _select_last(krema, windows, underlying, "three-last")
@@ -200,17 +209,17 @@ def test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts(
     _open(krema, windows, "three-before-shrink")
     vertical = edge in (config.EDGE_LEFT, config.EDGE_RIGHT)
     apps.close(windows.pop())
-    shrunk_two, _ = _assert_popup_inside(
+    shrunk_two, _, _ = _assert_popup_inside(
         krema, list(TITLES[:2]), "two-shrunk", shrinking_from=three_surface.width if vertical else None
     )
     apps.close(windows.pop())
-    single_surface, _ = _assert_popup_inside(
+    single_surface, _, _ = _assert_popup_inside(
         krema, [TITLES[0]], "single-shrunk", shrinking_from=shrunk_two.width if vertical else None
     )
     if edge in (config.EDGE_LEFT, config.EDGE_RIGHT):
         assert single_surface.width < shrunk_two.width < three_surface.width
     windows.extend(apps.open(title, app_id=env.TEST_APP_ID) for title in TITLES[1:])
-    regrown_surface, _ = _assert_popup_inside(krema, list(TITLES), "three-regrown")
+    regrown_surface, _, _ = _assert_popup_inside(krema, list(TITLES), "three-regrown")
     assert regrown_surface.width == three_surface.width
-    _select_last(krema, windows, underlying, "three-regrown-last")
-    _transparent_passthrough(krema, windows, underlying)
+    selected = _select_last(krema, windows, underlying, "three-regrown-last")
+    _transparent_passthrough(krema, windows, underlying, selected)

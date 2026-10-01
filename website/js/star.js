@@ -32,25 +32,25 @@
     if (e.target.closest("[data-star-link], .star-btn")) set(local, "clicked", "1");
   });
 
-  // ---------- Live count: reuse site.js's single request ----------
+  // ---------- Count: reuse site.js's cached request ----------
   const countReady = new Promise((resolve) => {
     const chip = $("[data-stars]");
     if (!chip) return resolve(null);
     const read = () => {
       try {
-        const c = JSON.parse(sessionStorage.getItem("krema:stars") || "null");
+        const c = JSON.parse(localStorage.getItem("krema:stars") || "null");
         return c && Number.isInteger(c.n) ? c.n : null;
       } catch { return null; }
     };
-    // site.js runs first: state is "pending" or "ready", or the chip is hidden on failure.
+    // site.js runs first and marks the chip data-settled once no request is pending.
     const check = () => {
-      if (chip.dataset.state === "ready") { resolve(read()); return true; }
-      if (chip.hidden && !chip.dataset.state) { resolve(null); return true; }
-      return false;
+      if (!("settled" in chip.dataset)) return false;
+      resolve(read());
+      return true;
     };
     if (check()) return;
     const mo = new MutationObserver(() => { if (check()) mo.disconnect(); });
-    mo.observe(chip, { attributes: true, attributeFilter: ["data-state", "hidden"] });
+    mo.observe(chip, { attributes: true, attributeFilter: ["data-settled"] });
     window.setTimeout(() => { mo.disconnect(); resolve(read()); }, 10000);
   });
 
@@ -215,12 +215,18 @@
     return mo < 18 ? `${mo} months ago` : `${Math.round(d / 365)} years ago`;
   };
 
-  // Newest stargazers. GitHub lists oldest first, so read the last page.
+  // Newest stargazers. GitHub lists oldest first, so read the last page. The
+  // list only changes when the count does, so it is cached in localStorage per
+  // count and fetched at most once per new count, never while site.js is
+  // waiting out the API rate limit.
   const recent = (n) => {
     const KEY = "krema:star:recent";
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem(KEY) || "null"); } catch { /* ignore */ }
+    if (c && c.n === n && Array.isArray(c.list)) return Promise.resolve(c.list);
     try {
-      const c = JSON.parse(sessionStorage.getItem(KEY) || "null");
-      if (c && Date.now() - c.t < 36e5) return Promise.resolve(c.list);
+      const s = JSON.parse(localStorage.getItem("krema:stars") || "null");
+      if (s && s.retryAt > Date.now()) return Promise.resolve([]);
     } catch { /* ignore */ }
     const page = Math.max(1, Math.ceil(n / 100));
     const ctl = new AbortController();
@@ -236,7 +242,7 @@
           .slice(-5)
           .reverse()
           .map((r) => ({ login: r.user.login, avatar: r.user.avatar_url, url: r.user.html_url, at: r.starred_at }));
-        try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), list })); } catch { /* ignore */ }
+        try { localStorage.setItem(KEY, JSON.stringify({ n, list })); } catch { /* ignore */ }
         return list;
       })
       .catch(() => [])

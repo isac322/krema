@@ -217,17 +217,18 @@
 
   // Newest stargazers. GitHub lists oldest first, so read the last page. The
   // list only changes when the count does, so it is cached in localStorage per
-  // count and fetched at most once per new count, never while site.js is
-  // waiting out the API rate limit.
+  // count and fetched at most once per new count. A failed request shares
+  // site.js's retry deadline (krema:stars.retryAt), so neither request runs
+  // again before it.
+  const STARS = "krema:stars";
+  const readStars = () => { try { return JSON.parse(localStorage.getItem(STARS) || "null"); } catch { return null; } };
   const recent = (n) => {
     const KEY = "krema:star:recent";
     let c = null;
     try { c = JSON.parse(localStorage.getItem(KEY) || "null"); } catch { /* ignore */ }
     if (c && c.n === n && Array.isArray(c.list)) return Promise.resolve(c.list);
-    try {
-      const s = JSON.parse(localStorage.getItem("krema:stars") || "null");
-      if (s && s.retryAt > Date.now()) return Promise.resolve([]);
-    } catch { /* ignore */ }
+    const s = readStars();
+    if (s && s.retryAt > Date.now()) return Promise.resolve([]);
     const page = Math.max(1, Math.ceil(n / 100));
     const ctl = new AbortController();
     const timer = window.setTimeout(() => ctl.abort(), 8000);
@@ -235,7 +236,12 @@
       headers: { Accept: "application/vnd.github.star+json" },
       signal: ctl.signal,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((r) => {
+        if (r.ok) return r.json();
+        const reset = Number(r.headers.get("x-ratelimit-reset")) * 1000;
+        const limited = (r.status === 403 || r.status === 429) && reset > Date.now();
+        return Promise.reject({ retryAt: limited ? reset : 0 });
+      })
       .then((rows) => {
         const list = rows
           .filter((r) => r && r.user && r.user.login)
@@ -245,7 +251,11 @@
         try { localStorage.setItem(KEY, JSON.stringify({ n, list })); } catch { /* ignore */ }
         return list;
       })
-      .catch(() => [])
+      .catch((err) => {
+        const retryAt = err && err.retryAt ? err.retryAt : Date.now() + 10 * 60 * 1000;
+        try { localStorage.setItem(STARS, JSON.stringify({ ...(readStars() || {}), retryAt })); } catch { /* ignore */ }
+        return [];
+      })
       .finally(() => window.clearTimeout(timer));
   };
 

@@ -66,7 +66,6 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Transparent** — Fully transparent dock background
 - **Tinted** — Custom color with adjustable opacity
 - **Acrylic / Frosted Glass** — Blur + noise texture effect
-- **Adaptive Opacity** — Switches to opaque when windows overlap the dock
 
 ### Window Previews
 - **PipeWire Thumbnails** — Live GPU-efficient window previews on hover

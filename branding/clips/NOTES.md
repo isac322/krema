@@ -21,7 +21,7 @@ machine without a GPU; it cannot show window previews.
 | `settings` | Icon size 72 → 88 → 72 with the spin box in Krema's settings window. The dock resizes live. |
 | `styles` | Background style Tinted, Acrylic, Transparent, then Panel Inherit, picked in the settings window. |
 | `dodge` | Dodge mode: a Kate window dragged over the dock makes it slide away, and dragging it back brings the dock back. |
-| `keyboard` | Meta+F5 focuses the dock, the arrow keys move the focus, and Escape leaves. |
+| `keyboard` | Meta+Alt+D focuses the dock, the arrow keys move the focus, and Escape leaves. |
 | `autohide` | Auto-hide: the dock slides in at the bottom edge, zooms under the pointer, and slides out after the pointer leaves. |
 | `previews` | Hover over the running Konsole: the preview popup opens with a live PipeWire thumbnail of the window (`top` refreshing). The pointer moves onto the thumbnail and leaves. |
 | `groups` | Three Konsole windows with slowly updating output. The popup shows three live thumbnails; a click on the middle one brings that window to the front, and after the popup opens again a click on the third brings it back on top, restoring the starting stack. |
@@ -250,10 +250,10 @@ Xvfb session recording: `ffmpeg -f x11grab -framerate 120 -video_size
 2560x1280 -i :99+0,160 -draw_mouse 1 -c:v utvideo` writes a lossless capture
 of the bottom 640 logical px of the screen, including the pointer.
 
-Meta+F5: xdotool's Super modifier does not reach KWin's global shortcut
+Meta+Alt+D: xdotool's Super modifier does not reach KWin's global shortcut
 handling in the X11-windowed backend (Right, Left and Escape do arrive), so
 `clip_keyboard` triggers Krema's registered `focus-dock` action, the action
-Meta+F5 is bound to, through kglobalaccel's `invokeShortcut`.
+Meta+Alt+D is bound to, through kglobalaccel's `invokeShortcut`.
 
 ### Regenerate in the Xvfb session (no GPU)
 

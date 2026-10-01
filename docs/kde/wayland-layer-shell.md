@@ -1,6 +1,6 @@
 # Wayland Layer-Shell (LayerShellQt)
 
-> Source: `/usr/include/LayerShellQt/` headers (KDE Plasma 6.5.5)
+> Source: `/usr/include/LayerShellQt/` headers (KDE Plasma 6)
 
 ## Overview
 

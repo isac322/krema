@@ -16,6 +16,7 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | [kglobalaccel.md](kglobalaccel.md) | KGlobalAccel — global keyboard shortcuts, registration, conflict handling |
 | [kaboutdata.md](kaboutdata.md) | KAboutData — application metadata, license, D-Bus/KGlobalAccel integration |
 | [kwin-scripting.md](kwin-scripting.md) | KWin Scripting D-Bus API (loadScript/run/unloadScript), `workspace.cursorPosChanged`, `callDBus` — global pointer motion |
+| [settings-window-patterns.md](settings-window-patterns.md) | Settings window patterns — KConfigDialog, KCMUtils, Kirigami Addons ConfigurationView/ConfigWindow |
 
 ### M4: Drag & Drop
 
@@ -42,23 +43,15 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 
 | Document | Description |
 |----------|-------------|
-| [notification-badges.md](notification-badges.md) | Multi-source badge architecture — WatchedNotificationsModel, SNI, Unity API, EWMH; all apps coverage |
-| [notification-watcher-protocol.md](notification-watcher-protocol.md) | RegisterWatcher protocol deep-dive — correct D-Bus path/interface, live test results, Krema bug diagnosis |
-| [notification-badge-approaches.md](notification-badge-approaches.md) | How Plasma task manager actually implements badges — SmartLauncherItem (Unity API), RegisterWatcher live test, Q_CLASSINFO issue diagnosis |
+| [notification-badges.md](notification-badges.md) | Multi-source badge architecture — RegisterWatcher, SNI, Unity API, EWMH; all apps coverage |
 
 ### M7: Visual Effects
 
 | Document | Description |
 |----------|-------------|
 | [kwindow-effects.md](kwindow-effects.md) | KWindowEffects (blur/contrast/slide), KWindowSystem, KWaylandExtras |
-| [attention-animation-reference.md](attention-animation-reference.md) | Attention animation options — wiggle/bounce/glow/badge comparison, Plasma reference, SmartLauncherItem API |
+| [attention-animation-reference.md](attention-animation-reference.md) | Attention animation options — wiggle/bounce/glow/badge comparison, Plasma reference |
 | [icon-normalization-reference.md](icon-normalization-reference.md) | Icon size normalization algorithms — alpha bounding box, threshold trim, content-aware scale |
-
-### M8: Multi-Monitor + Virtual Desktop
-
-| Document | Description |
-|----------|-------------|
-| [screen-transition-research.md](screen-transition-research.md) | Dock transition animation research — Latte, macOS, GNOME, follow-active recommendations |
 
 ### M9: System Tray
 
@@ -78,4 +71,3 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | Document | Description |
 |----------|-------------|
 | [lessons-learned.md](lessons-learned.md) | Bug-fix lessons and debugging insights |
-| [tasksmodel-virtual-session.md](tasksmodel-virtual-session.md) | Why TasksModel cannot detect windows in kwin-mcp virtual sessions — protocol chain, permission checks, workarounds |

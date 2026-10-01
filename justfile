@@ -44,13 +44,8 @@ dev-desktop:
         src/com.bhyoo.krema.desktop.in > ~/.local/share/applications/com.bhyoo.krema.desktop
     @echo "Installed dev launcher to ~/.local/share/applications/com.bhyoo.krema.desktop"
     @echo "Run: kbuildsycoca6 --noincremental"
-    @# Clean up legacy dev desktop files if they exist
-    @rm -f ~/.local/share/applications/org.krema.dev.desktop
-    @rm -f ~/.local/share/applications/org.krema.desktop
 
 # Remove dev .desktop file
 dev-desktop-clean:
-    @rm -f ~/.local/share/applications/org.krema.dev.desktop
-    @rm -f ~/.local/share/applications/org.krema.desktop
     @rm -f ~/.local/share/applications/com.bhyoo.krema.desktop
     @echo "Removed dev .desktop file"

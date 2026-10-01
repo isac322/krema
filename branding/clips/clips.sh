@@ -685,16 +685,16 @@ clip_dodge() {
     start_krema
 }
 
-# 13. Keyboard: Meta+F5 focuses the dock, the arrow keys move the focus ring,
+# 13. Keyboard: Meta+Alt+D focuses the dock, the arrow keys move the focus ring,
 #     Escape leaves keyboard navigation.
 clip_keyboard() {
     local i
     move 640 60
     rec_start keyboard
     sleep 0.6
-    # Meta+F5. xdotool's Super modifier does not reach KWin's global-shortcut
+    # Meta+Alt+D. xdotool's Super modifier does not reach KWin's global-shortcut
     # handling in the X11-windowed backend, so ask kglobalaccel to trigger
-    # Krema's registered "focus-dock" action (what Meta+F5 is bound to). The
+    # Krema's registered "focus-dock" action (what Meta+Alt+D is bound to). The
     # arrow keys and Escape below are real key presses.
     busctl --user call org.kde.kglobalaccel /component/krema org.kde.kglobalaccel.Component \
         invokeShortcut s focus-dock

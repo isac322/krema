@@ -26,6 +26,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          # website/ and branding/ binaries are Git LFS objects; the site ships them.
+          lfs: true
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
@@ -60,6 +62,12 @@ jobs:
           if [[ "$kept" -eq 0 ]]; then
             perl -0pi -e 's/^[ \t]*<!-- screenshots:begin -->.*?<!-- screenshots:end -->\n//ms' _site/index.html
             rmdir _site/screenshots
+          fi
+
+          # A missing LFS object would ship as a ~130-byte pointer file.
+          if pointers="$(grep -rlx 'version https://git-lfs.github.com/spec/v1' _site)"; then
+            echo "::error::Git LFS pointers instead of assets:"$'\n'"$pointers"
+            exit 1
           fi
 
           find _site -type f | sort

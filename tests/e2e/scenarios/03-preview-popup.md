@@ -52,11 +52,11 @@ the existing pixel/layout waits.
 
 **Precondition:** App with 1+ open windows. Dock visible.
 **Steps:**
-1. Show dock (see dock show sequence in README)
-2. `mouse_move` to dock item of the running app (screen coordinates)
+1. Show dock (README "Showing a hidden dock for mouse tests")
+2. Move the pointer to the running app's dock item
 3. Wait 1000ms (preview trigger delay + animation)
-4. `accessibility_tree app_name="krema"` — look for PopupMenu with name "Preview for <AppName>"
-5. `screenshot` — verify preview popup visible with live PipeWire thumbnails
+4. Check the krema AT-SPI tree — look for PopupMenu with name "Preview for <AppName>"
+5. Screenshot — verify preview popup visible with live PipeWire thumbnails
 
 **Expected:**
 - Preview popup appears above dock (dock is bottom-positioned)
@@ -65,11 +65,7 @@ the existing pixel/layout waits.
 - Each thumbnail button contains: `[button] "Close <Title>"`, `[label] "<Title>"]`
 - Live PipeWire thumbnails visible in screenshot
 
-**Historical PoC note:** Mouse hover on KCalc produced the `"Preview for
-KCalc"` popup with a live thumbnail.
-
-
-**Verification:** accessibility_tree (PopupMenu present with correct name), screenshot (popup with thumbnails)
+**Verification:** AT-SPI (PopupMenu present with correct name), screenshot (popup with thumbnails)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails
 
@@ -81,15 +77,15 @@ KCalc"` popup with a live thumbnail.
 **Steps:**
 1. Hover over the grouped app's dock item
 2. Wait 800ms
-3. `accessibility_tree` — count Button elements inside PopupMenu
-4. `screenshot` — verify multiple thumbnails
+3. Check the AT-SPI tree — count Button elements inside PopupMenu
+4. Screenshot — verify multiple thumbnails
 
 **Expected:**
 - Number of thumbnails matches number of open windows
 - Each thumbnail has `Accessible.role: Button` with window title
 - Thumbnails arranged horizontally
 
-**Verification:** accessibility_tree (button count = window count), screenshot (layout)
+**Verification:** AT-SPI (button count = window count), screenshot (layout)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row
 
@@ -98,27 +94,20 @@ KCalc"` popup with a live thumbnail.
 ## TC PREV-003: Click Thumbnail Activates Window
 
 **Precondition:** Preview popup open with multiple thumbnails (PREV-002).
-**Important:** AT-SPI coordinates are surface-local. Convert to screen coordinates:
-`screen_y = (600 - 400) + surface_y = 200 + surface_y` (preview surface is 800x400).
+**Important:** AT-SPI coordinates are surface-local; convert them to screen coordinates (README pattern 5).
 **Steps:**
-1. Note window title of second thumbnail from accessibility_tree
-2. Get thumbnail surface coordinates (e.g., (528, 226, 208x166))
-3. Convert center to screen: `screen = (632, 200 + 309) = (632, 509)`
-4. `mouse_click(screen_x, screen_y)` on the second thumbnail
-5. Wait 500ms
-6. `accessibility_tree` — check preview popup closed (0x0 size)
+1. Note window title of second thumbnail from the AT-SPI tree
+2. Convert the second thumbnail's center to screen coordinates
+3. Move the pointer from the dock onto the popup gradually (README pattern 8) and click the second thumbnail
+4. Wait 500ms
+5. Check the AT-SPI tree — preview popup closed (0x0 size)
 
 **Expected:**
 - Clicked window becomes active/focused
 - Preview popup closes after activation (popup reverts to 0x0)
-- Dock may auto-hide (SmartHide)
+- Dock may auto-hide (Auto hide / Dodge windows)
 
-**Limitation:** `list_windows` cannot verify which window is active (D-01).
-
-**Historical PoC note:** Thumbnail click at screen-converted coordinates
-activated a window and closed the preview.
-
-**Verification:** accessibility_tree (popup 0x0), screenshot (correct window in foreground)
+**Verification:** AT-SPI (popup 0x0), active window (clicked window in foreground)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev003_clicking_a_thumbnail_activates_that_window
 
@@ -127,23 +116,22 @@ activated a window and closed the preview.
 ## TC PREV-004: Close Button Closes Window
 
 **Precondition:** Preview popup open with at least 2 thumbnails.
-**Note:** Close button is very small (22x22). Mouse click requires precise coordinate
-conversion. **Preferred alternative: use keyboard Delete key (TC KBD-007).**
-**Steps (mouse — difficult):**
-1. `accessibility_tree` — find "Close <title>" button surface coordinates (22x22)
-2. Convert to screen: `screen_y = 200 + surface_y`
-3. Move mouse from dock → preview gradually (20px steps, avoid triggering hidePreviewDelayed)
-4. `mouse_click` at exact close button center
-5. Wait 500ms
-6. `list_windows` — verify window count decreased
+**Note:** Close button is small (22x22); the click needs precise coordinate
+conversion. The keyboard path (TC KBD-007) is an alternative.
+**Steps (mouse):**
+1. Find the "Close <title>" button in the AT-SPI tree (22x22) and convert its center to screen coordinates
+2. Move the pointer from the dock onto the preview gradually (README pattern 8)
+3. Click the close button center
+4. Wait 500ms
+5. Check the window list — window count decreased
 
-**Steps (keyboard — preferred):**
+**Steps (keyboard):**
 1. Open preview via keyboard (Down arrow from dock item in keyboard mode)
 2. Navigate to target thumbnail (Left/Right arrows)
-3. `keyboard_key Delete`
+3. Press Delete
 4. Wait 500ms
-5. `list_windows` — verify window count decreased
-6. `accessibility_tree` — verify thumbnail removed
+5. Check the window list — window count decreased
+6. Check the AT-SPI tree — thumbnail removed
 
 **Expected:**
 - Window is closed
@@ -151,7 +139,7 @@ conversion. **Preferred alternative: use keyboard Delete key (TC KBD-007).**
 - If 1+ windows remain, preview stays open with remaining thumbnails
 - If 0 windows remain, preview closes and keyboard returns to dock
 
-**Verification:** list_windows (window count decreased), accessibility_tree (thumbnail removed)
+**Verification:** window list (window count decreased), AT-SPI (thumbnail removed)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev004_close_button_closes_that_window, tests/appium/test_03_preview.py::test_prev004_delete_key_closes_focused_thumbnail_window, tests/appium/test_03_preview.py::test_prev004_closing_last_window_closes_preview_and_returns_to_dock
 
@@ -161,20 +149,20 @@ conversion. **Preferred alternative: use keyboard Delete key (TC KBD-007).**
 
 **Precondition:** Preview popup open.
 **Steps:**
-1. Verify preview popup visible (accessibility_tree — popup has `showing` state)
-2. `mouse_move` far away from dock and preview (e.g., center of screen y=300)
+1. Verify preview popup visible (popup has `showing` state in the AT-SPI tree)
+2. Move the pointer far away from dock and preview (e.g., center of screen)
 3. Wait 500ms (close delay)
-4. `accessibility_tree` — verify popup reverted to 0x0 (hidden state)
+4. Check the AT-SPI tree — popup reverted to 0x0 (hidden state)
 
 **Expected:**
 - Preview popup closes after mouse leaves both dock item and preview area
 - Close has a small delay (hidePreviewDelayed, not instant)
 - Popup element remains in AT-SPI tree but with 0x0 size and no `showing` state
 
-**Note:** Moving mouse from dock to preview must be gradual (20px steps).
-Direct jump to a distant point will trigger hidePreviewDelayed immediately.
+**Note:** Moving the pointer from dock to preview must be gradual (README pattern 8).
+A direct jump to a distant point triggers hidePreviewDelayed immediately.
 
-**Verification:** accessibility_tree (popup 0x0, no `showing`)
+**Verification:** AT-SPI (popup 0x0, no `showing`)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev005_preview_closes_when_pointer_leaves, tests/appium/test_03_preview.py::test_prev005_close_on_leave_is_delayed
 
@@ -222,15 +210,15 @@ outside-close tests retain that wait for layout and painted-pixel stability.
 **Steps:**
 1. Hover over that app's dock item
 2. Wait 800ms
-3. `accessibility_tree` — verify popup with 1 thumbnail
-4. `screenshot`
+3. Check the AT-SPI tree — popup with 1 thumbnail
+4. Screenshot
 
 **Expected:**
 - Preview shows single thumbnail with window title
 - Close button present on the thumbnail
 - Click activates the single window
 
-**Verification:** accessibility_tree (1 Button in PopupMenu), screenshot
+**Verification:** AT-SPI (1 Button in PopupMenu), screenshot
 
 **Automated:** tests/appium/test_03_preview.py::test_prev006_single_window_preview
 
@@ -241,13 +229,13 @@ outside-close tests retain that wait for layout and painted-pixel stability.
 **Precondition:** Screen reader support active (Accessible.announce available, Qt >= 6.8).
 **Steps:**
 1. Hover to trigger preview popup
-2. Check announcement via accessibility_tree or log
+2. Check the announcement (AT-SPI announcement event or log)
 
 **Expected:**
 - `Accessible.announce` fires with preview count message
   (e.g., "2 windows for Dolphin")
 
-**Verification:** accessibility_tree (announcement text), logs
+**Verification:** AT-SPI (announcement text), logs
 
 **Automated:** tests/appium/test_03_preview.py::test_prev007_opening_preview_announces_window_count
 

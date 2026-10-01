@@ -33,26 +33,18 @@ against installed packages.
 ## TC MOUSE-001: Left-Click Activates Running App
 
 **Precondition:** Dock visible with a running app (e.g., kcalc running).
-Note: If dock is hidden (SmartHide/AutoHide), use the dock show sequence:
-```
-dbus_call invokeShortcut("focus-dock")   # shows dock, enters keyboard mode
-sleep 500ms
-mouse_move(icon_x, dock_y)              # cancels keyboard mode, keeps dock visible
-sleep 300ms
-```
-Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
+If the dock is hidden (Auto hide / Dodge windows), show it first (README "Showing a hidden dock for mouse tests").
 **Steps:**
-1. `accessibility_tree app_name="krema"` — find KCalc button surface coordinates
-2. Convert to screen coordinates: `screen_y = (600 - surface_height) + surface_y`
-3. `mouse_click` on the dock item center (screen coordinates)
-4. Wait 300ms
-5. `list_windows` — check kcalc is active (note: active window not shown, check screenshot)
+1. Find the KCalc button in the krema AT-SPI tree and convert its center to screen coordinates (README pattern 5)
+2. Left-click the dock item center
+3. Wait 300ms
+4. Check which window is active
 
 **Expected:**
 - kcalc window becomes the active/focused window
 - If kcalc was minimized, it un-minimizes
 
-**Verification:** screenshot (kcalc in foreground), list_windows (kcalc present)
+**Verification:** screenshot (kcalc in foreground), active window
 **Automated:** tests/appium/test_02_mouse.py::test_mouse001_left_click_activates_and_unminimizes_running_app, tests/appium/test_02_mouse.py::test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointer
 
 ---
@@ -61,17 +53,17 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 
 **Precondition:** Dock has a pinned app that is NOT running.
 **Steps:**
-1. `find_ui_elements` for the pinned app dock item
-2. `mouse_click` on the dock item
+1. Locate the pinned app's dock item in the AT-SPI tree
+2. Left-click the dock item
 3. Wait 2000ms for app launch
-4. `list_windows` — check new app window appeared
+4. Check the window list — new app window appeared
 
 **Expected:**
 - New app instance launches
-- Bounce animation plays on the dock item (visual only — verify with screenshot)
+- Bounce animation plays on the dock item (visual only — verify with a screenshot)
 - Indicator dot appears under the icon
 
-**Verification:** list_windows (new window), screenshot (indicator dot)
+**Verification:** window list (new window), screenshot (indicator dot)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces)
 
 ---
@@ -80,14 +72,14 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 
 **Precondition:** Dock visible with multiple items. `ZoomStyle=0` (Parabolic, the default) and `ZoomAnimationDuration=100` (the default unscaled baseline; 100 ms matches normal-speed `Kirigami.Units.shortDuration`).
 **Steps:**
-1. `screenshot` — capture baseline dock state
-2. `accessibility_tree app_name="krema"` — record rest bounding boxes (position + size) of all dock items
-3. `mouse_move` to center of a middle dock item
+1. Screenshot — capture baseline dock state
+2. Record rest bounding boxes (position + size) of all dock items from the AT-SPI tree
+3. Move the pointer to the center of a middle dock item
 4. Wait 200ms for animation
-5. `screenshot` — capture zoomed state
-6. `accessibility_tree app_name="krema"` — record zoomed bounding boxes
-7. `mouse_move` horizontally across several middle items in small steps, taking a `screenshot` + `accessibility_tree` after each step
-8. `mouse_move` toward one dock end in small steps, then `mouse_move` away from the dock
+5. Screenshot — capture zoomed state
+6. Record zoomed bounding boxes from the AT-SPI tree
+7. Move the pointer horizontally across several middle items in small steps, taking a screenshot and reading the AT-SPI bounding boxes after each step
+8. Move the pointer toward one dock end in small steps, then away from the dock
 
 **Expected:**
 - Hovered item is visually larger (zoomed) and stays under the pointer
@@ -98,7 +90,7 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 - Toward a dock end, the background grows smoothly toward that end in one direction only
 - All items and the background return to the rest layout when the pointer leaves the dock, using the configured hover transition baseline and Plasma animation scaling
 
-**Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (item bounding boxes: shifted positions, grown sizes, no overlap)
+**Verification:** screenshot comparison (zoomed vs baseline), AT-SPI (item bounding boxes: shifted positions, grown sizes, no overlap)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover
 
 ---
@@ -108,9 +100,9 @@ Screen edge trigger does NOT work in kwin-mcp (EIS limitation).
 **Precondition:** Dock visible, no keyboard navigation active. Target a pinned-only
 (not running) app to get text tooltip instead of preview popup.
 **Steps:**
-1. `mouse_move` to a pinned-only dock item (screen coordinates)
+1. Move the pointer to a pinned-only dock item
 2. Wait 800ms (tooltip delay)
-3. `screenshot` — verify tooltip visible
+3. Screenshot — verify tooltip visible
 
 **Expected:**
 - Tooltip appears above/below the dock item with app name (horizontal docks)
@@ -132,23 +124,20 @@ shifted item's zoomed bounding box as a target.
 
 **Precondition:** App with 2+ open windows (e.g., 2 kcalc instances via middle-click).
 **Steps:**
-1. `mouse_move` to the grouped app's dock item (screen coordinates)
-2. `mouse_scroll(x, y, delta=1, discrete=true)` — scroll down
+1. Move the pointer to the grouped app's dock item
+2. Scroll down one notch
 3. Wait 300ms
-4. `screenshot` — note which window is in foreground
-5. `mouse_scroll(x, y, delta=1, discrete=true)` — scroll down again
+4. Screenshot — note which window is in foreground
+5. Scroll down one notch again
 6. Wait 300ms
-7. `screenshot` — verify different window is in foreground
+7. Screenshot — verify different window is in foreground
 
 **Expected:**
 - Each scroll switches to the next window of the same app
 - Cycling wraps around
 - Scrolling over a pinned app that is NOT running does nothing (it does not launch the app)
 
-**Limitation:** `list_windows` does not show active/focused window (kwin-mcp D-01).
-Cannot programmatically verify which window is active. Use screenshot comparison.
-
-**Verification:** screenshot comparison (different window in foreground after scroll)
+**Verification:** active window after each scroll (KWin's active window, or screenshot comparison)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows
 
 **Automated:** `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`) covers the no-launch case
@@ -159,19 +148,17 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 
 **Precondition:** App is already running (e.g., kcalc). Dock visible.
 **Steps:**
-1. `list_windows` — count kcalc entries
-2. Show dock and move mouse to kcalc item (see dock show sequence in README)
-3. `mouse_click(x, y, button="middle")` on kcalc dock item (screen coordinates)
+1. Count kcalc windows in the window list
+2. Show dock and move the pointer to the kcalc item (README "Showing a hidden dock for mouse tests")
+3. Middle-click the kcalc dock item
 4. Wait 3000ms (app launch time)
-5. `list_windows` — count kcalc entries again
+5. Count kcalc windows again
 
 **Expected:**
-- One additional kcalc process appears (separate entry in list_windows)
+- One additional kcalc window appears in the window list
 - Bounce animation plays on the dock icon until the new window maps (screenshot verification); if the app is already active and no new window appears within 5s (single-instance no-op), the bounce stops
 
-**Historical PoC note:** KCalc went from 1 to 2 separate process entries.
-
-**Verification:** list_windows (kcalc entry count increased by 1)
+**Verification:** window list (kcalc window count increased by 1)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse006_middle_click_launches_new_instance (bounce until the new window maps: tests/appium/test_02_mouse.py::test_mouse006_launch_bounce_lasts_until_the_new_window_maps)
 
 ---
@@ -180,13 +167,13 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 
 **Precondition:** Dock visible with mix of running and pinned-only apps.
 **Steps:**
-1. `screenshot` — observe indicator dots
+1. Screenshot — observe indicator dots
 2. Launch a pinned-but-not-running app via click
 3. Wait 2000ms
-4. `screenshot` — verify new indicator dot appeared
+4. Screenshot — verify new indicator dot appeared
 5. Close the app (via context menu or window close)
 6. Wait 1000ms
-7. `screenshot` — verify indicator dot removed
+7. Screenshot — verify indicator dot removed
 
 **Expected:**
 - Running apps show indicator dot(s) below icon
@@ -204,12 +191,12 @@ Cannot programmatically verify which window is active. Use screenshot comparison
 **Precondition:** App with 2+ open windows (e.g., 2 kcalc instances via middle-click).
 **Steps:**
 1. Click one of the grouped app's windows (call it the last-used window), then click another app's window so the grouped app is not active
-2. `mouse_click` on the grouped app's dock item (screen coordinates)
+2. Left-click the grouped app's dock item
 3. Wait 300ms
-4. `screenshot` — the last-used window is in the foreground
-5. `mouse_click` on the same dock item again
+4. Screenshot — the last-used window is in the foreground
+5. Left-click the same dock item again
 6. Wait 300ms
-7. `screenshot` — the app's other window is in the foreground
+7. Screenshot — the app's other window is in the foreground
 
 **Expected:**
 - The first click activates the app's most recently used window (scrolling onto the app does the same)
@@ -232,12 +219,12 @@ neighbour's zoomed position as a click target.
 **Steps:**
 1. Set `ZoomStyle=1` in `kremarc` (or choose "In place - icons overlap" in the "Zoom style" combo
    in Appearance settings) and restart krema
-2. `accessibility_tree app_name="krema"` — record rest bounding boxes of all dock items
-3. `mouse_move` to center of a middle dock item
+2. Record rest bounding boxes of all dock items from the AT-SPI tree
+3. Move the pointer to the center of a middle dock item
 4. Wait 200ms for animation
-5. `screenshot` — capture zoomed state
-6. `accessibility_tree app_name="krema"` — record zoomed bounding boxes
-7. `mouse_move` away from the dock; restore `ZoomStyle=0`
+5. Screenshot — capture zoomed state
+6. Record zoomed bounding boxes from the AT-SPI tree
+7. Move the pointer away from the dock; restore `ZoomStyle=0`
 
 **Expected:**
 - Hovered item and its neighbours grow via the same parabolic zoom curve
@@ -245,7 +232,7 @@ neighbour's zoomed position as a click target.
 - Magnified icons may overlap each other
 - All icons return to base size when the pointer leaves the dock, using the configured hover transition baseline and Plasma animation scaling
 
-**Verification:** screenshot comparison (zoomed vs baseline), accessibility_tree (bounding-box sizes grow while centres stay fixed)
+**Verification:** screenshot comparison (zoomed vs baseline), AT-SPI (bounding-box sizes grow while centres stay fixed)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them
 
 ---

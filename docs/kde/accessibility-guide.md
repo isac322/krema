@@ -76,7 +76,7 @@ Qt QML Accessible → QAccessible → qt-at-spi bridge → D-Bus → Orca
 
 - **Orca**: Primary Linux screen reader. Start with `orca` command.
 - **accerciser**: AT-SPI tree inspector. Shows roles, names, states.
-- **kwin-mcp accessibility_tree**: Dumps the accessibility tree for a window.
+- **selenium-webdriver-at-spi**: KDE's WebDriver over AT-SPI — used by `tests/appium` to inspect the tree, read states, and drive input inside `kwin_wayland --virtual`. `pyatspi` gives in-process tree/state access in tests.
 
 ## References
 

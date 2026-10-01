@@ -30,7 +30,8 @@ EDGES = [
 ORIENTATIONS = [pytest.param(config.EDGE_BOTTOM, id="horizontal"), pytest.param(config.EDGE_LEFT, id="vertical")]
 SEPARATION = [pytest.param(True, id="on"), pytest.param(False, id="off")]
 APP_IDS = (*PINNED_IDS, KWRITE_ID, KFIND_ID)
-EXTRA_APP_ID = "qt6-designer"  # Also used by the existing mouse/settings native fixtures.
+EXTRA_APP_ID = "org.kde.krema.taskzoneextra"
+EXTRA_COLD_NAME = "Krema Extra Test Window"
 EXTRA_NAME = "Newly launched"
 ICON_SIZE = 48
 GROUP_TITLES = ("Group 1", "Group 2", "Group 3")
@@ -233,8 +234,24 @@ def _traverse(krema: Krema, apps: TestWindows, windows: dict[str, TestWindow], n
     _record(krema, f"{stage}-delivered", expected_pid=target.pid, delivered=delivered)
 
 
+def _install_extra_launcher(krema: Krema) -> None:
+    # Use the fixture's private XDG_DATA_HOME, as the native mouse tests do.
+    applications = krema.home / "data" / "applications"
+    applications.mkdir(parents=True, exist_ok=True)
+    (applications / f"{EXTRA_APP_ID}.desktop").write_text(
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        f"Name={EXTRA_COLD_NAME}\n"
+        f"Exec={env.TEST_WINDOW_BINARY} --app-id {EXTRA_APP_ID}\n"
+        "Icon=utilities-terminal\n"
+        f"StartupWMClass={EXTRA_APP_ID}\n",
+        encoding="utf-8",
+    )
+
+
 @pytest.mark.parametrize("edge", EDGES)
 def test_kbd010_task_navigation_survives_native_launch_and_close(krema: Krema, apps: TestWindows, edge: int) -> None:
+    _install_extra_launcher(krema)
     _start(krema, edge, pinned=(*PINNED_IDS, EXTRA_APP_ID))
     cold_names = wait_until(
         lambda: (names if len(names := krema.item_names()) == 3 else None),
@@ -243,6 +260,7 @@ def test_kbd010_task_navigation_survives_native_launch_and_close(krema: Krema, a
     cold_name = cold_names[2]
     # The existing harness documents desktop-id names as unresolved launchers.
     assert cold_name not in (EXTRA_APP_ID, f"{EXTRA_APP_ID}.desktop", config.launcher(EXTRA_APP_ID)), f"extra desktop fixture did not resolve: {cold_names}"
+    assert cold_name == EXTRA_COLD_NAME, f"cold launcher name must resolve from the private fixture entry: {cold_names}"
     _record(krema, "cold-pinned-fixture", app_id=EXTRA_APP_ID, native_cold_names=cold_names, extra_cold_name=cold_name)
     initial = (PINNED_A, PINNED_B, cold_name, UNPINNED_A, UNPINNED_B)
     windows = _matrix(apps, krema, initial)

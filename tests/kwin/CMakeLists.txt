@@ -47,6 +47,16 @@ target_link_libraries(krema_grouped_activation_tests PRIVATE
     Qt6::Test
     krema_lib
 )
+add_executable(krema_task_icons_tests
+    test_task_icons.cpp
+)
+
+target_link_libraries(krema_task_icons_tests PRIVATE
+    Catch2::Catch2
+    Qt6::Test
+    krema_lib
+)
+
 
 add_executable(krema_showdesktop_tests
     test_show_desktop.cpp
@@ -116,6 +126,11 @@ if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_grouped_activation_tests>
     )
     set_tests_properties(krema_grouped_activation_tests PROPERTIES TIMEOUT 300)
+    add_test(NAME krema_task_icons_tests
+        COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_task_icons_tests>
+    )
+    set_tests_properties(krema_task_icons_tests PROPERTIES TIMEOUT 300)
+
 
     add_test(NAME krema_showdesktop_tests
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_showdesktop_tests>
@@ -148,5 +163,5 @@ if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
         ENVIRONMENT "KREMA_TEST_KWIN_EFFECTS=${CMAKE_CURRENT_SOURCE_DIR}/effects"
     )
 else()
-    message(STATUS "kwin_wayland or dbus-run-session not found: krema_kwin_tests, krema_selected_output_tests, krema_grouped_activation_tests, krema_showdesktop_tests, krema_tooltip_tests, krema_hittest_tests, krema_preview_tests and krema_delegate_geometry_tests are built but not registered with CTest")
+    message(STATUS "kwin_wayland or dbus-run-session not found: krema_kwin_tests, krema_selected_output_tests, krema_grouped_activation_tests, krema_task_icons_tests, krema_showdesktop_tests, krema_tooltip_tests, krema_hittest_tests, krema_preview_tests and krema_delegate_geometry_tests are built but not registered with CTest")
 endif()

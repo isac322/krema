@@ -91,7 +91,7 @@ def fast_pointer_entry(krema: Krema, item: str, timeout: float = 10.0) -> tuple[
     )
 
     first_visible: float | None = None
-    component: Any | None = None
+    component: Any | None = popup.get_component_iface()
     geometry: Rect | None = None
 
     def current() -> Rect | None:

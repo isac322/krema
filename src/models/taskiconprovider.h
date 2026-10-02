@@ -6,6 +6,7 @@
 #include <QCache>
 #include <QHash>
 #include <QIcon>
+#include <QMutex>
 #include <QPixmap>
 #include <QQuickImageProvider>
 #include <QRect>
@@ -52,6 +53,9 @@ public:
     /// Runs on the GUI thread only.
     static void registerRawIcon(const QString &key, const QIcon &icon);
 
+    /// Release retained QIcons while QApplication is still alive.
+    static void clearRawIcons();
+
 private:
     /// Find the bounding rect of non-transparent content in an image.
     static QRect findContentBounds(const QImage &image, int threshold = 25);
@@ -67,13 +71,16 @@ private:
     /// Shrink an icon to add breathing room. Factor 1.0 = no shrink, 0.88 = 12% smaller.
     static QPixmap shrinkPixmap(const QIcon &icon, int targetSize, qreal shrinkFactor);
 
+    QMutex m_mutex;
     QHash<QString, IconNormalizationInfo> m_cache;
+    quint64 m_cacheGeneration = 0;
     bool m_normalizationEnabled = true;
     qreal m_iconScale = 1.0;
 
     // QML image providers are created per DockView, while DockModel is shared.
     // Keep only a bounded number of opaque raw sources for all providers and
     // replace entries atomically when a source is re-registered.
+    static QMutex s_rawIconsMutex;
     static QCache<QString, QIcon> s_rawIcons;
     static constexpr int kRawIconCacheCapacity = 256;
 

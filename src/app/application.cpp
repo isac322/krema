@@ -8,6 +8,7 @@
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
+#include "models/taskiconprovider.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
@@ -44,7 +45,10 @@ Application::Application(int &argc, char **argv)
 {
 }
 
-Application::~Application() = default;
+Application::~Application()
+{
+    TaskIconProvider::clearRawIcons();
+}
 
 void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *context)
 {

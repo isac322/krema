@@ -4,6 +4,7 @@
 #include "taskiconprovider.h"
 
 #include <QImage>
+#include <QMutexLocker>
 #include <QPainter>
 
 #include <algorithm>
@@ -12,6 +13,7 @@
 namespace krema
 {
 
+QMutex TaskIconProvider::s_rawIconsMutex;
 QCache<QString, QIcon> TaskIconProvider::s_rawIcons{TaskIconProvider::kRawIconCacheCapacity};
 
 TaskIconProvider::TaskIconProvider(bool normalizationEnabled)
@@ -28,7 +30,14 @@ void TaskIconProvider::registerRawIcon(const QString &key, const QIcon &icon)
     // QCache owns the copy and deletes the replaced value. This gives raw
     // artwork explicit replacement and bounded lifetime semantics while
     // allowing every DockView provider to resolve the same opaque source.
+    const QMutexLocker locker(&s_rawIconsMutex);
     s_rawIcons.insert(key, new QIcon(icon));
+}
+
+void TaskIconProvider::clearRawIcons()
+{
+    const QMutexLocker locker(&s_rawIconsMutex);
+    s_rawIcons.clear();
 }
 
 QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QSize &requestedSize)
@@ -44,8 +53,11 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
     // Nameless task decorations are registered under opaque keys by
     // DockModel. Theme names remain the first-class path for named icons.
     QIcon icon;
-    if (const QIcon *rawIcon = s_rawIcons.object(iconName)) {
-        icon = *rawIcon;
+    {
+        const QMutexLocker locker(&s_rawIconsMutex);
+        if (const QIcon *rawIcon = s_rawIcons.object(iconName)) {
+            icon = *rawIcon;
+        }
     }
     if (icon.isNull()) {
         icon = QIcon::fromTheme(iconName);
@@ -57,10 +69,18 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
         icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
     }
 
+    bool normalizationEnabled;
+    qreal iconScale;
+    {
+        const QMutexLocker locker(&m_mutex);
+        normalizationEnabled = m_normalizationEnabled;
+        iconScale = m_iconScale;
+    }
+
     QPixmap result;
 
     // Fast path: normalization disabled
-    if (!m_normalizationEnabled) {
+    if (!normalizationEnabled) {
         result = icon.pixmap(QSize(targetSize, targetSize), 1.0);
         if (result.isNull()) {
             result = QPixmap(targetSize, targetSize);
@@ -91,8 +111,8 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
     }
 
     // Apply uniform icon scale (adds equal padding around all icons)
-    if (m_iconScale < 1.0) {
-        int shrunkSize = static_cast<int>(std::round(targetSize * m_iconScale));
+    if (iconScale < 1.0) {
+        int shrunkSize = static_cast<int>(std::round(targetSize * iconScale));
         QImage scaled = result.toImage().scaled(shrunkSize, shrunkSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         result = QPixmap(targetSize, targetSize);
         result.fill(Qt::transparent);
@@ -109,17 +129,21 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
 
 void TaskIconProvider::setNormalizationEnabled(bool enabled)
 {
+    const QMutexLocker locker(&m_mutex);
     m_normalizationEnabled = enabled;
 }
 
 void TaskIconProvider::setIconScale(qreal scale)
 {
+    const QMutexLocker locker(&m_mutex);
     m_iconScale = std::clamp(scale, 0.5, 1.0);
 }
 
 void TaskIconProvider::clearCache()
 {
+    const QMutexLocker locker(&m_mutex);
     m_cache.clear();
+    ++m_cacheGeneration;
 }
 
 QRect TaskIconProvider::findContentBounds(const QImage &image, int threshold)
@@ -162,9 +186,14 @@ IconNormalizationInfo TaskIconProvider::analyzeIcon(const QString &iconName, con
     // the normalization key so geometry cannot outlive the pixels it describes.
     const QString cacheKey = iconName + QLatin1Char('\x1f')
         + QString::number(static_cast<qulonglong>(icon.cacheKey()), 16);
-    auto it = m_cache.constFind(cacheKey);
-    if (it != m_cache.constEnd()) {
-        return it.value();
+    quint64 cacheGeneration;
+    {
+        const QMutexLocker locker(&m_mutex);
+        const auto it = m_cache.constFind(cacheKey);
+        if (it != m_cache.constEnd()) {
+            return it.value();
+        }
+        cacheGeneration = m_cacheGeneration;
     }
 
     // Determine probe size: use the largest available raster, or 256 for SVG
@@ -216,7 +245,13 @@ IconNormalizationInfo TaskIconProvider::analyzeIcon(const QString &iconName, con
         info.fillRatio = (bboxArea > 0) ? contentPixels / bboxArea : 1.0;
     }
 
-    m_cache.insert(cacheKey, info);
+    {
+        const QMutexLocker locker(&m_mutex);
+        // Do not repopulate a cache cleared while the probe was rendering.
+        if (cacheGeneration == m_cacheGeneration) {
+            m_cache.insert(cacheKey, info);
+        }
+    }
     return info;
 }
 

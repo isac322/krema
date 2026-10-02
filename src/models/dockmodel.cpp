@@ -9,10 +9,13 @@
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
+#include <algorithm>
+#include <QCryptographicHash>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
 #include <QRect>
+#include <QVariant>
 #include <QScreen>
 #include <QSet>
 
@@ -30,6 +33,36 @@ bool isPinnedTask(const QModelIndex &index, const QStringList &launchers)
     }
     const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
     return url.isValid() && launchers.contains(url.toString());
+}
+
+QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &icon)
+{
+    // Window IDs are the stable task identity across row movement. Grouped
+    // tasks may expose the same IDs in a different order, so canonicalize
+    // them before hashing. Launchers use their URL; AppId is only the final
+    // TaskManager/KService identity fallback and is never exposed in the key.
+    QStringList identityParts;
+    const QVariantList windowIds = index.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+    identityParts.reserve(windowIds.size());
+    for (const QVariant &windowId : windowIds) {
+        identityParts.append(QString::fromLatin1(windowId.typeName()) + QLatin1Char('=')
+            + windowId.toString());
+    }
+    std::sort(identityParts.begin(), identityParts.end());
+
+    QByteArray identity;
+    if (!identityParts.isEmpty()) {
+        identity = identityParts.join(QLatin1Char('\x1f')).toUtf8();
+    } else {
+        const QUrl launcherUrl = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        identity = launcherUrl.isValid() ? launcherUrl.toString().toUtf8() : appId.toUtf8();
+    }
+
+    QByteArray material = identity;
+    material.append('\0');
+    material.append(QByteArray::number(static_cast<qulonglong>(icon.cacheKey()), 16));
+    const QByteArray digest = QCryptographicHash::hash(material, QCryptographicHash::Sha256).toHex();
+    return QStringLiteral("raw:%1").arg(QString::fromLatin1(digest));
 }
 } // namespace
 
@@ -246,37 +279,33 @@ QString DockModel::iconName(int index) const
     const QIcon icon = idx.data(Qt::DecorationRole).value<QIcon>();
     QString name = icon.name();
 
-    // Icons resolved from an absolute file path (Snap/Flatpak/AppImage .desktop
-    // entries commonly use Icon=/path/to/icon.png instead of a theme name) have
-    // no QIcon::name(). Register the actual pixmap under a synthetic key so
-    // TaskIconProvider can still find and normalize it, instead of silently
-    // falling back to the dock's generic letter-tile placeholder.
+    // A nameless, non-null DecorationRole is authoritative artwork. Give it
+    // an opaque task/content key so it outranks an unrelated AppId fallback,
+    // remains stable when rows move, and changes when the artwork changes.
     if (name.isEmpty() && !icon.isNull()) {
-        name = QStringLiteral("raw:") + appId(index);
+        name = rawIconKey(idx, appId(index), icon);
         TaskIconProvider::registerRawIcon(name, icon);
+        return name;
     }
 
-    // KWin/LibTaskManager hand back a generic placeholder icon (name "wayland")
-    // for windows it can't otherwise identify, instead of leaving the
-    // decoration null. It resolves to a real (but meaningless) theme icon, so
-    // it isn't caught by the empty-or-unresolvable check below — treat it the
-    // same as having no icon at all.
+    // KWin/LibTaskManager can provide these named placeholders when a window
+    // has no resolved decoration. Prefer a resolvable TaskManager/KService
+    // AppId, but preserve the usable placeholder when no fallback exists.
     static const QSet<QString> genericPlaceholderIconNames{QStringLiteral("wayland"), QStringLiteral("unknown")};
     if (genericPlaceholderIconNames.contains(name)) {
-        name.clear();
-    }
-
-    // Whenever we still don't have a theme name that actually resolves to a
-    // real icon — no decoration at all (common on Wayland when no installed
-    // .desktop file matches the window's app_id), or a name LibTaskManager
-    // handed back that doesn't correspond to anything installed — fall back
-    // to the window's app_id itself. Many toolkits (Flutter apps in
-    // particular) name their installed icon after their app_id, even when no
-    // matching .desktop file exists to supply Icon= directly.
-    if (name.isEmpty() || (!name.startsWith(QLatin1String("raw:")) && QIcon::fromTheme(name).isNull())) {
         const QString app = appId(index);
         if (!app.isEmpty() && !QIcon::fromTheme(app).isNull()) {
-            name = app;
+            return app;
+        }
+        return name;
+    }
+
+    // AppId is the TaskManager/KService desktop-entry or executable identity,
+    // not a promise that the raw Wayland app_id is a theme icon name.
+    if (name.isEmpty() || QIcon::fromTheme(name).isNull()) {
+        const QString app = appId(index);
+        if (!app.isEmpty() && !QIcon::fromTheme(app).isNull()) {
+            return app;
         }
     }
 

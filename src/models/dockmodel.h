@@ -58,7 +58,7 @@ public:
     /// Returns true for launchers, tasks on all desktops, and tasks on current desktop.
     Q_INVOKABLE bool isOnCurrentDesktop(int index) const;
 
-    /// Return the icon theme name for the task at @p index.
+    /// Return the theme name or opaque raw source key for the task icon at @p index.
     Q_INVOKABLE QString iconName(int index) const;
 
     /// Return the launcher URL for the task at @p index.
@@ -82,7 +82,8 @@ public:
     /// Publish the delegate geometry for a window task to KWin.
     Q_INVOKABLE void publishDelegateGeometry(int index, QObject *delegate);
 
-    /// Return the desktop entry name (AppId) for the task at @p index.
+    /// Return the TaskManager/KService desktop-entry or executable identity for
+    /// the task at @p index (not necessarily the raw Wayland app_id).
     Q_INVOKABLE QString appId(int index) const;
 
 Q_SIGNALS:

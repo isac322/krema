@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <QCache>
 #include <QHash>
 #include <QIcon>
 #include <QPixmap>
@@ -45,17 +46,19 @@ public:
     void setIconScale(qreal scale);
     void clearCache();
 
-    /// Register a QIcon that has no theme name (e.g. resolved from an absolute
-    /// file path, as with Snap/Flatpak/AppImage .desktop entries) under a
-    /// synthetic key so requestPixmap() can still find it. Runs on the GUI
-    /// thread only (QQuickImageProvider::Pixmap providers are not threaded).
+    /// Register a nameless QIcon under an opaque source key. Registrations
+    /// replace an existing key and are retained in a bounded process cache so
+    /// multiple DockView image providers can consume the same QML source.
+    /// Runs on the GUI thread only.
     static void registerRawIcon(const QString &key, const QIcon &icon);
 
 private:
     /// Find the bounding rect of non-transparent content in an image.
     static QRect findContentBounds(const QImage &image, int threshold = 25);
 
-    /// Analyze an icon to determine its content ratio. Result is cached.
+    /// Analyze an icon to determine its content ratio. The cache key includes
+    /// the icon's content revision so replacement artwork cannot reuse stale
+    /// normalization geometry.
     IconNormalizationInfo analyzeIcon(const QString &iconName, const QIcon &icon);
 
     /// Load, crop, and scale an icon to fill the target size.
@@ -68,7 +71,11 @@ private:
     bool m_normalizationEnabled = true;
     qreal m_iconScale = 1.0;
 
-    static QHash<QString, QIcon> s_rawIcons;
+    // QML image providers are created per DockView, while DockModel is shared.
+    // Keep only a bounded number of opaque raw sources for all providers and
+    // replace entries atomically when a source is re-registered.
+    static QCache<QString, QIcon> s_rawIcons;
+    static constexpr int kRawIconCacheCapacity = 256;
 
     static constexpr int kAlphaThreshold = 25;
     static constexpr qreal kMinContentRatio = 0.92;

@@ -12,7 +12,7 @@
 namespace krema
 {
 
-QHash<QString, QIcon> TaskIconProvider::s_rawIcons;
+QCache<QString, QIcon> TaskIconProvider::s_rawIcons{TaskIconProvider::kRawIconCacheCapacity};
 
 TaskIconProvider::TaskIconProvider(bool normalizationEnabled)
     : QQuickImageProvider(QQuickImageProvider::Pixmap)
@@ -22,7 +22,13 @@ TaskIconProvider::TaskIconProvider(bool normalizationEnabled)
 
 void TaskIconProvider::registerRawIcon(const QString &key, const QIcon &icon)
 {
-    s_rawIcons.insert(key, icon);
+    if (key.isEmpty() || icon.isNull()) {
+        return;
+    }
+    // QCache owns the copy and deletes the replaced value. This gives raw
+    // artwork explicit replacement and bounded lifetime semantics while
+    // allowing every DockView provider to resolve the same opaque source.
+    s_rawIcons.insert(key, new QIcon(icon));
 }
 
 QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QSize &requestedSize)
@@ -35,10 +41,12 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
     const int height = requestedSize.height() > 0 ? requestedSize.height() : 48;
     const int targetSize = std::max(width, height);
 
-    // Icons resolved from an absolute file path (Snap/Flatpak/AppImage .desktop
-    // entries commonly do this) have no theme name, so DockModel registers them
-    // here under a synthetic key instead of a QIcon::fromTheme()-resolvable name.
-    QIcon icon = s_rawIcons.value(iconName);
+    // Nameless task decorations are registered under opaque keys by
+    // DockModel. Theme names remain the first-class path for named icons.
+    QIcon icon;
+    if (const QIcon *rawIcon = s_rawIcons.object(iconName)) {
+        icon = *rawIcon;
+    }
     if (icon.isNull()) {
         icon = QIcon::fromTheme(iconName);
     }
@@ -150,7 +158,11 @@ QRect TaskIconProvider::findContentBounds(const QImage &image, int threshold)
 
 IconNormalizationInfo TaskIconProvider::analyzeIcon(const QString &iconName, const QIcon &icon)
 {
-    auto it = m_cache.constFind(iconName);
+    // QIcon::cacheKey changes when the artwork is replaced. Include it in
+    // the normalization key so geometry cannot outlive the pixels it describes.
+    const QString cacheKey = iconName + QLatin1Char('\x1f')
+        + QString::number(static_cast<qulonglong>(icon.cacheKey()), 16);
+    auto it = m_cache.constFind(cacheKey);
     if (it != m_cache.constEnd()) {
         return it.value();
     }
@@ -204,7 +216,7 @@ IconNormalizationInfo TaskIconProvider::analyzeIcon(const QString &iconName, con
         info.fillRatio = (bboxArea > 0) ? contentPixels / bboxArea : 1.0;
     }
 
-    m_cache.insert(iconName, info);
+    m_cache.insert(cacheKey, info);
     return info;
 }
 

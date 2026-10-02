@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The software-center description (Discover, GNOME Software) now lists the four available background styles and no longer advertises unsupported Mica or adaptive opacity
 - "Follow active screen" with the "Mouse position" trigger moved the dock: pushing the pointer against the dock edge of another monitor brought the dock there
 - Changing the icon size or screen edge resized and moved the dock immediately on distributions with LayerShellQt older than 6.4 (e.g. Debian 13, Ubuntu 25.04) instead of only after a restart
+- Preserved the current positive dock window size before changing layer-shell anchors, preventing KWin from rejecting an intermediate zero-axis configure during edge transitions
 - Clicking a dock icon worked when the icon had just appeared or moved under a resting pointer; the click was previously ignored or went to the wrong icon
 - Clicking a pinned app bounced its icon until the app's window appeared, including on sessions without startup notifications
 - Launching a new instance of a running app (middle click or New Instance) kept the launch bounce going until the new window appeared, instead of stopping after half a second

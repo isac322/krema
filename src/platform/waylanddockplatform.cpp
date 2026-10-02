@@ -78,6 +78,13 @@ void WaylandDockPlatform::setEdge(Edge edge)
     if (m_edge == edge) {
         return;
     }
+    // Keep LayerShellQt's current positive desired size while the compositor
+    // replaces the old anchor set. Without this intermediate size, changing
+    // orientation can briefly leave both old and new stretch axes unset and
+    // KWin can reject a zero-width set_size state/commit.
+    if (m_window && m_window->width() > 0 && m_window->height() > 0) {
+        setSize(m_window->size());
+    }
     m_edge = edge;
     if (m_layerWindow) {
         applyAnchors();

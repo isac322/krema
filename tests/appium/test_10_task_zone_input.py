@@ -206,6 +206,7 @@ def _traverse(krema: Krema, apps: TestWindows, windows: dict[str, TestWindow], n
     invoke_shortcut("focus-dock")
     initial = wait_until(lambda: (f if len(f := _focused_names(krema, names)) == 1 else None), message="one native focused controlled task")[0]
     _focus(krema, names, initial, f"{stage}-initial")
+    krema.wait_keyboard_focus()
     previous, following = ("Up", "Down") if _vertical(edge) else ("Left", "Right")
     for index in range(names.index(initial) - 1, -1, -1):
         inp.key(previous)

@@ -12,7 +12,7 @@
 - preview-mouse-leave-close: Preview closes when mouse leaves
 - preview-live-thumbnail: PipeWire-based live window thumbnails
 - preview-fast-pointer-entry: Pointer entering a popup reported visible by AT-SPI keeps it open past the hide delay
-- preview-task-index: Preview thumbnails keep their actual task order after pinned/running partitioning
+- preview-task-index: Preview thumbnails keep their initial displayed order and exact native targets after pinned/running partitioning
 
 ## Affected Files
 - src/qml/main.qml
@@ -292,22 +292,24 @@ state. PipeWire/Screenshot2 checks require DRM/vgem.
 
 ---
 
-## TC PREV-010: Preview Thumbnails Match Task Order After Partitioning
+## TC PREV-010: Grouped Preview Order and Native Targets Survive Partitioning
 
-**Precondition:** Enable `Separate pinned and running apps`. Use a grouped app with at least three open windows, and keep another pinned running app and another unpinned running app present so both task zones are populated.
+**Precondition:** Enable `Separate pinned and running apps`. Use a grouped app with three uniquely titled open windows for the bottom dock, or two for the left dock. Keep another pinned running app and another unpinned running app present so both task zones are populated.
 
 **Steps:**
-1. Use `list_windows` to record the grouped app's window titles and stable window identifiers in task order.
-2. Open the grouped app's preview from its dock item after the dock has settled.
-3. Read the thumbnail titles and their left-to-right order from `accessibility_tree`.
-4. Select the second thumbnail, then repeat with the last thumbnail after reopening the preview.
-5. Pin or unpin a different running app, wait for the dock partition to reconcile, and reopen the grouped preview.
+1. Use `list_windows` and the fixture records to identify the grouped app's exact window count and unique `(PID, internal_id, title)` identities. KWin enumeration supplies the identity set, not the preview order; its stacking order and fixture creation order are not a TasksModel child-order oracle.
+2. Open the grouped app's preview after the dock has settled. Check that its thumbnail count and unique titles match the independently recorded windows, then record the displayed left-to-right identity sequence from `accessibility_tree` as the initial baseline.
+3. Hover the unpinned app across the divider, then return to the group. Require the same full baseline sequence without recapturing or sorting it.
+4. For every displayed slot, make the unpinned app active and verify its exact native identity. Click its dock item only if that window is not already active, to avoid toggling minimization. Reopen the grouped preview, retarget across the divider and back, and require the unchanged baseline on each grouped reopen or return. Move the real pointer to that slot's thumbnail center, including the last displayed slot, and click.
+5. Unpin the other pinned running app and wait for the dock partition to reconcile. Repeat every slot selection against the original baseline.
+6. Repin that other app, wait for reconciliation, and repeat every slot selection against the same original baseline.
 
 **Expected:**
-- The preview contains one thumbnail for each current window of the grouped app.
-- Thumbnail order matches the actual task/window order recorded from KWin, not the app's position relative to the pinned/running divider.
-- Selecting a thumbnail activates that exact window and closes the preview; it never activates an adjacent task or a different child in the group.
-- Repartitioning another app leaves the grouped app's thumbnail count, order, and click targets correct, with no duplicate thumbnail.
+- The preview has exactly one thumbnail for each independently identified group window, with no missing or duplicate title or native identity.
+- Every grouped reopen and return preserves the initial displayed identity sequence, even when another app's pin transition changes the group's dock slot.
+- Every physical thumbnail click activates that slot's exact `(PID, internal_id, title)` identity and closes the popup; it never activates an adjacent task or a different child in the group.
+- Every selected thumbnail center lies inside both the native input surface and the interactive popup. The last displayed slot is selected by its baseline identity, not by fixture creation order.
+- Pin/unpin transitions preserve the group identities, correct pinned launcher membership, expected dock order, and populated divider.
 
-**Verification:** AT-SPI thumbnail names and order, KWin window identifiers/active state after each selection, and popup visibility after the partition update.
-**Automated (strict feature coverage):** `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` keeps three-thumbnail horizontal coverage and uses a two-thumbnail vertical fixture to prove index-1 remapping, exact native activation, and different-app pin/unpin repartition. The vertical popup remains wider than the existing 400 px native surface, so this feature check asserts center-point input reachability rather than whole-rect containment; the separate preview-surface fix owns strict whole-popup and whole-thumbnail containment. Image/RHI/DRM and default timing remain unverified.
+**Verification:** Independent fixture/KWin identity sets and counts, AT-SPI thumbnail names and measured left-to-right order, unchanged full baseline identities on every grouped reopen or return, real pointer coordinates, KWin active identities after every slot selection, and popup closure.
+**Automated (strict feature coverage):** `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` exercises all three horizontal slots and both vertical slots before and after other-app unpin/repin transitions. It retains strict single-action vertical hover and physical last-center input reachability. The vertical popup remains wider than the existing 400 px native surface, so this feature check asserts center-point input reachability rather than whole-rect containment; the separate preview-surface fix owns strict whole-popup and whole-thumbnail containment. Image/RHI/DRM and default timing remain unverified.

@@ -329,13 +329,17 @@ def _vertical_preview_hover(krema: Krema, names: tuple[str, ...], item: str, ini
     assert _physical(krema, names, item, "vertical-popup-physical-target", path) == before
 
 
-def _group_identity(krema: Krema, group: list[TestWindow], stage: str) -> None:
+def _group_identity(krema: Krema, group: list[TestWindow] | tuple[TestWindow, ...], stage: str) -> None:
+    expected = {(w.pid, w.internal_id, w.title) for w in group}
+    assert len(expected) == len(group), "fixture windows must have unique native identities"
     native = [w for w in kwin.app_windows() if w.pid in {window.pid for window in group}]
-    assert {(w.pid, w.internal_id, w.title) for w in native} == {(w.pid, w.internal_id, w.title) for w in group}
-    _record(krema, stage, native_windows=[asdict(window) for window in native])
+    actual = {(w.pid, w.internal_id, w.title) for w in native}
+    _record(krema, stage, expected_count=len(group), native_count=len(native), native_windows=[asdict(window) for window in native])
+    assert len(native) == len(group) and len(actual) == len(native)
+    assert actual == expected
 
 
-def _preview(krema: Krema, edge: int, names: tuple[str, ...], item: str, header: str, windows: list[TestWindow], stage: str, *, initial: bool = False) -> None:
+def _preview(krema: Krema, edge: int, names: tuple[str, ...], item: str, header: str, windows: list[TestWindow] | tuple[TestWindow, ...], stage: str, *, initial: bool = False, expected_order: tuple[TestWindow, ...] | None = None) -> tuple[TestWindow, ...]:
     if edge == config.EDGE_LEFT:
         _vertical_preview_hover(krema, names, item, initial)
     else:
@@ -343,30 +347,48 @@ def _preview(krema: Krema, edge: int, names: tuple[str, ...], item: str, header:
     popup = krema.preview_popup()
     assert popup is not None and has_state(popup, "showing") and has_state(popup, "visible")
     wait_until(lambda: krema.find(pv.HEADER_XPATH).get_attribute("name") == header, message=f"application header {header!r}")
-    titles = [window.title for window in windows]
-    wait_until(lambda: pv.thumb_titles(krema) == titles, message=f"exact thumbnail titles/order {titles}")
+    by_title = {window.title: window for window in windows}
+    assert len(by_title) == len(windows), "thumbnail titles must identify fixture windows uniquely"
+    wait_until(
+        lambda: len(titles := pv.thumb_titles(krema)) == len(windows) and set(titles) == set(by_title),
+        message=f"exact thumbnail title set/count {tuple(by_title)}",
+    )
+    if expected_order is not None:
+        wait_until(
+            lambda: pv.thumb_titles(krema) == [window.title for window in expected_order],
+            message=f"unchanged thumbnail order {[window.title for window in expected_order]}",
+        )
+    titles = tuple(pv.thumb_titles(krema))
+    assert len(titles) == len(windows) and len(set(titles)) == len(titles) and set(titles) == set(by_title)
     assert len(krema.thumbnails()) == len(windows)
     _group_identity(krema, windows, stage)
-    _record(krema, stage, popup_name=popup.get_attribute("name"), expected_header=header, thumbnail_titles=pv.thumb_titles(krema))
+    displayed = tuple(by_title[title] for title in titles)
+    identities = tuple((window.pid, window.internal_id, window.title) for window in displayed)
+    _record(krema, stage, popup_name=popup.get_attribute("name"), expected_header=header, thumbnail_count=len(titles), thumbnail_titles=titles, displayed_window_identities=identities, baseline_window_identities=tuple((window.pid, window.internal_id, window.title) for window in expected_order) if expected_order is not None else identities)
+    if expected_order is not None:
+        assert identities == tuple((window.pid, window.internal_id, window.title) for window in expected_order)
+    return displayed
 
 
-def _last_thumbnail(krema: Krema, group: list[TestWindow], expected_titles: tuple[str, ...], stage: str) -> None:
-    expected = group[-1]
-    assert pv.thumb_titles(krema) == list(expected_titles)
+def _select_thumbnail(krema: Krema, baseline: tuple[TestWindow, ...], index: int, other: TestWindow, stage: str) -> None:
+    expected = baseline[index]
+    assert pv.thumb_titles(krema) == [window.title for window in baseline]
     surface, popup, thumbnail = wait_stable(
         lambda: (krema.surface_rect("preview"), pv.screen_rect(krema, krema.preview_popup()), pv.screen_rect(krema, krema.wait_for(pv.thumb_xpath(expected.title))))
     )
     point = thumbnail.center
-    _record(krema, f"{stage}-target", expected_title=expected.title, expected_pid=expected.pid, native_preview=surface._asdict() if surface else None, popup=popup._asdict(), thumbnail=thumbnail._asdict(), point=point)
-    assert surface is not None and surface.contains(*point), f"last thumbnail is outside native input surface: {surface}, {thumbnail}"
+    _record(krema, f"{stage}-target", displayed_slot=index, expected_title=expected.title, expected_pid=expected.pid, expected_internal_id=expected.internal_id, native_preview=surface._asdict() if surface else None, popup=popup._asdict(), thumbnail=thumbnail._asdict(), point=point)
+    assert surface is not None and surface.contains(*point), f"thumbnail slot {index} is outside native input surface: {surface}, {thumbnail}"
     assert popup.contains(*point)
     before = kwin.active_window()
-    assert before is not None and before.pid != expected.pid, "last-thumbnail selection must activate a different native client"
+    assert before is not None and (before.pid, before.internal_id, before.title) == (other.pid, other.internal_id, other.title), "thumbnail selection must start with the other app active"
+    assert before is not None and before.pid != expected.pid, "thumbnail selection must activate a different native client"
     pv.glide_into(krema, point)
-    wait_until(lambda: kwin.cursor_pos() == point, message="native pointer on last thumbnail")
+    wait_until(lambda: kwin.cursor_pos() == point, message=f"native pointer on thumbnail slot {index}")
+    assert pv.thumb_titles(krema) == [window.title for window in baseline]
     inp.click(*point)
     _active(krema, expected, stage)
-    wait_until(lambda: not krema.preview_visible(), message="last-thumbnail activation closes preview")
+    wait_until(lambda: not krema.preview_visible(), message=f"thumbnail slot {index} activation closes preview")
 
 
 def _toggle_pin(krema: Krema, name: str, app_id: str, *, pinned: bool, order: tuple[str, ...]) -> None:
@@ -387,7 +409,7 @@ def _toggle_pin(krema: Krema, name: str, app_id: str, *, pinned: bool, order: tu
 def test_prev010_last_thumbnail_and_other_app_pin_transitions(krema: Krema, apps: TestWindows, edge: int) -> None:
     _start(krema, edge, previews=True)
     # The existing vertical preview surface is 400 px deep. Keep its feature
-    # coverage strict by exercising thumbnail index 1 vertically; the separate
+    # coverage strict by exercising both vertical slots; the separate
     # preview-surface fix owns whole-rect reachability for wider grouped rows.
     group_titles = GROUP_TITLES if edge == config.EDGE_BOTTOM else GROUP_TITLES[:2]
     group = [apps.open(title, app_id=env.TEST_APP_ID, accessible=True) for title in group_titles]
@@ -401,29 +423,34 @@ def test_prev010_last_thumbnail_and_other_app_pin_transitions(krema: Krema, apps
     _toggle_pin(krema, name, env.TEST_APP_ID, pinned=False, order=reordered)
     assert config.as_list(krema.read_config()["General"]["PinnedLaunchers"]) == [config.launcher(env.TEST_APP2_ID), config.launcher(env.TEST_APP_ID)]
     _divider(krema, True)
-    _preview(krema, edge, reordered, name, name, group, "initial-group", initial=True)
-    _preview(krema, edge, reordered, UNPINNED_A, "KWrite", [unpinned], "initial-across-division")
-    _preview(krema, edge, reordered, name, name, group, "initial-return-group")
-    _last_thumbnail(krema, group, group_titles, "last-thumbnail-first-selection")
+    baseline = _preview(krema, edge, reordered, name, name, group, "initial-group", initial=True)
+    _preview(krema, edge, reordered, UNPINNED_A, "KWrite", [unpinned], "initial-across-division", expected_order=(unpinned,))
+    _preview(krema, edge, reordered, name, name, group, "initial-return-group", expected_order=baseline)
 
     shifted = (name, PINNED_B, UNPINNED_A)
-    for currently_pinned, label in ((True, "other-app-unpinned"), (False, "other-app-repinned")):
-        before_names = krema.item_names()
-        _toggle_pin(krema, PINNED_B, env.TEST_APP2_ID, pinned=currently_pinned, order=shifted)
-        after_names = krema.item_names()
-        assert after_names.index(name) == 0
-        if currently_pinned:
-            assert before_names.index(name) == 1
-            assert after_names.index(name) != before_names.index(name)
-        _record(krema, f"{label}-group-slot", before_names=before_names, after_names=after_names, before_slot=before_names.index(name), after_slot=after_names.index(name))
-        _group_identity(krema, group, f"{label}-group-preserved")
-        _divider(krema, True)
-        krema.click_item(UNPINNED_A)
-        _active(krema, unpinned, f"{label}-before-last-selection")
-        _preview(krema, edge, shifted, name, name, group, f"{label}-group", initial=True)
-        _preview(krema, edge, shifted, UNPINNED_A, "KWrite", [unpinned], f"{label}-other-app")
-        _preview(krema, edge, shifted, name, name, group, f"{label}-return-group")
-        _last_thumbnail(krema, group, group_titles, f"{label}-last-thumbnail-reselection")
+    for currently_pinned, label in ((None, "initial-selection"), (True, "other-app-unpinned"), (False, "other-app-repinned")):
+        names = reordered if currently_pinned is None else shifted
+        if currently_pinned is not None:
+            before_names = krema.item_names()
+            _toggle_pin(krema, PINNED_B, env.TEST_APP2_ID, pinned=currently_pinned, order=shifted)
+            after_names = krema.item_names()
+            assert after_names.index(name) == 0
+            if currently_pinned:
+                assert before_names.index(name) == 1
+                assert after_names.index(name) != before_names.index(name)
+            _record(krema, f"{label}-group-slot", before_names=before_names, after_names=after_names, before_slot=before_names.index(name), after_slot=after_names.index(name))
+            _group_identity(krema, group, f"{label}-group-preserved")
+            _divider(krema, True)
+        for index in range(len(baseline)):
+            stage = f"{label}-thumbnail-{index}"
+            anchor = kwin.active_window()
+            if anchor is None or (anchor.pid, anchor.internal_id) != (unpinned.pid, unpinned.internal_id):
+                krema.click_item(UNPINNED_A)
+            _active(krema, unpinned, f"{stage}-before-selection")
+            _preview(krema, edge, names, name, name, group, f"{stage}-group", initial=True, expected_order=baseline)
+            _preview(krema, edge, names, UNPINNED_A, "KWrite", [unpinned], f"{stage}-other-app", expected_order=(unpinned,))
+            _preview(krema, edge, names, name, name, group, f"{stage}-return-group", expected_order=baseline)
+            _select_thumbnail(krema, baseline, index, unpinned, stage)
 
 
 def _expanded_point(base: Rect, drawn: Rect, edge: int) -> tuple[int, int]:

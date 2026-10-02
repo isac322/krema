@@ -24,11 +24,13 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QImage>
+#include <QMainWindow>
 #include <QProcess>
 #include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTest>
-#include <QWidget>
+#include <QStringList>
+#include <QTemporaryDir>
 
 namespace
 {
@@ -41,6 +43,8 @@ const QString kHealthyTitle = QStringLiteral("krema-icon-healthy-window");
 const QString kHealthyIcon = QStringLiteral("utilities-terminal");
 const QString kUnresolvedAppId = QStringLiteral("krema-icon-unresolved");
 const QString kUnresolvedTitle = QStringLiteral("krema-icon-unresolved-window");
+const QString kRawAppId = QStringLiteral("krema-icon-raw");
+const QString kRawTitle = QStringLiteral("krema-icon-raw-window");
 const QString kGenericIcon = QStringLiteral("application-x-executable");
 
 krema::DockModel &model()
@@ -129,12 +133,16 @@ bool installHealthyDesktopEntry()
     return QProcess::execute(QStringLiteral("kbuildsycoca6"), {}) == 0;
 }
 
-auto startChild(QProcess &process, const QString &appId, const QString &title)
+auto startChild(QProcess &process, const QString &appId, const QString &title, const QString &iconPath = {})
 {
-    process.start(QCoreApplication::applicationFilePath(), {QStringLiteral("--child"), appId, title});
+    QStringList arguments{QStringLiteral("--child"), appId, title};
+    if (!iconPath.isEmpty()) {
+        arguments << QStringLiteral("--icon-path") << iconPath;
+    }
+    process.start(QCoreApplication::applicationFilePath(), arguments);
     return qScopeGuard([&process] {
         process.kill();
-        process.waitForFinished();
+        process.waitForFinished(kTimeoutMs);
     });
 }
 
@@ -142,7 +150,7 @@ bool noTestWindows()
 {
     return QTest::qWaitFor(
         [] {
-            return taskRow(kHealthyTitle) < 0 && taskRow(kUnresolvedTitle) < 0;
+            return taskRow(kHealthyTitle) < 0 && taskRow(kUnresolvedTitle) < 0 && taskRow(kRawTitle) < 0;
         },
         kTimeoutMs);
 }
@@ -153,9 +161,12 @@ int childMain(int argc, char **argv)
     const QString title = QString::fromLocal8Bit(argv[3]);
     QGuiApplication::setDesktopFileName(appId);
     QApplication application(argc, argv);
-    QWidget window;
+    QMainWindow window;
     window.setWindowTitle(title);
     window.resize(240, 180);
+    if (argc == 6) {
+        window.setWindowIcon(QIcon(QString::fromLocal8Bit(argv[5])));
+    }
     window.show();
     return application.exec();
 }
@@ -211,6 +222,90 @@ TEST_CASE("TaskManager named icon reaches DockModel and provider", "[task-icons]
     CHECK(providerPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == decorationArtwork);
 }
 
+TEST_CASE("TaskManager nameless client artwork reaches the raw icon provider", "[task-icons]")
+{
+    REQUIRE(noTestWindows());
+
+    QTemporaryDir fixtureDirectory;
+    REQUIRE(fixtureDirectory.isValid());
+    const QSize iconSize(64, 64);
+    QImage fixtureArtwork(iconSize, QImage::Format_ARGB32);
+    const QRgb colors[]{qRgb(240, 24, 240), qRgb(24, 240, 240), qRgb(240, 240, 24), qRgb(24, 240, 24)};
+    for (int y = 0; y < fixtureArtwork.height(); ++y) {
+        for (int x = 0; x < fixtureArtwork.width(); ++x) {
+            fixtureArtwork.setPixel(x, y, colors[(x >= 32) + 2 * (y >= 32)]);
+        }
+    }
+    const QString iconPath = fixtureDirectory.filePath(QStringLiteral("raw-window-icon.png"));
+    REQUIRE(fixtureArtwork.save(iconPath, "PNG"));
+    const QImage expectedArtwork = fixtureArtwork.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    // No desktop entry or theme icon is installed: this is the same Qt
+    // setWindowIcon(QIcon(path)) stimulus used by the Appium real-client fixture.
+    QProcess child;
+    const auto stopChild = startChild(child, kRawAppId, kRawTitle, iconPath);
+    REQUIRE(child.waitForStarted(kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            return taskRow(kRawTitle) >= 0;
+        },
+        kTimeoutMs));
+
+    // Allow asynchronous icon delivery, but do not report a pass when this
+    // Qt/KWin platform cannot expose the real nameless DecorationRole seam.
+    const bool namelessAvailable = QTest::qWaitFor(
+        [] {
+            const int row = taskRow(kRawTitle);
+            if (row < 0) {
+                return false;
+            }
+            const QIcon icon = model().tasksModel()->index(row, 0).data(Qt::DecorationRole).value<QIcon>();
+            return !icon.isNull() && icon.name().isEmpty();
+        },
+        kTimeoutMs);
+
+    const int row = taskRow(kRawTitle);
+    REQUIRE(row >= 0);
+    const QModelIndex index = model().tasksModel()->index(row, 0);
+    REQUIRE(index.isValid());
+    const QIcon decoration = index.data(Qt::DecorationRole).value<QIcon>();
+    if (!namelessAvailable) {
+        // A skip records an unavailable producer seam, not verified raw routing.
+        if (decoration.isNull()) {
+            SKIP("Raw producer seam unavailable: QMainWindow::setWindowIcon(QIcon(PNG)) left the real TaskManager DecorationRole null after "
+                 << kTimeoutMs << " ms on " << QGuiApplication::platformName().toStdString());
+        }
+        if (!decoration.name().isEmpty()) {
+            SKIP("Raw producer seam unavailable: QMainWindow::setWindowIcon(QIcon(PNG)) yielded named TaskManager DecorationRole '"
+                 << decoration.name().toStdString() << "' after " << kTimeoutMs << " ms on "
+                 << QGuiApplication::platformName().toStdString());
+        }
+    }
+
+    REQUIRE_FALSE(decoration.isNull());
+    REQUIRE(decoration.name().isEmpty());
+    const QPixmap taskPixmap = decoration.pixmap(iconSize, 1.0);
+    REQUIRE_FALSE(taskPixmap.isNull());
+    // The oracle is the generated PNG, never another production-rendered icon.
+    CHECK(taskPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == expectedArtwork);
+
+    const QString taskManagerAppId = model().appId(row);
+    REQUIRE_FALSE(taskManagerAppId.isEmpty());
+    const QString rawKey = model().iconName(row);
+    INFO("TaskManager AppId: " << taskManagerAppId.toStdString());
+    INFO("DockModel icon key: " << rawKey.toStdString());
+    REQUIRE(rawKey.startsWith(QStringLiteral("raw:")));
+    CHECK(rawKey != taskManagerAppId);
+    CHECK(rawKey != kRawAppId);
+
+    krema::TaskIconProvider provider(false);
+    QSize returnedSize;
+    const QPixmap providerPixmap = provider.requestPixmap(rawKey, &returnedSize, iconSize);
+    REQUIRE_FALSE(providerPixmap.isNull());
+    CHECK(returnedSize == iconSize);
+    CHECK(providerPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == expectedArtwork);
+}
+
 TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path", "[task-icons]")
 {
     REQUIRE(noTestWindows());
@@ -253,13 +348,11 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
         CHECK(artworkBounds(decoration.pixmap(QSize(64, 64))).isValid());
     }
 
-    // KWin supplies DecorationRole from window/desktop metadata. There is no
-    // supported protocol seam for forcing a nameless DecorationRole or a
-    // delayed icon without replacing the real TaskManager model. Therefore
-    // this test accepts the supported unresolved outcomes: an empty name
-    // selects DockItem's visible placeholder, while the generic, "wayland",
-    // and "unknown" names exercise the provider's fallback artwork. In every
-    // case AppId remains actionable.
+    // KWin supplies DecorationRole from window/desktop metadata. The raw-client
+    // test probes whether Qt's window-icon stimulus reaches a nameless icon on
+    // this platform; this unresolved client deliberately supplies no artwork.
+    // Its supported outcomes remain an empty placeholder name or a generic,
+    // "wayland", or "unknown" fallback. AppId stays actionable in every case.
     krema::TaskIconProvider provider;
     QSize returnedSize;
     const QPixmap fallbackPixmap = provider.requestPixmap(iconName, &returnedSize, QSize(64, 64));
@@ -270,7 +363,10 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
 
 int main(int argc, char *argv[])
 {
-    if (argc == 4 && qstrcmp(argv[1], "--child") == 0) {
+    if (argc > 1 && qstrcmp(argv[1], "--child") == 0) {
+        if ((argc != 4 && argc != 6) || (argc == 6 && qstrcmp(argv[4], "--icon-path") != 0)) {
+            return 2;
+        }
         return childMain(argc, argv);
     }
 

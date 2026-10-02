@@ -164,12 +164,12 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
         near = (trigger[0], rest.center[1]) if edge == config.EDGE_TOP else (rest.center[0], trigger[1])
         inp.move_path([trigger, near, *inp.line(near, rest.center, 5)], 40)
 
-        # Older Qt does not expose a transformed hover hit box. Prove the
-        # frontdoor through the native menu at the existing pointer instead.
+        # Hovering a running task may legitimately show its preview. Prove the
+        # Settings frontdoor through the native menu at the existing pointer.
         wait_until(
-            lambda: has_state(krema.wait_for_item(name), "showing") and not krema.preview_visible(),
+            lambda: has_state(krema.wait_for_item(name), "showing"),
             timeout=5,
-            message=f"{name!r} showing with preview closed before the native context menu",
+            message=f"{name!r} showing before the native context menu",
         )
         assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
         before = {w.internal_id for w in krema.windows()}

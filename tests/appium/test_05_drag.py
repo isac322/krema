@@ -370,8 +370,8 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
 
 
 # ICON-009: an unresolved window icon keeps its raw client artwork in the drag ghost.
-# The standard source-dimming invariant is covered by DND-003; this test's oracle
-# deliberately checks the independent raw artwork and ghost-opacity signals.
+# DND-003 covers source dimming and ghost opacity; this oracle independently
+# identifies the four raw-artwork colors after normalization and alpha blending.
 @pytest.mark.kremarc(kremarc(KWRITE))
 def test_icon009_drag_ghost_uses_raw_client_artwork(tmp_path: Path, krema: Krema, apps: TestWindows) -> None:
     if not kwin.can_capture():
@@ -399,8 +399,22 @@ def test_icon009_drag_ghost_uses_raw_client_artwork(tmp_path: Path, krema: Krema
     start = scene.center(source)
     over = (scene.center(target)[0], scene.row_top - 16)
     drop = (over[0], start[1])
-    rows = min(ICON, scene.row_top - (over[1] - ICON // 2))
-    expected = raw[:rows]
+    gx, gy = over[0] - ICON // 2, over[1] - ICON // 2
+    rows = min(ICON, scene.row_top - gy)
+    # Sample inside each quadrant, clear of normalized artwork's outer padding,
+    # the quadrant seams, and the dock icons below the ghost.
+    inset = ICON // 12
+    samples = {
+        "magenta": (half // 2, half // 2, half - inset, half - inset),
+        "cyan": (half + inset, half // 2, half + half // 2, half - inset),
+        "yellow": (half // 2, half + inset, half - inset, min(rows - inset, half + half // 2)),
+        "green": (half + inset, half + inset, half + half // 2, min(rows - inset, half + half // 2)),
+    }
+    assert all(x1 > x0 and y1 > y0 for x0, y0, x1, y1 in samples.values()), (
+        f"ghost crop has no unobstructed quadrant samples: crop={(gx, gy, ICON, rows)}, samples={samples}"
+    )
+    background = scene.base[gy : gy + rows, gx : gx + ICON, :3].astype(np.float32)
+    crop_path = tmp_path / "icon009-ghost-crop.png"
 
     with dragging(start, [over, PAUSE_MS, drop]):
         wait_cursor(over)
@@ -408,33 +422,41 @@ def test_icon009_drag_ghost_uses_raw_client_artwork(tmp_path: Path, krema: Krema
 
         def feedback() -> dict | None:
             shot = scene.shot("icon009-mid-drag")
-            opacity, baseline_corr = scene.ghost(shot, source, over)
-            gx, gy = over[0] - ICON // 2, over[1] - ICON // 2
-            artwork = shot[gy : gy + rows, gx : gx + ICON, :3].astype(np.float32)
-            raw_corr = float(
-                np.mean(
-                    [
-                        np.corrcoef(artwork[..., channel].ravel(), expected[..., channel].ravel())[0, 1]
-                        for channel in range(3)
-                    ]
+            artwork = shot[gy : gy + rows, gx : gx + ICON, :3]
+            Image.fromarray(artwork).save(crop_path)
+            quadrants = {}
+            for color, (x0, y0, x1, y1) in samples.items():
+                pixels = artwork[y0:y1, x0:x1].astype(np.float32)
+                expected_rgb = np.median(raw[y0:y1, x0:x1], axis=(0, 1))
+                high = expected_rgb > (expected_rgb.min() + expected_rgb.max()) / 2
+                # Check channel ordering and paired-channel similarity instead
+                # of luminance or exact RGB: opacity changes their magnitude.
+                bright, dark = pixels[..., high], pixels[..., ~high]
+                signature = (
+                    (bright.min(axis=-1) - dark.max(axis=-1) >= 30)
+                    & (np.ptp(bright, axis=-1) <= 40)
+                    & (np.ptp(dark, axis=-1) <= 40)
                 )
-            )
-            seen.update(
-                ghost_opacity=round(opacity, 3),
-                baseline_corr=round(baseline_corr, 3),
-                raw_corr=round(raw_corr, 3),
-            )
-            return dict(seen) if (
-                0.65 <= seen["ghost_opacity"] <= 0.95
-                and seen["raw_corr"] >= 0.9
-            ) else None
+                signal = np.max(np.abs(pixels - background[y0:y1, x0:x1]), axis=-1) >= 30
+                quadrants[color] = {
+                    "bounds": (x0, y0, x1, y1),
+                    "rgb": np.median(pixels, axis=(0, 1)).round(1).tolist(),
+                    "background_rgb": np.median(background[y0:y1, x0:x1], axis=(0, 1)).round(1).tolist(),
+                    "signature_fraction": float(np.mean(signature)),
+                    "signal_fraction": float(np.mean(signal)),
+                    "matching_fraction": float(np.mean(signature & signal)),
+                }
+            seen.update(crop=(gx, gy, ICON, rows), crop_path=str(crop_path), quadrants=quadrants)
+            # An absent/stale ghost has no new signal; a fallback must not pass
+            # merely because it shares one color with the raw fixture.
+            return dict(seen) if all(q["matching_fraction"] >= 0.75 for q in quadrants.values()) else None
 
         wait_until(
             feedback,
             timeout=5,
             message=lambda: (
                 "raw drag ghost feedback "
-                "(raw_corr/ghost_opacity; source dimming covered by DND-003): "
+                "(quadrant colors/new signal; opacity covered by DND-003): "
                 f"{seen}"
             ),
         )

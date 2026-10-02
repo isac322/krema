@@ -331,3 +331,16 @@ visual parent is the dock root.
 safe across engine teardown. Give callbacks the same lifetime as the items
 they read. A single-shot debounce is not polling and must not be restarted by
 hover-animation frames.
+
+## 18. Size the preview surface from the popup's laid-out extent (2026-10, vertical grouped preview)
+
+**Symptom:** A grouped preview on a left or right dock could lay out a thumbnail row wider than the native preview surface. The compositor clipped the last thumbnail, and a click at that location could reach the window underneath.
+
+**Cause:** The native surface used a fixed 400px perpendicular extent while QML sized the popup from the actual thumbnail row.
+
+**Fix:** Keep 400px as the minimum transition size, then grow the native perpendicular extent from the QML-reported popup size, limited by the output extent available after the dock-side anchor margin and reserved panel bar. The input region remains the exact visible popup rectangle. The existing unbounded row can still exceed the available output; wrapping or scrolling is outside this fix.
+
+**Key lessons:**
+- A layer surface must follow the content it hosts; a fixed reserve is only a safe minimum.
+- Anchor margins reduce the available output extent and must be included when constraining a surface.
+- Growing a transparent surface is safe only when the input region remains limited to visible content.

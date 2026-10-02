@@ -40,11 +40,13 @@ scenarios 01 and 04; this file adds only the explicit mouse-preview path.
 | PREV-004 | Keyboard Delete closes the focused window | `test_prev004_delete_key_closes_focused_thumbnail_window` |
 | PREV-005 | Pointer leave closes outside the popup; configured hide delay is respected | `test_prev005_preview_closes_when_pointer_leaves`, `test_prev005_close_on_leave_is_delayed` |
 | PREV-005 | A neighbouring task row re-centres the dock without reopening a preview under a stale pointer position | `test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving` |
+| PREV-011 | Two/three default thumbnails fit the native Left/Right surface; last-thumbnail clicks select the exact client rather than the window underneath; live group/single reuse; horizontal control | `test_11_preview_surface.py::test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts` |
 
-All tests are in `tests/appium/test_03_preview.py`. The new QA-PREV-01 test
-records both sides: the pre-fix run failed after a 33 ms entry, while the fixed
-run passed three fresh opens. Its fast path complements, rather than replaces,
-the existing pixel/layout waits.
+Tests above are in `tests/appium/test_03_preview.py` except PREV-011, which
+is in `test_11_preview_surface.py`. QA-PREV-01 records both sides: the
+pre-fix run failed after a 33 ms entry, while the fixed run passed three fresh
+opens. Its fast path complements, rather than replaces, the existing
+pixel/layout waits.
 
 ---
 

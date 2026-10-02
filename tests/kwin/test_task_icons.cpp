@@ -232,7 +232,7 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
 
     const QString iconName = model().iconName(row);
     INFO("DecorationRole icon name: " << iconName.toStdString());
-    CHECK(iconName.isEmpty() || iconName == kGenericIcon);
+    CHECK((iconName.isEmpty() || iconName == kGenericIcon));
 
     const QIcon decoration = index.data(Qt::DecorationRole).value<QIcon>();
     if (iconName.isEmpty()) {

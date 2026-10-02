@@ -161,7 +161,7 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
         )
         assert surface is not None and surface.contains(*rest.center)
         wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed at the off-centre reveal point")
-        near = (trigger[0], rest.center[1]) if edge == config.EDGE_TOP else (rest.center[0], trigger[1])
+        near = (rest.center[0], trigger[1]) if edge == config.EDGE_TOP else (trigger[0], rest.center[1])
         inp.move_path([trigger, near, *inp.line(near, rest.center, 5)], 40)
 
         # Hovering a running task may legitimately show its preview. Prove the

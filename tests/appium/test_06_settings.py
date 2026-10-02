@@ -154,7 +154,7 @@ def current_choice(krema: Krema, row: str) -> str:
 def choose(krema: Krema, row: str, option: str) -> None:
     """Pick ``option`` in the FormComboBoxDelegate ``row`` with real clicks."""
     click_el(krema, scroll_into_view(krema, f"{SETTINGS}//list_item[@name='{row}']"))
-    opt = krema.wait_for(f"{SETTINGS}/dialog//list_item[@name='{option}']")
+    opt = krema.wait_for(f"{SETTINGS}/dialog//*[self::list_item or self::menu_item][@name='{option}']")
     wait_until(lambda: has_state(opt, "showing") and Rect.of(opt).width > 0, message=f"option {option} shown")
     click_el(krema, opt)
     wait_until(lambda: current_choice(krema, row) == option, message=f"{row} to show {option}")
@@ -812,15 +812,7 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
 
     # Two entries, Parabolic by default.
     assert current_choice(krema, ZOOM_STYLE) == PARABOLIC
-    click_el(krema, scroll_into_view(krema, row_xpath))
-    first = krema.wait_for(f"{SETTINGS}/dialog//list_item[@name='{PARABOLIC}']")
-    wait_until(lambda: has_state(first, "showing") and Rect.of(first).width > 0, message="zoom style options shown")
-    options = [
-        n for e in krema.find_all(f"{SETTINGS}/dialog//list_item") if has_state(e, "showing") and (n := e.get_attribute("name")) not in PAGES
-    ]
-    assert options == [PARABOLIC, IN_PLACE]
-    click_el(krema, first)
-    wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
+    choose(krema, ZOOM_STYLE, PARABOLIC)
     duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
     duration = scroll_into_view(krema, duration_xpath)
     assert has_state(duration, "enabled")

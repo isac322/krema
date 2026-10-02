@@ -21,6 +21,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QIcon>
+#include <QLabel>
 #include <QPalette>
 #include <QMainWindow>
 #include <QPushButton>

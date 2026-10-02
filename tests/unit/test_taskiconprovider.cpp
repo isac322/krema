@@ -29,8 +29,9 @@ QGuiApplication &guiApplication()
         return true;
     }();
     Q_UNUSED(platformSelected);
-    static QGuiApplication application(argc, argv);
-    return application;
+    // Keep the application alive through static QIcon cache destruction at process exit.
+    static QGuiApplication *application = new QGuiApplication(argc, argv);
+    return *application;
 }
 
 QIcon coloredIcon(const QColor &color, const QRect &content, int canvasSize = 32)

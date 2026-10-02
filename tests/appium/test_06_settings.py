@@ -812,7 +812,22 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
 
     # Two entries, Parabolic by default.
     assert current_choice(krema, ZOOM_STYLE) == PARABOLIC
-    choose(krema, ZOOM_STYLE, PARABOLIC)
+    click_el(krema, scroll_into_view(krema, row_xpath))
+    popup_xpath = (
+        f"{SETTINGS}/dialog[.//*[self::list_item or self::menu_item][@name='{PARABOLIC}']]"
+    )
+    first = krema.wait_for(
+        f"{popup_xpath}//*[self::list_item or self::menu_item][@name='{PARABOLIC}']"
+    )
+    wait_until(lambda: has_state(first, "showing") and Rect.of(first).width > 0, message="zoom style options shown")
+    options = [
+        e.get_attribute("name")
+        for e in krema.find_all(f"{popup_xpath}//*[self::list_item or self::menu_item]")
+        if has_state(e, "showing")
+    ]
+    assert len(options) == 2 and set(options) == {PARABOLIC, IN_PLACE}, f"zoom style options: {options}"
+    click_el(krema, first)
+    wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
     duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
     duration = scroll_into_view(krema, duration_xpath)
     assert has_state(duration, "enabled")

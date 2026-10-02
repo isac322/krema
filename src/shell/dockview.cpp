@@ -14,6 +14,7 @@
 #include <QLoggingCategory>
 #include <QPainterPath>
 
+#include <taskmanager/tasksmodel.h>
 #include <KIconLoader>
 #include <KLocalizedQmlContext>
 

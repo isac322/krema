@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Application icons supplied by KDE/Wayland task metadata stayed visible when they lacked a theme name and refreshed when delayed metadata arrived.
 - Changing visibility mode while the Settings window was open now released or applied the dock's screen-space reservation immediately.
 - The README now lists the four available background styles and no longer advertises unsupported Semi-Transparent or Mica styles
 - Windows minimized with KWin's Magic Lamp or Squash effects now animate toward their Krema dock icon instead of an unrelated fallback position

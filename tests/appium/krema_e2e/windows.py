@@ -71,16 +71,22 @@ class TestWindows:
         accessible: bool = False,
         color: str | None = None,
         timeout: float = 10.0,
+        icon_path: str | os.PathLike[str] | None = None,
     ) -> TestWindow:
         """Start a window and wait until KWin maps it. ``accessible`` exposes
         its widgets on the AT-SPI bus (off by default to keep the bus quiet).
         ``badge`` sends a Unity LauncherEntry count for ``app_id``. ``color``
-        (a QColor name, e.g. ``"red"``) fills the window content solidly."""
+        (a QColor name, e.g. ``"red"``) fills the window content solidly.
+        ``icon_path`` supplies a local test icon to the fixture's Qt window;
+        it is a raw-render test stimulus, not a claim about Wayland app_id
+        semantics."""
         args = [env.TEST_WINDOW_BINARY, "--app-id", app_id, "--title", title, "--width", str(width), "--height", str(height)]
         if badge is not None:
             args += ["--badge", str(badge)]
         if color is not None:
             args += ["--color", color]
+        if icon_path is not None:
+            args += ["--icon-path", os.fspath(icon_path)]
         child_env = dict(os.environ)
         if accessible:
             child_env.update(QT_ACCESSIBILITY="1", QT_LINUX_ACCESSIBILITY_ALWAYS_ON="1")

@@ -238,7 +238,7 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
     if (iconName.isEmpty()) {
         // A nameless DecorationRole is the production placeholder route; the
         // QML delegate intentionally does not ask the provider for a pixmap.
-        CHECK(decoration.isNull() || artworkBounds(decoration.pixmap(QSize(64, 64))).isValid());
+        CHECK((decoration.isNull() || artworkBounds(decoration.pixmap(QSize(64, 64))).isValid()));
     } else {
         REQUIRE_FALSE(decoration.isNull());
         CHECK(artworkBounds(decoration.pixmap(QSize(64, 64))).isValid());

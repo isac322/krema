@@ -6,13 +6,19 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QColor>
+#include <QDir>
+#include <QFile>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QImage>
 #include <QPainter>
 #include <QPixmap>
 #include <QRect>
+#include <QScopeGuard>
 #include <QSize>
 #include <QString>
+#include <QTemporaryDir>
+#include <QStringList>
 
 #include <algorithm>
 
@@ -186,14 +192,58 @@ TEST_CASE("TaskIconProvider preserves healthy named theme lookup", "[taskiconpro
 {
     Q_UNUSED(guiApplication());
 
-    const QIcon themed = QIcon::fromTheme(QStringLiteral("application-x-executable"));
-    if (themed.isNull()) {
-        SKIP("The test environment has no application-x-executable theme icon");
+    QTemporaryDir themeDirectory;
+    REQUIRE(themeDirectory.isValid());
+
+    const QString themeName = QStringLiteral("krema-named-fixture-theme");
+    const QString iconName = QStringLiteral("krema-named-fixture-icon");
+    const QString iconDirectory = themeDirectory.path() + QLatin1Char('/') + themeName + QStringLiteral("/32x32");
+    REQUIRE(QDir().mkpath(iconDirectory));
+
+    const QString indexPath = themeDirectory.path() + QLatin1Char('/') + themeName + QStringLiteral("/index.theme");
+    QFile indexFile(indexPath);
+    REQUIRE(indexFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    indexFile.write("[Icon Theme]\n"
+                    "Name=Krema Named Fixture\n"
+                    "Directories=32x32\n"
+                    "\n"
+                    "[32x32]\n"
+                    "Size=32\n"
+                    "Type=Fixed\n");
+    indexFile.close();
+
+    const QString artworkPath = iconDirectory + QLatin1Char('/') + iconName + QStringLiteral(".png");
+    QImage fixture(32, 32, QImage::Format_ARGB32_Premultiplied);
+    fixture.fill(Qt::transparent);
+    {
+        QPainter painter(&fixture);
+        painter.fillRect(QRect(2, 2, 28, 28), QColor(23, 180, 91));
+        painter.fillRect(QRect(10, 10, 12, 12), QColor(245, 188, 32));
     }
+    REQUIRE(fixture.save(artworkPath));
+
+    QImage expected;
+    REQUIRE(expected.load(artworkPath));
+    expected = expected.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    const QStringList previousSearchPaths = QIcon::themeSearchPaths();
+    const QString previousThemeName = QIcon::themeName();
+    const auto restoreTheme = qScopeGuard([&] {
+        QIcon::setThemeSearchPaths(previousSearchPaths);
+        QIcon::setThemeName(previousThemeName);
+    });
+    QIcon::setThemeSearchPaths(QStringList{themeDirectory.path()});
+    QIcon::setThemeName(themeName);
+
+    const QIcon directThemeIcon = QIcon::fromTheme(iconName);
+    REQUIRE_FALSE(directThemeIcon.isNull());
+    const QPixmap directPixmap = directThemeIcon.pixmap(QSize(32, 32), 1.0);
+    REQUIRE_FALSE(directPixmap.isNull());
+    REQUIRE(directPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == expected);
 
     krema::TaskIconProvider provider(false);
-    const QPixmap rendered = provider.requestPixmap(QStringLiteral("application-x-executable"), nullptr, QSize(32, 32));
+    const QPixmap rendered = provider.requestPixmap(iconName, nullptr, QSize(32, 32));
     REQUIRE_FALSE(rendered.isNull());
     REQUIRE(rendered.size() == QSize(32, 32));
-    REQUIRE(alphaBounds(rendered).isValid());
+    REQUIRE(rendered.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == expected);
 }

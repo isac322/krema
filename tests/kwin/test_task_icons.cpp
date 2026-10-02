@@ -197,14 +197,18 @@ TEST_CASE("TaskManager named icon reaches DockModel and provider", "[task-icons]
     REQUIRE_FALSE(decoration.isNull());
     const QPixmap taskPixmap = decoration.pixmap(QSize(64, 64));
     REQUIRE_FALSE(taskPixmap.isNull());
+    const QImage decorationArtwork = taskPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
     CHECK(artworkBounds(taskPixmap).isValid());
 
-    krema::TaskIconProvider provider;
+    // Disable normalization so this compares the provider's named-theme pixels
+    // directly with the independent DecorationRole artwork.
+    krema::TaskIconProvider provider(false);
     QSize returnedSize;
     const QPixmap providerPixmap = provider.requestPixmap(kHealthyIcon, &returnedSize, QSize(64, 64));
     REQUIRE_FALSE(providerPixmap.isNull());
     CHECK(returnedSize == QSize(64, 64));
     CHECK(artworkBounds(providerPixmap).isValid());
+    CHECK(providerPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == decorationArtwork);
 }
 
 TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path", "[task-icons]")

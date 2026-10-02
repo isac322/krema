@@ -23,9 +23,11 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 import numpy as np
+from PIL import Image, ImageDraw
 import pytest
 
 from krema_e2e import config, env, kwin
@@ -364,6 +366,70 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
 
     order = [TW2, KWRITE, KFIND, TW]
     wait_until(lambda: krema.item_names() == order, message=lambda: f"AT-SPI order {order} (have {krema.item_names()})")
+
+
+
+# ICON-009: an unresolved window icon keeps its raw client artwork in the drag ghost.
+@pytest.mark.kremarc(kremarc(KWRITE))
+def test_icon009_drag_ghost_uses_raw_client_artwork(tmp_path: Path, krema: Krema, apps: TestWindows) -> None:
+    if not kwin.can_capture():
+        pytest.fail("KWin cannot capture (QPainter compositing, no /dev/dri render node); ICON-009 is a visual check")
+
+    icon_path = tmp_path / "icon009-raw.png"
+    icon = Image.new("RGB", (ICON, ICON))
+    draw = ImageDraw.Draw(icon)
+    half = ICON // 2
+    draw.rectangle((0, 0, half - 1, half - 1), fill=(240, 24, 240))
+    draw.rectangle((half, 0, ICON - 1, half - 1), fill=(24, 240, 240))
+    draw.rectangle((0, half, half - 1, ICON - 1), fill=(240, 240, 24))
+    draw.rectangle((half, half, ICON - 1, ICON - 1), fill=(24, 240, 24))
+    icon.save(icon_path)
+    raw = np.asarray(icon, dtype=np.float32)
+
+    source = "ICON-009 Raw Icon"
+    target = KWRITE
+    apps.open(
+        source,
+        app_id="org.krema.icon009.drag-raw",
+        icon_path=icon_path,
+    )
+    scene = Scene.capture(krema, [target, source])
+    start = scene.center(source)
+    over = (scene.center(target)[0], scene.row_top - 16)
+    drop = (over[0], start[1])
+    rows = min(ICON, scene.row_top - (over[1] - ICON // 2))
+    expected = raw[:rows]
+
+    with dragging(start, [over, PAUSE_MS, drop]):
+        wait_cursor(over)
+        seen: dict = {}
+
+        def feedback() -> dict | None:
+            shot = scene.shot("icon009-mid-drag")
+            opacity, baseline_corr = scene.ghost(shot, source, over)
+            gx, gy = over[0] - ICON // 2, over[1] - ICON // 2
+            artwork = shot[gy : gy + rows, gx : gx + ICON, :3].astype(np.float32)
+            raw_corr = float(
+                np.mean(
+                    [
+                        np.corrcoef(artwork[..., channel].ravel(), expected[..., channel].ravel())[0, 1]
+                        for channel in range(3)
+                    ]
+                )
+            )
+            seen.update(
+                source_opacity=round(scene.source_opacity(shot, source), 3),
+                ghost_opacity=round(opacity, 3),
+                baseline_corr=round(baseline_corr, 3),
+                raw_corr=round(raw_corr, 3),
+            )
+            return dict(seen) if (
+                0.18 <= seen["source_opacity"] <= 0.42
+                and 0.65 <= seen["ghost_opacity"] <= 0.95
+                and seen["raw_corr"] >= 0.9
+            ) else None
+
+        wait_until(feedback, timeout=5, message=lambda: f"raw drag ghost feedback: {seen}")
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND))

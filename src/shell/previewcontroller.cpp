@@ -252,6 +252,11 @@ void PreviewController::setContentSize(qreal width, qreal height)
         changed = true;
     }
     if (changed) {
+        // The popup reports its laid-out extent after QML completes the
+        // thumbnail row. Resize the native surface before recalculating the
+        // popup position and publishing the corresponding input region.
+        applyEdgeLayout();
+
         // Recalculate position to stay centered on the icon
         if (m_visible && m_parentIndex >= 0) {
             recalcContentPosition();
@@ -532,13 +537,20 @@ void PreviewController::applyEdgeLayout()
     layerWindow->setAnchors(anchors);
     layerWindow->setMargins(margins);
 
-    // Surface size: stretch along dock axis, 400px in depth axis
+    // Surface size: stretch along dock axis. Keep the historical 400px
+    // minimum for the transition from hidden/default geometry, then grow the
+    // perpendicular extent from the popup's actual laid-out size. The
+    // available extent excludes the dock-side margin imposed by the anchor.
     constexpr int previewDepth = 400;
+    const int contentExtent = static_cast<int>(std::ceil(vertical ? m_contentWidth : m_contentHeight));
+    const int reservedPanelBar = dockReservesPanelBar ? m_dockView->panelBarHeight() : 0;
+    const int availableExtent = (vertical ? screenGeo.width() : screenGeo.height()) - dockMargin - reservedPanelBar;
+    const int depth = qBound(1, qMax(previewDepth, contentExtent), qMax(1, availableExtent));
     QSize size;
     if (vertical) {
-        size = QSize(previewDepth, screenGeo.height());
+        size = QSize(depth, screenGeo.height());
     } else {
-        size = QSize(screenGeo.width(), previewDepth);
+        size = QSize(screenGeo.width(), depth);
     }
 
     m_previewView->setWidth(size.width());
@@ -622,10 +634,12 @@ void PreviewController::updateInputRegion()
         // which makes the entire surface accept ALL input — the opposite of intended!
         inputRegion = QRegion(0, 0, 1, 1);
     } else {
-        // Input region = the visible popup only. The surface is 400 px deep and
-        // spans the whole dock axis; any transparent part in the region would take
-        // pointer focus (e.g. when KWin re-picks focus after a window closes) and
-        // the surface HoverHandler would then end preview keyboard navigation.
+        // Input region = the visible popup only. The surface depth is at
+        // least 400 px and grows when the popup's layout needs more room;
+        // it spans the whole dock axis. Any transparent part in the region
+        // would take pointer focus (e.g. when KWin re-picks focus after a
+        // window closes) and the surface HoverHandler would then end preview
+        // keyboard navigation.
         PreviewInputRegionParams params{};
         params.surfaceWidth = m_previewView->width();
         params.surfaceHeight = m_previewView->height();

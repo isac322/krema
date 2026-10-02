@@ -15,8 +15,8 @@ AT-SPI facts this relies on (probed in this harness):
 * FormComboBoxDelegate rows are ``list_item[@name=<label>]`` whose first
   ``label`` child shows the current choice. Clicking a row opens an in-scene
   ``dialog`` (Dialog mode: named after the row; Popup mode: unnamed) whose
-  options are ``list_item`` elements without AT-SPI actions, so they are
-  clicked with the real pointer.
+  options are ``list_item`` or ``menu_item`` elements, selected using
+  the real pointer.
 * Rows below the fold have no ``showing`` state and a 0x0 rect until the page
   is wheel-scrolled.
 * The QColorDialog is a separate toplevel ``frame[@name='Choose tint color']``.

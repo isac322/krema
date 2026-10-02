@@ -345,6 +345,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | MOUSE-017 | `tests/kwin/test_delegate_geometry.cpp` (ctest `krema_delegate_geometry_tests`) | Independent KWin `EffectWindow.iconGeometry` | partial: initial target, move/resize, groups, teardown passed; hidden new-task/group and reveal pending; visible Magic Lamp/Squash animation manual |
 | PREV-008 | `test_03_preview.py::test_prev008_explicit_group_click_shows_all_thumbnails_and_selected_child_closes` | KWin, AT-SPI, screenshot | pending; DRM capture required |
 | PREV-009 | `test_03_preview.py::test_prev009_explicit_group_pending_hide_retargets_after_reenter` | AT-SPI, screenshot | pending; DRM capture required |
+| PREV-011 | `test_11_preview_surface.py::test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts` (Left, Right, horizontal control) | Entire popup/thumbnail containment in KWin native surface, real last-thumbnail input, exact PID/internalId, wrong underlying-client negative, live grow/shrink/reuse, transparent-area pass-through | pass: source-built and Fedora 43 installed RPM; no DRM or pixel proof |
 | DND-005 | `test_05_drag.py::test_dnd005_release_inside_outside_and_exit_reenter_preserves_window_state` (72 base scenarios: six policy pairs × 12 source/release cases, plus 24 held-left/right release-order controls) | KWin, AT-SPI, screenshot | pending; DRM capture required |
 | CLK-002 | `test_06_settings.py::test_clk002_click_action_combinations_apply_live_persist_and_restore` (six cases), `test_06_settings.py::test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores_them` (`outputs(2)`) | KWin, AT-SPI, `kremarc` | pending |
 | CLK-011 | `test_06_settings.py::test_clk011_preview_controls_follow_hover_and_explicit_group_choice` (six cases) | AT-SPI, screenshot, `kremarc` | pending; DRM capture required |
@@ -358,7 +359,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | DND-006 | `test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both cross-boundary directions with separation on/off) | Real drags, ordered AT-SPI app names, saved pinned membership | native Tier 2 coverage; visual drop-indicator/drag ghost/paint unverified; installed Tier 3 unverified |
 | KBD-010 | `tests/appium/test_10_task_zone_input.py::test_kbd010_task_navigation_survives_native_launch_and_close` (four edges) | Real keys, AT-SPI item focus, native launch/close, KWin activation | native Tier 2 coverage; F12 is a delivery probe, not launch proof; painted-divider quality and KWin RPC unverified |
 | MOUSE-018 | `tests/appium/test_10_task_zone_input.py::test_mouse018_separation_modes_and_magnified_boundary_hits` (four edges × separation ON/OFF, `MaxZoomFactor=1.6`) | Real pointer hover, AT-SPI separator/item geometry, outward-neighbor reflow, exact native PID hit targets | native Tier 2 coverage; rest separator clearance is measured in TZONE-002 to iconSpacing ±1 px on all four edges; pixel/AA, overlap screenshots, and DRM unverified |
-| PREV-010 | `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` (horizontal three-thumbnail and vertical two-thumbnail invocations) | Actual grouped window IDs/titles, last-thumbnail selection, selected-window KWin activation, AT-SPI preview state | Strict feature coverage for partition/index/pin transitions. The vertical two-thumbnail case still exercises center-point input reachability while the existing 400 px native surface clips the wider popup; whole-popup/thumbnail containment is owned by the separate preview-surface fix. Image/RHI/DRM/default-timing unverified |
+| PREV-010 | `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` (horizontal three-thumbnail and vertical two-thumbnail invocations) | Ordered grouped window IDs/titles, every-slot physical selection and exact KWin activation, AT-SPI preview state | Strict partition/order/index/pin-transition coverage with thumbnail-center reachability in the native input surface. PREV-011 covers whole-popup/thumbnail containment. Image/RHI/DRM/default-timing unverified |
 The Tier 1 QML names are:
 `test_groupPreviewClickShowsPopupAndSuppressesTooltip`,
 `test_groupPreviewClickStopsDelayedTooltip`,
@@ -467,12 +468,14 @@ remain unverified.
 
 `KBD-010` covers launch/close and focus traversal on all four edges; F12 is a
 delivery probe, not launch proof. `PREV-010` keeps three-thumbnail horizontal
-coverage and uses a two-thumbnail vertical fixture to prove index-1
-remapping, exact native activation, and the other-app pin/unpin transitions.
-The vertical popup remains wider than the existing 400 px native surface, so
-the feature check is center-point input reachability rather than whole-rect
-containment. The separate preview-surface fix owns whole-popup and
-whole-thumbnail containment for this vertical case.
+coverage and a two-thumbnail vertical fixture. It preserves the initial
+ordered window-identity baseline across other-app unpin/repin transitions
+and checks index-1 remapping, every-slot physical selection, exact native
+activation, and thumbnail-center reachability in the native input surface.
+The native preview depth tracks the QML popup extent with a 400 px minimum,
+subject to the available output limit. `PREV-011`
+(`test_11_preview_surface.py::test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts`)
+checks whole-popup and whole-thumbnail containment.
 These checks do not establish divider paint/AA, preview image/RHI content,
 DRM capture, installed-package Tier 3, or KWin RPC behavior. Preview input uses
 configured `PreviewHideDelay=1500`, `PreviewHoverDelay=500`, and
@@ -488,13 +491,10 @@ checks run against an installed package.
 
 ## Known krema bugs
 
-The feature suite does not pin the existing vertical preview-surface clipping
-with an xfail. `PREV-010` keeps strict partition/index/pin-transition coverage
-with a two-thumbnail vertical fixture and checks the selected thumbnail's
-center point; the popup and thumbnail can still extend beyond the existing
-400 px native surface. The separate preview-surface fix owns strict
-whole-popup/whole-thumbnail containment for grouped vertical previews and
-must remove this limitation from the contract when fixed.
+Grouped preview rows can still exceed the available output capacity. The
+native preview depth is limited by the output extent; thumbnail wrapping and
+scrolling are not implemented, so unusually large rows may extend beyond
+the surface.
 Tests marked `outputs(2)` or `outputs(3)` are intentionally skipped when the
 session has a different output count because the exact number of displays is a
 test precondition.

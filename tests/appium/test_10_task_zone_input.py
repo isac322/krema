@@ -408,9 +408,9 @@ def _toggle_pin(krema: Krema, name: str, app_id: str, *, pinned: bool, order: tu
 @pytest.mark.parametrize("edge", ORIENTATIONS)
 def test_prev010_last_thumbnail_and_other_app_pin_transitions(krema: Krema, apps: TestWindows, edge: int) -> None:
     _start(krema, edge, previews=True)
-    # The existing vertical preview surface is 400 px deep. Keep its feature
-    # coverage strict by exercising both vertical slots; the separate
-    # preview-surface fix owns whole-rect reachability for wider grouped rows.
+    # The two-thumbnail vertical fixture exercises both vertical slots.
+    # PREV-011 in test_11_preview_surface.py checks whole-popup rectangles:
+    # test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts.
     group_titles = GROUP_TITLES if edge == config.EDGE_BOTTOM else GROUP_TITLES[:2]
     group = [apps.open(title, app_id=env.TEST_APP_ID, accessible=True) for title in group_titles]
     apps.open(PINNED_B, app_id=env.TEST_APP2_ID, accessible=True)

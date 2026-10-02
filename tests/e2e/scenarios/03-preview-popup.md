@@ -42,13 +42,14 @@ scenarios 01 and 04; this file adds only the explicit mouse-preview path.
 | PREV-005 | Pointer leave closes outside the popup; configured hide delay is respected | `test_prev005_preview_closes_when_pointer_leaves`, `test_prev005_close_on_leave_is_delayed` |
 | PREV-005 | A neighbouring task row re-centres the dock without reopening a preview under a stale pointer position | `test_prev005_preview_stays_closed_when_a_task_row_appears_while_leaving` |
 | PREV-001 / VIS-009 | Reservation ON/OFF and four-edge inward popup geometry relative to the resting dock item, including Floating ON; geometry-only coverage with no DRM thumbnail-pixel assertion | `tests/appium/test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` |
+| PREV-011 | Two/three default thumbnails fit the native Left/Right surface; last-thumbnail clicks select the exact client rather than the window underneath; live group/single reuse; horizontal control | `test_11_preview_surface.py::test_prev011_grouped_preview_surface_tracks_two_three_and_single_layouts` |
 
 Existing preview behavior tests are in `tests/appium/test_03_preview.py`. The
-reservation preservation regression is in
-`tests/appium/test_08_reservation.py`. The new QA-PREV-01 test records both
-sides: the pre-fix run failed after a 33 ms entry, while the fixed run passed
-three fresh opens. Its fast path complements, rather than replaces, the
-existing pixel/layout waits.
+reservation preservation regression is in `tests/appium/test_08_reservation.py`,
+and PREV-011 surface containment is in `tests/appium/test_11_preview_surface.py`.
+QA-PREV-01 records both sides: the pre-fix run failed after a 33 ms entry,
+while the fixed run passed three fresh opens. Its fast path complements,
+rather than replaces, the existing pixel/layout waits.
 
 ---
 
@@ -312,4 +313,4 @@ state. PipeWire/Screenshot2 checks require DRM/vgem.
 - Pin/unpin transitions preserve the group identities, correct pinned launcher membership, expected dock order, and populated divider.
 
 **Verification:** Independent fixture/KWin identity sets and counts, AT-SPI thumbnail names and measured left-to-right order, unchanged full baseline identities on every grouped reopen or return, real pointer coordinates, KWin active identities after every slot selection, and popup closure.
-**Automated (strict feature coverage):** `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` exercises all three horizontal slots and both vertical slots before and after other-app unpin/repin transitions. It retains strict single-action vertical hover and physical last-center input reachability. The vertical popup remains wider than the existing 400 px native surface, so this feature check asserts center-point input reachability rather than whole-rect containment; the separate preview-surface fix owns strict whole-popup and whole-thumbnail containment. Image/RHI/DRM and default timing remain unverified.
+**Automated (strict feature coverage):** `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` exercises all three horizontal slots and both vertical slots before and after other-app unpin/repin transitions. It retains strict single-action vertical hover and physical last-center input reachability. The native preview surface follows the laid-out popup extent within available output space. PREV-010 checks partition order and exact native activation with center-point input reachability; PREV-011 separately verifies whole-popup and whole-thumbnail containment. Image/RHI/DRM and default timing remain unverified.

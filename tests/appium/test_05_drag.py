@@ -370,6 +370,8 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
 
 
 # ICON-009: an unresolved window icon keeps its raw client artwork in the drag ghost.
+# The standard source-dimming invariant is covered by DND-003; this test's oracle
+# deliberately checks the independent raw artwork and ghost-opacity signals.
 @pytest.mark.kremarc(kremarc(KWRITE))
 def test_icon009_drag_ghost_uses_raw_client_artwork(tmp_path: Path, krema: Krema, apps: TestWindows) -> None:
     if not kwin.can_capture():
@@ -418,18 +420,24 @@ def test_icon009_drag_ghost_uses_raw_client_artwork(tmp_path: Path, krema: Krema
                 )
             )
             seen.update(
-                source_opacity=round(scene.source_opacity(shot, source), 3),
                 ghost_opacity=round(opacity, 3),
                 baseline_corr=round(baseline_corr, 3),
                 raw_corr=round(raw_corr, 3),
             )
             return dict(seen) if (
-                0.18 <= seen["source_opacity"] <= 0.42
-                and 0.65 <= seen["ghost_opacity"] <= 0.95
+                0.65 <= seen["ghost_opacity"] <= 0.95
                 and seen["raw_corr"] >= 0.9
             ) else None
 
-        wait_until(feedback, timeout=5, message=lambda: f"raw drag ghost feedback: {seen}")
+        wait_until(
+            feedback,
+            timeout=5,
+            message=lambda: (
+                "raw drag ghost feedback "
+                "(raw_corr/ghost_opacity; source dimming covered by DND-003): "
+                f"{seen}"
+            ),
+        )
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND))

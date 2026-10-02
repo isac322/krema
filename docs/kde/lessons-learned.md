@@ -344,3 +344,24 @@ hover-animation frames.
 - A layer surface must follow the content it hosts; a fixed reserve is only a safe minimum.
 - Anchor margins reduce the available output extent and must be included when constraining a surface.
 - Growing a transparent surface is safe only when the input region remains limited to visible content.
+
+## 19. Preserve a positive layer-surface size before changing orientation (2026-10, PR #73)
+
+**Symptom:** CI reported a fatal layer-shell protocol error: a zero-width surface
+without both left and right anchors. KWin terminated the client's Wayland
+connection.
+
+**Cause:** [INFERENCE] The source changes anchors before replacing the old
+zero-axis desired size. During a horizontal-to-vertical transition, zero width
+can therefore coexist with left, top, and bottom anchors, which is invalid if
+committed. The failing run did not capture the exact commit timing.
+
+**Fix:** Before applying new anchors, pass the current positive `QWindow::size()`
+through the existing `setSize()` path. Skip the step while either dimension is
+zero, including the initial `0x0` window. The compositor can then process the
+anchor transition with a valid intermediate size; normal `DockView` sizing
+restores the final zero-axis stretch afterward.
+
+**Key lesson:** A layer-shell zero size is a compositor instruction only after
+the matching double anchor exists. During live anchor replacement, preserve a
+positive current size instead of inventing a fallback size or adding a new API.

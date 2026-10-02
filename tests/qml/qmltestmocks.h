@@ -164,6 +164,8 @@ public:
                                        qreal restStart,
                                        qreal iconSize,
                                        qreal spacing,
+                                       int boundary,
+                                       qreal boundaryGap,
                                        qreal restBackgroundStart,
                                        qreal restBackgroundEnd,
                                        qreal maxZoomFactor,

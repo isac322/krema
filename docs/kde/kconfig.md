@@ -233,9 +233,17 @@ class DockSettings : public QObject {
 | `VisibilityMode` | int | 0 | Dock visibility behavior |
 | `Edge` | int | 0 | Screen edge (0=Bottom, 1=Top, 2=Left, 3=Right) |
 | `ShowDelay` | int | 200 | Show delay in ms |
+| `ReserveScreenSpace` | bool | true | In Always visible mode, reserve the dock's panel-bar height as the exclusive screen zone so maximized windows avoid the dock; when false, do not reserve that zone |
+| `SeparateLaunchers` | bool | false | Keep pinned applications, including running pinned applications, before unpinned running tasks in the dock |
 | `HideDelay` | int | 500 | Hide delay in ms |
 | `SingleWindowClickAction` | int | `0` | Left-click action (0 to 1): 0 = Activate window; 1 = Minimize active window (restore a minimized window or focus a background window) |
 | `GroupedWindowClickAction` | int | `0` | Grouped left-click action (0 to 2): 0 = Cycle through windows; 1 = Show window previews; 2 = Minimize only the currently active child (activate or restore the most recently used child when none is active) |
+
+`ReserveScreenSpace` is a global `[General]` setting. The Behavior switch is shown only when `VisibilityMode=0` (Always visible). The dock applies a changed value while running and persists it for the next start. Auto hide and Dodge modes keep their existing platform behavior rather than using this reservation setting.
+
+`SeparateLaunchers` is also global and optional. When enabled, the dock keeps pinned applications in the first section and unpinned running applications after the boundary. A drag that crosses the boundary is clamped to the source section and does not implicitly pin or unpin an application. When disabled, the existing free-reorder behavior remains in effect.
+
+The corresponding FormCard switches are labeled **Reserve screen space** (shown only for Always visible mode; maximized windows avoid the dock) and **Separate pinned and running apps** (pinned apps, including running ones, stay together; unpinned running apps follow after the divider).
 
 Both click-action keys are global values in the `[General]` group of `~/.config/kremarc`, shared by every monitor's dock through the application's `DockSettings` singleton. Each choice saves independently when changed and loads on startup. Their default value of `0` preserves single-window activation and grouped-window cycling on upgrade.
 

@@ -10,6 +10,7 @@
 - preview-keyboard-activate: Enter to activate focused thumbnail window
 - preview-keyboard-close: Delete to close focused thumbnail window
 - keyboard-escape: Escape to exit keyboard navigation
+- dock-task-zones: Keyboard focus crosses the pinned and unpinned task zones without focusing the separator
 
 ## Affected Files
 - src/qml/main.qml
@@ -27,6 +28,11 @@
 - src/platform/kwinpointermotionwatcher.h
 - src/platform/kwinpointermotionwatcher.cpp
 - src/app/application.cpp
+- src/config/krema.kcfg
+- src/models/dockactions.h
+- src/models/dockactions.cpp
+- src/models/dockmodel.h
+- src/models/dockmodel.cpp
 
 **Tier:** Tier 2 (Appium), with Tier 1 QML coverage for shared `main.qml`
 keyboard behavior.
@@ -231,3 +237,25 @@ existing keyboard assertions remain the consumer contract for those paths.
 
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_keyboard_mode_keeps_hidden_dock_visible[autohide|dodge|smarthide] (SmartHide = VisibilityMode=2 + DodgeActiveOnly=true)
 **Automated:** tests/appium/test_01_keyboard_nav.py::test_kbd009_dock_auto_hides_again_after_escape[autohide|dodge|smarthide] (Escape returns focus to the previously active window, so SmartHide sees it again)
+
+---
+
+## TC KBD-010: Keyboard Traversal Crosses Task Zones
+
+**Precondition:** Enable `Separate pinned and running apps`. Provide at least two pinned apps (including one running app) and two unpinned running apps. The dock is visible and no dock item currently has keyboard focus.
+
+**Steps:**
+1. Invoke the existing focus-dock shortcut and record the dock item names in visual order from `accessibility_tree`.
+2. Press `keyboard_key Right` until focus reaches the last pinned item, then press `keyboard_key Right` once more.
+3. Inspect the accessibility tree while focus crosses the boundary.
+4. Press `keyboard_key Left` to return to the last pinned item, then continue left to the first item.
+5. Repeat the traversal once after one pinned app is launched and once after an unpinned app is closed.
+
+**Expected:**
+- Each app appears in exactly one focusable dock button; running pinned apps remain in the pinned zone.
+- Right and Left move directly between adjacent task buttons across the zone boundary.
+- With both zones non-empty, the visual separator is visible but not focusable, selectable, or an extra keyboard stop.
+- Adding or removing a task updates the traversal order without duplicate buttons or skipped tasks.
+
+**Verification:** AT-SPI `focused` state and ordered button names before and after the lifecycle changes; the separator has no `focusable` state.
+**Automated (native Tier 2; rerunnable 4-edge coverage):** `tests/appium/test_10_task_zone_input.py::test_kbd010_task_navigation_survives_native_launch_and_close` covers native launch/close lifecycle and the task-boundary focus sequence on all four edges. The divider never receives focus or selection; F12 remains a delivery probe, not launch proof. KWin RPC and painted-divider quality are not claimed.

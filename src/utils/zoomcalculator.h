@@ -52,12 +52,17 @@ struct DockZoomLayout {
 /// position.
 ///
 /// All coordinates share one rest frame on the primary axis: item i rests at
-/// [restStart + i * pitch, restStart + i * pitch + iconSize] with
-/// pitch = iconSize + spacing, and its rest centre is
-/// c_i = restStart + i * pitch + iconSize / 2. The cursor is expressed in that
-/// same rest frame. restBackgroundStart/restBackgroundEnd are the background's
-/// rest edges and [minEdge, maxEdge] the surface bounds the background must
-/// not cross (pass -Infinity/Infinity for no bound).
+/// [restStart + i * pitch + boundaryGap (when i >= boundary), restStart + i * pitch
+/// + boundaryGap (when i >= boundary) + iconSize] with pitch = iconSize + spacing,
+/// and its rest centre is the corresponding slot centre. The cursor is expressed
+/// in that same rest frame. restBackgroundStart/restBackgroundEnd are the
+/// background's rest edges and [minEdge, maxEdge] the surface bounds the
+/// background must not cross (pass -Infinity/Infinity for no bound).
+///
+/// The optional-looking boundary is deliberately required: pass -1 and 0 when
+/// no pinned/running boundary is present. When boundary >= 0, boundaryGap is a
+/// fixed, unscaled increment inserted before item boundary and included in the
+/// row extent.
 ///
 /// Both styles scale item i by z_i = parabolicZoomFactor(c_i - cursor,
 /// iconSize, M) (Gaussian, sigma = 1.2 * iconSize).
@@ -71,23 +76,28 @@ struct DockZoomLayout {
 ///   a = erf(max(0, cursor - rowStart) / sigma), b = erf(max(0, rowEnd - cursor) / sigma)
 ///   leadingGrowth = G * a / (a + b), trailingGrowth = G - leadingGrowth
 /// where [rowStart, rowEnd) spans every item's slot (icon plus half a gap on
-/// each side). Away from the ends a = b = 1, so each end grows by exactly G/2
-/// and, because the sampled Gaussian sum G is constant there, both
-/// background edges and every far icon stay still while the cursor moves.
-/// Toward an end the growth shifts smoothly to that end. Pinning the icon
-/// under the cursor to the cursor instead (Plank, Apple's patent) makes the
-/// whole row shake back and forth once per icon.
+/// each side), including the fixed boundary gap. Away from the ends a = b = 1,
+/// so each end grows by exactly G/2 and, because the sampled Gaussian sum G is
+/// constant there, both background edges and every far icon stay still while
+/// the cursor moves.
 ///
-/// When G exceeds the slack between the background's rest edges and the
-/// bounds, the positional growth is reduced to fit (each item's positional
-/// width becomes iconSize + (iconSize * z_i - iconSize) * slack / G) while
-/// the visual scales stay full, so neighbours overlap slightly instead of the
-/// zoom disappearing. Each end's growth is clamped to its own slack.
+/// Toward an end the growth shifts smoothly to that end. Pinning the icon under
+/// the cursor to the cursor (Plank, Apple's patent) makes the whole row shake
+/// back and forth once per icon.
+///
+/// When G exceeds the slack between the background's rest edges and the bounds,
+/// the positional growth is reduced to fit (each item's positional width becomes
+/// iconSize + (iconSize * z_i - iconSize) * slack / G) while the visual scales
+/// stay full, so neighbours overlap slightly instead of the zoom disappearing.
+/// Each end's growth is clamped to its own slack. The fixed boundary gap is
+/// never scaled or compressed.
 ///
 /// @param count Number of items
 /// @param restStart Leading edge of item 0 at rest
 /// @param iconSize Base icon size
-/// @param spacing Gap between adjacent icons (not scaled by the zoom)
+/// @param spacing Gap between adjacent icons
+/// @param boundary Index of first item in the second zone, or -1 when absent
+/// @param boundaryGap Fixed extra gap inserted before @p boundary
 /// @param restBackgroundStart Background's rest leading edge
 /// @param restBackgroundEnd Background's rest trailing edge
 /// @param maxZoomFactor Zoom factor at the cursor (M)
@@ -100,6 +110,8 @@ struct DockZoomLayout {
                                                     double restStart,
                                                     double iconSize,
                                                     double spacing,
+                                                    int boundary,
+                                                    double boundaryGap,
                                                     double restBackgroundStart,
                                                     double restBackgroundEnd,
                                                     double maxZoomFactor,
@@ -123,8 +135,10 @@ struct DockZoomLayout {
         return layout;
     }
 
-    const auto restCentre = [restStart, pitch, iconSize](std::size_t i) {
-        return restStart + static_cast<double>(i) * pitch + iconSize * 0.5;
+    const bool hasBoundary = boundary >= 0 && boundary < count && boundaryGap > 0.0;
+    const auto restCentre = [restStart, pitch, iconSize, boundary, boundaryGap, hasBoundary](std::size_t i) {
+        const double extra = hasBoundary && static_cast<int>(i) >= boundary ? boundaryGap : 0.0;
+        return restStart + static_cast<double>(i) * pitch + extra + iconSize * 0.5;
     };
 
     for (std::size_t i = 0; i < n; ++i) {
@@ -141,7 +155,7 @@ struct DockZoomLayout {
 
     const double sigma = iconSize * kDefaultZoomSigmaFactor;
     const double rowStart = restStart - spacing * 0.5;
-    const double rowEnd = rowStart + static_cast<double>(n) * pitch;
+    const double rowEnd = rowStart + static_cast<double>(n) * pitch + (hasBoundary ? boundaryGap : 0.0);
     const double before = std::erf(std::max(0.0, cursor - rowStart) / sigma);
     const double after = std::erf(std::max(0.0, rowEnd - cursor) / sigma);
     const double leadingShare = before + after > 0.0 ? before / (before + after) : 0.5;
@@ -155,6 +169,9 @@ struct DockZoomLayout {
 
     double edge = restStart - leading;
     for (std::size_t i = 0; i < n; ++i) {
+        if (hasBoundary && static_cast<int>(i) == boundary) {
+            edge += boundaryGap;
+        }
         const double width = iconSize + iconSize * (layout.scales[i] - 1.0) * positionalShare;
         layout.offsets[i] = edge + width * 0.5 - restCentre(i);
         edge += width + spacing;

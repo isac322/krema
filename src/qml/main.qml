@@ -25,6 +25,16 @@ Item {
 
     // Hovered item tracking (for custom tooltip and click targeting)
     property int hoveredIndex: -1
+    // A separator is a real primary-axis slot, not an overlay in the normal
+    // inter-icon gap. The boundary remains a model-free index so task and
+    // keyboard indices are unchanged.
+    readonly property int taskZoneBoundary: DockSettings.separateLaunchers
+        && DockModel.pinnedTaskCount > 0
+        && DockModel.pinnedTaskCount < dockRepeater.count
+        ? DockModel.pinnedTaskCount : -1
+    readonly property real taskZoneSeparatorThickness: 1
+    readonly property real taskZoneGap: taskZoneBoundary >= 0
+        ? DockSettings.iconSpacing + taskZoneSeparatorThickness : 0
     property string hoveredName: ""
 
     // Keyboard navigation state
@@ -325,18 +335,30 @@ Item {
         root._dragTargetIndex = -1
         DockVisibility.setDragActive(false)
     }
+    // Return an item's unscaled rest-slot start in dockPanel coordinates.
+    // The primary axis includes the allocated separator slot; the secondary
+    // axis intentionally remains the Flow coordinate.
+    function _primaryRestSlotStart(item) {
+        return DockView.isVertical
+            ? dockRow.y + item.y + item.restOffset
+            : dockRow.x + item.x + item.restOffset
+    }
+
 
     // Compute the target index where the dragged item would be inserted.
     // Compares mouse X with each icon's center X (including the source so
     // that dropping near the original position keeps the item in place).
     function computeDropIndex(globalMousePos) {
+        const separate = DockSettings.separateLaunchers
+        const sourcePinned = separate && DockModel.isPinned(root._dragSourceIndex)
         if (DockView.isVertical) {
             let panelRelY = globalMousePos - dockPanel.y
             let items = []
             for (let i = 0; i < dockRepeater.count; i++) {
                 let item = dockRepeater.itemAt(i)
                 if (!item) continue
-                items.push({ idx: i, cx: item.y + item.height / 2 + dockRow.y })
+                if (separate && DockModel.isPinned(i) !== sourcePinned) continue
+                items.push({ idx: i, cx: _primaryRestSlotStart(item) + item.height / 2 })
             }
             if (items.length === 0) return -1
             let bestIdx = items[0].idx
@@ -352,7 +374,8 @@ Item {
             for (let i = 0; i < dockRepeater.count; i++) {
                 let item = dockRepeater.itemAt(i)
                 if (!item) continue
-                items.push({ idx: i, cx: item.x + item.width / 2 + dockRow.x })
+                if (separate && DockModel.isPinned(i) !== sourcePinned) continue
+                items.push({ idx: i, cx: _primaryRestSlotStart(item) + item.width / 2 })
             }
             if (items.length === 0) return -1
             let bestIdx = items[0].idx
@@ -370,7 +393,7 @@ Item {
         for (let i = 0; i < dockRepeater.count; i++) {
             let item = dockRepeater.itemAt(i)
             if (!item) continue
-            let itemLeft = dockRow.x + item.x
+            let itemLeft = _primaryRestSlotStart(item)
             let itemRight = itemLeft + item.width
             if (dropX >= itemLeft && dropX <= itemRight) return i
         }
@@ -667,10 +690,11 @@ Item {
                 if (root._dragTargetIndex >= 0 && root._dragTargetIndex !== root._dragSourceIndex) {
                     let item = dockRepeater.itemAt(root._dragSourceIndex)
                     let name = item ? item.displayName : ""
-                    DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)
-                    Accessible.announce(
-                        i18n("Moved %1 to position %2", name, root._dragTargetIndex + 1),
-                        Accessible.Polite)
+                    if (DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)) {
+                        Accessible.announce(
+                            i18n("Moved %1 to position %2", name, root._dragTargetIndex + 1),
+                            Accessible.Polite)
+                    }
                 }
                 // Reset drag state
                 root._dragActive = false
@@ -810,9 +834,9 @@ Item {
         // Panel size: primary axis stretches to content, secondary axis = icon + padding
         width: DockView.isVertical
             ? (DockSettings.iconSize + Kirigami.Units.largeSpacing * 2)
-            : Math.max(dockRow.implicitWidth + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
+            : Math.max(dockRow.implicitWidth + root.taskZoneGap + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
         height: DockView.isVertical
-            ? Math.max(dockRow.implicitHeight + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
+            ? Math.max(dockRow.implicitHeight + root.taskZoneGap + Kirigami.Units.largeSpacing * 2, Kirigami.Units.gridUnit * 6)
             : (DockSettings.iconSize + Kirigami.Units.largeSpacing * 2)
         color: "transparent"
 
@@ -1002,6 +1026,7 @@ Item {
         readonly property var zoomLayout: DockView.zoomLayout(
             dockRepeater.count, _restStart,
             DockSettings.iconSize, DockSettings.iconSpacing,
+            root.taskZoneBoundary, root.taskZoneGap,
             0, DockView.isVertical ? height : width,
             zoomStyle === 1
                 ? DockSettings.maxZoomFactor
@@ -1074,8 +1099,8 @@ Item {
             onPositioningComplete: root.scheduleDelegateGeometryRefresh()
 
             // Animate content extent to sync centering with panel size animation.
-            property real animatedContentWidth: implicitWidth
-            property real animatedContentHeight: implicitHeight
+            property real animatedContentWidth: implicitWidth + (DockView.isVertical ? 0 : root.taskZoneGap)
+            property real animatedContentHeight: implicitHeight + (DockView.isVertical ? root.taskZoneGap : 0)
             Behavior on animatedContentWidth {
                 enabled: dockPanel.animationsReady && !DockView.isVertical
                 NumberAnimation {
@@ -1112,9 +1137,16 @@ Item {
             Repeater {
                 id: dockRepeater
                 model: DockModel.tasksModel
+                property int layoutRevision: 0
                 onCountChanged: root.scheduleDelegateGeometryRefresh()
-                onItemAdded: root.scheduleDelegateGeometryRefresh()
-                onItemRemoved: root.scheduleDelegateGeometryRefresh()
+                onItemAdded: {
+                    layoutRevision++
+                    root.scheduleDelegateGeometryRefresh()
+                }
+                onItemRemoved: {
+                    layoutRevision++
+                    root.scheduleDelegateGeometryRefresh()
+                }
 
                 DockItem {
                     id: taskDelegate
@@ -1131,8 +1163,12 @@ Item {
                         id: delegateGeometryProxy
                         parent: root
                         visible: false
-                        x: dockPanel.restX + dockRow.x + taskDelegate.x
-                        y: dockPanel.restY + dockRow.y + taskDelegate.y
+                        x: dockPanel.restX + (DockView.isVertical
+                            ? dockRow.x + taskDelegate.x
+                            : root._primaryRestSlotStart(taskDelegate))
+                        y: dockPanel.restY + (DockView.isVertical
+                            ? root._primaryRestSlotStart(taskDelegate)
+                            : dockRow.y + taskDelegate.y)
                         width: taskDelegate.width
                         height: taskDelegate.height
                     }
@@ -1143,24 +1179,81 @@ Item {
                     iconSize: DockSettings.iconSize
                     maxZoomFactor: DockSettings.maxZoomFactor
                     spacing: DockSettings.iconSpacing
+                    restOffset: taskZoneBoundary >= 0 && index >= taskZoneBoundary
+                        ? taskZoneGap : 0
+                    restOffsetAnimationEnabled: dockPanel.animationsReady
+                        && !dockPanel.mouseInside
                     zoomScale: dockPanel.zoomLayout.scales?.[index] ?? 1.0
                     zoomOffset: dockPanel.zoomLayout.offsets?.[index] ?? 0.0
                     zoomStyle: dockPanel.zoomStyle
+                    itemCenterX: DockView.isVertical
+                        ? root._primaryRestSlotStart(taskDelegate) + height / 2
+                        : root._primaryRestSlotStart(taskDelegate) + width / 2
                     onCurrentOffsetChanged: dockPanel.scheduleHoverUpdate()
                     onCurrentScaleChanged: dockPanel.scheduleHoverUpdate()
                     onDelegateGeometryChanged: root.scheduleDelegateGeometryRefresh()
 
-                    // Compute this item's rest center on the primary axis relative to the panel.
-                    // For vertical docks, the primary axis is Y (remapped to mouseX).
-                    itemCenterX: DockView.isVertical
-                        ? (y + height / 2 + dockRow.y)
-                        : (x + width / 2 + dockRow.x)
 
                     // Drag and drop visual feedback
                     isDragSource: root._dragActive && root._dragSourceIndex === index
                     isExternalDropTarget: externalDropArea.containsDrag
                                           && externalDropArea.dropTargetIndex === index
                 }
+            }
+        }
+        // Allocate a dedicated separator slot outside the Flow. The native
+        // separator is centered between transformed visual edges below, cannot
+        // become a task or keyboard stop, and contributes its thickness to
+        // root.taskZoneGap for normal spacing on both sides.
+        Kirigami.Separator {
+            id: taskZonesSeparator
+            objectName: "taskZonesSeparator"
+            z: -0.5
+            readonly property int boundary: root.taskZoneBoundary
+            readonly property bool hasBoundary: boundary >= 0
+            readonly property var pinnedItem: {
+                let revision = dockRepeater.layoutRevision
+                let count = dockRepeater.count
+                return hasBoundary ? dockRepeater.itemAt(boundary - 1) : null
+            }
+            readonly property var runningItem: {
+                let revision = dockRepeater.layoutRevision
+                let count = dockRepeater.count
+                return hasBoundary ? dockRepeater.itemAt(boundary) : null
+            }
+            readonly property real primaryCenter: {
+                if (!pinnedItem || !runningItem) return 0
+                let pinnedExtent = DockView.isVertical ? pinnedItem.height : pinnedItem.width
+                let runningExtent = DockView.isVertical ? runningItem.height : runningItem.width
+                let pinnedEdge = pinnedItem.itemCenterX + pinnedItem.currentOffset
+                    + pinnedExtent * pinnedItem.currentScale / 2
+                let runningEdge = runningItem.itemCenterX + runningItem.currentOffset
+                    - runningExtent * runningItem.currentScale / 2
+                return (pinnedEdge + runningEdge) / 2
+            }
+            readonly property real secondaryCenter: {
+                if (!pinnedItem || !runningItem) return 0
+                let pinnedSpan = root._secondarySpan(pinnedItem, pinnedItem.currentScale)
+                let runningSpan = root._secondarySpan(runningItem, runningItem.currentScale)
+                return (pinnedSpan.near + pinnedSpan.far + runningSpan.near + runningSpan.far) / 4
+            }
+            readonly property real thickness: root.taskZoneSeparatorThickness
+            readonly property real length: Math.min(DockSettings.iconSize, Kirigami.Units.gridUnit * 2)
+            visible: hasBoundary && pinnedItem !== null && runningItem !== null
+            width: DockView.isVertical ? length : thickness
+            height: DockView.isVertical ? thickness : length
+            x: Math.round((DockView.isVertical ? secondaryCenter : primaryCenter) - width / 2)
+            y: Math.round((DockView.isVertical ? primaryCenter : secondaryCenter) - height / 2)
+            Accessible.role: Accessible.Separator
+            Accessible.name: i18n("Pinned and running apps separator")
+            Accessible.focusable: false
+            Accessible.ignored: !visible
+
+            Connections {
+                target: DockModel.tasksModel
+                function onLayoutChanged() { dockRepeater.layoutRevision++ }
+                function onRowsMoved() { dockRepeater.layoutRevision++ }
+                function onModelReset() { dockRepeater.layoutRevision++ }
             }
         }
 
@@ -1251,7 +1344,7 @@ Item {
             if (DockView.isVertical) return dockPanel.x + dockRow.x
             let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
             if (!targetItem) return 0
-            let itemX = dockPanel.x + dockRow.x + targetItem.x
+            let itemX = dockPanel.x + root._primaryRestSlotStart(targetItem)
             if (root._dragTargetIndex > root._dragSourceIndex) {
                 return itemX + targetItem.width + DockSettings.iconSpacing / 2 - 1
             } else {
@@ -1263,7 +1356,7 @@ Item {
             if (!DockView.isVertical) return dockPanel.y + dockRow.y
             let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
             if (!targetItem) return 0
-            let itemY = dockPanel.y + dockRow.y + targetItem.y
+            let itemY = dockPanel.y + root._primaryRestSlotStart(targetItem)
             if (root._dragTargetIndex > root._dragSourceIndex) {
                 return itemY + targetItem.height + DockSettings.iconSpacing / 2 - 1
             } else {
@@ -1377,7 +1470,7 @@ Item {
             if (DockView.edge === 2) return dockPanel.x + dockPanel.width + sp  // Left → right
             if (DockView.edge === 3) return dockPanel.x - width - sp            // Right → left
             // Visual centre: rest centre plus the animated zoom offset (Scale keeps the centre)
-            return dockPanel.x + dockRow.x + item.x + item.width / 2 + item.currentOffset - width / 2
+            return dockPanel.x + root._primaryRestSlotStart(item) + item.width / 2 + item.currentOffset - width / 2
         }
         y: {
             if (root.hoveredIndex < 0 || root.hoveredIndex >= dockRepeater.count)
@@ -1387,7 +1480,7 @@ Item {
             let sp = Kirigami.Units.largeSpacing
             if (DockView.edge === 0) return dockPanel.y + dockPanel.height + sp  // Top → below
             if (DockView.edge === 1) return dockPanel.y - height - sp            // Bottom → above
-            return dockPanel.y + dockRow.y + item.y + item.height / 2 + item.currentOffset - height / 2
+            return dockPanel.y + root._primaryRestSlotStart(item) + item.height / 2 + item.currentOffset - height / 2
         }
 
         Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip

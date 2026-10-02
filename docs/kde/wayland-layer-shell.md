@@ -199,6 +199,24 @@ bool activateOnShow() const;
 | `keyboardInteractivityChanged()` | Keyboard mode changed |
 | `layerChanged()` | Layer changed |
 
+## Dynamic Exclusive-Zone Updates
+
+`Window::setExclusiveZone()` changes the layer-shell exclusion-zone request, but the `wlr-layer-shell` state is double-buffered. The compositor applies the new zone only when the client commits the `wl_surface`; changing the wrapper property alone does not publish a new work-area reservation.
+
+When a dock's reservation setting changes while it is mapped, the setting-change callback should update the dock view's geometry and then request a repaint from the public Qt API:
+
+```cpp
+void onReserveScreenSpaceChanged()
+{
+    view->updateSize();
+    view->update(); // QQuickWindow::update()
+}
+```
+
+`QQuickWindow::update()` requests a repaint even when the scene has not otherwise changed. Qt and the Wayland integration then own the frame and surface commit; callers should not add a private Wayland commit, timer, resize workaround, or direct protocol commit for this path.
+
+For a preview surface whose edge-dependent layout changes, call its existing edge-layout update and request `QQuickWindow::update()` only when the preview is visible. Keep this refresh scoped to the setting-change/layout path rather than adding a repaint to every geometry update.
+
 ---
 
 ## Input Region

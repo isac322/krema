@@ -29,9 +29,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPainter>
+#include <QPointer>
 #include <QProcess>
 #include <QQuickItem>
-#include <QPointer>
 #include <QQuickStyle>
 #include <QRasterWindow>
 #include <QScopeGuard>
@@ -170,10 +170,8 @@ Snapshot latestSnapshot()
 
 bool setShowingDesktop(bool showing)
 {
-    auto message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"),
-                                                 QStringLiteral("/KWin"),
-                                                 QStringLiteral("org.kde.KWin"),
-                                                 QStringLiteral("showDesktop"));
+    auto message =
+        QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/KWin"), QStringLiteral("org.kde.KWin"), QStringLiteral("showDesktop"));
     message << showing;
     return QDBusConnection::sessionBus().call(message, QDBus::Block, kTimeoutMs).type() == QDBusMessage::ReplyMessage;
 }
@@ -211,8 +209,7 @@ int taskRow(const QSet<QString> &titles)
     auto *tasks = app().model->tasksModel();
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const auto index = tasks->index(row, 0);
-        if (!index.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
-            && !index.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+        if (!index.data(TaskManager::AbstractTasksModel::IsWindow).toBool() && !index.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
             continue;
         }
         QSet<QString> found;
@@ -245,18 +242,13 @@ QRectF restSlot(QQuickView *view, QQuickItem *delegate)
     constexpr int kFloatingMargin = 8; // DockView::s_floatingMargin
     const int floatingPadding = app().settings->floating() ? kFloatingMargin : 0;
     const int edge = app().settings->edge();
-    const qreal panelX = (edge == 2 || edge == 3)
-        ? (edge == 2 ? floatingPadding : root->width() - panel->width() - floatingPadding)
-        : (root->width() - panel->width()) / 2.0;
-    const qreal panelY = (edge == 0 || edge == 1)
-        ? (edge == 0 ? floatingPadding : root->height() - panel->height() - floatingPadding)
-        : (root->height() - panel->height()) / 2.0;
+    const qreal panelX =
+        (edge == 2 || edge == 3) ? (edge == 2 ? floatingPadding : root->width() - panel->width() - floatingPadding) : (root->width() - panel->width()) / 2.0;
+    const qreal panelY = (edge == 0 || edge == 1) ? (edge == 0 ? floatingPadding : root->height() - panel->height() - floatingPadding)
+                                                  : (root->height() - panel->height()) / 2.0;
     const QPointF rowOrigin(row->x(), row->y());
     const QPointF delegateOrigin(delegate->x(), delegate->y());
-    return {panelX + rowOrigin.x() + delegateOrigin.x(),
-            panelY + rowOrigin.y() + delegateOrigin.y(),
-            delegate->width(),
-            delegate->height()};
+    return {panelX + rowOrigin.x() + delegateOrigin.x(), panelY + rowOrigin.y() + delegateOrigin.y(), delegate->width(), delegate->height()};
 }
 
 QQuickItem *findDelegate(QQuickItem *root, int row)
@@ -406,7 +398,11 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
         },
         kTimeoutMs));
 
-    REQUIRE(QTest::qWaitFor([] { return krema::OutputOrderMonitor::instance()->orderReady(); }, kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            return krema::OutputOrderMonitor::instance()->orderReady();
+        },
+        kTimeoutMs));
     auto manager = std::make_unique<krema::MultiDockManager>(app().settings.get(), app().model.get(), app().tracker.get());
     manager->initialize();
     const QRectF initial = waitForPublished(*manager, {kWindowA});
@@ -417,9 +413,26 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
     app().settings->setEdge(static_cast<int>(krema::DockPlatform::Edge::Left));
     const QRectF moved = waitForPublished(*manager, {kWindowA});
     CHECK(moved != initial);
+
+    // Exercise both orientation changes and every physical edge. Each
+    // observation checks the real KWin consumer geometry for the managed
+    // window, not only the setting or source wiring.
+    app().settings->setEdge(static_cast<int>(krema::DockPlatform::Edge::Bottom));
+    const QRectF returned = waitForPublished(*manager, {kWindowA});
+    CHECK(returned != moved);
+    app().settings->setEdge(static_cast<int>(krema::DockPlatform::Edge::Top));
+    const QRectF top = waitForPublished(*manager, {kWindowA});
+    CHECK(top != returned);
+    app().settings->setEdge(static_cast<int>(krema::DockPlatform::Edge::Right));
+    const QRectF right = waitForPublished(*manager, {kWindowA});
+    CHECK(right != top);
+    app().settings->setEdge(static_cast<int>(krema::DockPlatform::Edge::Bottom));
+    const QRectF restored = waitForPublished(*manager, {kWindowA});
+    CHECK(restored != right);
+
     app().settings->setIconSize(app().settings->iconSize() + 16);
     const QRectF resized = waitForPublished(*manager, {kWindowA});
-    CHECK(resized.size() != moved.size());
+    CHECK(resized.size() != restored.size());
 
     // A hidden AutoHide dock must publish the stable visible slot for a newly
     // opened window, before the edge reveal occurs.
@@ -427,7 +440,11 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
     REQUIRE(visibility);
     visibility->setMode(krema::DockPlatform::VisibilityMode::AutoHide);
     visibility->setHovered(false);
-    REQUIRE(QTest::qWaitFor([&] { return !visibility->isDockVisible(); }, kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return !visibility->isDockVisible();
+        },
+        kTimeoutMs));
 
     startWindow(second, kWindowB);
     const QRectF hidden = waitForPublished(*manager, {kWindowA, kWindowB});
@@ -435,7 +452,11 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
     CHECK_FALSE(visibility->isDockVisible());
 
     visibility->setHovered(true);
-    REQUIRE(QTest::qWaitFor([&] { return visibility->isDockVisible(); }, kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return visibility->isDockVisible();
+        },
+        kTimeoutMs));
     const QRectF revealed = waitForPublished(*manager, {kWindowA, kWindowB});
     CHECK(revealed == hidden);
     const int group = taskRow({kWindowA, kWindowB});
@@ -452,7 +473,11 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
     // Destroying the dock surface lets KWin clear its geometry association.
     // Keep both clients alive: disappearance of their windows is not cleanup.
     manager.reset();
-    REQUIRE(QTest::qWaitFor([&] { return groupProxy.isNull(); }, kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return groupProxy.isNull();
+        },
+        kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [&] {
             if (!takeSnapshot(snapshot)) {

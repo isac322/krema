@@ -46,6 +46,7 @@ Item {
     readonly property var zoomLayout: DockView.zoomLayout(
         repeater.count, 0,
         DockSettings.iconSize, DockSettings.iconSpacing,
+        -1, 0,
         0, row.width,
         zoomStyle === 1
             ? DockSettings.maxZoomFactor

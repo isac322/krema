@@ -93,6 +93,8 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::UseSystemColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::UseAccentColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::DodgeActiveOnlyChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ReserveScreenSpaceChanged, context, saveSettings);
+    connect(settings, &KremaSettings::SeparateLaunchersChanged, context, saveSettings);
 }
 
 int Application::run()
@@ -136,6 +138,7 @@ int Application::run()
     // Create data model
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
+    m_dockModel->setSeparateLaunchers(m_settings->separateLaunchers());
 
     // Create notification trackers (before QML loading)
     m_notificationTracker = std::make_unique<NotificationTracker>();
@@ -195,6 +198,11 @@ int Application::run()
     // Virtual desktop mode change
     connect(s, &KremaSettings::VirtualDesktopModeChanged, this, [this]() {
         m_dockModel->setVirtualDesktopMode(m_settings->virtualDesktopMode());
+    });
+
+    // Keep task partitioning in sync with the live settings page.
+    connect(s, &KremaSettings::SeparateLaunchersChanged, this, [this]() {
+        m_dockModel->setSeparateLaunchers(m_settings->separateLaunchers());
     });
 
     // Monitor mode change

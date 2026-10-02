@@ -5,6 +5,8 @@
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
 - settings-behavior: Visibility mode, dock position, monitor mode, selected monitor switches and temporary fallback
+- settings-reserve-screen-space: Independent Always Visible reservation switch applies to maximized windows live and persists
+- settings-separate-launchers: Optional pinned/running sections apply live and persist without duplicating running pinned apps
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
@@ -21,9 +23,12 @@
 - src/models/dockactions.h
 - src/models/dockactions.cpp
 - src/qml/DockItem.qml
+- src/models/dockmodel.h
+- src/models/dockmodel.cpp
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
 - src/shell/dockshell.cpp
+- src/shell/dockview.h
 - src/shell/dockview.cpp
 - src/shell/multidockmanager.h
 - src/shell/multidockmanager.cpp
@@ -38,8 +43,8 @@
 effects. Tier 1 QML does not replace these FormCard and multi-dock checks.
 Tier 3 reuses the Appium cases against installed packages.
 The existing context-menu Settings entry, keyboard paths, and multi-monitor
-lifecycle remain covered by their original cases; the new rows assert only
-the click-policy controls and their consumer effects.
+lifecycle remain covered by their original cases. Click-policy, reservation,
+and task-section rows check their real controls and consumer effects.
 
 
 ---
@@ -367,3 +372,105 @@ visibility, labels, and thumbnail width. Visual thumbnail checks require
 DRM/vgem capture.
 **Automated (Tier 2):** `tests/appium/test_06_settings.py::test_clk011_preview_controls_follow_hover_and_explicit_group_choice`
 (six cases).
+
+---
+
+## TC SET-015: Reserve screen space applies live and survives restart
+
+**Precondition:** A fresh configuration, one output without another panel,
+and a real fixture window maximized by KWin. Open Settings → Behavior with
+visibility mode `Always visible`. Record Krema's process and the fixture
+window's identity and frame geometry.
+
+**Steps:**
+1. Find the `Reserve screen space` switch. Verify it is checked by default
+   and its description explains that maximized windows avoid the dock.
+2. Turn it off using the actual switch. Wait for the already-maximized
+   fixture's frame to reach the output edge occupied by the dock; do not
+   restore/remaximize the fixture or restart Krema.
+3. Turn it on. Verify the same fixture frame moves inward to leave the
+   panel-bar space while the dock stays visible and the process is unchanged.
+4. Turn it off again, close Settings, and restart Krema. Reopen Behavior
+   and verify the switch remains off and the maximized fixture uses the
+   full output. Check `ReserveScreenSpace=false` in `[General]` in `kremarc`.
+5. Select `Auto hide`, then `Dodge windows`. Verify the reservation row is
+   hidden in each mode, without clearing the saved value.
+6. Return to `Always visible`, turn the switch on, and restart again.
+   Verify the checked state and the reserved maximized geometry return.
+   A missing `ReserveScreenSpace` key is valid when the default is true.
+
+**Expected:**
+- Reservation changes independently of visibility mode; turning it off
+  does not hide the Always Visible dock.
+- Existing maximized windows reflow in the same session for both directions
+  of the toggle; restarting is needed only to check persistence.
+- Auto Hide and Dodge Windows do not reserve space, regardless of the saved
+  switch value.
+- The switch state and observed window bounds agree after restart.
+
+**Verification:** AT-SPI switch state/visibility, `kremarc`, process/window
+identity, and KWin output/frame geometry. Record the actual frame bounds,
+not only the maximize command or an exclusive-zone setter call. Screenshot
+capture is supplementary; missing DRM must not skip geometry checks.
+**Automated (Tier 2 native coverage):**
+`tests/appium/test_06_settings.py::test_set015_reservation_switch_is_native_conditional_and_autosaves`
+checks the native switch, autosave, mode-dependent row visibility, and
+retained preference without restarting the process. VIS-009 maps the
+maximized geometry and restart checks.
+
+---
+
+## TC SET-016: Separate pinned and running apps applies live and persists
+
+**Precondition:** A fresh configuration with two pinned fixture apps and
+two unpinned running fixture apps. At least one pinned app is running.
+Open Settings → Behavior.
+
+**Steps:**
+1. Find `Separate pinned and running apps`. Verify the switch is off by
+   default and its description states that pinned apps, including running
+   ones, stay together, with unpinned running apps after the divider.
+2. Turn it on using the actual switch. Close Settings and read dock items
+   in visual order from AT-SPI item centres.
+3. Verify pinned apps form the leading section and unpinned running apps
+   follow. Verify each running pinned app has one icon in its pinned slot.
+   Locate the accessible separator named `Pinned and running apps separator`.
+4. Reopen Settings and turn it off. Verify the separator disappears without
+   losing apps or changing their pinned membership.
+5. Turn it on again, close Settings, and restart Krema. Reopen Settings;
+   verify the switch is checked, `[General]` saves `SeparateLaunchers=true`,
+   and the real dock restores its two sections.
+6. Turn it off and restart again. Verify the switch is unchecked and the
+   ordinary free-reorder behavior returns. An absent key is valid for the
+   default false value.
+7. Run the pin/unpin, launch/close/group, empty-section, and drag-boundary
+   checks linked from the context-menu, mouse, and drag scenarios.
+
+**Expected:**
+- The setting changes the current dock without a restart and survives one.
+- Running pinned apps stay in the pinned section with one icon per app.
+- The divider is shown only when separation is on and both sections contain
+  items; the setting does not itself pin an unpinned app.
+- With separation off, existing manual ordering remains available.
+
+**Verification:** AT-SPI switch, ordered app names and separator role/state,
+KWin fixture windows, `kremarc` membership and setting, and actual input.
+Divider paint, hover movement, and hit-testing require the additional
+interaction scenarios; a checked switch alone is not their proof.
+**Automated (Tier 2 native coverage):**
+`tests/appium/test_09_task_zones.py::test_tzone001_live_toggle_orders_visible_tasks_and_persists`
+checks the live switch, ordered sections, saved values, and ON/OFF restarts
+on top, bottom, left, and right edges.
+`test_tzone002_separator_accessibility_geometry_and_single_zone_visibility`,
+`test_tzone003_grouped_instances_keep_one_pinned_slot_and_close_differently`,
+and `test_tzone004_pin_and_unpin_use_real_context_menu_and_preserve_membership`
+map the separator and app lifecycle checks.
+`test_tzone007_fresh_default_separation_is_off` checks the unchecked native
+switch with a fresh configuration.
+The task-section checks remain geometry- and AT-SPI-focused; divider paint,
+hover movement, hit-testing, preview image/RHI content, installed-package Tier
+3, and drop-ghost appearance require their dedicated environments and remain
+unverified here. The PREV-010 vertical fixture intentionally uses two grouped
+windows for strict index/pin-transition coverage while the separate
+preview-surface fix owns whole-popup/thumbnail containment for wider vertical
+previews.

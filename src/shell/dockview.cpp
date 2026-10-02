@@ -212,6 +212,8 @@ QVariantMap DockView::zoomLayout(int count,
                                  qreal restStart,
                                  qreal iconSize,
                                  qreal spacing,
+                                 int boundary,
+                                 qreal boundaryGap,
                                  qreal restBackgroundStart,
                                  qreal restBackgroundEnd,
                                  qreal maxZoomFactor,
@@ -227,6 +229,8 @@ QVariantMap DockView::zoomLayout(int count,
                                                   restStart,
                                                   iconSize,
                                                   spacing,
+                                                  boundary,
+                                                  boundaryGap,
                                                   restBackgroundStart,
                                                   restBackgroundEnd,
                                                   maxZoomFactor,
@@ -279,8 +283,8 @@ void DockView::updateSize()
         m_platform->setSize(QSize(0, h));
     }
 
-    // AlwaysVisible reserves the panel bar so maximized windows end above it.
-    m_platform->setExclusiveZone(panelBarHeight());
+    // Reserve the panel bar only when screen-space reservation is enabled.
+    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? panelBarHeight() : 0);
 
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());

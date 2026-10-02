@@ -190,9 +190,18 @@ Item {
     property int iconSize: 48
     property real maxZoomFactor: 1.6
     property int spacing: 4
+    // Fixed separator-slot displacement for items in the second zone.
+    property real restOffset: 0
+    property bool restOffsetAnimationEnabled: false
+    Behavior on restOffset {
+        enabled: dockItem.restOffsetAnimationEnabled
+        NumberAnimation {
+            duration: Kirigami.Units.longDuration
+            easing.type: Easing.InOutQuad
+        }
+    }
     // Rest centre on the primary axis in dockPanel coordinates (never moves with zoom)
     property real itemCenterX: 0
-
     // Hover-zoom inputs computed by DockView.zoomLayout() in main.qml:
     // zoomScale is this item's magnification, zoomOffset the primary-axis
     // shift of the icon centre from its rest centre (always 0 for InPlace).
@@ -261,14 +270,17 @@ Item {
         interval: 0
         onTriggered: dockItem.publishDelegateGeometry()
     }
+    signal delegateGeometryChanged()
 
     // Position changes may be animated by the Flow. Let the dock debounce
     // those changes before refreshing all settled delegate slots.
-    signal delegateGeometryChanged()
-
     onIndexChanged: scheduleDelegateGeometryPublication()
     onXChanged: delegateGeometryChanged()
     onYChanged: delegateGeometryChanged()
+    onRestOffsetChanged: {
+        delegateGeometryChanged()
+        scheduleDelegateGeometryPublication()
+    }
     onWidthChanged: scheduleDelegateGeometryPublication()
     onHeightChanged: scheduleDelegateGeometryPublication()
 
@@ -392,6 +404,7 @@ Item {
     // InPlace eases each icon's scale towards its target instead.
     property real currentScale: 1.0
     readonly property real currentOffset: zoomOffset
+    readonly property real primaryTranslate: currentOffset + restOffset
     property bool _zoomAnimReady: false
     // The setting is an unscaled baseline: 100 ms matches shortDuration at
     // normal speed. Plasma scaling also makes Instant/reduced motion snap.
@@ -477,8 +490,8 @@ Item {
             yScale: currentScale
         },
         Translate {
-            x: DockView.isVertical ? 0 : dockItem.currentOffset
-            y: DockView.isVertical ? dockItem.currentOffset : 0
+            x: DockView.isVertical ? 0 : dockItem.primaryTranslate
+            y: DockView.isVertical ? dockItem.primaryTranslate : 0
         }
     ]
 

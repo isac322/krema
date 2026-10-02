@@ -473,6 +473,9 @@ void PreviewController::updateEdge()
         return;
     }
     applyEdgeLayout();
+    if (m_previewView->isVisible()) {
+        m_previewView->update();
+    }
 }
 
 void PreviewController::applyEdgeLayout()
@@ -490,11 +493,11 @@ void PreviewController::applyEdgeLayout()
     const bool vertical = (edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right);
     // The margin puts the popup right past the dock's zoom area. It counts from
     // where the compositor places the surface: exclusive zone 0 moves it out of
-    // other surfaces' exclusive zones, and in AlwaysVisible mode the dock
-    // reserves its panel bar as one (WaylandDockPlatform::applyExclusiveZone),
-    // so the panel bar is already behind that origin.
+    // other surfaces' exclusive zones. When AlwaysVisible reserves the panel
+    // bar, that zone is already behind the popup origin; otherwise include it.
     const auto *visibility = m_dockView->visibilityController();
-    const bool dockReservesPanelBar = visibility && visibility->mode() == static_cast<int>(DockPlatform::VisibilityMode::AlwaysVisible);
+    const bool dockReservesPanelBar =
+        visibility && visibility->mode() == static_cast<int>(DockPlatform::VisibilityMode::AlwaysVisible) && m_settings->reserveScreenSpace();
     const int zoomOverflow = static_cast<int>(std::ceil(m_settings->iconSize() * (m_settings->maxZoomFactor() - 1.0)));
     const int dockMargin = (dockReservesPanelBar ? 0 : m_dockView->panelBarHeight()) + zoomOverflow + 4;
 

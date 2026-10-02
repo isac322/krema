@@ -26,6 +26,15 @@
 
 > **Note:** Krema is under active development. Core features are functional, but some features are still in progress. See the [Roadmap](ROADMAP.md) for details.
 
+### Planned / Unreleased
+
+The following settings are part of the current unreleased development work and are not included in a numbered release:
+
+- **Reserve screen space** — The Behavior switch is enabled by default and applies to **Always visible** mode. When enabled, maximized windows avoid the dock; Auto hide and Dodge windows keep their existing platform behavior. The switch is saved for the next start and can be changed while the dock is running.
+- **Separate pinned and running apps** — The Behavior switch is disabled by default. When enabled, pinned apps, including pinned apps that are running, stay in the first section; unpinned running apps follow after the divider. Dragging across that boundary stays within the source section and does not pin or unpin an app. With the switch off, dock items keep the existing free-reorder behavior.
+
+These entries describe unreleased behavior; they are not claims about the latest published release.
+
 A lightweight, high-performance dock for KDE Plasma 6 — spiritual successor to [Latte Dock](https://github.com/KDE/latte-dock).
 
 Krema brings back the beloved dock experience for KDE Plasma users who miss Latte Dock. Built from scratch with C++23, Qt 6, and KDE Frameworks 6, it delivers smooth parabolic zoom animations, live window previews via PipeWire, and deep native integration with the Plasma desktop.

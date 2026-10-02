@@ -114,15 +114,34 @@ Item {
         }
 
         // Fallback: icon (when PipeWire not ready or minimized)
-        Kirigami.Icon {
+        Item {
+            id: fallbackIcon
             anchors.centerIn: parent
             width: Kirigami.Units.iconSizes.large
             height: Kirigami.Units.iconSizes.large
-            source: {
-                let name = DockModel.iconName(root.parentIndex)
-                return (name && name.length > 0) ? name : "application-x-executable"
+            readonly property string iconName: {
+                // iconName() is invokable, so track the model's artwork revision.
+                let iconCacheVersion = DockView.iconCacheVersion
+                return DockModel.iconName(root.parentIndex) || "application-x-executable"
             }
+            readonly property bool isRawIcon: iconName.startsWith("raw:")
             visible: !pipeWireItem.ready
+
+            Kirigami.Icon {
+                anchors.fill: parent
+                source: fallbackIcon.isRawIcon ? "" : fallbackIcon.iconName
+                visible: !fallbackIcon.isRawIcon
+            }
+
+            Image {
+                anchors.fill: parent
+                source: fallbackIcon.isRawIcon
+                    ? "image://icon/" + fallbackIcon.iconName + "?v=" + DockView.iconCacheVersion
+                    : ""
+                sourceSize: Qt.size(width, height)
+                smooth: true
+                visible: fallbackIcon.isRawIcon
+            }
         }
 
         // Minimized overlay

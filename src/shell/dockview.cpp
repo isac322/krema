@@ -76,6 +76,13 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
         bumpIconCacheVersion();
     });
 
+    // Refresh provider URLs when task artwork arrives or changes.
+    connect(tasksModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+        if (roles.isEmpty() || roles.contains(Qt::DecorationRole)) {
+            bumpIconCacheVersion();
+        }
+    });
+
     // Enable i18n() in QML (required for Accessible.name/description strings)
     KLocalization::setupLocalizedContext(engine());
 

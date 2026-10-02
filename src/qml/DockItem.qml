@@ -529,9 +529,10 @@ Item {
             // whatever (possibly empty) icon name was computed at creation,
             // even after the real icon becomes available moments later.
             let _dep2 = model.decoration
+            let iconCacheVersion = DockView.iconCacheVersion
             let name = DockModel.iconName(dockItem.index)
             if (name && name.length > 0) {
-                return "image://icon/" + name + "?v=" + DockView.iconCacheVersion
+                return "image://icon/" + name + "?v=" + iconCacheVersion
             }
             return ""
         }

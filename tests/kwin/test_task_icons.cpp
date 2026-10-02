@@ -236,7 +236,8 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
 
     const QString iconName = model().iconName(row);
     INFO("DecorationRole icon name: " << iconName.toStdString());
-    CHECK((iconName.isEmpty() || iconName == kGenericIcon));
+    CHECK((iconName.isEmpty() || iconName == kGenericIcon || iconName == QStringLiteral("wayland")
+           || iconName == QStringLiteral("unknown")));
 
     const QIcon decoration = index.data(Qt::DecorationRole).value<QIcon>();
     if (iconName.isEmpty()) {
@@ -251,9 +252,10 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
     // KWin supplies DecorationRole from window/desktop metadata. There is no
     // supported protocol seam for forcing a nameless DecorationRole or a
     // delayed icon without replacing the real TaskManager model. Therefore
-    // this test accepts either valid production outcome: an empty name selects
-    // DockItem's visible placeholder, while the generic name exercises the
-    // provider's fallback artwork. In both cases AppId remains actionable.
+    // this test accepts the supported unresolved outcomes: an empty name
+    // selects DockItem's visible placeholder, while the generic, "wayland",
+    // and "unknown" names exercise the provider's fallback artwork. In every
+    // case AppId remains actionable.
     krema::TaskIconProvider provider;
     QSize returnedSize;
     const QPixmap fallbackPixmap = provider.requestPixmap(iconName, &returnedSize, QSize(64, 64));

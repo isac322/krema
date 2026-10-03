@@ -22,9 +22,6 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    env:
-      KREMA_E2E_ARTIFACTS: ${{ runner.temp }}/delayed-icon-evidence
-      KREMA_E2E_SHARDS: "1"
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -55,6 +52,8 @@ jobs:
       - name: Record existing dock item across metadata arrival
         id: recording
         shell: bash
+        env:
+          KREMA_E2E_ARTIFACTS: ${{ runner.temp }}/delayed-icon-evidence
         run: |
           set -euo pipefail
           tests/distro/run-distro-e2e.sh fedora-43 record_delayed_icon.py -q
@@ -75,7 +74,7 @@ jobs:
           from pathlib import Path
           import subprocess
 
-          evidence = Path(os.environ["KREMA_E2E_ARTIFACTS"]) / "visual-evidence"
+          evidence = Path(os.environ["RUNNER_TEMP"]) / "delayed-icon-evidence" / "visual-evidence"
           rows = [json.loads(line) for line in (evidence / "frames.jsonl").read_text().splitlines()]
           if len(rows) <= 30:
               raise SystemExit(f"Need more than 30 captured frames, got {len(rows)}")

@@ -63,11 +63,11 @@ def _write_desktop_entry(path: Path, app_id: str, title: str, icon: str) -> None
     )
 
 
-def _refresh_service_cache(krema: Krema) -> dict[str, Any]:
-    """Refresh KService in the same private XDG environment as Krema."""
+def _refresh_service_cache(environment: dict[str, str]) -> dict[str, Any]:
+    """Refresh KService in one private XDG environment."""
     result = subprocess.run(
         ["kbuildsycoca6"],
-        env=krema.environment(),
+        env=environment,
         capture_output=True,
         text=True,
         timeout=CACHE_TIMEOUT_SECONDS,
@@ -77,11 +77,36 @@ def _refresh_service_cache(krema: Krema) -> dict[str, Any]:
         "returncode": result.returncode,
         "stdout": result.stdout[-2000:],
         "stderr": result.stderr[-2000:],
-        "xdg_data_home": krema.environment()["XDG_DATA_HOME"],
-        "xdg_cache_home": krema.environment()["XDG_CACHE_HOME"],
+        "xdg_data_home": environment.get("XDG_DATA_HOME"),
+        "xdg_cache_home": environment.get("XDG_CACHE_HOME"),
     }
     if result.returncode != 0:
         raise RuntimeError(f"kbuildsycoca6 failed: {json.dumps(details, sort_keys=True)}")
+    return details
+
+
+def _recording_environments(krema: Krema) -> list[dict[str, str]]:
+    """Return the session and isolated Krema XDG environments."""
+    return [dict(os.environ), krema.environment()]
+
+
+def _desktop_path(environment: dict[str, str], app_id: str) -> Path:
+    data_home = Path(environment.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return data_home / "applications" / f"{app_id}.desktop"
+
+
+def _restore_desktop_entries(entries: list[tuple[dict[str, str], Path, bytes | None]]) -> None:
+    """Restore only this test's private unique entries."""
+    try:
+        for environment, path, previous in entries:
+            if previous is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(previous)
+            _refresh_service_cache(environment)
+    except Exception as error:  # noqa: BLE001 - teardown must not hide the test result
+        env.artifact_path("visual-evidence/cleanup-error.txt").write_text(repr(error), encoding="utf-8")
     return details
 
 
@@ -162,20 +187,21 @@ def test_record_delayed_icon(krema: Krema, apps: TestWindows, request: pytest.Fi
     suffix = uuid.uuid4().hex[:10]
     app_id = f"krema-delayed-icon-{suffix}"
     title = f"Delayed Icon {suffix}"
-    desktop_path = krema.home / "data" / "applications" / f"{app_id}.desktop"
-    if desktop_path.exists():
-        pytest.fail(f"unique delayed-icon desktop entry already exists: {desktop_path}")
-    previous_desktop = None
-    request.addfinalizer(
-        lambda: _restore_desktop_entry(krema, desktop_path, previous_desktop)
-    )
+    desktop_entries: list[tuple[dict[str, str], Path, bytes | None]] = []
+    for environment in _recording_environments(krema):
+        desktop_path = _desktop_path(environment, app_id)
+        previous_desktop = desktop_path.read_bytes() if desktop_path.exists() else None
+        if previous_desktop is not None:
+            pytest.fail(f"unique delayed-icon desktop entry already exists: {desktop_path}")
+        desktop_entries.append((environment, desktop_path, previous_desktop))
+    request.addfinalizer(lambda: _restore_desktop_entries(desktop_entries))
 
     metadata: dict[str, Any] = {
         "scenario": "record_delayed_icon",
         "outcome": "running",
         "app_id": app_id,
         "title": title,
-        "desktop_file": str(desktop_path),
+        "desktop_files": [str(path) for _, path, _ in desktop_entries],
         "icon_before": GENERIC_ICON,
         "icon_after": RAW_ICON,
         "capture_interval_seconds": CAPTURE_INTERVAL,
@@ -259,9 +285,9 @@ def test_record_delayed_icon(krema: Krema, apps: TestWindows, request: pytest.Fi
                 recorder_error.append("capture thread did not stop within 10 seconds")
 
     try:
-        _write_desktop_entry(desktop_path, app_id, title, GENERIC_ICON)
-        metadata["cache_refreshes"].append(_refresh_service_cache(krema))
-
+        for environment, desktop_path, _ in desktop_entries:
+            _write_desktop_entry(desktop_path, app_id, title, GENERIC_ICON)
+            metadata["cache_refreshes"].append(_refresh_service_cache(environment))
         window = apps.open(title, app_id=app_id, width=320, height=220)
         item = krema.wait_for_item(title, timeout=15)
         wait_until(
@@ -286,8 +312,9 @@ def test_record_delayed_icon(krema: Krema, apps: TestWindows, request: pytest.Fi
 
         transition_times["transition_started_ns"] = time.monotonic_ns()
         update_started.set()
-        _write_desktop_entry(desktop_path, app_id, title, RAW_ICON)
-        metadata["cache_refreshes"].append(_refresh_service_cache(krema))
+        for environment, desktop_path, _ in desktop_entries:
+            _write_desktop_entry(desktop_path, app_id, title, RAW_ICON)
+            metadata["cache_refreshes"].append(_refresh_service_cache(environment))
         transition_times["cache_refreshed_ns"] = time.monotonic_ns()
         metadata["desktop_updated_ns"] = transition_times["transition_started_ns"]
         metadata["cache_refreshed_ns"] = transition_times["cache_refreshed_ns"]
@@ -329,14 +356,3 @@ def test_record_delayed_icon(krema: Krema, apps: TestWindows, request: pytest.Fi
         metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _restore_desktop_entry(krema: Krema, path: Path, previous: bytes | None) -> None:
-    """Restore only this test's private unique entry, even on assertion failure."""
-    try:
-        if previous is None:
-            path.unlink(missing_ok=True)
-        else:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(previous)
-        _refresh_service_cache(krema)
-    except Exception as error:  # noqa: BLE001 - teardown must not hide the test result
-        env.artifact_path("visual-evidence/cleanup-error.txt").write_text(repr(error), encoding="utf-8")

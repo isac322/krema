@@ -107,7 +107,6 @@ def _restore_desktop_entries(entries: list[tuple[dict[str, str], Path, bytes | N
             _refresh_service_cache(environment)
     except Exception as error:  # noqa: BLE001 - teardown must not hide the test result
         env.artifact_path("visual-evidence/cleanup-error.txt").write_text(repr(error), encoding="utf-8")
-    return details
 
 
 def _signature_counts(image: Any, area: tuple[int, int, int, int]) -> list[int]:

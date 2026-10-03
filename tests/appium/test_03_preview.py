@@ -13,7 +13,6 @@ from __future__ import annotations
 import time
 import warnings
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 from PIL import Image
@@ -515,26 +514,30 @@ def test_prev009_explicit_group_pending_hide_retargets_after_reenter(
 
 @pytest.mark.kremarc({"PinnedLaunchers": []})
 def test_icon008_minimized_preview_fallback_preserves_raw_artwork(
-    krema: Krema, apps: TestWindows, tmp_path: Path
+    krema: Krema, apps: TestWindows
 ) -> None:
-    """ICON-008: real unresolved client artwork survives the preview fallback."""
+    """ICON-008: absolute-path desktop artwork survives the preview fallback."""
     _require_capture()
 
-    # No desktop file or theme icon is installed for this unique app_id.
-    # Four opaque quadrants give us an oracle independent of the icon provider,
-    # dock rendering, and any application's shipped artwork.
-    app_id = f"org.krema.icon008.{uuid4().hex}"
+    # The desktop entry and its absolute Icon path are installed before KWin
+    # starts, so TaskManager resolves the fixture through desktop metadata.
+    app_id = "org.krema.icon008"
+    icon_path = Path("/usr/share/krema-test-window/icon-raw-quadrants.svg")
+    assert icon_path.is_file(), (
+        f"ICON-008 static icon fixture is missing: {icon_path}; "
+        "install the test-window fixture before starting the session"
+    )
     title = "ICON-008 raw preview fixture"
+    # Generate the expected artwork independently of the installed SVG,
+    # icon provider, and dock rendering.
     artwork = Image.new("RGB", (96, 96))
     artwork.paste((240, 24, 240), (0, 0, 48, 48))
     artwork.paste((24, 240, 240), (48, 0, 96, 48))
     artwork.paste((240, 240, 24), (0, 48, 48, 96))
     artwork.paste((24, 240, 24), (48, 48, 96, 96))
-    icon_path = tmp_path / "icon008-raw-quadrants.png"
-    artwork.save(icon_path)
     artwork.save(env.artifact_path(f"{krema.name}/icon008-expected.png"))
 
-    window = apps.open(title, app_id=app_id, icon_path=icon_path, color="#202020")
+    window = apps.open(title, app_id=app_id, color="#202020")
     krema.wait_for_item(title)
     krema.move_away()
     # Minimize before creating the preview, so no previously captured live
@@ -596,8 +599,8 @@ def test_icon008_minimized_preview_fallback_preserves_raw_artwork(
         timeout=15,
         interval=0.5,
         message=lambda: (
-            "ICON-008 blocked: the minimized preview does not show the supplied raw PNG's four-quadrant signature. "
-            "The no-desktop --icon-path client may not deliver a usable nameless TaskManager DecorationRole, "
+            "ICON-008 blocked: the minimized preview does not show the static SVG's four-quadrant signature. "
+            "The preinstalled desktop entry's absolute Icon path may not resolve through TaskManager, "
             "or preview raw fallback rendering is failing; generic placeholder pixels are not accepted. "
             f"Observed screenshot crop: {observed}; compare icon008-expected.png, "
             "icon008-preview-fallback.png and icon008-preview-fallback-crop.png"

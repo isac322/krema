@@ -20,8 +20,6 @@ screenshots (needs the OpenGL compositor, i.e. a DRM render node).
 
 from __future__ import annotations
 
-import os
-import subprocess
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,7 +27,7 @@ from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 import pytest
 
 from krema_e2e import config, env, kwin
@@ -376,86 +374,32 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
 # identifies the four raw-artwork colors after normalization and alpha blending.
 @pytest.mark.kremarc(kremarc(KWRITE))
 def test_icon009_drag_ghost_uses_raw_client_artwork(
-    tmp_path: Path, krema: Krema, apps: TestWindows, request: pytest.FixtureRequest
+    tmp_path: Path, krema: Krema, apps: TestWindows
 ) -> None:
     if not kwin.can_capture():
         pytest.fail("KWin cannot capture (QPainter compositing, no /dev/dri render node); ICON-009 is a visual check")
 
-    icon_path = (tmp_path / "icon009-raw.png").resolve()
-    icon = Image.new("RGB", (ICON, ICON))
-    draw = ImageDraw.Draw(icon)
-    half = ICON // 2
-    draw.rectangle((0, 0, half - 1, half - 1), fill=(240, 24, 240))
-    draw.rectangle((half, 0, ICON - 1, half - 1), fill=(24, 240, 240))
-    draw.rectangle((0, half, half - 1, ICON - 1), fill=(240, 240, 24))
-    draw.rectangle((half, half, ICON - 1, ICON - 1), fill=(24, 240, 24))
-    icon.save(icon_path)
-    raw = np.asarray(icon, dtype=np.float32)
+    icon_path = Path("/usr/share/krema-test-window/icon-raw-quadrants.svg")
+    assert icon_path.is_file(), (
+        f"ICON-009 static icon fixture is missing: {icon_path}; "
+        "install the test-window fixture before starting the session"
+    )
 
     source = "ICON-009 Raw Icon"
     target = KWRITE
-    app_id = f"org.krema.icon009.drag-raw.{os.getpid()}.{tmp_path.name}"
-    desktop_entry = (
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        f"Name={source}\n"
-        "Exec=true\n"
-        f"Icon={icon_path}\n"
-        f"StartupWMClass={app_id}\n"
-    )
-    desktop_environments = [dict(os.environ), krema.environment()]
-    desktop_paths: list[Path] = []
-
-    def rebuild_desktop_cache(environment: dict[str, str]) -> None:
-        result = subprocess.run(
-            ["kbuildsycoca6"], env=environment, capture_output=True, text=True, timeout=30, check=False
-        )
-        assert result.returncode == 0, (
-            f"ICON-009 desktop cache rebuild failed for {environment.get('XDG_DATA_HOME')}: "
-            f"exit={result.returncode}, stdout={result.stdout!r}, stderr={result.stderr!r}"
-        )
-
-    def remove_desktop_entries() -> None:
-        for path in desktop_paths:
-            path.unlink(missing_ok=True)
-        for environment in desktop_environments:
-            rebuild_desktop_cache(environment)
-
-    request.addfinalizer(remove_desktop_entries)
-    # Qt's setWindowIcon does not cross xdg-shell. Give KWin and the isolated
-    # TaskManager an absolute-path Icon entry instead of a theme icon, so both
-    # can obtain the actual PNG without depending on a client-icon protocol.
-    for environment in desktop_environments:
-        data_home = Path(environment.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-        applications = data_home / "applications"
-        applications.mkdir(parents=True, exist_ok=True)
-        desktop_path = applications / f"{app_id}.desktop"
-        # Never overwrite another fixture or a desktop entry supplied by a user.
-        with desktop_path.open("x", encoding="utf-8") as entry:
-            desktop_paths.append(desktop_path)
-            entry.write(desktop_entry)
-        rebuild_desktop_cache(environment)
-
-    apps.open(
-        source,
-        app_id=app_id,
-        icon_path=icon_path,
-    )
+    app_id = "org.krema.icon009.drag-raw"
+    apps.open(source, app_id=app_id)
     scene = Scene.capture(krema, [target, source])
     start = scene.center(source)
     over = (scene.center(target)[0], scene.row_top - 16)
     drop = (over[0], start[1])
     gx, gy = over[0] - ICON // 2, over[1] - ICON // 2
     rows = min(ICON, scene.row_top - gy)
-    fixture_quadrants = {
-        "magenta": (0, 0, half, half),
-        "cyan": (half, 0, ICON, half),
-        "yellow": (0, half, half, ICON),
-        "green": (half, half, ICON, ICON),
-    }
     expected_colors = {
-        color: np.median(raw[y0:y1, x0:x1], axis=(0, 1))
-        for color, (x0, y0, x1, y1) in fixture_quadrants.items()
+        "magenta": np.array((240, 24, 240), dtype=np.float32),
+        "cyan": np.array((24, 240, 240), dtype=np.float32),
+        "yellow": np.array((240, 240, 24), dtype=np.float32),
+        "green": np.array((24, 240, 24), dtype=np.float32),
     }
     background = scene.base[gy : gy + rows, gx : gx + ICON, :3].astype(np.float32)
     crop_path = tmp_path / "icon009-ghost-crop.png"

@@ -125,7 +125,7 @@ Item {
                 return DockModel.iconName(root.parentIndex) || "application-x-executable"
             }
             readonly property bool isRawIcon: iconName.startsWith("raw:")
-            visible: !pipeWireItem.ready
+            visible: !pipeWireItem.ready || root.isMinimized
 
             Kirigami.Icon {
                 anchors.fill: parent

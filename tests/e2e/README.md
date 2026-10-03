@@ -152,11 +152,11 @@ Quick reference: which scenarios to re-run when a source file changes.
 
 | Changed File | Re-run Scenarios |
 |---|---|
-| `src/qml/main.qml` | 01, 02, 03, 04, 05, 06, 07 |
+| `src/qml/main.qml` (including the drag ghost) | 01, 02, 03, 04, 05, 06, 07 |
 | `src/qml/DockItem.qml` | 01, 02, 05, 06 |
 | `src/utils/zoomcalculator.h` | 01, 02, 05, 06, 07 |
 | `src/qml/PreviewPopup.qml` | 01, 03 |
-| `src/qml/PreviewThumbnail.qml` | 01, 03 |
+| `src/qml/PreviewThumbnail.qml` (including the fallback icon) | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03 |
 | `src/shell/dockshell.*` | 01, 06 |
 | `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
@@ -173,6 +173,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/shell/settingswindow.*` | 06, 07 |
 | `src/shell/dockview.*` | 02, 06, 07 |
 | `src/models/dockmodel.*` | 01, 02, 03, 04, 05, 06 |
+| `src/models/taskiconprovider.*` | 01, 03, 05 |
 | `src/shell/multidockmanager.*` | 02, 03, 06, 07 |
 | `src/shell/edgetrigger.*` | 06 |
 | `src/shell/outputordermonitor.*` | 02, 03, 06, 07 |

@@ -17,3 +17,5 @@ target_link_libraries(krema-test-window Qt6::Widgets Qt6::DBus)
 
 install(TARGETS krema-test-window DESTINATION bin)
 install(FILES org.kde.krema.testwindow.desktop org.kde.krema.testwindow2.desktop DESTINATION share/applications)
+install(FILES org.krema.icon008.desktop org.krema.icon009.drag-raw.desktop DESTINATION share/applications)
+install(FILES raw-icon-quadrants.svg DESTINATION share/krema-test-window RENAME icon-raw-quadrants.svg)

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=org.krema.icon008
+Exec=krema-test-window --app-id org.krema.icon008
+Icon=/usr/share/krema-test-window/icon-raw-quadrants.svg
+StartupWMClass=org.krema.icon008

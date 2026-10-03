@@ -14,6 +14,7 @@
 #include <QLoggingCategory>
 #include <QPainterPath>
 
+#include <taskmanager/tasksmodel.h>
 #include <KIconLoader>
 #include <KLocalizedQmlContext>
 
@@ -74,6 +75,13 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
     connect(KIconLoader::global(), &KIconLoader::iconChanged, this, [this]() {
         m_iconProvider->clearCache();
         bumpIconCacheVersion();
+    });
+
+    // Refresh provider URLs when task artwork arrives or changes.
+    connect(tasksModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+        if (roles.isEmpty() || roles.contains(Qt::DecorationRole)) {
+            bumpIconCacheVersion();
+        }
     });
 
     // Enable i18n() in QML (required for Accessible.name/description strings)

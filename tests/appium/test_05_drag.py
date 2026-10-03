@@ -23,9 +23,11 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 import numpy as np
+from PIL import Image
 import pytest
 
 from krema_e2e import config, env, kwin
@@ -364,6 +366,129 @@ def test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator(krema: Krema)
 
     order = [TW2, KWRITE, KFIND, TW]
     wait_until(lambda: krema.item_names() == order, message=lambda: f"AT-SPI order {order} (have {krema.item_names()})")
+
+
+
+# ICON-009: an absolute-path window icon keeps its raw artwork in the drag ghost.
+# DND-003 covers source dimming and ghost opacity; this oracle independently
+# identifies the four raw-artwork colors after normalization and alpha blending.
+@pytest.mark.kremarc(kremarc(KWRITE))
+def test_icon009_drag_ghost_uses_raw_client_artwork(
+    tmp_path: Path, krema: Krema, apps: TestWindows
+) -> None:
+    if not kwin.can_capture():
+        pytest.fail("KWin cannot capture (QPainter compositing, no /dev/dri render node); ICON-009 is a visual check")
+
+    icon_path = Path("/usr/share/krema-test-window/icon-raw-quadrants.svg")
+    assert icon_path.is_file(), (
+        f"ICON-009 static icon fixture is missing: {icon_path}; "
+        "install the test-window fixture before starting the session"
+    )
+
+    source = "ICON-009 Raw Icon"
+    target = KWRITE
+    app_id = "org.krema.icon009.drag-raw"
+    apps.open(source, app_id=app_id)
+    scene = Scene.capture(krema, [target, source])
+    start = scene.center(source)
+    over = (scene.center(target)[0], scene.row_top - 16)
+    drop = (over[0], start[1])
+    gx, gy = over[0] - ICON // 2, over[1] - ICON // 2
+    rows = min(ICON, scene.row_top - gy)
+    expected_colors = {
+        "magenta": np.array((240, 24, 240), dtype=np.float32),
+        "cyan": np.array((24, 240, 240), dtype=np.float32),
+        "yellow": np.array((240, 240, 24), dtype=np.float32),
+        "green": np.array((24, 240, 24), dtype=np.float32),
+    }
+    background = scene.base[gy : gy + rows, gx : gx + ICON, :3].astype(np.float32)
+    crop_path = tmp_path / "icon009-ghost-crop.png"
+
+    with dragging(start, [over, PAUSE_MS, drop]):
+        wait_cursor(over)
+        seen: dict = {}
+
+        def feedback() -> dict | None:
+            shot = scene.shot("icon009-mid-drag")
+            artwork = shot[gy : gy + rows, gx : gx + ICON, :3]
+            Image.fromarray(artwork).save(crop_path)
+            pixels = artwork.astype(np.float32)
+            signal = np.max(np.abs(pixels - background), axis=-1) >= 30
+            signatures = {}
+            for color, expected_rgb in expected_colors.items():
+                high = expected_rgb > (expected_rgb.min() + expected_rgb.max()) / 2
+                # Channel ordering survives normalization and alpha blending;
+                # exact RGB and luminance depend on the ghost's opacity.
+                bright, dark = pixels[..., high], pixels[..., ~high]
+                signatures[color] = (
+                    (bright.min(axis=-1) - dark.max(axis=-1) >= 30)
+                    & (np.ptp(bright, axis=-1) <= 40)
+                    & (np.ptp(dark, axis=-1) <= 40)
+                )
+
+            # Locate new fixture-colored artwork within the bounded ghost crop.
+            # The provider and drag image both scale it, so the 48px canvas's
+            # outer quadrants may mostly contain transparent padding.
+            ys, xs = np.nonzero(np.logical_or.reduce(list(signatures.values())) & signal)
+            bounds = None
+            samples = {}
+            quadrants = {}
+            if xs.size:
+                x, y = int(xs.min()), int(ys.min())
+                width, height = int(xs.max()) - x + 1, int(ys.max()) - y + 1
+                bounds = (x, y, width, height)
+                # Sample the middle half of each rendered quadrant, avoiding
+                # antialiased edges and the seams between the fixture colors.
+                left = (x + width // 8, x + 3 * width // 8)
+                right = (x + 5 * width // 8, x + 7 * width // 8)
+                top = (y + height // 8, y + 3 * height // 8)
+                bottom = (y + 5 * height // 8, y + 7 * height // 8)
+                samples = {
+                    "magenta": (left[0], top[0], left[1], top[1]),
+                    "cyan": (right[0], top[0], right[1], top[1]),
+                    "yellow": (left[0], bottom[0], left[1], bottom[1]),
+                    "green": (right[0], bottom[0], right[1], bottom[1]),
+                }
+                for color, (x0, y0, x1, y1) in samples.items():
+                    if x1 <= x0 or y1 <= y0:
+                        continue
+                    signature = signatures[color][y0:y1, x0:x1]
+                    new_signal = signal[y0:y1, x0:x1]
+                    quadrants[color] = {
+                        "bounds": (x0, y0, x1, y1),
+                        "expected_rgb": expected_colors[color].tolist(),
+                        "rgb": np.median(pixels[y0:y1, x0:x1], axis=(0, 1)).round(1).tolist(),
+                        "background_rgb": np.median(background[y0:y1, x0:x1], axis=(0, 1)).round(1).tolist(),
+                        "signature_fraction": float(np.mean(signature)),
+                        "signal_fraction": float(np.mean(new_signal)),
+                        "matching_fraction": float(np.mean(signature & new_signal)),
+                    }
+            seen.update(
+                crop=(gx, gy, ICON, rows),
+                crop_path=str(crop_path),
+                crop_rgb=np.median(pixels, axis=(0, 1)).round(1).tolist(),
+                matching_pixels={
+                    color: int(np.count_nonzero(signature & signal))
+                    for color, signature in signatures.items()
+                },
+                artwork_bounds=bounds,
+                samples=samples,
+                quadrants=quadrants,
+            )
+            # An absent/stale ghost has no new signal; a fallback must not pass
+            # merely because it shares one color with the raw fixture.
+            matches = len(quadrants) == 4 and all(q["matching_fraction"] >= 0.75 for q in quadrants.values())
+            return dict(seen) if matches else None
+
+        wait_until(
+            feedback,
+            timeout=5,
+            message=lambda: (
+                "raw drag ghost feedback "
+                "(quadrant colors/new signal; opacity covered by DND-003): "
+                f"{seen}"
+            ),
+        )
 
 
 @pytest.mark.kremarc(kremarc(KWRITE, KFIND))

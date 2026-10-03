@@ -20,6 +20,7 @@
 #include <QCommandLineParser>
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QIcon>
 #include <QLabel>
 #include <QPalette>
 #include <QMainWindow>
@@ -106,6 +107,7 @@ int main(int argc, char **argv)
     parser.addOption({QStringLiteral("height"), QStringLiteral("Window height"), QStringLiteral("px"), QStringLiteral("300")});
     parser.addOption({QStringLiteral("badge"), QStringLiteral("Unity LauncherEntry badge count"), QStringLiteral("n"), QStringLiteral("-1")});
     parser.addOption({QStringLiteral("color"), QStringLiteral("Solid background color of the window content (e.g. red, #00ff00)"), QStringLiteral("color")});
+    parser.addOption({QStringLiteral("icon-path"), QStringLiteral("Explicit local test icon path"), QStringLiteral("path")});
     parser.process(app);
 
     ::socketpair(AF_UNIX, SOCK_STREAM, 0, s_sigFd);
@@ -140,6 +142,10 @@ int main(int argc, char **argv)
     layout->addWidget(quit);
     window.setCentralWidget(central);
     window.resize(parser.value(QStringLiteral("width")).toInt(), parser.value(QStringLiteral("height")).toInt());
+    if (const QString iconPath = parser.value(QStringLiteral("icon-path")); !iconPath.isEmpty()) {
+        // This is a raw-render test stimulus, not a claim about Wayland app_id semantics.
+        window.setWindowIcon(QIcon(iconPath));
+    }
     window.show();
 
     if (const int badge = parser.value(QStringLiteral("badge")).toInt(); badge >= 0) {

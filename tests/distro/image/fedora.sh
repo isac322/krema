@@ -19,7 +19,7 @@ family_upgrade() {
 family_runtime() {
     fedora_install \
         kwin-wayland kglobalacceld \
-        mesa-dri-drivers mesa-libEGL mesa-libgbm \
+        mesa-dri-drivers mesa-libEGL mesa-libgbm libglvnd-gles \
         dbus-daemon dbus-tools wayland-utils qt6-qttools \
         at-spi2-core at-spi2-atk python3-pyatspi \
         pipewire wireplumber pipewire-utils \

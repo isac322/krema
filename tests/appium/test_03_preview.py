@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 import warnings
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -506,3 +507,102 @@ def test_prev009_explicit_group_pending_hide_retargets_after_reenter(
     inp.click()
     wait_until(other.is_active, message="retargeted second-group thumbnail to activate its child")
     wait_until(lambda: not krema.preview_visible(), message="retargeted selection to close popup")
+
+
+# ---------------------------------------------------------------- ICON-008
+
+
+@pytest.mark.kremarc({"PinnedLaunchers": []})
+def test_icon008_minimized_preview_fallback_preserves_raw_artwork(
+    krema: Krema, apps: TestWindows
+) -> None:
+    """ICON-008: absolute-path desktop artwork survives the preview fallback."""
+    _require_capture()
+
+    # The desktop entry and its absolute Icon path are installed before KWin
+    # starts, so TaskManager resolves the fixture through desktop metadata.
+    app_id = "org.krema.icon008"
+    icon_path = Path("/usr/share/krema-test-window/icon-raw-quadrants.svg")
+    assert icon_path.is_file(), (
+        f"ICON-008 static icon fixture is missing: {icon_path}; "
+        "install the test-window fixture before starting the session"
+    )
+    title = "ICON-008 raw preview fixture"
+    # Generate the expected artwork independently of the installed SVG,
+    # icon provider, and dock rendering.
+    artwork = Image.new("RGB", (96, 96))
+    artwork.paste((240, 24, 240), (0, 0, 48, 48))
+    artwork.paste((24, 240, 240), (48, 0, 96, 48))
+    artwork.paste((240, 240, 24), (0, 48, 48, 96))
+    artwork.paste((24, 240, 24), (48, 48, 96, 96))
+    artwork.save(env.artifact_path(f"{krema.name}/icon008-expected.png"))
+
+    window = apps.open(title, app_id=app_id, color="#202020")
+    krema.wait_for_item(title)
+    krema.move_away()
+    # Minimize before creating the preview, so no previously captured live
+    # frame can masquerade as fallback artwork.
+    kwin.set_minimized(window.internal_id, True)
+    wait_until(
+        lambda: (state := window.refresh()) is not None and state.minimized,
+        message="ICON-008 fixture to be minimized in KWin before opening its preview",
+    )
+    pv.open_by_hover(krema, title)
+    wait_until(
+        lambda: (thumb := krema.find(pv.thumb_xpath(title))) is not None
+        and "Minimized" in thumb.get_attribute("name"),
+        message="ICON-008 preview to acknowledge the minimized window",
+    )
+
+    # Channel differences tolerate the minimized overlay's uniform tint and
+    # opacity. Require all four colors in their original spatial arrangement,
+    # not just nonempty pixels or a screenshot matching the dock's own icon.
+    signatures = {
+        "magenta": lambda r, g, b: r - g > 60 and b - g > 60 and abs(r - b) < 40,
+        "cyan": lambda r, g, b: g - r > 60 and b - r > 60 and abs(g - b) < 40,
+        "yellow": lambda r, g, b: r - b > 60 and g - b > 60 and abs(r - g) < 40,
+        "green": lambda r, g, b: g - r > 60 and g - b > 60 and abs(r - b) < 40,
+    }
+    observed: dict[str, object] = {}
+
+    def contains_fixture() -> bool:
+        thumb = krema.wait_for(pv.thumb_xpath(title))
+        rect = pv.thumbnail_image_rect(pv.screen_rect(krema, thumb))
+        image = krema.screenshot("icon008-preview-fallback")
+        crop = image.convert("RGB").crop((rect.x, rect.y, rect.x + rect.width, rect.y + rect.height))
+        crop.save(env.artifact_path(f"{krema.name}/icon008-preview-fallback-crop.png"))
+        pixels = list(crop.getdata())
+        samples = {
+            name: [(i % crop.width, i // crop.width) for i, pixel in enumerate(pixels) if matches(*pixel)]
+            for name, matches in signatures.items()
+        }
+        counts = {name: len(points) for name, points in samples.items()}
+        observed.update(crop_size=crop.size, quadrant_pixels=counts, thumbnail_name=thumb.get_attribute("name"))
+        if not all(count > crop.width * crop.height * 0.02 for count in counts.values()):
+            return False
+        centers = {
+            name: (sum(x for x, _ in points) / len(points), sum(y for _, y in points) / len(points))
+            for name, points in samples.items()
+        }
+        observed["quadrant_centers"] = centers
+        magenta, cyan, yellow, green = (centers[name] for name in ("magenta", "cyan", "yellow", "green"))
+        return (
+            max(counts.values()) < min(counts.values()) * 2
+            and magenta[0] + 6 < cyan[0]
+            and yellow[0] + 6 < green[0]
+            and magenta[1] + 6 < yellow[1]
+            and cyan[1] + 6 < green[1]
+        )
+
+    wait_until(
+        contains_fixture,
+        timeout=15,
+        interval=0.5,
+        message=lambda: (
+            "ICON-008 blocked: the minimized preview does not show the static SVG's four-quadrant signature. "
+            "The preinstalled desktop entry's absolute Icon path may not resolve through TaskManager, "
+            "or preview raw fallback rendering is failing; generic placeholder pixels are not accepted. "
+            f"Observed screenshot crop: {observed}; compare icon008-expected.png, "
+            "icon008-preview-fallback.png and icon008-preview-fallback-crop.png"
+        ),
+    )

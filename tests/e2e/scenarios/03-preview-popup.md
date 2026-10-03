@@ -73,6 +73,7 @@ rather than replaces, the existing pixel/layout waits.
 **Verification:** AT-SPI (PopupMenu present with correct name), screenshot (popup with thumbnails)
 
 **Automated:** tests/appium/test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails
+**Automated (ICON-008 raw fallback):** `tests/appium/test_03_preview.py::test_icon008_minimized_preview_fallback_preserves_raw_artwork` (requires a DRM-capable KWin capture session)
 **Automated (reservation regression, native Tier 2 coverage):** `tests/appium/test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` (geometry-only; no DRM thumbnail-pixel assertion)
 
 ---

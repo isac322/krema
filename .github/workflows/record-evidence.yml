@@ -1,0 +1,167 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+# Record the packaged Fedora session, not reconstructed before/after stills.
+name: Delayed icon video evidence
+
+on:
+  push:
+    branches:
+      - fix/issue-75-icons
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: delayed-icon-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Record delayed DecorationRole update (Fedora 43)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          lfs: false
+
+      # Same public-image/build fallback as distro-e2e.yml. No registry
+      # credentials or packages permission are needed for anonymous pulls.
+      - name: Load vgem (DRM render node)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ko="$RUNNER_TEMP/vgem/vgem.ko"
+          ref="$(tests/distro/image-ref.sh vgem)"
+          if docker pull -q "$ref" >/dev/null 2>&1; then
+            mkdir -p "$(dirname "$ko")"
+            cid="$(docker create "$ref" /vgem.ko)"
+            docker cp "$cid:/vgem.ko" "$ko"
+            docker rm -f "$cid" >/dev/null
+            echo "[vgem] module from $ref"
+          else
+            echo "::notice::$ref not in ghcr.io; building vgem for $(uname -r)"
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq "linux-headers-$(uname -r)" build-essential
+          fi
+          sudo VGEM_KO="$ko" tests/appium/setup-vgem.sh
+
+      - name: Record existing dock item across metadata arrival
+        id: recording
+        shell: bash
+        env:
+          KREMA_E2E_ARTIFACTS: ${{ runner.temp }}/delayed-icon-evidence
+        run: |
+          set -euo pipefail
+          tests/distro/run-distro-e2e.sh fedora-43 record_delayed_icon.py -q
+
+      - name: Assemble and verify real-time video
+        if: always() && steps.recording.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          python3 - <<'PY'
+          import json
+          import math
+          import os
+          from pathlib import Path
+          import subprocess
+
+          evidence = Path(os.environ["RUNNER_TEMP"]) / "delayed-icon-evidence" / "visual-evidence"
+          rows = [json.loads(line) for line in (evidence / "frames.jsonl").read_text().splitlines()]
+          if len(rows) <= 30:
+              raise SystemExit(f"Need more than 30 captured frames, got {len(rows)}")
+          timestamps = [row["timestamp_ns"] for row in rows]
+          if any(not isinstance(value, int) for value in timestamps):
+              raise SystemExit("Capture timestamps must be integer monotonic nanoseconds")
+          deltas = [right - left for left, right in zip(timestamps, timestamps[1:])]
+          if any(delta <= 0 for delta in deltas):
+              raise SystemExit("Capture timestamps must be strictly increasing")
+          capture_seconds = (timestamps[-1] - timestamps[0]) / 1_000_000_000
+          if capture_seconds <= 2:
+              raise SystemExit(f"Capture spans only {capture_seconds:.3f}s; need more than 2s")
+
+          # Each interval comes from successive live ScreenShot2 captures.
+          # image2's microsecond time base avoids its default 25fps rounding;
+          # VFR output preserves these intervals rather than assigning a rate.
+          concat = ["ffconcat version 1.0"]
+          frame_root = (evidence / "frames").resolve()
+          for index, row in enumerate(rows):
+              frame = (evidence / row["frame"]).resolve()
+              if frame.parent != frame_root or not frame.is_file() or frame.suffix != ".png":
+                  raise SystemExit(f"Invalid or missing recorded PNG: {frame}")
+              if "'" in str(frame) or "\n" in str(frame):
+                  raise SystemExit(f"Unsupported recorded frame path: {frame}")
+              concat.append(f"file '{frame}'")
+              concat.append("option framerate 1000000")
+              if index < len(deltas):
+                  concat.append(f"duration {deltas[index] / 1_000_000_000:.9f}")
+          manifest = evidence / "capture.ffconcat"
+          manifest.write_text("\n".join(concat) + "\n")
+          video = evidence / "delayed-icon.mp4"
+          subprocess.run([
+              "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+              "-f", "concat", "-safe", "0", "-i", str(manifest),
+              "-an", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+              "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+              "-pix_fmt", "yuv420p", "-fps_mode", "vfr",
+              "-enc_time_base", "1:1000000", "-video_track_timescale", "1000000",
+              "-movflags", "+faststart", str(video),
+          ], check=True)
+          if not video.is_file() or video.stat().st_size == 0:
+              raise SystemExit("Video encoder produced no nonempty MP4")
+          probe = json.loads(subprocess.check_output([
+              "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames", "-show_frames",
+              "-show_entries", "stream=nb_read_frames:format=duration:frame=best_effort_timestamp_time",
+              "-of", "json", str(video),
+          ], text=True))
+          (evidence / "ffprobe.json").write_text(json.dumps(probe, indent=2) + "\n")
+          duration = float(probe["format"]["duration"])
+          frame_count = int(probe["streams"][0]["nb_read_frames"])
+          if not math.isfinite(duration) or duration <= 2 or frame_count <= 30:
+              raise SystemExit(f"Video verification failed: {duration}s, {frame_count} frames")
+          if frame_count != len(rows):
+              raise SystemExit(f"Encoder changed frame count: {len(rows)} captures, {frame_count} encoded")
+          presentation_times = [float(frame["best_effort_timestamp_time"]) for frame in probe["frames"]]
+          if len(presentation_times) != len(rows):
+              raise SystemExit("ffprobe did not report every captured frame timestamp")
+          timing_tolerance = 0.001 + len(rows) / 1_000_000
+          for index, (encoded, captured) in enumerate(zip(presentation_times, timestamps)):
+              expected = (captured - timestamps[0]) / 1_000_000_000
+              if not math.isfinite(encoded) or abs(encoded - expected) > timing_tolerance:
+                  raise SystemExit(f"Frame {index} timing changed: encoded {encoded}s, captured {expected}s")
+          # The final sample can carry one final display interval. No stretched
+          # time axis, duplicated motion, or fixed-framerate slideshow is allowed.
+          if abs(duration - capture_seconds) > max(0.01, max(deltas) / 1_000_000_000):
+              raise SystemExit(f"Video duration {duration}s differs from live capture {capture_seconds}s")
+          context = {
+              "commit": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "distro": "fedora-43",
+              "captured_frames": len(rows),
+              "capture_seconds": capture_seconds,
+              "encoded_frames": frame_count,
+              "video_seconds": duration,
+              "timestamp_source": "time.monotonic_ns; successive live ScreenShot2 captures",
+              "encoding": "variable frame rate, capture intervals quantized only to microseconds",
+          }
+          (evidence / "recording-context.json").write_text(json.dumps(context, indent=2) + "\n")
+          print(f"Verified {video}: {frame_count} frames, {duration:.3f}s; live span {capture_seconds:.3f}s")
+          PY
+
+      - name: Upload video, source frames, and timestamp metadata
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: delayed-icon-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/delayed-icon-evidence/visual-evidence/
+          if-no-files-found: error
+          retention-days: 14

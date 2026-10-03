@@ -96,6 +96,7 @@ hold delay does not start a Krema drag.
 **Verification:** screenshot (ghost icon + opacity change + drop indicator line)
 
 **Automated:** tests/appium/test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator
+**Automated (ICON-009 raw drag ghost):** `tests/appium/test_05_drag.py::test_icon009_drag_ghost_uses_raw_client_artwork` (requires a DRM-capable KWin capture session)
 
 ---
 

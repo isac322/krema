@@ -299,6 +299,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`; existing cycle/no-launch cases plus Issue 54 click-minimize cases) | KWin | baseline pass; Issue 54 cases pending |
 | MOUSE-009 | `test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them` | AT-SPI, screenshot | pass |
 | PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails`; `test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` (four edges × reservation off/on, floating on; geometry/title only, no DRM) | AT-SPI, screenshot for original thumbnail case; KWin popup/surface/item geometry and real hover for reservation regression | baseline pass; reservation geometry regression 8/8 native Tier 2 pass; current thumbnail pixels/DRM and installed Tier 3 unverified |
+| ICON-008 | `test_03_preview.py::test_icon008_minimized_preview_fallback_preserves_raw_artwork` | screenshot, KWin, TaskManager | pending; DRM capture required on current host |
 | PREV-002 | `test_03_preview.py::test_prev002_grouped_app_shows_one_thumbnail_per_window_in_a_row` | AT-SPI | pass |
 | PREV-003 | `test_03_preview.py::test_prev003_clicking_a_thumbnail_activates_that_window` | KWin, AT-SPI | pass |
 | PREV-004 | `test_03_preview.py::test_prev004_close_button_closes_that_window`, `test_prev004_delete_key_closes_focused_thumbnail_window`, `test_prev004_closing_last_window_closes_preview_and_returns_to_dock` | KWin, AT-SPI | pass |
@@ -315,6 +316,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | DND-001 | `test_05_drag.py::test_dnd_001_drag_reorders_dock_items` (also: focus returns to the previously active window) | AT-SPI, screenshot, KWin | pass |
 | DND-002 | `test_05_drag.py::test_dnd_002_reorder_persists_after_restart` | AT-SPI, kremarc | pass |
 | DND-003 | `test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator` | screenshot | pass |
+| ICON-009 | `test_05_drag.py::test_icon009_drag_ghost_uses_raw_client_artwork` | screenshot, KWin, TaskManager | pending; DRM capture required on current host |
 | DND-004 | `test_05_drag.py::test_dnd_004_drag_released_outside_dock_keeps_order`, `test_dnd_004_escape_cancels_drag` (both also: focus returns to the previously active window) | AT-SPI, kremarc, screenshot, KWin | pass |
 | SET-001 | `test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown` | KWin, AT-SPI | pass |
 | SET-002 | `test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion` | AT-SPI, kremarc | pass |

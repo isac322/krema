@@ -365,3 +365,41 @@ restores the final zero-axis stretch afterward.
 **Key lesson:** A layer-shell zero size is a compositor instruction only after
 the matching double anchor exists. During live anchor replacement, preserve a
 positive current size instead of inventing a fallback size or adding a new API.
+
+## 20. A per-point Wayland roundtrip can dominate recorded input time (2026-10, tests/appium)
+
+**Symptom:** In the fast preview-entry measurement the recorded input
+phase took 206.109 ms of a 209.820 ms elapsed run (CI run 37183970965)
+while valid geometry arrived in under 4 ms after first visibility. A
+strict 190 ms fresh-entry case failed.
+
+**Cause:** Upstream inputsynth roundtrips the Wayland connection after
+every `pointer_motion_absolute`, so a hover path's zero-duration steps
+each paid a server roundtrip. The recorded cost was dominated by
+`move_path` transport rather than popup geometry or state polling (that
+readiness was already under 4 ms); the compositor's per-roundtrip
+processing cost was not separately measured. Reducing redundant
+per-motion synchronization was supported by the before/after runs.
+
+**Fix (test tooling only; `src/` unchanged):** `tools/inputsynth-fixes.patch`
+flushes each zero-duration mouse move immediately, in request order, and
+marks it pending on the chain's worker thread; one end-of-chain roundtrip
+(or a later action's own barrier) confirms all pending motion before the
+chain is answered. The pending flag is thread-local, so a concurrent
+chain's barrier cannot clear it, and a failed flush falls back to the
+previous per-point roundtrip. Positive-duration moves, pen, touch, key,
+button, wheel and pause behaviour are unchanged. The same Leap control
+then passed 201 tests (13 skipped, 0 failed), including all three strict
+fresh-entry cases at 150.789/67.095/69.204 ms and all six previously
+failed cases (run 37190253025). Oracles unchanged: 190 ms max elapsed, 3
+fresh opens, 500 ms hold, 2 motion points, 5 ms step.
+
+**Key lessons:**
+- A roundtrip acknowledgement proves only that the server processed the
+  request — it is not proof Qt consumed the event or that the
+  client-visible effect landed.
+- These latencies are per-run measurements, not guarantees: the patch
+  removes roundtrips, it does not promise a deterministic sub-15 ms or a
+  fixed 5 ms server/Qt dwell.
+- Batching to the chain barrier preserves request ordering without paying
+  a blocking roundtrip per point.

@@ -707,6 +707,24 @@ chain's interruptible pause with a request for that chain only. A chain
 that exceeds its timeout kills the process and raises `TimeoutExpired`, as
 before. The process exits when pytest does (stdin closes).
 
+The patch also skips the per-point server roundtrip for zero-duration mouse
+moves. Upstream sends each `pointer_motion_absolute` and roundtrips after
+it, so a hover path of tens of steps paid a roundtrip per step. Now such a
+move is enqueued and flushed immediately, in request order with everything
+sent before it, and marked pending on the chain's worker thread. The chain
+is answered only after a roundtrip has confirmed any motion still pending
+on that thread, so a pure-motion chain costs one roundtrip instead of one
+per point; a later action's own barrier (button press or release, key,
+wheel, touch, an interpolated move's steps) confirms it first and adds
+nothing. The pending flag is `thread_local`, so a concurrent chain's
+barrier, its Escape key or interruptible pause end, cannot clear another
+chain's unconfirmed motion. A flush that cannot write everything falls
+back to the roundtrip the move used to do, so buffered requests never sit
+out the pauses that follow them.
+Positive-duration mouse moves keep their interpolated steps and final
+roundtrip unchanged, and pen, touch, key, button, wheel and pause
+behaviour are unchanged.
+
 `drag` presses, moves and releases in one chain, so the button is held
 throughout. A button held across separate calls lasts only as long as the
 `--stdin` process: a crash or a timeout restarts it and drops the button. A

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Corrected the Debian/Ubuntu package copyright notice to include the full MIT-CMU terms for the bundled KDE protocol.
 - Application icons supplied by KDE/Wayland task metadata stayed visible when they lacked a theme name and refreshed when delayed metadata arrived.
 - Minimized live previews now retained their application icon when PipeWire was ready instead of becoming blank.
 - Changing visibility mode while the Settings window was open now released or applied the dock's screen-space reservation immediately.

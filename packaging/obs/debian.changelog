@@ -1,3 +1,19 @@
+krema (0.10.0-1) unstable; urgency=medium
+
+  * New upstream release v0.10.0
+  * Ships its own app icon (application launcher, task switcher, Discover,
+    window title bars)
+  * New "Zoom animation duration" setting for Parabolic and In place hover zoom
+  * Independent left-click actions for single and grouped windows
+  * "Selected monitors" setting keeps docks on chosen outputs
+  * Enabled-by-default "Reserve screen space" for Always visible mode
+  * Optional "Separate pinned and running apps" grouping
+  * Focus Dock shortcut default moved from Meta+F5 to Meta+Alt+D
+  * Fixed dock resizing on LayerShellQt older than 6.4 and a batch of window
+    preview and click handling bugs
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Mon, 05 Oct 2026 00:00:00 +0900
+
 krema (0.9.0-1) unstable; urgency=medium
 
   * New upstream release v0.9.0

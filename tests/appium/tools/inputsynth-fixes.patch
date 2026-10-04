@@ -1,5 +1,5 @@
 inputsynth: absolute pointer moves, W3C Meta = Super, interruptible pauses,
-a persistent --stdin mode
+a persistent --stdin mode, and flushed zero-duration mouse moves
 
 1. Upstream adds every mouse move to the previous *target* and stores the raw
    move value, so the 2nd+ move of one action chain lands in the wrong place.
@@ -29,9 +29,26 @@ a persistent --stdin mode
    after each request waits on a per-thread event queue when called off the
    GUI thread (Qt dispatches the default queue there), and the pointer
    state shared by all chains is guarded by a mutex.
+5. A zero-duration mouse move no longer waits for the server after its
+   point: the request is enqueued and flushed right away and marked pending
+   on the chain's thread. The suite's hover paths send tens of these per
+   chain, each previously paying a roundtrip. If a flush cannot write
+   everything (EAGAIN) the move falls back to the roundtrip it used to do,
+   so buffered requests never sit out the pauses that follow them. The
+   chain is answered only after any motion still pending on its thread has
+   been confirmed by a roundtrip, so a pure-motion chain costs one
+   roundtrip instead of one per point. A later action's own barrier
+   (button press/release, key, touch, wheel, an interpolated move's step)
+   already confirms it, so there is no extra roundtrip then. The flag is
+   per thread: another chain's barrier must not clear it, its sync
+   callback may return while our motion is not even on the wire yet.
+   Positive-duration mouse moves keep their final roundtrip and
+   interpolated steps unchanged so the compositor sees every intermediate
+   position in real time, and touch moves keep theirs so every motion
+   still carries its own frame.
 
 diff --git a/inputsynth/interaction.cpp b/inputsynth/interaction.cpp
-index 5e7dd9d..3e2eb99 100644
+index 5e7dd9d..dec9f82 100644
 --- a/inputsynth/interaction.cpp
 +++ b/inputsynth/interaction.cpp
 @@ -6,6 +6,7 @@
@@ -58,25 +75,50 @@ index 5e7dd9d..3e2eb99 100644
  QHash<unsigned /* unique id */, QPoint> PointerAction::s_positions = {};
  QSet<unsigned /*unique id*/> PointerAction::s_touchPoints = {};
  QSet<int /* pressed button */> PointerAction::s_mouseButtons = {};
-@@ -100,7 +103,16 @@ void FakeInputInterface::roundtrip(bool touch)
+@@ -100,7 +103,41 @@ void FakeInputInterface::roundtrip(bool touch)
      if (touch) {
          touch_frame();
      }
 -    wl_display_roundtrip(s_interface->m_display);
 +    if (QThread::currentThread() == thread()) {
 +        wl_display_roundtrip(m_display);
-+        return;
++    } else {
++        // --stdin mode performs chains on worker threads while Qt dispatches
++        // the default queue on the GUI thread: wait for the sync callback on
++        // a queue of this thread's own.
++        thread_local const std::unique_ptr<wl_event_queue, decltype(&wl_event_queue_destroy)> queue{wl_display_create_queue(m_display), wl_event_queue_destroy};
++        wl_display_roundtrip_queue(m_display, queue.get());
 +    }
-+    // --stdin mode performs chains on worker threads while Qt dispatches the
-+    // default queue on the GUI thread: wait for the sync callback on a queue
-+    // of this thread's own.
-+    thread_local const std::unique_ptr<wl_event_queue, decltype(&wl_event_queue_destroy)> queue{wl_display_create_queue(m_display),
-+                                                                                               wl_event_queue_destroy};
-+    wl_display_roundtrip_queue(m_display, queue.get());
++    // A roundtrip also confirms every motion this thread only flushed (the
++    // return value is ignored here, like every other roundtrip above).
++    s_motionPending = false;
++}
++
++void FakeInputInterface::flushMotion()
++{
++    s_motionPending = true;
++    if (wl_display_flush(m_display) == -1) {
++        // The socket buffer is full (EAGAIN): what stays buffered must not
++        // sit there past the pauses that follow this move, so fall back to
++        // the roundtrip this move used to do anyway (its dispatch flushes
++        // again and waits for POLLOUT). roundtrip() clears the pending flag.
++        roundtrip();
++    }
++}
++
++void FakeInputInterface::syncPendingMotion()
++{
++    // Chains answer once their actions have finished. A chain ending on
++    // flushed-only motion must still wait for the server to have seen it, so
++    // roundtrip once; a later barrier in the chain (button, key, touch,
++    // wheel, positive-duration move) already did that and cleared the flag.
++    if (s_motionPending) {
++        roundtrip();
++    }
  }
  
  void FakeInputInterface::sendKey(const std::vector<quint32> &linuxModifiers, quint32 linuxKeyCode, wl_keyboard_key_state keyState)
-@@ -109,19 +121,19 @@ void FakeInputInterface::sendKey(const std::vector<quint32> &linuxModifiers, qui
+@@ -109,19 +146,19 @@ void FakeInputInterface::sendKey(const std::vector<quint32> &linuxModifiers, qui
          for (const auto &modifier : linuxModifiers) {
              qDebug() << "  pressing modifier" << modifier;
              keyboard_key(modifier, WL_KEYBOARD_KEY_STATE_PRESSED);
@@ -99,7 +141,7 @@ index 5e7dd9d..3e2eb99 100644
          }
      }
  }
-@@ -335,7 +347,7 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
+@@ -335,7 +372,7 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
          {QChar(u'\ue037'), XKB_KEY_F7},        {QChar(u'\ue038'), XKB_KEY_F8},
          {QChar(u'\ue039'), XKB_KEY_F9},        {QChar(u'\ue002'), XKB_KEY_Help},
          {QChar(u'\ue011'), XKB_KEY_Home},      {QChar(u'\ue016'), XKB_KEY_Insert},
@@ -108,7 +150,7 @@ index 5e7dd9d..3e2eb99 100644
          {QChar(u'\ue024'), XKB_KEY_multiply},  {QChar(u'\ue000'), XKB_KEY_NoSymbol},
          {QChar(u'\ue01a'), XKB_KEY_KP_0},      {QChar(u'\ue01b'), XKB_KEY_KP_1},
          {QChar(u'\ue01c'), XKB_KEY_KP_2},      {QChar(u'\ue01d'), XKB_KEY_KP_3},
-@@ -356,9 +368,12 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
+@@ -356,9 +393,12 @@ xkb_keysym_t KeyboardAction::charToKeysym(const QChar &key)
      return xkb_utf32_to_keysym(key.unicode());
  }
  
@@ -122,7 +164,7 @@ index 5e7dd9d..3e2eb99 100644
  {
  }
  
-@@ -368,7 +383,15 @@ PauseAction::~PauseAction()
+@@ -368,7 +408,15 @@ PauseAction::~PauseAction()
  
  void PauseAction::perform()
  {
@@ -139,7 +181,7 @@ index 5e7dd9d..3e2eb99 100644
  }
  
  WheelAction::WheelAction(const QString &id, const QPoint &pos, const QPoint &deltaPos, unsigned long duration)
-@@ -385,6 +408,7 @@ WheelAction::~WheelAction()
+@@ -385,6 +433,7 @@ WheelAction::~WheelAction()
  
  void WheelAction::perform()
  {
@@ -147,7 +189,7 @@ index 5e7dd9d..3e2eb99 100644
      PointerAction::s_positions[m_uniqueId] = m_pos;
      s_interface->pointer_motion_absolute(wl_fixed_from_int(m_pos.x()), wl_fixed_from_int(m_pos.y()));
      s_interface->roundtrip();
-@@ -430,6 +454,10 @@ void PointerAction::perform()
+@@ -430,6 +479,10 @@ void PointerAction::perform()
          {static_cast<int>(Button::Back), BTN_BACK},
      };
  
@@ -158,7 +200,7 @@ index 5e7dd9d..3e2eb99 100644
      switch (m_actionType) {
      case ActionType::Move: {
          auto lastPosIt = s_positions.find(m_uniqueId);
-@@ -474,16 +502,11 @@ void PointerAction::perform()
+@@ -474,26 +527,30 @@ void PointerAction::perform()
                  QThread::msleep(stepDurationMs);
              }
          }
@@ -179,8 +221,20 @@ index 5e7dd9d..3e2eb99 100644
 +        const wl_fixed_t lastY = wl_fixed_from_int(target.y());
          if (m_pointerType == PointerKind::Touch) {
              s_interface->touch_motion(m_uniqueId, lastX, lastY);
++            s_interface->roundtrip(true);
++        } else if (m_pointerType == PointerKind::Mouse && m_duration == 0) {
++            // A zero-duration mouse move has no interpolated points: enqueue
++            // and flush only. The E2E suite's hover paths send tens of these
++            // per chain, each previously paying a server roundtrip; the
++            // end-of-chain sync (or any later action's barrier) still
++            // confirms them.
++            s_interface->pointer_motion_absolute(lastX, lastY);
++            s_interface->flushMotion();
          } else {
-@@ -493,7 +516,7 @@ void PointerAction::perform()
+             s_interface->pointer_motion_absolute(lastX, lastY);
++            s_interface->roundtrip();
+         }
+-        s_interface->roundtrip(m_pointerType == PointerKind::Touch);
          // Sleep to the total duration
          QThread::msleep(m_duration - (steps - 1) * stepDurationMs);
          // Update the last position
@@ -190,7 +244,7 @@ index 5e7dd9d..3e2eb99 100644
          return;
      }
 diff --git a/inputsynth/interaction.h b/inputsynth/interaction.h
-index 710fcae..0d08512 100644
+index 710fcae..a2f3d5a 100644
 --- a/inputsynth/interaction.h
 +++ b/inputsynth/interaction.h
 @@ -6,7 +6,9 @@
@@ -203,7 +257,32 @@ index 710fcae..0d08512 100644
  
  #include "qwayland-fake-input.h"
  #include <QHash>
-@@ -145,13 +147,20 @@ private:
+@@ -56,6 +58,12 @@ public:
+     ~FakeInputInterface() override;
+
+     void roundtrip(bool touch = false);
++    // A zero-duration mouse move flushes instead of roundtripping (5.): it
++    // marks the motion pending on this thread so a later roundtrip, or the
++    // sync before the chain is answered, still confirms it. A flush that
++    // cannot write everything (EAGAIN) falls back to that roundtrip.
++    void flushMotion();
++    void syncPendingMotion();
+     void sendKey(const std::vector<quint32> &linuxModifiers, quint32 linuxKeyCode, wl_keyboard_key_state keyState);
+
+     Q_DISABLE_COPY_MOVE(FakeInputInterface)
+@@ -64,6 +72,11 @@ Q_SIGNALS:
+     void readyChanged();
+
+ private:
++    // Motion this thread flushed but no roundtrip confirmed yet. One chain
++    // lives on one thread, so this is per-chain pending state; another
++    // chain's barrier must not clear it (its sync callback may confirm its
++    // own queue while ours is still unflushed or unanswered).
++    static inline thread_local bool s_motionPending = false;
+     bool m_ready = false;
+     wl_display *m_display = nullptr;
+ };
+@@ -145,13 +158,20 @@ private:
  class PauseAction : public BaseAction
  {
  public:
@@ -225,7 +304,7 @@ index 710fcae..0d08512 100644
  };
  
  class WheelAction : public BaseAction
-@@ -211,6 +220,8 @@ public:
+@@ -211,6 +231,8 @@ public:
      void perform() override;
  
  private:
@@ -235,7 +314,7 @@ index 710fcae..0d08512 100644
      static QSet<unsigned /*unique id*/> s_touchPoints;
      static QSet<int /* pressed button */> s_mouseButtons;
 diff --git a/inputsynth/main.cpp b/inputsynth/main.cpp
-index a3073a3..56fef20 100644
+index a3073a3..fc9e631 100644
 --- a/inputsynth/main.cpp
 +++ b/inputsynth/main.cpp
 @@ -1,7 +1,14 @@
@@ -327,7 +406,7 @@ index a3073a3..56fef20 100644
                      continue;
                  } else {
                      const auto x = hash.value(QStringLiteral("x")).toInt();
-@@ -141,16 +144,162 @@ int main(int argc, char **argv)
+@@ -141,16 +144,165 @@ int main(int argc, char **argv)
              continue;
          }
      }
@@ -342,6 +421,9 @@ index a3073a3..56fef20 100644
 +    for (auto action : actions) {
 +        action->perform();
 +    }
++    // A chain ending on flushed-only motion is answered only once the server
++    // has seen it (no-op when a later barrier already confirmed it).
++    s_interface->syncPendingMotion();
 +    qDeleteAll(actions);
 +}
 +

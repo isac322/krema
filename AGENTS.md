@@ -54,7 +54,7 @@ Rules that apply to every agent working on this repository, regardless of harnes
   2. the product needs a newer dependency (Qt, KDE Frameworks, LayerShellQt, etc.) that the release cannot provide and this blocks product work.
 - Platform-forced removal is per channel: when a build service stops offering a release (COPR deletes EOL Fedora chroots, Launchpad rejects uploads to Obsolete Ubuntu series, OBS removes a distro project), that channel simply stops serving the release. Other channels that still offer it keep building it — record the platform action, do not remove the release elsewhere.
 - Add new distro releases promptly to every channel that offers them (OBS `packaging/obs/project.meta.xml`, COPR chroots, Launchpad PPA series, README Installation table).
-- The scheduled workflow `.github/workflows/distro-release-watch.yml` opens tracking issues labeled `distro-release` when new distro versions appear; those issues drive the additions.
+- The scheduled workflow `.github/workflows/distro-release-watch.yml` opens one tracking issue per channel, labeled `distro-release`, once that channel offers a distro release (including pre-releases) that Krema does not build there yet; those issues drive the additions. Releases a channel does not offer yet are only logged, never filed.
 
 ### Agent Rules
 

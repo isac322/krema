@@ -2,8 +2,10 @@
 """
 check_distro_releases.py — Distro release watcher for Krema.
 
-Detects newer distribution releases that our build channels do not cover yet
-and keeps one GitHub issue per distro release in sync (label: distro-release).
+Detects distribution releases that a build channel already offers but Krema
+does not build there yet, and keeps one GitHub issue per (release, channel)
+pair in sync (label: distro-release). An issue therefore only appears once
+the maintainer can actually add the release on that channel.
 
 Detection rule:
     A distro version is *missing* on a channel when it is numerically greater
@@ -12,19 +14,26 @@ Detection rule:
     older releases; EOL is never a removal reason, so EOL cycles are never
     flagged and only new releases produce issues.
 
+    A missing version is *actionable* when the channel offers it (OBS has the
+    distro project, COPR has the chroot, Launchpad has the series active).
+    Pre-releases count as soon as the channel offers them. Missing versions a
+    channel does not offer yet are only logged as waiting; their issue is
+    opened by the first run after the channel starts offering them.
+
 Channels:
-    Fedora   : OBS (Fedora_<N> in project.meta.xml) + COPR (fedora-<N>-* chroots)
-    Ubuntu   : OBS (xUbuntu_<ver>) + Launchpad PPA (published series)
+    Fedora   : OBS (Fedora_<N> in project.meta.xml), COPR (fedora-<N>-* chroots)
+    Ubuntu   : OBS (xUbuntu_<ver>), Launchpad PPA (published series)
     Debian   : OBS (Debian_<N>)
     openSUSE : OBS (openSUSE_Leap_<ver>)
     Rolling targets (Rawhide, Tumbleweed, Slowroll, AUR/Arch) are ignored.
 
-Issue lifecycle (one issue per missing release, title
-"Distro release: <Distro> <version>"):
+Issue lifecycle (one issue per actionable gap, title
+"Distro release: <Distro> <version> on <channel>"):
     absent -> create; open -> edit body when it changed; closed -> untouched.
-    An open issue is commented and closed once nothing is missing anymore.
-    The close pass is skipped when any data source was unreachable, so a
-    partial run never closes an issue prematurely.
+    An open issue is commented and closed once its gap is gone (the channel
+    builds the release, or stopped offering it). The close pass is skipped
+    when any data source was unreachable, so a partial run never closes an
+    issue prematurely.
 
 Exit code:
     0  — run completed (new issues may or may not have been filed)
@@ -42,6 +51,7 @@ import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -66,7 +76,10 @@ LP_SERIES_API = "https://api.launchpad.net/devel/ubuntu/series"
 
 LABEL = "distro-release"
 LABEL_COLOR = "0E8A16"
-LABEL_DESCRIPTION = "New distribution release missing from a build channel"
+LABEL_DESCRIPTION = (
+    "New distribution release a build channel offers but Krema does not "
+    "build there"
+)
 
 POLICY_LINK = (
     "See the [Distribution Support Policy]"
@@ -74,7 +87,7 @@ POLICY_LINK = (
     "#distribution-support-policy) in AGENTS.md."
 )
 
-MARKER_RE = re.compile(r"<!--\s*distro-release:([\w-]+):([\d.]+)\s*-->")
+MARKER_RE = re.compile(r"<!--\s*distro-release:([\w-]+):([\d.]+):([\w-]+)\s*-->")
 
 
 def warn(msg: str) -> None:
@@ -254,49 +267,50 @@ def eol_candidates(distro: str) -> dict[tuple[int, ...], tuple[str, str]] | None
 
 
 @dataclass
-class ChannelStatus:
-    """One issue-table row: a channel's state for a given release."""
+class Gap:
+    """A release one channel offers but Krema does not build there yet."""
 
-    channel: str
-    built: bool | None  # None = unknown (tracked set could not be fetched)
-    offered: bool | None  # None = unknown (fetch error)
-    action: str
+    distro: str  # display name, e.g. "Fedora"
+    slug: str  # distro slug used in the marker, e.g. "fedora"
+    version: str  # display version, e.g. "45" or "26.10"
+    channel: str  # display name, e.g. "OBS"
+    channel_slug: str  # marker slug, e.g. "obs"
+    target: str  # what to add on the channel, markdown
+    action: str  # how to add it, markdown
+    released: str | None  # upstream release date; None = pre-release
 
-
-@dataclass
-class Release:
-    distro: str
-    slug: str
-    version: str
-    channels: list[ChannelStatus]
+    @property
+    def key(self) -> str:
+        return f"{self.slug}:{self.version}:{self.channel_slug}"
 
     @property
     def title(self) -> str:
-        return f"Distro release: {self.distro} {self.version}"
+        return f"Distro release: {self.distro} {self.version} on {self.channel}"
 
     @property
     def marker(self) -> str:
-        return f"<!-- distro-release:{self.slug}:{self.version} -->"
+        return f"<!-- distro-release:{self.key} -->"
 
 
-def build_body(release: Release) -> str:
-    tri_state = {True: "yes", False: "no", None: "unknown"}
+def build_body(gap: Gap) -> str:
+    status = (
+        f"released {gap.released}"
+        if gap.released
+        else f"pre-release ({gap.channel} already offers it)"
+    )
     lines = [
-        f"**{release.distro} {release.version}** is now available (released, or "
-        "offered as a pre-release by a build service) but Krema does not build "
-        "for it on every channel yet.",
+        f"**{gap.channel}** now offers **{gap.distro} {gap.version}**, but "
+        "Krema does not build for it there yet.",
         "",
-        "| Channel | Currently built? | Offered by the build service? | Action |",
-        "| --- | --- | --- | --- |",
-    ]
-    for c in release.channels:
-        lines.append(
-            f"| {c.channel} | {tri_state[c.built]} "
-            f"| {tri_state[c.offered]} | {c.action} |"
-        )
-    lines += [
+        f"- Release status: {status}",
+        f"- Target: {gap.target}",
+        f"- Action: {gap.action}",
+        "- Also list the release in the README Installation table if it is "
+        "not there yet.",
         "",
-        release.marker,
+        "This issue closes automatically once the channel builds the target.",
+        "",
+        gap.marker,
         "",
         f"> Reminder: {POLICY_LINK} EOL is not a removal reason; a target is "
         "retired only when it breaks or blocks product work.",
@@ -330,8 +344,12 @@ def missing(
     return True
 
 
-def detect(repo_names: set[str]) -> tuple[list[Release], bool]:
-    """Return (releases missing on >=1 channel, had_unknown_source)."""
+def detect(repo_names: set[str]) -> tuple[list[Gap], list[str], bool]:
+    """Return (actionable gaps, waiting gaps, had_unknown_source).
+
+    Waiting gaps are missing releases the channel does not offer yet; they
+    are only logged.
+    """
     obs_fedora = tracked_versions(repo_names, "Fedora_")
     obs_ubuntu = tracked_versions(repo_names, "xUbuntu_")
     obs_debian = tracked_versions(repo_names, "Debian_")
@@ -362,7 +380,7 @@ def detect(repo_names: set[str]) -> tuple[list[Release], bool]:
     )
 
     # Candidate version key -> display string; dates kept separately for the
-    # release-date guard inside missing().
+    # release-date guard inside missing() and the issue's release status.
     def split_eol(
         eol: dict[tuple[int, ...], tuple[str, str]] | None,
     ) -> tuple[dict[tuple[int, ...], str], dict[tuple[int, ...], str]]:
@@ -375,151 +393,118 @@ def detect(repo_names: set[str]) -> tuple[list[Release], bool]:
         fedora_cands.setdefault(k, fmt_version(k))
 
     ubuntu_cands, ubuntu_dates = split_eol(eol_ubuntu)
+    ubuntu_codename: dict[tuple[int, ...], str] = {}
     if lp is not None:
+        ubuntu_codename = {k: n for n, k in lp.name_to_version.items()}
         for k in lp.active:
             ubuntu_cands.setdefault(k, lp.version_str.get(k, fmt_version(k)))
 
     debian_cands, debian_dates = split_eol(eol_debian)
     leap_cands, leap_dates = split_eol(eol_leap)
 
-    releases: list[Release] = []
+    gaps: list[Gap] = []
+    waiting: list[str] = []
+
+    def scan(
+        distro: str,
+        slug: str,
+        cands: dict[tuple[int, ...], str],
+        dates: dict[tuple[int, ...], str],
+        tracked: set[tuple[int, ...]] | None,
+        channel: str,
+        channel_slug: str,
+        offered: Callable[[tuple[int, ...], str], bool | None],
+        target: Callable[[tuple[int, ...], str], str],
+        action: str,
+    ) -> None:
+        nonlocal had_unknown
+        if tracked is None:
+            return  # already counted as an unknown source
+        for ver in sorted(cands):
+            if not missing(tracked, ver, dates):
+                continue
+            vstr = cands[ver]
+            state = offered(ver, vstr)
+            if state is None:
+                had_unknown = True
+                warn(f"cannot tell whether {channel} offers {distro} {vstr}")
+            elif not state:
+                waiting.append(f"{distro} {vstr} on {channel}")
+            else:
+                gaps.append(
+                    Gap(
+                        distro=distro,
+                        slug=slug,
+                        version=vstr,
+                        channel=channel,
+                        channel_slug=channel_slug,
+                        target=target(ver, vstr),
+                        action=action,
+                        released=dates.get(ver),
+                    )
+                )
+
+    obs_action = (
+        "add the repository to `packaging/obs/project.meta.xml` and the "
+        "matching row to `tests/distro/targets.tsv`"
+    )
+
+    def obs(prefix: str) -> Callable[[tuple[int, ...], str], bool | None]:
+        return lambda _ver, vstr: check_obs_project(f"{prefix}{vstr}")
 
     # --- Fedora ----------------------------------------------------------
-    for ver in sorted(fedora_cands):
-        obs_miss = missing(obs_fedora, ver, fedora_dates)
-        # COPR tracked unknown -> cannot tell whether COPR is missing it
-        copr_miss = (
-            None
-            if copr_tracked is None
-            else missing(copr_tracked, ver, fedora_dates)
-        )
-        if not obs_miss and copr_miss is not True:
-            continue
-        vstr = fedora_cands[ver]
-        n = ver[0]
-        releases.append(
-            Release(
-                "Fedora",
-                "fedora",
-                vstr,
-                [
-                    ChannelStatus(
-                        channel=f"OBS (`Fedora_{n}`)",
-                        built=ver in obs_fedora,
-                        offered=check_obs_project(f"Fedora:{n}"),
-                        action=(
-                            "add repository to "
-                            "`packaging/obs/project.meta.xml`"
-                            if obs_miss
-                            else "—"
-                        ),
-                    ),
-                    ChannelStatus(
-                        channel="COPR",
-                        built=None if copr_miss is None else not copr_miss,
-                        offered=(
-                            ver in copr_available
-                            if copr_available is not None
-                            else None
-                        ),
-                        action=(
-                            f"enable chroot `fedora-{n}-*` in COPR"
-                            if copr_miss
-                            else "—"
-                        ),
-                    ),
-                ],
-            )
-        )
+    scan(
+        "Fedora", "fedora", fedora_cands, fedora_dates, obs_fedora,
+        "OBS", "obs", obs("Fedora:"),
+        lambda _ver, vstr: f"repository `Fedora_{vstr}`",
+        obs_action,
+    )
+    scan(
+        "Fedora", "fedora", fedora_cands, fedora_dates, copr_tracked,
+        "COPR", "copr",
+        lambda ver, _vstr: (
+            None if copr_available is None else ver in copr_available
+        ),
+        lambda _ver, vstr: (
+            f"chroots `fedora-{vstr}-x86_64`, `fedora-{vstr}-aarch64`"
+        ),
+        "enable the chroots in the isac322/krema COPR project settings, "
+        "then rebuild the latest release into them",
+    )
 
     # --- Ubuntu ----------------------------------------------------------
-    for ver in sorted(ubuntu_cands):
-        obs_miss = missing(obs_ubuntu, ver, ubuntu_dates)
-        ppa_miss = (
-            None
-            if ppa_tracked is None
-            else missing(ppa_tracked, ver, ubuntu_dates)
-        )
-        if not obs_miss and ppa_miss is not True:
-            continue
-        vstr = ubuntu_cands[ver]
-        releases.append(
-            Release(
-                "Ubuntu",
-                "ubuntu",
-                vstr,
-                [
-                    ChannelStatus(
-                        channel=f"OBS (`xUbuntu_{vstr}`)",
-                        built=ver in obs_ubuntu,
-                        offered=check_obs_project(f"Ubuntu:{vstr}"),
-                        action=(
-                            "add repository to "
-                            "`packaging/obs/project.meta.xml`"
-                            if obs_miss
-                            else "—"
-                        ),
-                    ),
-                    ChannelStatus(
-                        channel="Launchpad PPA",
-                        built=None if ppa_miss is None else not ppa_miss,
-                        offered=ver in lp.active if lp is not None else None,
-                        action=(
-                            "uploaded automatically at next release via "
-                            "`/release` (active series)"
-                            if ppa_miss
-                            else "—"
-                        ),
-                    ),
-                ],
-            )
-        )
+    scan(
+        "Ubuntu", "ubuntu", ubuntu_cands, ubuntu_dates, obs_ubuntu,
+        "OBS", "obs", obs("Ubuntu:"),
+        lambda _ver, vstr: f"repository `xUbuntu_{vstr}`",
+        obs_action,
+    )
+    scan(
+        "Ubuntu", "ubuntu", ubuntu_cands, ubuntu_dates, ppa_tracked,
+        "Launchpad PPA", "ppa",
+        lambda ver, _vstr: None if lp is None else ver in lp.active,
+        lambda ver, vstr: f"series `{ubuntu_codename.get(ver, vstr)}`",
+        "upload the latest release's source package for the series "
+        "(release skill, section *Launchpad PPA*)",
+    )
 
     # --- Debian ----------------------------------------------------------
-    for ver in sorted(debian_cands):
-        if not missing(obs_debian, ver, debian_dates):
-            continue
-        vstr = debian_cands[ver]
-        releases.append(
-            Release(
-                "Debian",
-                "debian",
-                vstr,
-                [
-                    ChannelStatus(
-                        channel=f"OBS (`Debian_{vstr}`)",
-                        built=False,
-                        offered=check_obs_project(f"Debian:{vstr}"),
-                        action="add repository to "
-                        "`packaging/obs/project.meta.xml`",
-                    )
-                ],
-            )
-        )
+    scan(
+        "Debian", "debian", debian_cands, debian_dates, obs_debian,
+        "OBS", "obs", obs("Debian:"),
+        lambda _ver, vstr: f"repository `Debian_{vstr}`",
+        obs_action,
+    )
 
     # --- openSUSE Leap ---------------------------------------------------
-    for ver in sorted(leap_cands):
-        if not missing(obs_leap, ver, leap_dates):
-            continue
-        vstr = leap_cands[ver]
-        releases.append(
-            Release(
-                "openSUSE Leap",
-                "opensuse-leap",
-                vstr,
-                [
-                    ChannelStatus(
-                        channel=f"OBS (`openSUSE_Leap_{vstr}`)",
-                        built=False,
-                        offered=check_obs_project(f"openSUSE:Leap:{vstr}"),
-                        action="add repository to "
-                        "`packaging/obs/project.meta.xml`",
-                    )
-                ],
-            )
-        )
+    scan(
+        "openSUSE Leap", "opensuse-leap", leap_cands, leap_dates, obs_leap,
+        "OBS", "obs", obs("openSUSE:Leap:"),
+        lambda _ver, vstr: f"repository `openSUSE_Leap_{vstr}`",
+        obs_action,
+    )
 
-    return releases, had_unknown
+    return gaps, waiting, had_unknown
 
 
 # ---------------------------------------------------------------------------
@@ -600,7 +585,7 @@ def gh_write(args: list[str], repo: str) -> bool:
 
 
 def reconcile(
-    releases: list[Release], repo: str, dry_run: bool, can_close: bool
+    gaps: list[Gap], repo: str, dry_run: bool, can_close: bool
 ) -> int:
     """Sync issues; return 0 on success, 1 if any gh write failed."""
     existing = list_issues(repo)
@@ -616,20 +601,20 @@ def reconcile(
     for issue in existing:
         m = MARKER_RE.search(issue.get("body") or "")
         if m and issue.get("state") == "OPEN":
-            open_by_marker[f"{m.group(1)}:{m.group(2)}"] = issue
+            open_by_marker[":".join(m.groups())] = issue
 
     failures = 0
 
-    # Close open issues whose release is no longer missing on any channel.
+    # Close open issues whose gap is gone.
     if can_close:
-        wanted = {f"{r.slug}:{r.version}" for r in releases}
+        wanted = {g.key for g in gaps}
         for marker_key, issue in open_by_marker.items():
             if marker_key in wanted:
                 continue
             number, title = issue["number"], issue["title"]
             comment = (
-                "Nothing is missing for this release anymore: every channel "
-                "either builds for it or stopped offering it. Closing."
+                "Nothing to do on this channel anymore: Krema builds this "
+                "release there, or the channel stopped offering it. Closing."
             )
             if dry_run:
                 print(
@@ -648,7 +633,7 @@ def reconcile(
     elif open_by_marker:
         warn("some data sources were unreachable; skipping issue close pass")
 
-    for rel in releases:
+    for rel in gaps:
         body = build_body(rel)
         issue = by_title.get(rel.title)
 
@@ -732,22 +717,18 @@ def main() -> int:
         warn(f"cannot parse tracked targets from {args.meta}: {e}")
         return 1
 
-    releases, had_unknown = detect(repo_names)
+    gaps, waiting, had_unknown = detect(repo_names)
 
-    if not releases:
-        print("All channels cover the latest released distro versions.")
-    else:
-        for rel in releases:
-            missing_chans = ", ".join(
-                c.channel for c in rel.channels if c.built is not True
-            )
-            print(f"missing: {rel.distro} {rel.version} on {missing_chans}")
+    for where in waiting:
+        print(f"waiting: {where} (channel does not offer it yet)")
+    for gap in gaps:
+        print(f"actionable: {gap.distro} {gap.version} on {gap.channel}")
+    if not gaps:
+        print("No channel offers a release Krema does not build there.")
 
     if not ensure_label(args.repo, args.dry_run):
         return 1
-    return reconcile(
-        releases, args.repo, args.dry_run, can_close=not had_unknown
-    )
+    return reconcile(gaps, args.repo, args.dry_run, can_close=not had_unknown)
 
 
 if __name__ == "__main__":

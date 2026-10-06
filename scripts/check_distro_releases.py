@@ -31,13 +31,16 @@ Issue lifecycle (one issue per actionable gap, title
 "Distro release: <Distro> <version> on <channel>"):
     absent -> create; open -> edit body when it changed; closed -> untouched.
     An open issue is commented and closed once its gap is gone (the channel
-    builds the release, or stopped offering it). The close pass is skipped
-    when any data source was unreachable, so a partial run never closes an
-    issue prematurely.
+    builds the release, or stopped offering it).
+
+    When any data source is unreachable the result is partial, so the run
+    touches no issue at all (no create, edit or close) and exits 1; the next
+    successful run catches up.
 
 Exit code:
     0  — run completed (new issues may or may not have been filed)
-    1  — project.meta.xml could not be parsed, or a gh write failed
+    1  — project.meta.xml could not be parsed, a data source was
+         unreachable, or a gh write failed
 """
 
 from __future__ import annotations
@@ -584,9 +587,7 @@ def gh_write(args: list[str], repo: str) -> bool:
     return True
 
 
-def reconcile(
-    gaps: list[Gap], repo: str, dry_run: bool, can_close: bool
-) -> int:
+def reconcile(gaps: list[Gap], repo: str, dry_run: bool) -> int:
     """Sync issues; return 0 on success, 1 if any gh write failed."""
     existing = list_issues(repo)
     if existing is None:
@@ -606,32 +607,26 @@ def reconcile(
     failures = 0
 
     # Close open issues whose gap is gone.
-    if can_close:
-        wanted = {g.key for g in gaps}
-        for marker_key, issue in open_by_marker.items():
-            if marker_key in wanted:
-                continue
-            number, title = issue["number"], issue["title"]
-            comment = (
-                "Nothing to do on this channel anymore: Krema builds this "
-                "release there, or the channel stopped offering it. Closing."
-            )
-            if dry_run:
-                print(
-                    f"[dry-run] would comment + close issue #{number} "
-                    f"({title})"
-                )
-                continue
-            ok = gh_write(
-                ["issue", "comment", str(number), "--body", comment], repo
-            )
-            ok &= gh_write(["issue", "close", str(number)], repo)
-            if ok:
-                print(f"closed issue #{number} ({title})")
-            else:
-                failures = 1
-    elif open_by_marker:
-        warn("some data sources were unreachable; skipping issue close pass")
+    wanted = {g.key for g in gaps}
+    for marker_key, issue in open_by_marker.items():
+        if marker_key in wanted:
+            continue
+        number, title = issue["number"], issue["title"]
+        comment = (
+            "Nothing to do on this channel anymore: Krema builds this "
+            "release there, or the channel stopped offering it. Closing."
+        )
+        if dry_run:
+            print(f"[dry-run] would comment + close issue #{number} ({title})")
+            continue
+        ok = gh_write(
+            ["issue", "comment", str(number), "--body", comment], repo
+        )
+        ok &= gh_write(["issue", "close", str(number)], repo)
+        if ok:
+            print(f"closed issue #{number} ({title})")
+        else:
+            failures = 1
 
     for rel in gaps:
         body = build_body(rel)
@@ -726,9 +721,16 @@ def main() -> int:
     if not gaps:
         print("No channel offers a release Krema does not build there.")
 
+    if had_unknown:
+        warn(
+            "some data sources were unreachable; results are partial, so no "
+            "issue is created, edited or closed in this run"
+        )
+        return 1
+
     if not ensure_label(args.repo, args.dry_run):
         return 1
-    return reconcile(gaps, args.repo, args.dry_run, can_close=not had_unknown)
+    return reconcile(gaps, args.repo, args.dry_run)
 
 
 if __name__ == "__main__":

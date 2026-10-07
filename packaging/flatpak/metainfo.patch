@@ -1,0 +1,38 @@
+--- a/src/com.bhyoo.krema.metainfo.xml
++++ b/src/com.bhyoo.krema.metainfo.xml
+@@ -15,6 +15,5 @@
+     <p>
+-      Choose from six background styles — transparent, tinted, acrylic frosted glass,
+-      Mica (system accent color based), and adaptive opacity that responds to
+-      overlapping windows. Full keyboard navigation (Meta+F5) and AT-SPI screen
++      Choose from four background styles: Panel Inherit, Transparent, Tinted, and Acrylic.
++      Full keyboard navigation (Meta+F5) and AT-SPI screen
+       reader support ensure the dock is accessible to all users.
+     </p>
+@@ -27,6 +26,21 @@
+   <url type="homepage">https://github.com/isac322/krema</url>
+   <url type="bugtracker">https://github.com/isac322/krema/issues</url>
+   <url type="contribute">https://github.com/isac322/krema</url>
++  <!-- Post-release listing media; the application remains the v0.9.0 source. -->
++  <screenshots>
++    <screenshot type="default">
++      <caption>Parabolic hover zoom magnifies the icon under the pointer</caption>
++      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/b2ac9249f0f3eb7467e24582ca27f624cd5ec0c1/branding/screenshots/dock-zoom.png</image>
++    </screenshot>
++    <screenshot>
++      <caption>Pinned launchers and running applications on the Plasma desktop</caption>
++      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/b2ac9249f0f3eb7467e24582ca27f624cd5ec0c1/branding/screenshots/dock-overview.png</image>
++    </screenshot>
++    <screenshot>
++      <caption>Kirigami Appearance settings for icon size, spacing, zoom, scale, and attention animation</caption>
++      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/b2ac9249f0f3eb7467e24582ca27f624cd5ec0c1/branding/screenshots/settings.png</image>
++    </screenshot>
++  </screenshots>
+   <developer id="com.bhyoo">
+     <name>Byeonghoon Yoo</name>
+   </developer>
+@@ -86,3 +100,3 @@
+       <description>
+-        <p>Six background styles (transparent, tinted, acrylic frosted glass, Mica, and adaptive opacity), and comprehensive keyboard accessibility with AT-SPI screen reader support.</p>
++        <p>Four background styles (Panel Inherit, Transparent, Tinted, and Acrylic), and comprehensive keyboard accessibility with AT-SPI screen reader support.</p>
+       </description>

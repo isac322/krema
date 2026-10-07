@@ -1,0 +1,5 @@
+Krema is a lightweight, Wayland-only dock for KDE Plasma 6 and a spiritual successor to Latte Dock. It provides parabolic hover zoom with an optional in-place zoom mode, plus PipeWire window previews for running applications.
+
+The dock supports primary-screen, all-screens, and follow-active-screen multi-monitor modes, with per-screen settings and virtual desktop filtering. Krema also provides notification badges, task progress indicators, grouped-window cycling, and configurable dock behavior.
+
+Krema integrates with Plasma through Qt 6, KDE Frameworks 6, and Kirigami. It includes keyboard navigation with AT-SPI screen reader support and is licensed under GPL-3.0-or-later.

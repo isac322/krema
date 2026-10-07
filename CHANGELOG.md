@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
+- Published a Launchpad project page with the app icon, logo, and branding image
+
+### Fixed
+
+- Pinned app-store screenshots to immutable image sources and corrected the settings screenshot caption
+
 ## [0.10.0] - 2026-10-05
 
 ### Added

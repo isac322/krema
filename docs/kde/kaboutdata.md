@@ -225,15 +225,17 @@ Used for:
 ## Krema Setup
 
 ```cpp
-void Application::setupAboutData() {
+// src/app/application.cpp — shared by main() (early CLI parse, usable before
+// QApplication exists) and Application::run()
+KAboutData Application::makeAboutData() {
     KAboutData aboutData(
         "krema",
         i18n("Krema"),
-        "0.1.0",
+        KREMA_VERSION_STRING,
         i18n("A dock for KDE Plasma 6"),
         KAboutLicense::GPL_V3
     );
-
-    KAboutData::setApplicationData(aboutData);
+    // ... authors, homepage, bug address ...
+    return aboutData;
 }
 ```

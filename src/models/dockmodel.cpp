@@ -26,13 +26,15 @@ namespace krema
 
 namespace
 {
-bool isPinnedTask(const QModelIndex &index, const QStringList &launchers)
+// launcherList() serializes activity-scoped launchers as "[ids]\n<url>", so a
+// string lookup misses them; launcherPosition() matches the URL itself.
+bool isPinnedTask(const TaskManager::TasksModel &model, const QModelIndex &index)
 {
     if (!index.isValid()) {
         return false;
     }
     const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
-    return url.isValid() && launchers.contains(url.toString());
+    return url.isValid() && model.launcherPosition(url) != -1;
 }
 
 QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &icon)
@@ -238,7 +240,6 @@ void DockModel::reconcileTaskPartition()
     }
 
     m_reconcilingPartition = true;
-    const QStringList launchers = m_tasksModel->launcherList();
     int pinnedCount = 0;
     bool moved = false;
     bool moveFailed = false;
@@ -246,7 +247,7 @@ void DockModel::reconcileTaskPartition()
     // Insertion into the next pinned slot preserves both zones' relative
     // order. Classify each row once; already partitioned rows need no move.
     for (int row = 0; row < count; ++row) {
-        if (!isPinnedTask(m_tasksModel->index(row, 0), launchers)) {
+        if (!isPinnedTask(*m_tasksModel, m_tasksModel->index(row, 0))) {
             continue;
         }
         if (row != pinnedCount && !moveFailed) {
@@ -334,7 +335,7 @@ bool DockModel::isDesktopFile(const QUrl &url) const
 
 bool DockModel::isPinned(int index) const
 {
-    return isPinnedTask(m_tasksModel->index(index, 0), m_tasksModel->launcherList());
+    return isPinnedTask(*m_tasksModel, m_tasksModel->index(index, 0));
 }
 
 QVariantList DockModel::windowIds(int index) const

@@ -18,6 +18,9 @@ QtObject {
     property int zoomOutDuration: 240
     property int zoomInEasing: 3
     property int zoomOutEasing: 3
+    property real iconOpacityActive: 1.0
+    property real iconOpacityInactive: 0.8
+    property real iconOpacityMinimized: 0.5
     property real iconScale: 1.0
     property int cornerRadius: 12
     property bool reserveScreenSpace: true
@@ -41,7 +44,7 @@ QtObject {
     property real shadowIntensity: 0.3
 
     // Restores every property listed in _resettable to its declared value.
-    readonly property var _resettable: ["iconSize", "iconSpacing", "maxZoomFactor", "zoomStyle", "zoomAnimationPreset", "zoomInDuration", "zoomOutDuration", "zoomInEasing", "zoomOutEasing", "iconScale", "cornerRadius", "reserveScreenSpace", "separateLaunchers", "attentionAnimation", "attentionAnimationDuration", "badgeDisplayMode", "otherDesktopOpacity", "previewEnabled", "previewHoverDelay", "singleWindowClickAction", "groupedWindowClickAction", "previewThumbnailSize", "shadowEnabled", "shadowElevation", "shadowLightX", "shadowLightY", "shadowLightZ", "shadowLightRadius", "shadowColor", "shadowIntensity"]
+    readonly property var _resettable: ["iconSize", "iconSpacing", "maxZoomFactor", "zoomStyle", "zoomAnimationPreset", "zoomInDuration", "zoomOutDuration", "zoomInEasing", "zoomOutEasing", "iconOpacityActive", "iconOpacityInactive", "iconOpacityMinimized", "iconScale", "cornerRadius", "reserveScreenSpace", "separateLaunchers", "attentionAnimation", "attentionAnimationDuration", "badgeDisplayMode", "otherDesktopOpacity", "previewEnabled", "previewHoverDelay", "singleWindowClickAction", "groupedWindowClickAction", "previewThumbnailSize", "shadowEnabled", "shadowElevation", "shadowLightX", "shadowLightY", "shadowLightZ", "shadowLightRadius", "shadowColor", "shadowIntensity"]
     property var _defaults: ({})
     Component.onCompleted: {
         for (const k of _resettable) _defaults[k] = this[k]

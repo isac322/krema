@@ -1,7 +1,7 @@
 # Settings UI
 
 ## Features
-- settings-appearance: Icon size, icon scale, zoom factor, zoom style, zoom animation presets and custom zoom-in/zoom-out timing, spacing, opacity, background style
+- settings-appearance: Icon size, icon scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style, zoom animation presets and custom zoom-in/zoom-out timing, spacing, opacity, background style
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
 - settings-behavior: Visibility mode, dock position, monitor mode, selected monitor switches and temporary fallback

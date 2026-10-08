@@ -398,7 +398,7 @@ TEST_CASE("Selected monitors create docks only on the saved outputs", "[selected
                 for (auto *window : QGuiApplication::topLevelWindows()) {
                     auto *quickView = qobject_cast<QQuickView *>(window);
                     auto *layer = LayerShellQt::Window::get(window);
-                    if (quickView && layer && layer->scope() == QLatin1String("krema-preview") && quickView->engine() == view->engine()) {
+                    if (quickView && layer && layer->scope() == QLatin1String("tooltip") && quickView->engine() == view->engine()) {
                         previewView = quickView;
                         return previewView->isExposed();
                     }
@@ -567,7 +567,7 @@ TEST_CASE(
 
     const QSet<QString> expected(selected.cbegin(), selected.cend());
     CHECK(surfaceOutputNames("dock") == expected);
-    CHECK(surfaceOutputNames("krema-preview") == expected);
+    CHECK(surfaceOutputNames("tooltip") == expected);
 }
 
 TEST_CASE(

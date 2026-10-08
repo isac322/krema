@@ -12,16 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
 - Added zoom animation presets in Appearance (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
+- Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
 
 ### Changed
 
 - Hover zoom now eased in and out by default (180 ms in, 240 ms out at normal animation speed) for a smoother, macOS-like magnification
 - In place zoom now followed the pointer directly and only animated when the pointer entered or left the dock, like Parabolic
 - Zoom animation presets replaced the single zoom duration setting; a previously customized duration was kept as a Custom setting with the old ease-out curve
+- Icon spacing can now be set up to 64 pixels instead of 16
+- Dock right-click menu entries gained their standard KDE icons
+- The shadow settings were relabeled "Light height" and "Panel elevation" (formerly "Light Z (height)" and "Elevation"), the light height slider moved in steps of 50, and the light radius value stopped claiming to be in pixels
 
 ### Fixed
 
 - Pinned app-store screenshots to immutable image sources and corrected the settings screenshot caption
+- KWin's Slide Back effect never fired while Krema was running, because Krema's always-mapped window preview surface counted as an ordinary window stacked above all others; raising a window, including from the dock, slid covering windows aside again
+- Apps pinned through a `.desktop` file path (as stored by hand-edited or imported configurations) are now recognized as pinned: the context menu offers "Unpin from Dock" instead of "Pin to Dock" and unpinning works, and "Separate pinned and running apps" keeps them on the pinned side
 
 ## [0.10.0] - 2026-10-05
 

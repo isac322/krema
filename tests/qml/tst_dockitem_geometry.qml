@@ -165,6 +165,21 @@ Item {
             tryCompare(icon, "opacity", data.opacity)
         }
 
+        function test_iconOpacityFollowsSettings_data() {
+            return [
+                { tag: "active", roles: { IsActive: true }, key: "iconOpacityActive", opacity: 0.6 },
+                { tag: "minimized", roles: { IsMinimized: true }, key: "iconOpacityMinimized", opacity: 0.25 },
+                { tag: "background", roles: {}, key: "iconOpacityInactive", opacity: 0.4 },
+            ]
+        }
+
+        function test_iconOpacityFollowsSettings(data) {
+            let roles = Object.assign({ display: "App", IsWindow: true }, data.roles)
+            let icon = T.iconImage(makeRow([roles]).itemAt(0))
+            DockSettings[data.key] = data.opacity
+            tryCompare(icon, "opacity", data.opacity)
+        }
+
         function test_dragSourceIsDimmed() {
             let item = makeRow([{ display: "App", IsWindow: true, IsActive: true }]).itemAt(0)
             let icon = T.iconImage(item)

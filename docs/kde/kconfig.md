@@ -225,6 +225,9 @@ class DockSettings : public QObject {
 | `PinnedLaunchers` | QStringList | `{}` | Pinned launcher URLs |
 | `IconSize` | int | 48 | Icon size in pixels |
 | `IconSpacing` | int | 8 | Spacing between icons |
+| `IconOpacityActive` | qreal | 1.0 | Icon opacity for the active window (0.1 to 1.0) |
+| `IconOpacityInactive` | qreal | 0.8 | Icon opacity for inactive windows and launchers (0.1 to 1.0) |
+| `IconOpacityMinimized` | qreal | 0.5 | Icon opacity for minimized windows (0.1 to 1.0) |
 | `MaxZoomFactor` | qreal | 2.0 | Maximum zoom magnification |
 | `ZoomStyle` | int | `0` | How magnified icons make room: 0 = Parabolic (neighbours pushed aside, background grows), 1 = InPlace (icons overlap) |
 | `ZoomAnimationPreset` | int | 0 | Hover zoom animation preset (0 to 4): 0 = Natural (180 ms in, 240 ms out, ease in and out), 1 = Quick (100 ms ease out both ways), 2 = Relaxed (300 ms in, 400 ms out, gentle ease in and out), 3 = Instant (no transition), 4 = Custom (uses the four entries below). Durations are unscaled baselines; Plasma animation scaling still applies |

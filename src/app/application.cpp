@@ -57,6 +57,9 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     };
     connect(settings, &KremaSettings::IconSizeChanged, context, saveSettings);
     connect(settings, &KremaSettings::IconSpacingChanged, context, saveSettings);
+    connect(settings, &KremaSettings::IconOpacityActiveChanged, context, saveSettings);
+    connect(settings, &KremaSettings::IconOpacityInactiveChanged, context, saveSettings);
+    connect(settings, &KremaSettings::IconOpacityMinimizedChanged, context, saveSettings);
     connect(settings, &KremaSettings::MaxZoomFactorChanged, context, saveSettings);
     connect(settings, &KremaSettings::ZoomStyleChanged, context, saveSettings);
     connect(settings, &KremaSettings::ZoomAnimationDurationChanged, context, saveSettings);

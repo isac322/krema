@@ -20,6 +20,27 @@
       <max>64</max>
     </entry>
 
+    <entry name="IconOpacityActive" type="Double">
+      <label>Icon opacity for the active window</label>
+      <default>1.0</default>
+      <min>0.1</min>
+      <max>1.0</max>
+    </entry>
+
+    <entry name="IconOpacityInactive" type="Double">
+      <label>Icon opacity for inactive windows and launchers</label>
+      <default>0.8</default>
+      <min>0.1</min>
+      <max>1.0</max>
+    </entry>
+
+    <entry name="IconOpacityMinimized" type="Double">
+      <label>Icon opacity for minimized windows</label>
+      <default>0.5</default>
+      <min>0.1</min>
+      <max>1.0</max>
+    </entry>
+
     <entry name="MaxZoomFactor" type="Double">
       <label>Maximum parabolic zoom factor</label>
       <default>1.6</default>

@@ -148,6 +148,123 @@ FormCard.FormCardPage {
 
         FormCard.FormDelegateSeparator {}
 
+        FormCard.AbstractFormDelegate {
+            id: iconOpacityActiveDelegate
+            Accessible.name: i18n("Active window icon opacity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Active window icon opacity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconOpacityActiveDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconOpacityActiveSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconOpacityActiveSlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconOpacityActive
+                    onMoved: DockSettings.iconOpacityActive = value
+                    Accessible.name: i18n("Active window icon opacity")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.AbstractFormDelegate {
+            id: iconOpacityInactiveDelegate
+            Accessible.name: i18n("Inactive window and launcher icon opacity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Inactive window and launcher icon opacity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconOpacityInactiveDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconOpacityInactiveSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconOpacityInactiveSlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconOpacityInactive
+                    onMoved: DockSettings.iconOpacityInactive = value
+                    Accessible.name: i18n("Inactive window and launcher icon opacity")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.AbstractFormDelegate {
+            id: iconOpacityMinimizedDelegate
+            Accessible.name: i18n("Minimized window icon opacity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Minimized window icon opacity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconOpacityMinimizedDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconOpacityMinimizedSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconOpacityMinimizedSlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconOpacityMinimized
+                    onMoved: DockSettings.iconOpacityMinimized = value
+                    Accessible.name: i18n("Minimized window icon opacity")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
         FormCard.FormComboBoxDelegate {
             text: i18n("Attention animation")
             description: i18n("Animation when an app demands attention")

@@ -97,7 +97,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Virtual Desktop Filtering** — Show all desktops, dim other desktops, or current only
 - **Automatic Startup** — Launches on login, enforces single instance
 
-Choose **Selected monitors** in Settings → Behavior, then enable the switches for the output names you want. Each selected connected output with usable geometry gets a dock. Primary-display changes and unselected monitor connections or disconnections leave retained docks and previews in place. Disconnected selections stay listed and can be removed by turning their switches off.
+Choose **Selected monitors** in Settings → Monitors & Desktops, then enable the switches for the output names you want. Each selected connected output with usable geometry gets a dock. Primary-display changes and unselected monitor connections or disconnections leave retained docks and previews in place. Disconnected selections stay listed and can be removed by turning their switches off.
 
 If the selection is empty or no selected output is usable, Krema shows a temporary dock on the primary display and a warning in Settings. The saved selection stays unchanged; reconnecting a selected monitor restores its dock and removes the fallback. Switching to another mode hides the selection controls without clearing the saved names.
 

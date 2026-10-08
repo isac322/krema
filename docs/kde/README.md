@@ -70,7 +70,7 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 
 | Document | Description |
 |----------|-------------|
-| [settings-window-patterns.md](settings-window-patterns.md) | KDE settings window patterns — KConfigDialog, KQuickConfigModule, ConfigurationView+ConfigurationModule, StatefulWindow; Krema current arch analysis and recommended fix (direct configViewItem access vs. polling) |
+| [settings-window-patterns.md](settings-window-patterns.md) | KDE settings window patterns — KConfigDialog, KQuickConfigModule, ConfigurationView+ConfigurationModule, StatefulWindow; Krema's custom sidebar window and its per-open lifecycle |
 
 ### Reference
 

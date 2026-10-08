@@ -139,12 +139,12 @@ failed or took the mobile path):
 const bool hasConfigViewItem = configView->metaObject()->indexOfProperty("configViewItem") >= 0;
 ```
 
-Without it, `SettingsWindow` snapshots `QGuiApplication::allWindows()` just before `open()`
-and takes the single new `QQuickWindow` with `qmlEngine(window) == m_engine`.
-`createObject()` runs synchronously and gives the object the component's engine context,
-so this identifies the window `open()` created without timers. It deletes that window
-on close, which matches the 1.8 cleanup. Verified on Debian 13 (kirigami-addons 1.7.0)
-and Fedora 44 (1.13.1) by `tests/integration/test_settings_lifecycle.cpp`.
+Before the settings redesign, Krema's `SettingsWindow` handled 1.7.0 this way: it
+snapshotted `QGuiApplication::allWindows()` just before `open()` and took the single new
+`QQuickWindow` with `qmlEngine(window) == m_engine`. `createObject()` runs synchronously and
+gives the object the component's engine context, so this identified the window `open()`
+created without timers. Krema no longer uses `ConfigurationView` (see
+[Krema's Current Implementation](#kremas-current-implementation)).
 
 ---
 
@@ -173,111 +173,67 @@ StatefulApp.StatefulWindow {
 
 ## Krema's Current Implementation
 
-**Files**: `src/shell/settingswindow.h`, `src/shell/settingswindow.cpp`, `src/qml/SettingsDialog.qml`
+**Files**: `src/shell/settingswindow.h`, `src/shell/settingswindow.cpp`,
+`src/qml/SettingsDialog.qml`, `src/qml/settings/*.qml`
 
 ### Architecture
 
 ```
 SettingsWindow (C++)
-  └── QQmlApplicationEngine (m_engine)
-        └── SettingsDialog.qml (hidden host Kirigami.ApplicationWindow, visible: false)
-              └── ConfigurationView (objectName: "configuration")
-                    └── ConfigWindow.qml (actual visible window, created by open())
+  └── QQmlEngine (m_engine, created on first open)
+        └── QQmlComponent (m_component, qrc:/qml/SettingsDialog.qml)
+              └── SettingsDialog.qml (QQC2.ApplicationWindow, one instance per open)
+                    ├── Sidebar: Kirigami.SearchField + ListView of RoundedItemDelegate
+                    └── Loader (objectName "settingsPageLoader") → FormCard.FormCardPage
 ```
 
-### Current flow (show())
+The window is a plain `QQC2.ApplicationWindow` titled "Settings". It draws its own sidebar:
+a `Kirigami.SearchField` ("Search settings") above a `ListView` ("Settings pages") of
+checkable `Delegates.RoundedItemDelegate` entries — Icons, Layout & Position, Panel Style,
+Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, then an "About"
+section with About Krema and About KDE. Each sidebar entry carries the names of its page's
+settings as keywords, so the search also matches setting names. The current page is always
+kept in the filtered list. The right side is a `Loader` that shows the `FormCardPage` of the
+current module. Escape closes the window.
 
-1. `ensureEngine()` — lazy-create `QQmlApplicationEngine`, load `SettingsDialog.qml`
-2. Find `configView = root->findChild<QObject*>("configuration")`
-3. `QMetaObject::invokeMethod(configView, "open")`
-4. `QTimer::singleShot(0, ...)` → `findAndTrackConfigWindow(attempt=0)`
-5. `findAndTrackConfigWindow` loops through `QGuiApplication::allWindows()` looking for the ConfigWindow
-6. Retries up to 10 times at 50ms intervals if not found immediately
+### Lifecycle
 
-### Problem with the current approach
+1. `SettingsWindow::open(defaultModule)` — if a window is open, call its QML
+   `openModule(moduleId)` (when a module was requested) and raise it.
+2. Otherwise `createWindow()` lazily creates the `QQmlEngine` and the `QQmlComponent`
+   (`PreferSynchronous`), then `createWithInitialProperties({defaultModule})`.
+   The root object *is* the window, so no searching is needed.
+3. The window gets `QQmlEngine::CppOwnership`; `SettingsWindow` owns it.
+4. On `visibleChanged(false)` the window is disconnected and `deleteLater()`-ed. The next
+   open creates a fresh window from the cached component.
+5. `visibleChanged(true/false)` is emitted once per open/close cycle (the dock keeps itself
+   shown while settings are open).
 
-The **polling retry loop is unnecessary**. Since `Qt.createComponent()` + `createObject()` for
-installed QML modules runs synchronously, `configViewItem` is set immediately after `invokeMethod`.
-The window can be retrieved directly:
+Module ids: `icons`, `layout`, `panelstyle`, `shadow`, `animations`, `behavior`, `monitors`,
+`preview`, `about`, `aboutkde`. Unknown ids, including the former `appearance`, open the
+first page (Icons).
 
-```cpp
-QMetaObject::invokeMethod(configView, "open");
-auto *win = qvariant_cast<QQuickWindow *>(configView->property("configViewItem"));
-// win != nullptr immediately — no retry needed
-```
+### Why ConfigurationView was replaced
 
-The `QGuiApplication::allWindows()` search is also fragile (relies on exclusion heuristics).
+- **AT-SPI coordinates**: `ConfigWindow.qml` is a `Kirigami.ApplicationWindow` whose sidebar
+  lives in an `OverlayDrawer` while pages live in the `pageStack`. Accessible bounding
+  boxes of the sidebar entries did not match where they were drawn, so screen readers and
+  AT-SPI-driven tests could not reliably locate or click them, and the page stack
+  intercepted input. In a `QQC2.ApplicationWindow` the sidebar and the page share one
+  coordinate space.
+- **Window lifecycle**: `ConfigurationView` created a hidden host window plus a
+  `ConfigWindow`. Getting a reference to that window depended on the kirigami-addons
+  version (`configViewItem` only exists from 1.8.0), and 1.7.0 never destroyed closed
+  windows. Creating the window directly from a `QQmlComponent` gives `SettingsWindow`
+  a direct reference on every supported version and a clear per-open lifecycle.
 
-### Recommended Fix
-
-Replace `findAndTrackConfigWindow()` with direct property access:
-
-```cpp
-void SettingsWindow::show(const QString &defaultModule)
-{
-    ensureEngine();
-
-    if (m_configWindow) {
-        m_configWindow->show();
-        m_configWindow->raise();
-        m_configWindow->requestActivate();
-        return;
-    }
-
-    if (m_engine->rootObjects().isEmpty()) {
-        m_engine->load(QUrl(QStringLiteral("qrc:/qml/SettingsDialog.qml")));
-        if (m_engine->rootObjects().isEmpty()) { return; }
-    }
-
-    auto *root = m_engine->rootObjects().first();
-    auto *configView = root->findChild<QObject *>(QStringLiteral("configuration"));
-    if (!configView) { return; }
-
-    QMetaObject::invokeMethod(configView, "open",
-                              Q_ARG(QVariant, defaultModule.isEmpty() ? QVariant() : QVariant(defaultModule)));
-
-    // configViewItem is set synchronously by open() — no polling needed
-    auto *win = qvariant_cast<QQuickWindow *>(configView->property("configViewItem"));
-    if (!win) { return; }
-
-    m_configWindow = win;
-    win->setIcon(QGuiApplication::windowIcon());
-
-    connect(win, &QWindow::visibleChanged, this, [this](bool visible) {
-        if (!visible) {
-            Q_EMIT visibleChanged(false);
-            m_configWindow = nullptr;
-        }
-    });
-
-    win->show();
-    win->raise();
-    win->requestActivate();
-    Q_EMIT visibleChanged(true);
-}
-```
-
-### Alternative: Direct window architecture (no hidden host)
-
-Instead of a hidden host ApplicationWindow, Krema could load a `KremaSettingsWindow.qml`
-that is itself the window (like `ConfigWindow.qml` but with modules defined inline).
-
-```cpp
-// C++: load the settings window as root object
-m_engine->load(QUrl("qrc:/qml/KremaSettingsWindow.qml"));
-// rootObjects().first() IS the settings window — no searching needed
-m_configWindow = qobject_cast<QQuickWindow *>(m_engine->rootObjects().first());
-```
-
-This eliminates the hidden host pattern entirely. Trade-off: loses the reusable
-`ConfigurationView` abstraction and must replicate the sidebar navigation manually
-(or copy from `ConfigWindow.qml`).
-
----
+Trade-off: the sidebar, search, and page switching are maintained in Krema instead of
+being reused from Kirigami Addons.
 
 ## Why Retry Loop = Bad Architecture
 
-The retry loop (`findAndTrackConfigWindow` with 10 attempts × 50ms) is a sign that:
+An earlier Krema version found the `ConfigWindow` with a retry loop (10 attempts × 50 ms over
+`QGuiApplication::allWindows()`). That was a sign that:
 1. The code doesn't know **which window** it created (looking by exclusion in all windows)
 2. It assumes async window creation when it's actually sync
 3. Up to 500ms additional latency for no reason
@@ -285,7 +241,7 @@ The retry loop (`findAndTrackConfigWindow` with 10 attempts × 50ms) is a sign t
 
 The correct pattern: **keep a direct reference** to whatever was created.
 For `ConfigurationView`: read `configViewItem` immediately after `open()`.
-For a directly-loaded QML window: `engine.rootObjects().first()`.
+For a window created from a `QQmlComponent`: the object returned by `create()`.
 
 ---
 

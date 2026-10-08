@@ -11,12 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
-- Added zoom animation presets in Appearance (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
+- Added zoom animation presets on the Icons settings page (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
 - `krema --version`, `--help`, `--author` and `--license` now print their information and exit, also without a display (handy for package smoke checks) and while the dock is already running; unknown options stop with an error instead of being silently ignored
 - Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
+- Every visual picker in the settings window works from the keyboard and is announced to screen readers, including the screen-edge schematic and the shadow light-source editor
 
 ### Changed
 
+- Redesigned the settings window into 8 focused pages plus About, with a sidebar search that also matches setting names
+- Settings now show what they do: a live preview dock for icon size, spacing, zoom, and icon opacity; a clickable monitor schematic for the screen edge; style cards with live previews; a draggable light-source shadow editor with exact values under "Advanced settings"; and animated pickers for attention animations, badges, visibility, monitor modes, screen transitions, and virtual desktops
+- Monitor and virtual desktop options moved from Behavior to a new "Monitors & Desktops" page
 - Hover zoom now eased in and out by default (180 ms in, 240 ms out at normal animation speed) for a smoother, macOS-like magnification
 - In place zoom now followed the pointer directly and only animated when the pointer entered or left the dock, like Parabolic
 - Zoom animation presets replaced the single zoom duration setting; a previously customized duration was kept as a Custom setting with the old ease-out curve

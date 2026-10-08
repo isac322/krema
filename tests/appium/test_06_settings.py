@@ -115,6 +115,26 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
         time.sleep(0.05)
 
 
+def page_wheel_point(krema: Krema) -> tuple[int, int]:
+    """Screen centre of the current settings page's vertical scroll bar.
+
+    Wheel events there always scroll the page: Kirigami's WheelHandler
+    filters the ScrollView's scroll bars. Over the page body a wheel at rest
+    goes to the control under the pointer first, and org.kde.desktop
+    ComboBox/SpinBox set ``wheelEnabled: true``, so they would eat it (and
+    change their value).
+    """
+
+    def bar():
+        for b in krema.find_all(SETTINGS_STACK_XPATH + "//scroll_bar"):
+            r = Rect.of(b)
+            if has_state(b, "showing") and r.width and r.height > r.width:
+                return b
+        return None
+
+    return krema.screen_rect(wait_until(bar, message="settings page vertical scroll bar"), "settings").center
+
+
 def scroll_into_view(krema: Krema, xpath: str):
     """Wheel-scroll the settings page until ``xpath`` is fully visible and at rest."""
     page = krema.wait_for(SETTINGS_STACK_XPATH)
@@ -123,20 +143,23 @@ def scroll_into_view(krema: Krema, xpath: str):
     def in_view(el, r: Rect) -> bool:
         return has_state(el, "showing") and bool(r.width) and r.y >= view.y and r.y + r.height <= view.y + view.height
 
+    wheel_at = None
     for _ in range(60):
         el = krema.wait_for(xpath)
-        r = Rect.of(el)
-        # The page animates each wheel step: an element can report an
-        # in-view rect mid-animation and still move ~60px, so a click on
-        # that rect lands on the row above it. Only return once it settled.
-        if in_view(el, r) and in_view(el, r := wait_stable(lambda: Rect.of(el), duration=0.3)):
+        # Decide on the settled position only: each wheel step animates and
+        # a new step during the animation adds to its end value, so acting
+        # on a mid-animation rect overshoots and can oscillate around the
+        # target forever.
+        r = wait_stable(lambda: Rect.of(el), duration=0.3)
+        if in_view(el, r):
             return el
         below = r.width == 0 or r.y + r.height > view.y + view.height
-        # Wheel over the page centre; the left margin did not reliably scroll.
-        # Sliders/spin boxes ignore the wheel: QQC2 Control.wheelEnabled
-        # defaults to false.
-        inp.scroll(*krema.to_screen(Rect(view.x + view.width // 2, view.y + view.height // 2, 1, 1), "settings")[:2], dy=60 if below else -60)
-        time.sleep(0.1)
+        # Four notches while far away; one notch once the element is within
+        # half a page, so a step can not jump over the visible window.
+        gap = (r.y + r.height - view.y - view.height) if below else (view.y - r.y)
+        notches = 1 if r.width and gap < view.height // 2 else 4
+        wheel_at = wheel_at or page_wheel_point(krema)
+        inp.scroll(*wheel_at, dy=15 * notches if below else -15 * notches)
     raise AssertionError(f"could not scroll {xpath} into view (last rect {r})")
 
 
@@ -965,6 +988,10 @@ def test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist(krema: K
     tab = scroll_into_view(krema, PRESET_TAB)
     wheel_x, wheel_y = krema.screen_rect(tab, "settings").center
     tab_y0 = Rect.of(krema.wait_for(PRESET_TAB)).y
+    # Let Kirigami's WheelHandler leave its scrolling state (400 ms after the
+    # last step): until then its filter item covers the page and takes the
+    # wheel before the tab bar could.
+    time.sleep(0.5)
     inp.scroll(wheel_x, wheel_y, dy=60)
     wait_until(
         lambda: Rect.of(krema.wait_for(PRESET_TAB)).y < tab_y0 - 10,
@@ -973,12 +1000,16 @@ def test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist(krema: K
     assert config_value(krema, "ZoomAnimationPreset") == "1", "wheel over the tab bar must not switch to Custom"
     assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
     assert has_state(krema.wait_for(quick_xpath), "checked")
-    inp.scroll(wheel_x, wheel_y, dy=-60)
+    # Scroll back up over the scroll bar: the old tab centre now lies over
+    # whatever row scrolled under it, possibly a ComboBox that takes the wheel.
+    tab_y1 = wait_stable(lambda: Rect.of(krema.wait_for(PRESET_TAB)).y, duration=0.3)
+    inp.scroll(*page_wheel_point(krema), dy=-60)
     wait_until(
-        lambda: abs(Rect.of(krema.wait_for(PRESET_TAB)).y - tab_y0) <= 2,
-        message="wheel back scrolls the page to the tab bar position",
+        lambda: Rect.of(krema.wait_for(PRESET_TAB)).y > tab_y1 + 10,
+        message="wheel up over the scroll bar scrolls the page back",
     )
     assert config_value(krema, "ZoomAnimationPreset") == "1"
+    assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
     assert has_state(krema.wait_for(quick_xpath), "checked")
 
     # Custom tab keeps the custom values.

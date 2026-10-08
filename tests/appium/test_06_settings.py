@@ -115,7 +115,26 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
         time.sleep(0.05)
 
 
-def page_wheel_point(krema: Krema) -> tuple[int, int]:
+def page_viewport(krema: Krema) -> Rect:
+    """Rect of the current settings page's scrolling viewport: its ScrollView
+    (the showing element whose children include the scroll bars).
+
+    Not the page stack: on every distro the stack also holds the PageRow's
+    page title toolbar (``heading`` "Appearance", ~40 px), so an element
+    scrolled under that toolbar would count as visible and a click on it
+    would land on the toolbar."""
+
+    def scroll_view():
+        for el in krema.find_all(SETTINGS_STACK_XPATH + "//*[scroll_bar]"):
+            r = Rect.of(el)
+            if has_state(el, "showing") and r.width and r.height:
+                return r
+        return None
+
+    return wait_until(scroll_view, message="settings page scroll view")
+
+
+def page_wheel_point(krema: Krema, view: Rect | None = None) -> tuple[int, int]:
     """A screen point over the settings page's empty right margin.
 
     Wheel events there always scroll the page. Over the page body a wheel
@@ -129,14 +148,13 @@ def page_wheel_point(krema: Krema) -> tuple[int, int]:
     full-width list pages the same x lands on plain rows, which ignore the
     wheel.
     """
-    view = Rect.of(krema.wait_for(SETTINGS_STACK_XPATH))
+    view = view or page_viewport(krema)
     return krema.to_screen(Rect(view.x + view.width - 40, view.y + view.height // 2, 1, 1), "settings")[:2]
 
 
 def scroll_into_view(krema: Krema, xpath: str):
     """Wheel-scroll the settings page until ``xpath`` is fully visible and at rest."""
-    page = krema.wait_for(SETTINGS_STACK_XPATH)
-    view = Rect.of(page)
+    view = page_viewport(krema)
 
     def in_view(el, r: Rect) -> bool:
         return has_state(el, "showing") and bool(r.width) and r.y >= view.y and r.y + r.height <= view.y + view.height
@@ -156,7 +174,7 @@ def scroll_into_view(krema: Krema, xpath: str):
         # half a page, so a step can not jump over the visible window.
         gap = (r.y + r.height - view.y - view.height) if below else (view.y - r.y)
         notches = 1 if r.width and gap < view.height // 2 else 4
-        wheel_at = wheel_at or page_wheel_point(krema)
+        wheel_at = wheel_at or page_wheel_point(krema, view)
         inp.scroll(*wheel_at, dy=15 * notches if below else -15 * notches)
     raise AssertionError(f"could not scroll {xpath} into view (last rect {r})")
 

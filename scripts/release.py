@@ -585,7 +585,17 @@ def _git_archive(root: Path, commit: str, version: str) -> bytes:
     return proc.stdout
 
 
-def _published_archive(repository: str, tag: str, version: str) -> bytes | None:
+def _published_archive(
+    repository: str, tag: str, version: str
+) -> tuple[bytes, str] | None:
+    """Source bytes GitHub already serves for a published ``tag``, with origin.
+
+    ``published``: the release's uploaded ``krema-X.Y.Z.tar.gz``.
+    ``autoarchive``: the tag's automatic GitHub source archive, used only when
+    a published (non-draft) release lacks that asset. None when no published
+    release exists, so a new or draft-only tag keeps the generated archive.
+    The caller must still bind the returned bytes to the signed tag.
+    """
     import release_github
 
     releases = [
@@ -593,21 +603,20 @@ def _published_archive(repository: str, tag: str, version: str) -> bytes | None:
     ]
     if len(releases) > 1:
         raise ReleaseError(f"more than one release uses tag {tag}")
-    for release in releases:
-        for asset in release.get("assets", []):
-            if asset.get("name") == asset_name(version):
-                if asset.get("state", "uploaded") != "uploaded":
-                    raise ReleaseError(f"published {asset_name(version)} is incomplete")
-                data = release_github.download_asset(
-                    repository, tag, asset_name(version)
+    if not releases:
+        return None
+    for asset in releases[0].get("assets", []):
+        if asset.get("name") == asset_name(version):
+            if asset.get("state", "uploaded") != "uploaded":
+                raise ReleaseError(f"published {asset_name(version)} is incomplete")
+            data = release_github.download_asset(repository, tag, asset_name(version))
+            digest = asset.get("digest")
+            if isinstance(digest, str) and digest != f"sha256:{sha256_bytes(data)}":
+                raise ReleaseError(
+                    f"downloaded {asset_name(version)} does not match GitHub's digest"
                 )
-                digest = asset.get("digest")
-                if isinstance(digest, str) and digest != f"sha256:{sha256_bytes(data)}":
-                    raise ReleaseError(
-                        f"downloaded {asset_name(version)} does not match GitHub's digest"
-                    )
-                return data
-    return None
+            return data, "published"
+    return release_github.download_tag_archive(repository, tag), "autoarchive"
 
 
 def _write_new(path: Path, data: bytes) -> None:
@@ -644,18 +653,21 @@ def prepare(
     if comment != commit:
         raise ReleaseError("git archive did not record the tagged commit")
     origin = "generated"
-    published = _published_archive(repository, tag, version)
-    if published is not None and published != data:
-        pub_comment, pub_manifest = archive_manifest(published, version)
-        differences = compare_manifests(manifest, pub_manifest)
-        if pub_comment != commit or differences:
-            raise ReleaseError(
-                f"published {asset_name(version)} does not match {tag}: "
-                + (", ".join(differences) or "different commit")
-            )
-        data = published
-    if published is not None:
-        origin = "published"
+    served = _published_archive(repository, tag, version)
+    if served is not None:
+        remote, origin = served
+        if remote != data:
+            remote_comment, remote_manifest = archive_manifest(remote, version)
+            differences = compare_manifests(manifest, remote_manifest)
+            if remote_comment != commit or differences:
+                what = (
+                    asset_name(version) if origin == "published" else "source archive"
+                )
+                raise ReleaseError(
+                    f"published {what} does not match {tag}: "
+                    + (", ".join(differences) or "different commit")
+                )
+            data = remote
 
     archive = work_dir / asset_name(version)
     _write_new(archive, data)

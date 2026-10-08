@@ -16,6 +16,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import urllib.error
 import zipfile
 from pathlib import Path
 from unittest import mock
@@ -23,8 +24,15 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
+import prepare_submission_kit  # noqa: E402
 import release_stores  # noqa: E402
-from prepare_submission_kit import CHANNELS, SCHEMA_DIR, build_kit  # noqa: E402
+from prepare_submission_kit import (  # noqa: E402
+    CHANNELS,
+    LFS_STAGING,
+    SCHEMA_DIR,
+    build_kit,
+    load_submissions,
+)
 from release_common import ReleaseContext, ReleaseError, asset_url  # noqa: E402
 
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
@@ -116,8 +124,6 @@ class ReleaseFixture(unittest.TestCase):
             debian_revision="1",
         )
 
-
-class SubmissionKitBoundaryTest(ReleaseFixture):
     def assert_refused(self, context: ReleaseContext) -> None:
         output = self.tmp / "out" / "kit"
         with self.assertRaises(ReleaseError):
@@ -125,6 +131,8 @@ class SubmissionKitBoundaryTest(ReleaseFixture):
         self.assertFalse(output.exists(), "a refused kit must not leave output behind")
         self.assertFalse(output.with_name("kit.zip").exists())
 
+
+class SubmissionKitBoundaryTest(ReleaseFixture):
     # Version binding
 
     def test_arbitrary_version_renders_complete_packet(self) -> None:
@@ -246,13 +254,18 @@ class SubmissionKitBoundaryTest(ReleaseFixture):
         schema_path.write_text(json.dumps(data), encoding="utf-8")
         self.assert_refused(self.context("9.8.7", make_archive("9.8.7"), source))
 
-    def test_lfs_pointer_media_is_refused(self) -> None:
+    def test_unavailable_lfs_pointer_media_is_refused(self) -> None:
         source = self.tagged_source()
         data = json.loads(
             (source / SCHEMA_DIR / "kde-store.json").read_text(encoding="utf-8")
         )
         (source / data["media"][0]["source"]).write_bytes(PNG_LFS_POINTER)
-        self.assert_refused(self.context("9.8.7", make_archive("9.8.7"), source))
+        with mock.patch.object(
+            prepare_submission_kit.urllib.request,
+            "urlopen",
+            side_effect=urllib.error.URLError("offline"),
+        ):
+            self.assert_refused(self.context("9.8.7", make_archive("9.8.7"), source))
 
     def test_lfs_pointer_license_symlink_target_is_refused(self) -> None:
         payload = make_archive(
@@ -295,6 +308,263 @@ class SubmissionKitBoundaryTest(ReleaseFixture):
         data["fields"]["Summary"] = "Krema {{version }"
         schema_path.write_text(json.dumps(data), encoding="utf-8")
         self.assert_refused(self.context("9.8.7", make_archive("9.8.7"), source))
+
+
+class FakeMediaResponse:
+    """The ``urlopen`` result the downloader reads: headers plus a byte stream."""
+
+    def __init__(self, body: bytes, length: int) -> None:
+        self.headers = {"Content-Length": str(length)}
+        self.stream = io.BytesIO(body)
+
+    def __enter__(self) -> "FakeMediaResponse":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def read(self, size: int = -1) -> bytes:
+        return self.stream.read(size)
+
+
+def lfs_pointer_bytes(payload: bytes) -> bytes:
+    return (
+        b"version https://git-lfs.github.com/spec/v1\noid sha256:"
+        + hashlib.sha256(payload).hexdigest().encode()
+        + f"\nsize {len(payload)}\n".encode()
+    )
+
+
+class TaggedLfsMediaTest(ReleaseFixture):
+    """Template media committed as Git LFS pointers, as ``git archive`` ships them.
+
+    Only the HTTP read is replaced: pointer parsing, size and SHA-256 checks,
+    staging, and PNG validation run unchanged.
+    """
+
+    MEDIA_URL = f"https://media.githubusercontent.com/media/isac322/krema/{COMMIT}/"
+
+    def pointerize(self, root: Path) -> dict[str, bytes]:
+        """Replace every template media file under ``root`` with its LFS pointer."""
+        payloads: dict[str, bytes] = {}
+        for channel in CHANNELS:
+            data = json.loads(
+                (root / SCHEMA_DIR / f"{channel}.json").read_text(encoding="utf-8")
+            )
+            for item in data["media"]:
+                if item["source"] in payloads:
+                    continue
+                payload = (REPO / item["source"]).read_bytes()
+                payloads[item["source"]] = payload
+                (root / item["source"]).write_bytes(lfs_pointer_bytes(payload))
+        return payloads
+
+    def serve(
+        self, payloads: dict[str, bytes], overrides: dict[str, bytes] | None = None
+    ):
+        """Patch the downloader's ``urlopen`` with a local media endpoint keyed by path."""
+        bodies = {**payloads, **(overrides or {})}
+        requested: list[str] = []
+
+        def urlopen(request, timeout=None):  # noqa: ANN001
+            url = request.full_url
+            requested.append(url)
+            self.assertTrue(url.startswith(self.MEDIA_URL), url)
+            self.assertIsNotNone(timeout)
+            body = bodies.get(url[len(self.MEDIA_URL) :])
+            if body is None:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return FakeMediaResponse(body, len(body))
+
+        patcher = mock.patch.object(
+            prepare_submission_kit.urllib.request, "urlopen", side_effect=urlopen
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return requested
+
+    def snapshot(self, root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+        }
+
+    def test_tagged_pointer_media_build_from_verified_downloads(self) -> None:
+        source = self.tagged_source()
+        payloads = self.pointerize(source)
+        requested = self.serve(payloads)
+        context = self.context("9.8.7", make_archive("9.8.7"), source)
+        source_before = self.snapshot(source)
+        archive_before = Path(context.archive).read_bytes()
+
+        built = build_kit(context, self.tmp / "out" / "kit")
+
+        self.assertEqual(
+            sorted(requested), sorted(self.MEDIA_URL + rel for rel in payloads)
+        )
+        self.assertEqual(built["kit"]["templates"]["source"], "tagged-source")
+        for channel in CHANNELS:
+            data = built["submissions"][channel]
+            for item in data["media"]:
+                staged = built["output"] / channel / "media" / item["filename"]
+                self.assertEqual(staged.read_bytes(), payloads[item["source"]])
+            provenance = json.loads(
+                (built["output"] / channel / "submission.json").read_text("utf-8")
+            )
+            self.assertNotIn("_media_files", provenance)
+            self.assertEqual(
+                [item["source"] for item in provenance["media"]],
+                [item["source"] for item in data["media"]],
+            )
+        self.assertEqual(self.snapshot(source), source_before)
+        self.assertEqual(Path(context.archive).read_bytes(), archive_before)
+        stage = Path(context.work_dir) / LFS_STAGING
+        self.assertEqual(
+            sorted(path.name for path in stage.iterdir()),
+            sorted(
+                hashlib.sha256(payload).hexdigest() for payload in payloads.values()
+            ),
+        )
+
+        # Read-only helpers reuse the verified stage without another request.
+        requested.clear()
+        load_submissions(context)
+        expected = release_stores.alternativeto_expected(context)
+        self.assertTrue(expected["paragraphs"])
+        self.assertEqual(requested, [])
+
+        # A corrupted staged object is refetched, never trusted.
+        corrupted = (
+            stage
+            / hashlib.sha256(payloads["branding/social/kde-store-logo.png"]).hexdigest()
+        )
+        corrupted.write_bytes(b"\x89PNG corrupted")
+        load_submissions(context)
+        self.assertEqual(
+            requested, [self.MEDIA_URL + "branding/social/kde-store-logo.png"]
+        )
+        self.assertEqual(
+            corrupted.read_bytes(), payloads["branding/social/kde-store-logo.png"]
+        )
+
+    def test_pointer_object_hash_mismatch_is_refused(self) -> None:
+        source = self.tagged_source()
+        payloads = self.pointerize(source)
+        rel = "branding/social/launchpad-icon-14.png"
+        tampered = bytearray(payloads[rel])
+        tampered[-1] ^= 0xFF
+        self.serve(payloads, {rel: bytes(tampered)})
+        context = self.context("9.8.7", make_archive("9.8.7"), source)
+        self.assert_refused(context)
+        staged = (
+            Path(context.work_dir)
+            / LFS_STAGING
+            / hashlib.sha256(payloads[rel]).hexdigest()
+        )
+        self.assertFalse(staged.exists())
+
+    def test_pointer_object_size_mismatch_is_refused(self) -> None:
+        rel = "branding/social/launchpad-logo-64.png"
+        for label, change in (
+            ("short", lambda body: body[:-1]),
+            ("long", lambda body: body + b"\x00"),
+        ):
+            with self.subTest(label):
+                source = self.tagged_source()
+                payloads = self.pointerize(source)
+                self.serve(payloads, {rel: change(payloads[rel])})
+                self.assert_refused(
+                    self.context("9.8.7", make_archive("9.8.7"), source)
+                )
+                shutil.rmtree(source)
+
+    def test_malformed_pointer_is_refused_without_download(self) -> None:
+        source = self.tagged_source()
+        payloads = self.pointerize(source)
+        rel = "branding/social/avatar-400.png"
+        (source / rel).write_bytes(lfs_pointer_bytes(payloads[rel]) + b"ext x\n")
+        requested = self.serve(payloads)
+        self.assert_refused(self.context("9.8.7", make_archive("9.8.7"), source))
+        self.assertNotIn(self.MEDIA_URL + rel, requested)
+
+    def test_pointer_resolving_to_non_png_is_refused(self) -> None:
+        source = self.tagged_source()
+        payloads = self.pointerize(source)
+        rel = "branding/social/launchpad-brand-192.png"
+        not_png = b"<html>not an image</html>\n"
+        (source / rel).write_bytes(lfs_pointer_bytes(not_png))
+        self.serve({**payloads, rel: not_png})
+        self.assert_refused(self.context("9.8.7", make_archive("9.8.7"), source))
+
+    def test_staging_inside_source_tree_is_refused(self) -> None:
+        source = self.tagged_source()
+        payloads = self.pointerize(source)
+        requested = self.serve(payloads)
+        context = self.context("9.8.7", make_archive("9.8.7"), source)
+        context = ReleaseContext(**{**context.__dict__, "work_dir": source})
+        before = self.snapshot(source)
+        self.assert_refused(context)
+        self.assertEqual(requested, [])
+        self.assertEqual(self.snapshot(source), before)
+
+    def test_installed_fallback_pointer_media_are_resolved(self) -> None:
+        installed = self.tagged_source()
+        payloads = self.pointerize(installed)
+        requested = self.serve(payloads)
+        bare = self.tmp / "bare-source"
+        bare.mkdir()
+        context = self.context("9.8.7", make_archive("9.8.7"), bare)
+        with mock.patch.object(prepare_submission_kit, "ROOT", installed):
+            built = build_kit(context, self.tmp / "out" / "kit")
+        self.assertEqual(built["kit"]["templates"]["source"], "installed-fallback")
+        self.assertEqual(len(requested), len(payloads))
+        for channel in CHANNELS:
+            for item in built["submissions"][channel]["media"]:
+                self.assertEqual(
+                    (
+                        built["output"] / channel / "media" / item["filename"]
+                    ).read_bytes(),
+                    payloads[item["source"]],
+                )
+
+    def test_direct_png_media_need_no_download(self) -> None:
+        requested = self.serve({})
+        build_kit(
+            self.context("9.8.7", make_archive("9.8.7"), self.tagged_source()),
+            self.tmp / "out" / "kit",
+        )
+        self.assertEqual(requested, [])
+
+    def test_launchpad_status_compares_resolved_pointer_media(self) -> None:
+        source = self.tagged_source()
+        payloads = self.pointerize(source)
+        self.serve(payloads)
+        context = self.context("9.8.7", make_archive("9.8.7"), source)
+        schema = json.loads(
+            (source / SCHEMA_DIR / "launchpad.json").read_text(encoding="utf-8")
+        )
+        media = {item["role"]: item for item in schema["media"]}
+        project = {
+            "name": "krema",
+            "owner_link": release_stores.LAUNCHPAD_OWNER,
+            "information_type": "Public",
+        }
+        live: dict[str, bytes] = {}
+        for role, link_key in release_stores.LAUNCHPAD_BRANDING:
+            link = f"https://api.launchpad.net/1.0/krema/{link_key}"
+            project[link_key] = link
+            live[link] = payloads[media[role]["source"]]
+        with (
+            mock.patch.object(release_stores, "http_json", return_value=project),
+            mock.patch.object(
+                release_stores,
+                "http_bytes",
+                side_effect=lambda url, **_: (200, live[url]),
+            ),
+        ):
+            status = release_stores.launchpad_status(context)
+        self.assertEqual(status["status"], "already_published", status)
 
 
 class StoreReceiptLifecycleTest(ReleaseFixture):

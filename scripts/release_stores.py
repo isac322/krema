@@ -457,7 +457,7 @@ def alternativeto_status(context: ReleaseContext) -> dict[str, Any]:
 
 
 def launchpad_status(context: ReleaseContext) -> dict[str, Any]:
-    submissions, _, template_root = load_submissions(context)
+    submissions, _, _ = load_submissions(context)
     schema = submissions["launchpad"][0]
     project = http_json(LAUNCHPAD_PROJECT_API)
     if not isinstance(project, dict):
@@ -478,7 +478,7 @@ def launchpad_status(context: ReleaseContext) -> dict[str, Any]:
         ):
             problems.append(f"{role} has no recorded asset or live link")
             continue
-        local = sha256_file(template_root / item["source"])
+        local = sha256_file(schema["_media_files"][item["source"]])
         if local != item["uploaded_sha256"]:
             problems.append(
                 f"{role} repository file no longer matches the published receipt"

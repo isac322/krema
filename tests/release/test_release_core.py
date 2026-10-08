@@ -9,6 +9,7 @@ Runs offline with the standard library:
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import os
@@ -19,6 +20,7 @@ import tarfile
 import tempfile
 import time
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest import mock
 
@@ -680,6 +682,139 @@ class GateDispatchTests(ContextFixture):
         out = self.gate(context, lambda argv, **_: "")
         self.assertEqual(out["status"], "pending")
         self.assertEqual(json.loads(marker.read_text())["commit"], COMMIT)
+
+
+def recompress(raw_tar: bytes, mtime: int) -> bytes:
+    """The same tar stream with other gzip framing, like GitHub's autoarchive."""
+    out = io.BytesIO()
+    with gzip.GzipFile(
+        filename="", mode="wb", fileobj=out, compresslevel=6, mtime=mtime
+    ) as gz:
+        gz.write(raw_tar)
+    return out.getvalue()
+
+
+class PrepareArchiveSourceTests(TempDirTest):
+    """Which source bytes ``prepare`` records for a real annotated tag."""
+
+    URL = "https://github.com/isac322/krema/releases/download/v1.2.3/krema-1.2.3.tar.gz"
+
+    def setUp(self) -> None:
+        super().setUp()
+        env = GitArchiveTests.GIT_ENV
+        self.repo = self.tmp / "repo"
+        self.repo.mkdir()
+        release.git(self.repo, "init", "-q", "-b", "main")
+        for name, text in source_files().items():
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        release.git(self.repo, "add", "-A")
+        command(["git", "-C", str(self.repo), "commit", "-q", "-m", "x"], env=env)
+        command(
+            ["git", "-C", str(self.repo), "tag", "-a", "v1.2.3", "-m", "v1.2.3"],
+            env=env,
+        )
+        self.commit = release.git(self.repo, "rev-parse", "HEAD")
+        raw = release._git_archive(self.repo, self.commit, "1.2.3")
+        self.generated = gzip_deterministic(raw)
+        self.legacy = recompress(raw, mtime=1)
+        self.uploaded = recompress(raw, mtime=2)
+        self.assertEqual(len({self.generated, self.legacy, self.uploaded}), 3)
+
+    def prepare(self, releases: list[dict], *, asset=None, autoarchive=None):
+        output = self.fresh()
+        asset_dl = mock.Mock(return_value=asset)
+        tag_dl = mock.Mock(return_value=autoarchive)
+        with (
+            mock.patch.object(release, "verify_signature", return_value=PINNED),
+            mock.patch.object(release_github, "find_releases", return_value=releases),
+            mock.patch.object(release_github, "download_asset", asset_dl),
+            mock.patch.object(release_github, "download_tag_archive", tag_dl),
+        ):
+            out = release.prepare(
+                "v1.2.3", output, self.repo, "isac322/krema", (PINNED,)
+            )
+        return out, asset_dl, tag_dl
+
+    def assert_recorded(self, out: dict, data: bytes, origin: str) -> None:
+        self.assertEqual(out["archive_origin"], origin)
+        self.assertEqual(out["sha256"], sha256_bytes(data))
+        self.assertEqual(Path(out["archive"]).read_bytes(), data)
+        context = load_context(Path(out["context"]))
+        self.assertEqual(context.sha256, sha256_bytes(data))
+        self.assertEqual(context.commit, self.commit)
+        self.assertEqual(context.source_url, self.URL)
+
+    def test_published_release_without_asset_reuses_its_autoarchive_bytes(
+        self,
+    ) -> None:
+        published = {"draft": False, "assets": [{"name": "unrelated.txt"}]}
+        out, asset_dl, tag_dl = self.prepare([published], autoarchive=self.legacy)
+        self.assert_recorded(out, self.legacy, "autoarchive")
+        tag_dl.assert_called_once_with("isac322/krema", "v1.2.3")
+        asset_dl.assert_not_called()
+
+    def test_new_or_draft_only_tag_keeps_the_generated_archive(self) -> None:
+        for releases in ([], [{"draft": True, "assets": []}]):
+            with self.subTest(releases=releases):
+                out, asset_dl, tag_dl = self.prepare(releases, autoarchive=self.legacy)
+                self.assert_recorded(out, self.generated, "generated")
+                tag_dl.assert_not_called()
+                asset_dl.assert_not_called()
+
+    def test_named_release_asset_takes_precedence_over_the_autoarchive(
+        self,
+    ) -> None:
+        asset = {
+            "name": "krema-1.2.3.tar.gz",
+            "state": "uploaded",
+            "digest": f"sha256:{sha256_bytes(self.uploaded)}",
+        }
+        out, _, tag_dl = self.prepare(
+            [{"draft": False, "assets": [asset]}],
+            asset=self.uploaded,
+            autoarchive=self.legacy,
+        )
+        self.assert_recorded(out, self.uploaded, "published")
+        tag_dl.assert_not_called()
+
+    def test_autoarchive_of_another_commit_tree_or_root_fails_closed(self) -> None:
+        changed = source_files(**{"CMakeLists.txt": "project(krema VERSION 1.2.3)\n"})
+        cases = {
+            "commit": (
+                make_archive(source_files(), commit="b" * 40),
+                "different commit",
+            ),
+            "tree": (
+                make_archive(changed, commit=self.commit),
+                "changed CMakeLists.txt",
+            ),
+            "root": (
+                make_archive(source_files(), version="9.9.9", commit=self.commit),
+                "",
+            ),
+        }
+        for name, (data, fragment) in cases.items():
+            with self.subTest(case=name):
+                with self.assertRaises(ReleaseError) as caught:
+                    self.prepare([{"draft": False, "assets": []}], autoarchive=data)
+                self.assertIn(fragment, str(caught.exception))
+
+    def test_autoarchive_redirects_stay_on_github_archive_hosts(self) -> None:
+        handler = release_github._ArchiveRedirect()
+        request = urllib.request.Request(
+            release_github.tag_archive_url("isac322/krema", "v1.2.3")
+        )
+        for url in (
+            "https://example.com/krema-1.2.3.tar.gz",
+            "http://codeload.github.com/isac322/krema/tar.gz/refs/tags/v1.2.3",
+        ):
+            with self.subTest(url=url), self.assertRaises(ReleaseError):
+                handler.redirect_request(request, None, 302, "Found", {}, url)
+        allowed = "https://codeload.github.com/isac322/krema/tar.gz/refs/tags/v1.2.3"
+        followed = handler.redirect_request(request, None, 302, "Found", {}, allowed)
+        self.assertEqual(followed.full_url, allowed)
 
 
 class GithubPublishTests(ContextFixture):

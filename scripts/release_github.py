@@ -19,7 +19,10 @@ excluded here; it is detected by the post-publication check and reported.
 A draft this tooling did not create (different notes or target) blocks the
 channel and is never edited or deleted.
 
-Uses the authenticated ``gh`` CLI already configured on the machine.
+Uses the authenticated ``gh`` CLI already configured on the machine. The
+tag's automatic source archive, used only by ``release.py prepare`` for a
+published release lacking ``krema-X.Y.Z.tar.gz``, is a public anonymous
+HTTPS download confined to GitHub's archive hosts and size-capped.
 """
 
 from __future__ import annotations
@@ -27,15 +30,20 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 from release_common import (
+    USER_AGENT,
     ReleaseContext,
     ReleaseError,
     asset_name,
     command,
     expected_notes,
+    redact,
     remote_tag_oids,
     result,
     sha256_bytes,
@@ -47,6 +55,11 @@ CHANNEL = "github"
 SUMS_NAME = "SHA256SUMS"
 API_TIMEOUT = 60
 UPLOAD_TIMEOUT = 900
+# GitHub's automatic source archive for a tag: streamed with a hard size cap.
+ARCHIVE_TIMEOUT = 120
+MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
+# Redirects may only stay on GitHub's own archive hosts; anything else fails.
+_ARCHIVE_HOSTS = frozenset({"github.com", "codeload.github.com"})
 
 
 def _gh_json(args: list[str], *, timeout: int = API_TIMEOUT) -> Any:
@@ -104,6 +117,55 @@ def download_asset(repository: str, tag: str, name: str) -> bytes:
         if path.is_symlink() or not path.is_file():
             raise ReleaseError(f"downloaded asset {name} is missing")
         return path.read_bytes()
+
+
+def tag_archive_url(repository: str, tag: str) -> str:
+    """GitHub's automatic source archive for ``tag`` (root ``<repo>-<version>/``).
+
+    Deliberately not the API ``tarball_url``: that endpoint serves other
+    bytes rooted at ``<owner>-<repo>-<short sha>/``, which is neither the
+    release layout nor what packagers already hold for a published tag.
+    """
+    return f"https://github.com/{repository}/archive/refs/tags/{tag}.tar.gz"
+
+
+class _ArchiveRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        parts = urllib.parse.urlsplit(newurl)
+        if parts.scheme != "https" or parts.hostname not in _ARCHIVE_HOSTS:
+            raise ReleaseError(
+                f"source archive redirect to {parts.scheme}://{parts.hostname or ''} refused"
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def download_tag_archive(repository: str, tag: str) -> bytes:
+    """Bytes of GitHub's automatic source archive for ``tag``.
+
+    HTTPS only, redirects confined to GitHub's archive hosts, at most
+    ``MAX_ARCHIVE_BYTES``. The bytes are not trusted here: the caller must
+    bind their recorded commit and file manifest to the signed tag.
+    """
+    url = tag_archive_url(repository, tag)
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    opener = urllib.request.build_opener(_ArchiveRedirect())
+    chunks: list[bytes] = []
+    total = 0
+    try:
+        with opener.open(request, timeout=ARCHIVE_TIMEOUT) as response:
+            while chunk := response.read(1 << 20):
+                total += len(chunk)
+                if total > MAX_ARCHIVE_BYTES:
+                    raise ReleaseError(
+                        f"source archive for {tag} exceeds {MAX_ARCHIVE_BYTES} bytes"
+                    )
+                chunks.append(chunk)
+    except urllib.error.HTTPError as exc:
+        raise ReleaseError(f"GET {url} failed: HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise ReleaseError(f"GET {url} failed: {redact(str(reason))}") from None
+    return b"".join(chunks)
 
 
 def remote_asset_sha256(repository: str, tag: str, asset: dict) -> str:

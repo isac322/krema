@@ -7,8 +7,11 @@ copyable directory plus a ZIP archive. When the tagged source tree carries
 ``packaging/submissions/``, those tagged schemas, descriptions, and media are
 the authoritative templates; otherwise the templates installed next to this
 script are used and the kit marks them for human review. Version, tag, commit,
-source archive bytes, and SHA-256 always come from the context. It never
-authenticates, submits forms, invokes Git, or creates a Flatpak manifest.
+source archive bytes, and SHA-256 always come from the context. Media that are
+Git LFS pointers (as in every ``git archive`` tarball) are fetched from the
+context commit into ``work_dir/submission-kit-lfs/`` and verified against the
+pointer's SHA-256 and size; the source tree and archive are never modified. It
+never authenticates, submits forms, invokes Git, or creates a Flatpak manifest.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ import shutil
 import sys
 import tarfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -37,6 +41,7 @@ from release_common import (  # noqa: E402
     load_context,
     read_archive,
     sha256_bytes,
+    sha256_file,
     source_root_name,
 )
 
@@ -62,6 +67,14 @@ CMAKE_VERSION_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
+LFS_STAGING = "submission-kit-lfs"
+LFS_MEDIA_BASE = "https://media.githubusercontent.com/media"
+MAX_LFS_POINTER_BYTES = 1024
+LFS_POINTER_RE = re.compile(
+    r"version https://git-lfs\.github\.com/spec/v1\n"
+    r"oid sha256:([0-9a-f]{64})\n"
+    r"size (0|[1-9][0-9]*)\n"
+)
 
 
 class KitError(ReleaseError):
@@ -183,6 +196,106 @@ def validate_png(
         )
 
 
+def lfs_pointer(path: Path, location: str) -> tuple[str, int] | None:
+    """Return ``(oid, size)`` when ``path`` is a Git LFS pointer, else None."""
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(MAX_LFS_POINTER_BYTES + 1)
+    except OSError as exc:
+        fail(f"cannot read {location}: {exc}")
+    if not head.startswith(LFS_PREFIX):
+        return None
+    match = LFS_POINTER_RE.fullmatch(head.decode("ascii", "replace"))
+    if len(head) > MAX_LFS_POINTER_BYTES or not match:
+        fail(f"{location} is not a valid Git LFS pointer")
+    size = int(match.group(2))
+    if not 0 < size <= MAX_DOWNLOAD_BYTES:
+        fail(f"{location} Git LFS object size {size} is out of range")
+    return match.group(1), size
+
+
+def fetch_lfs_object(url: str, oid: str, size: int) -> bytes:
+    """Download exactly ``size`` bytes from ``url`` and require the SHA-256 ``oid``."""
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "Krema-submission-kit/1.0"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) != size:
+                fail(f"{url} is {content_length} bytes; the LFS pointer records {size}")
+            chunks: list[bytes] = []
+            total = 0
+            while total <= size:
+                chunk = response.read(min(1024 * 1024, size + 1 - total))
+                if not chunk:
+                    break
+                total += len(chunk)
+                chunks.append(chunk)
+    except (OSError, urllib.error.URLError, ValueError) as exc:
+        fail(f"cannot download {url}: {exc}")
+    if total != size:
+        fail(
+            f"{url} returned {'more than ' if total > size else ''}{total} bytes; "
+            f"the LFS pointer records {size}"
+        )
+    payload = b"".join(chunks)
+    actual = sha256_bytes(payload)
+    if actual != oid:
+        fail(f"SHA256 mismatch for {url}: the LFS pointer records {oid}, got {actual}")
+    return payload
+
+
+def resolve_media(
+    context: ReleaseContext, path: Path, root: Path, location: str
+) -> Path:
+    """Return ``path``, or for a Git LFS pointer its verified object staged in ``work_dir``.
+
+    The object is fetched from the context commit at the same repository path.
+    Staged files are named by their SHA-256, re-verified on reuse, and live
+    outside the source tree and the repository, which are never written.
+    """
+    pointer = lfs_pointer(path, location)
+    if pointer is None:
+        return path
+    oid, size = pointer
+    stage = (Path(context.work_dir) / LFS_STAGING).resolve()
+    protected_trees = (root, Path(context.source_dir), ROOT)
+    for protected in (tree.resolve() for tree in protected_trees):
+        if stage.is_relative_to(protected) or protected.is_relative_to(stage):
+            fail(f"LFS media staging {stage} overlaps {protected}")
+    staged = stage / oid
+    try:
+        if (
+            staged.is_file()
+            and not staged.is_symlink()
+            and staged.stat().st_size == size
+            and sha256_file(staged) == oid
+        ):
+            return staged
+    except OSError as exc:
+        fail(f"cannot read staged LFS media {staged}: {exc}")
+    rel = path.relative_to(root.resolve()).as_posix()
+    url = (
+        f"{LFS_MEDIA_BASE}/{context.repository}/{context.commit}/"
+        + urllib.parse.quote(rel)
+    )
+    payload = fetch_lfs_object(url, oid, size)
+    temporary = stage / f".{oid}.partial"
+    try:
+        stage.mkdir(parents=True, exist_ok=True)
+        if staged.is_dir() and not staged.is_symlink():
+            fail(f"LFS media staging path is a directory: {staged}")
+        temporary.unlink(missing_ok=True)
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+        temporary.replace(staged)
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        fail(f"cannot stage LFS media {staged}: {exc}")
+    return staged
+
+
 def read_description(channel: str, path: Path, tokens: dict[str, str]) -> str:
     try:
         raw = path.read_text(encoding="utf-8")
@@ -234,7 +347,11 @@ def validate_observed_release(value: Any, location: str) -> dict[str, str]:
 
 
 def validate_submission(
-    data: dict[str, Any], source: Path, root: Path, tokens: dict[str, str]
+    context: ReleaseContext,
+    data: dict[str, Any],
+    source: Path,
+    root: Path,
+    tokens: dict[str, str],
 ) -> tuple[str, str, str]:
     channel = data.get("channel")
     if channel not in CHANNELS:
@@ -260,6 +377,7 @@ def validate_submission(
     if not isinstance(media, list) or not media:
         fail(f"{source}: media must be a non-empty array")
     media_names: set[str] = set()
+    media_files: dict[str, Path] = {}
     for index, item in enumerate(media):
         location = f"{source}.media[{index}]"
         if not isinstance(item, dict):
@@ -271,7 +389,9 @@ def validate_submission(
         media_names.add(filename)
         if media_source.suffix.lower() != ".png":
             fail(f"{location}.source must be a PNG")
-        validate_png(media_source, item.get("width"), item.get("height"), location)
+        media_file = resolve_media(context, media_source, root, location)
+        validate_png(media_file, item.get("width"), item.get("height"), location)
+        media_files[item["source"]] = media_file
         for key in ("role", "caption", "alt"):
             require_string(item, key, location)
     downloads = data.get("downloads")
@@ -321,6 +441,7 @@ def validate_submission(
         if fee["chosen"]:
             fail(f"{source}: AlternativeTo paid priority submission is not authorized")
     data["_normalized_downloads"] = normalized_downloads
+    data["_media_files"] = media_files
     return channel, description_rel, description_text
 
 
@@ -608,6 +729,8 @@ def load_submissions(
     """Read, render, and validate every channel schema for the context's release.
 
     Returns the submissions, the template source label, and the template root.
+    Each schema's ``_media_files`` maps its media ``source`` to the verified PNG:
+    the template file itself, or the staged object of a Git LFS pointer.
     """
     tokens = release_tokens(context)
     release = release_identity(context)
@@ -619,7 +742,7 @@ def load_submissions(
         )
         data = render(read_json(schema_path), tokens, str(schema_path))
         channel, description_rel, description_text = validate_submission(
-            data, schema_path, root, tokens
+            context, data, schema_path, root, tokens
         )
         if channel != expected:
             fail(f"{schema_path}: channel must be {expected}")
@@ -659,7 +782,7 @@ def build_kit(context: ReleaseContext, output: Path) -> dict[str, Any]:
     release = release_identity(context)
     source_payload = read_context_archive(context)
     validate_source_archive(source_payload, context.version, context.commit)
-    submissions, template_source, root = load_submissions(context)
+    submissions, template_source, _ = load_submissions(context)
 
     source_entries: list[tuple[str, dict[str, str]]] = []
     for channel, (data, _, _) in submissions.items():
@@ -716,8 +839,9 @@ def build_kit(context: ReleaseContext, output: Path) -> dict[str, Any]:
             )
         )
         for item in data["media"]:
-            source_path = repo_path(item["source"], f"{channel}.media source", root)
-            shutil.copyfile(source_path, media_dir / item["filename"])
+            shutil.copyfile(
+                data["_media_files"][item["source"]], media_dir / item["filename"]
+            )
         for item in data["_normalized_downloads"]:
             copy_bytes(downloads_dir / item["filename"], downloads[item["url"]])
 

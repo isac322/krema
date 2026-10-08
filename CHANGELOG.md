@@ -11,15 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
+- Added zoom animation presets in Appearance (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
 - `krema --version`, `--help`, `--author` and `--license` now print their information and exit, also without a display (handy for package smoke checks) and while the dock is already running; unknown options stop with an error instead of being silently ignored
 - Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
 
 ### Changed
 
+- Hover zoom now eased in and out by default (180 ms in, 240 ms out at normal animation speed) for a smoother, macOS-like magnification
+- In place zoom now followed the pointer directly and only animated when the pointer entered or left the dock, like Parabolic
+- Zoom animation presets replaced the single zoom duration setting; a previously customized duration was kept as a Custom setting with the old ease-out curve
 - Icon spacing can now be set up to 64 pixels instead of 16
-
-### Changed
-
 - Dock right-click menu entries gained their standard KDE icons
 - The shadow settings were relabeled "Light height" and "Panel elevation" (formerly "Light Z (height)" and "Elevation"), the light height slider moved in steps of 50, and the light radius value stopped claiming to be in pixels
 

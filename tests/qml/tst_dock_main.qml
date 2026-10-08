@@ -73,6 +73,17 @@ Item {
             return T.findAll(dock, T.isDockItem).sort((a, b) => a.index - b.index)
         }
 
+        property int settledTurns: 0
+
+        // Lets deferred (Qt.callLater) post-layout delegate setup run.
+        function settleDeferredCallbacks() {
+            let next = settledTurns + 1
+            Qt.callLater(function() {
+                Qt.callLater(function() { tc.settledTurns = next })
+            })
+            tryCompare(tc, "settledTurns", next)
+        }
+
         function makeDock(count) {
             let comp = Qt.createComponent(Qt.resolvedUrl("../../src/qml/main.qml"))
             compare(comp.status, Component.Ready, comp.errorString())
@@ -80,7 +91,8 @@ Item {
             verify(dock)
             tryVerify(() => items(dock).length === count, 2000, "expected " + count + " dock items")
             for (let it of items(dock))
-                tryVerify(() => it._zoomAnimReady, 2000)
+                tryVerify(() => it._delegateGeometryReady, 2000)
+            settleDeferredCallbacks()
             tryVerify(() => DockVisibility.panelRect.width > 0)
             return dock
         }
@@ -450,6 +462,10 @@ Item {
             for (let it of its) compare(it.currentOffset, 0)
             compare(panelEdges().left, rest.left)
             compare(panelEdges().right, rest.right)
+            // Leaving eases zoomAmount out: every icon settles back at rest.
+            mouseMove(stage, stage.width / 2, 2)
+            for (let it of its) tryCompare(it, "currentScale", 1.0)
+            for (let it of its) compare(it.currentOffset, 0)
         }
 
         function test_zoomSettlesWhenPointerLeavesPanel() {
@@ -472,6 +488,106 @@ Item {
             hoverItem(its[1])
             tryCompare(dock, "hoveredIndex", 1)
             for (let it of its) compare(it.currentScale, 1.0)
+        }
+
+        // Easing curves of ZoomAnimationProfile's easing indices (Qt's formulas),
+        // mirroring tst_dockitem_zoom.qml.
+        function ease(index, t) {
+            switch (index) {
+            case 0: return t
+            case 1: return t * t * t
+            case 2: return 1.0 - Math.pow(1.0 - t, 3)
+            case 4: return -(Math.cos(Math.PI * t) - 1.0) / 2.0
+            default: return t < 0.5 ? 4.0 * t * t * t : 1.0 - Math.pow(-2.0 * t + 2.0, 3) / 2.0
+            }
+        }
+
+        // Every intermediate zoomAmount sample must sit on the configured
+        // curve and — where the two curves separate — closer to it than to the
+        // other direction's easing.
+        function verifyAmountTimeline(probe, from, to, easingIndex, otherEasingIndex) {
+            verify(probe.samples.length >= 2,
+                   "configured duration must produce intermediate zoomAmount frames")
+            let discriminating = 0
+            for (const sample of probe.samples) {
+                let expected = from + (to - from) * ease(easingIndex, sample.progress)
+                fuzzyCompare(sample.amount, expected, 1e-2,
+                    "zoomAmount " + sample.amount + " off the configured curve (" + expected
+                    + ") at timeline progress " + sample.progress)
+                let wrong = from + (to - from) * ease(otherEasingIndex, sample.progress)
+                if (Math.abs(wrong - expected) > 0.08) {
+                    discriminating++
+                    verify(Math.abs(sample.amount - wrong) > Math.abs(sample.amount - expected),
+                           "zoomAmount " + sample.amount + " fits the wrong easing better at progress "
+                           + sample.progress)
+                }
+            }
+            verify(discriminating >= 1, "no sample landed where the two easing curves separate")
+        }
+
+        // The Custom preset must drive the PRODUCTION dockPanel Behavior
+        // (src/qml/main.qml), not only the DockItemRow fixture: hover eases
+        // zoomAmount in on the configured zoom-in duration/easing and back out
+        // on the zoom-out ones.
+        function test_customZoomTimingDrivesProductionDock() {
+            // Keep the pointer exit a clean zoom-out: no preview popup.
+            DockSettings.previewEnabled = false
+            DockSettings.zoomAnimationPreset = 4
+            DockSettings.zoomInDuration = 600
+            DockSettings.zoomInEasing = 1   // Ease in (InCubic)
+            DockSettings.zoomOutDuration = 400
+            DockSettings.zoomOutEasing = 2  // Ease out (OutCubic)
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            // Delegates are dockRow (Flow) children; the Flow sits in
+            // dockPanel — the same path
+            // test_separatedParabolicHoverPreservesGapAndRestProxy uses for
+            // zoomCursor.
+            let panel = its[1].parent.parent
+            verify(panel.zoomAmount !== undefined, "dockPanel not reachable through the delegate tree")
+            compare(panel.zoomAmount, 0.0)
+
+            // Effective durations honour Plasma's animation-speed scaling.
+            let inMs = Math.round(DockSettings.zoomInDuration * Kirigami.Units.shortDuration / 100.0)
+            let outMs = Math.round(DockSettings.zoomOutDuration * Kirigami.Units.shortDuration / 100.0)
+            if (inMs === 0 && outMs === 0)
+                skip("Plasma Instant animation speed: no zoom timeline to sample")
+
+            // Zoom in: a linear probe started in the same turn reports the
+            // timeline fraction; zoomAmount must trace InCubic, not OutCubic.
+            let inProbe = createTemporaryObject(zoomProbeComponent, tc, { targetPanel: panel })
+            let inStart = Date.now()
+            hoverItem(its[1])
+            inProbe.start(inMs)
+            tryCompare(dock, "hoveredIndex", 1)
+            tryCompare(inProbe, "finished", true, inMs + 3000)
+            tryCompare(panel, "zoomAmount", 1.0)
+            let inElapsed = Date.now() - inStart
+            if (inMs > 0) {
+                verifyAmountTimeline(inProbe, 0.0, 1.0, 1, 2)
+                verify(inElapsed >= inMs * 0.8 && inElapsed <= inMs + 3000,
+                       "zoom-in took " + inElapsed + " ms, expected ≈ " + inMs + " ms")
+            } else {
+                compare(panel.zoomAmount, 1.0, "0 ms zoom-in must snap synchronously")
+            }
+
+            // Zoom out: zoomAmount must trace the OutCubic decay, not InCubic.
+            let outProbe = createTemporaryObject(zoomProbeComponent, tc, { targetPanel: panel })
+            let outStart = Date.now()
+            mouseMove(stage, stage.width / 2, 2)  // far above the panel's zoom zone
+            outProbe.start(outMs)
+            tryCompare(outProbe, "finished", true, outMs + 3000)
+            tryCompare(panel, "zoomAmount", 0.0)
+            let outElapsed = Date.now() - outStart
+            if (outMs > 0) {
+                verifyAmountTimeline(outProbe, 1.0, 0.0, 2, 1)
+                verify(outElapsed >= outMs * 0.8 && outElapsed <= outMs + 3000,
+                       "zoom-out took " + outElapsed + " ms, expected ≈ " + outMs + " ms")
+            } else {
+                compare(panel.zoomAmount, 0.0, "0 ms zoom-out must snap synchronously")
+            }
+            for (let it of its) tryCompare(it, "currentScale", 1.0)
         }
 
         function test_hoverReportsToVisibilityController() {
@@ -1132,6 +1248,48 @@ Item {
             verify(!its[0].isDragSource)
             mouseRelease(stage, centerOf(its[1]).x, to.y, Qt.LeftButton)
             verify(!PreviewController.visible)
+        }
+
+        // Samples dockPanel.zoomAmount on Qt's shared animation clock, not
+        // after a wall-clock sleep: a linear reference animation started in the
+        // same turn as the zoom transition reports the timeline fraction each
+        // frame (same pattern as tst_dockitem_zoom.qml's durationProbeComponent).
+        Component {
+            id: zoomProbeComponent
+            Item {
+                id: probe
+                property var targetPanel
+                property int duration: 0
+                property real progress: 0.0
+                property var samples: []
+                property bool finished: false
+                function start(ms) {
+                    finished = false
+                    samples = []
+                    duration = ms
+                    reference.start()
+                }
+                onProgressChanged: {
+                    if (progress <= 0.0 || progress >= 1.0) return
+                    // Let both animations update before observing the panel.
+                    Qt.callLater(function() {
+                        if (probe.progress > 0.0 && probe.progress < 1.0)
+                            probe.samples.push({
+                                progress: probe.progress,
+                                amount: probe.targetPanel.zoomAmount,
+                            })
+                    })
+                }
+                NumberAnimation {
+                    id: reference
+                    target: probe
+                    property: "progress"
+                    from: 0.0
+                    to: 1.0
+                    duration: probe.duration
+                    onFinished: probe.finished = true
+                }
+            }
         }
     }
 }

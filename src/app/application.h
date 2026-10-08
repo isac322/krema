@@ -39,6 +39,13 @@ public:
     /// changes. PinnedLaunchers is saved by its own handler in run().
     static void connectSettingsAutoSave(KremaSettings *settings, QObject *context);
 
+    /// Migrates settings written by older Krema releases. A legacy
+    /// ZoomAnimationDuration key becomes the Custom zoom animation preset with
+    /// that duration and an ease-out curve in both directions (unless a preset
+    /// is already stored); the legacy key is always removed and @p settings
+    /// saved. Call right after load().
+    static void migrateLegacySettings(KremaSettings *settings);
+
 private:
     void registerGlobalShortcuts();
 

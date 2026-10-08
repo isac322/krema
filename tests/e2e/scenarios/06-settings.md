@@ -1,7 +1,7 @@
 # Settings UI
 
 ## Features
-- settings-appearance: Icon size, icon scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style, zoom animation duration, spacing, opacity, background style
+- settings-appearance: Icon size, icon scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style, zoom animation presets and custom zoom-in/zoom-out timing, spacing, opacity, background style
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
 - settings-behavior: Visibility mode, dock position, monitor mode, selected monitor switches and temporary fallback
@@ -19,6 +19,7 @@
 - src/qml/settings/PreviewPage.qml
 - src/qml/SettingsDialog.qml
 - src/qml/main.qml
+- src/qml/ZoomAnimationProfile.qml
 - src/app/application.cpp
 - src/models/dockactions.h
 - src/models/dockactions.cpp
@@ -57,7 +58,7 @@ and task-section rows check their real controls and consumer effects.
 2. Choose "Settings..."
 3. Wait 1500ms (settings window creation)
 4. Check the window list — krema window count increased
-5. Check the AT-SPI tree for the "Icon size" control
+5. Check the AT-SPI tree for the "Icon size" control and the "Zoom animation" card: the "Preset" tab is selected and the "Natural" preset is checked
 6. Screenshot — verify settings dialog
 7. Right-click the dock again → "Settings..." while the dialog is open
 8. Check the window list — there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
@@ -136,7 +137,7 @@ and task-section rows check their real controls and consumer effects.
 
 ## TC SET-005: Settings Persist After Restart
 
-**Precondition:** Changed multiple settings (icon size, visibility mode, background style).
+**Precondition:** Changed multiple settings (icon size, zoom animation preset, visibility mode, background style).
 **Steps:**
 1. Note current settings values
 2. Close settings dialog
@@ -250,7 +251,7 @@ and task-section rows check their real controls and consumer effects.
 6. Screenshot and AT-SPI bounding boxes — icons magnify in place without moving; bounding-box centres unchanged, magnified icons may overlap
 7. Check `~/.config/kremarc` (or the combo after reopening Settings) — `ZoomStyle=1` persisted
 8. Select "Parabolic - neighbors move aside", verify `ZoomStyle=0` persisted (or the key is removed as the default)
-9. Set "Zoom factor" slider to 1.0 — verify the combo becomes disabled
+9. Set "Zoom factor" slider to 1.0 — verify the combo and the "Zoom animation" card controls become disabled
 10. Restore zoom factor > 1.0
 
 **Expected:**
@@ -258,32 +259,44 @@ and task-section rows check their real controls and consumer effects.
 - "In place - icons overlap" restores in-place zoom: icons scale in place (positions unchanged, overlap allowed)
 - "Parabolic - neighbors move aside" pushes neighbours aside and grows the dock background
 - Setting persists to `kremarc` as `ZoomStyle` (0 = Parabolic, 1 = In place)
-- Combo is disabled while zoom factor is 1.0 (no zoom to lay out)
+- Combo and "Zoom animation" controls are disabled while zoom factor is 1.0 (no zoom to lay out); the selected zoom animation preset is preserved
 
 **Verification:** AT-SPI (combo entries/state/enabled, item bounding-box centres), screenshot (Parabolic vs In place zoom), kremarc (`ZoomStyle` key)
 **Automated:** tests/appium/test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists
 
 ---
 
-## TC SET-011: Zoom Animation Duration
+## TC SET-011: Zoom Animation Presets and Custom Timing
 
-**Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0 and Zoom style set to Parabolic.
+**Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0 and Zoom style set to Parabolic. Fresh configuration (no `ZoomAnimationPreset` key).
 **Steps:**
-1. Find the "Zoom animation duration (ms)" spin box and verify it is enabled, shows 100, and accepts values from 0 to 1000 in steps of 25
-2. Set the duration to 500 ms, move the pointer onto a middle dock item, wait 250ms, and capture a screenshot; move the pointer away, wait 250ms, and capture another screenshot
-3. Select "In place - icons overlap" and repeat the hover check with the 500 ms duration
-4. Set the duration to 0 ms and verify hover zoom snaps immediately
-5. Set "Zoom factor" to 1.0 and verify the duration control is disabled
-6. Restore zoom factor > 1.0, set the duration to 250 ms, close Settings, restart Krema, and reopen Settings
+1. Find the "Zoom animation" card and verify it has two tabs, "Preset" and "Custom"; "Preset" is selected and the "Natural" radio is checked. The radios are "Natural", "Quick", "Relaxed", and "Instant", each with a description and (except Instant) a "Zoom in … ms, zoom out … ms" summary
+2. Move the pointer onto a middle dock item, wait 100ms, capture a screenshot; wait another 150ms and capture again; move the pointer away and repeat. Natural accelerates then decelerates into the peak (180 ms in, 240 ms out at normal animation speed)
+3. Select "Quick" and repeat the hover check: the zoom starts fast and decelerates (100 ms ease-out in both directions, the Krema 0.10 behaviour). Verify `ZoomAnimationPreset=1`
+4. Select "Relaxed" (300 ms in, 400 ms out, gentle ease in and out) and then "Instant" (hover zoom snaps), checking `ZoomAnimationPreset=2` and `3`
+5. Select "Quick", then click the "Custom" tab. Verify `ZoomAnimationPreset=4` and the tab shows "Zoom-in duration (ms)", "Zoom-in easing", "Zoom-out duration (ms)", and "Zoom-out easing" with the Natural defaults (180 ms / 240 ms, "Ease in and out")
+6. Raise "Zoom-in duration (ms)" by two steps (10 ms each) to 200 and choose "Linear" for "Zoom-out easing". Verify `ZoomInDuration=200` and `ZoomOutEasing=0`; the easing combos offer exactly "Linear", "Ease in", "Ease out", "Ease in and out", "Gentle ease in and out"
+7. Hover a dock item: zoom-in and zoom-out follow the custom durations and curves without a restart
+8. Click the "Preset" tab: "Quick" is restored (`ZoomAnimationPreset=1`) and its radio is checked; "Natural", "Relaxed", and "Instant" are unchecked
+9. Select "Relaxed" (`ZoomAnimationPreset=2`), then "Quick" again (`ZoomAnimationPreset=1`): each time only the selected radio is checked. Click the already-checked "Quick" radio once more: it stays checked and `ZoomAnimationPreset` stays 1
+10. Scroll the mouse wheel down one step with the pointer over the "Preset"/"Custom" tab bar, then back up: the Settings page scrolls (the tab bar moves with the page and returns), the "Preset" tab stays selected, "Quick" stays checked, and `ZoomAnimationPreset` stays 1
+11. Click "Custom" again: the custom values are unchanged
+12. Select "In place - icons overlap" and repeat a hover check: moving the pointer along the dock tracks it directly without lag; only entering and leaving the dock animate
+13. Set "Zoom factor" to 1.0 and verify the whole card is disabled; restore zoom factor > 1.0
+14. With the "Custom" tab selected, close Settings, restart Krema, and reopen Settings. Verify the "Custom" tab and values are restored. Click "Preset": with no earlier preset in this Settings session, "Natural" is selected
 
 **Expected:**
-- Duration changes apply to hover zoom immediately in both Parabolic and In place styles; the value is an unscaled baseline, so Plasma animation scaling remains active
-- A duration of 0 ms disables the hover transition, so zoom changes snap instantly; Instant/reduced-motion behavior remains unchanged
-- The duration control is disabled while zoom factor is 1.0
-- The selected duration remains 250 ms after restart
+- Preset and custom changes apply to hover zoom immediately in both Parabolic and In place styles; durations are unscaled baselines, so Plasma animation scaling remains active and Plasma "Instant" animation speed still snaps
+- Only entering and leaving the dock animate; pointer movement along the dock never lags
+- Zoom-in and zoom-out use independent durations and easing; a 0 ms direction snaps
+- The "Custom" tab stores `ZoomAnimationPreset=4`; the "Preset" tab restores the last preset chosen in the current Settings session, otherwise Natural
+- Radio checked state always mirrors the stored preset, including after a Custom → Preset round trip and after clicking the already-checked radio
+- The mouse wheel over the tab bar scrolls the page; it never switches the tab or changes the preset
+- The card is disabled while zoom factor is 1.0
+- Preset, custom durations, and custom easing persist across restart
 
-**Verification:** AT-SPI (spin box range, step, value, and enabled state), screenshot (hover transitions), `kremarc` (`ZoomAnimationDuration` key)
-**Automated:** `tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the default, 25 ms steps, persistence, zero value, and disabled state. `tests/qml/tst_dockitem_zoom.qml::test_zeroDurationSnapsInAndOut` and `test_customDurationUsesConfiguredTimeline` cover snapping and animation timing in both styles. The live-dock 500 ms screenshot checks remain manual.
+**Verification:** AT-SPI (tab and radio checked/enabled state, spin box value and step, combo choice), screenshot (hover transitions), `kremarc` (`ZoomAnimationPreset`, `ZoomInDuration`, `ZoomOutDuration`, `ZoomInEasing`, `ZoomOutEasing` keys)
+**Automated:** `tests/appium/test_06_settings.py::test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist` covers the tabs, custom spin box and easing combo, Preset restore with exactly one checked radio (steps 8–9, including re-clicking the checked radio), the tab-bar wheel regression (step 10), and restart; its hover check after the custom edits is only a smoke check (hover still zooms, no restart), not a timing check. `tests/qml/tst_dock_main.qml::test_customZoomTimingDrivesProductionDock` covers the custom zoom-in/zoom-out timing driving the production `main.qml` dock (step 7). `test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the Natural default, preset persistence, the Instant preset, and the disabled state. `tests/qml/tst_dockitem_zoom.qml::test_scaleEasesInAndSettlesBackOnExit`, `test_zeroDurationSnapsInAndOut`, `test_customInOutDurationsUseConfiguredTimelines`, `test_presetsResolveTimingAndEasing`, `test_naturalEasesInSlowerThanQuick`, `test_zeroZoomInDurationSnapsInButAnimatesOut`, and `test_inPlaceTracksPointerWithoutLag` cover timing, easing, and pointer tracking in both styles. `tests/unit/test_settings_migration.cpp` covers migrating a legacy duration to the Custom preset. The live-dock screenshot checks of the curve shape remain manual.
 
 ---
 

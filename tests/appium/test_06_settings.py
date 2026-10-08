@@ -115,28 +115,67 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
         time.sleep(0.05)
 
 
+def page_viewport(krema: Krema) -> Rect:
+    """Rect of the current settings page's scrolling viewport: its ScrollView
+    (the showing element whose children include the scroll bars).
+
+    Not the page stack: on every distro the stack also holds the PageRow's
+    page title toolbar (``heading`` "Appearance", ~40 px), so an element
+    scrolled under that toolbar would count as visible and a click on it
+    would land on the toolbar."""
+
+    def scroll_view():
+        for el in krema.find_all(SETTINGS_STACK_XPATH + "//*[scroll_bar]"):
+            r = Rect.of(el)
+            if has_state(el, "showing") and r.width and r.height:
+                return r
+        return None
+
+    return wait_until(scroll_view, message="settings page scroll view")
+
+
+def page_wheel_point(krema: Krema, view: Rect | None = None) -> tuple[int, int]:
+    """A screen point over the settings page's empty right margin.
+
+    Wheel events there always scroll the page. Over the page body a wheel
+    at rest goes to the control under the pointer first, and org.kde.desktop
+    ComboBox/SpinBox set ``wheelEnabled: true``, so they would eat it (and
+    change their value). FormCards are width-capped and centred, so the
+    margin between the card edge and the scroll bar is empty for the full
+    page height (about 60 px at the usual window size); the left margin
+    proved unreliable (the column's SeparatorHandle), and the scroll bar's
+    accessible has no Component so its rect cannot be measured. On
+    full-width list pages the same x lands on plain rows, which ignore the
+    wheel.
+    """
+    view = view or page_viewport(krema)
+    return krema.to_screen(Rect(view.x + view.width - 40, view.y + view.height // 2, 1, 1), "settings")[:2]
+
+
 def scroll_into_view(krema: Krema, xpath: str):
     """Wheel-scroll the settings page until ``xpath`` is fully visible and at rest."""
-    page = krema.wait_for(SETTINGS_STACK_XPATH)
-    view = Rect.of(page)
+    view = page_viewport(krema)
 
     def in_view(el, r: Rect) -> bool:
         return has_state(el, "showing") and bool(r.width) and r.y >= view.y and r.y + r.height <= view.y + view.height
 
+    wheel_at = None
     for _ in range(60):
         el = krema.wait_for(xpath)
-        r = Rect.of(el)
-        # The page animates each wheel step: an element can report an
-        # in-view rect mid-animation and still move ~60px, so a click on
-        # that rect lands on the row above it. Only return once it settled.
-        if in_view(el, r) and in_view(el, r := wait_stable(lambda: Rect.of(el), duration=0.3)):
+        # Decide on the settled position only: each wheel step animates and
+        # a new step during the animation adds to its end value, so acting
+        # on a mid-animation rect overshoots and can oscillate around the
+        # target forever.
+        r = wait_stable(lambda: Rect.of(el), duration=0.3)
+        if in_view(el, r):
             return el
         below = r.width == 0 or r.y + r.height > view.y + view.height
-        # Wheel over the page centre; the left margin did not reliably scroll.
-        # Sliders/spin boxes ignore the wheel: QQC2 Control.wheelEnabled
-        # defaults to false.
-        inp.scroll(*krema.to_screen(Rect(view.x + view.width // 2, view.y + view.height // 2, 1, 1), "settings")[:2], dy=60 if below else -60)
-        time.sleep(0.1)
+        # Four notches while far away; one notch once the element is within
+        # half a page, so a step can not jump over the visible window.
+        gap = (r.y + r.height - view.y - view.height) if below else (view.y - r.y)
+        notches = 1 if r.width and gap < view.height // 2 else 4
+        wheel_at = wheel_at or page_wheel_point(krema, view)
+        inp.scroll(*wheel_at, dy=15 * notches if below else -15 * notches)
     raise AssertionError(f"could not scroll {xpath} into view (last rect {r})")
 
 
@@ -301,8 +340,9 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     # FormCard widgets exposed with labels.
     spin = krema.find(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
     assert spin is not None and float(spin.get_attribute("value")) == 48.0
-    duration = krema.find(f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button")
-    assert duration is not None and float(duration.get_attribute("value")) == 100.0
+    # Zoom animation card: Preset tab selected with the default Natural preset.
+    assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
+    assert has_state(krema.wait_for(preset_radio("Natural")), "checked")
     assert krema.find(f"{SETTINGS}//slider[@name='Zoom factor']") is not None
     assert krema.find(f"{SETTINGS}//list_item[@name='Attention animation']/combo_box") is not None
     assert krema.find(f"{SETTINGS}//check_box[@name='Icon size normalization']") is not None
@@ -448,18 +488,15 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     for _ in range(4):
         inp.key("up")
     wait_until(lambda: float(spin.get_attribute("value")) == 64.0)
-    duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
-    duration = scroll_into_view(krema, duration_xpath)
-    click_el(krema, duration)
-    for _ in range(4):
-        inp.key("up")
-    wait_until(lambda: float(duration.get_attribute("value")) == 200.0, message="zoom duration changed in 25 ms steps")
-    wait_until(lambda: config_value(krema, "ZoomAnimationDuration") == "200", message="zoom duration saved")
+    relaxed = scroll_into_view(krema, preset_radio("Relaxed"))
+    click_el(krema, relaxed)
+    wait_until(lambda: has_state(krema.wait_for(preset_radio("Relaxed")), "checked"), message="Relaxed preset selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "2", message="zoom animation preset saved")
     choose(krema, "Style", "Acrylic")
     open_page(krema, "Behavior")
     choose(krema, "Visibility mode", "Auto hide")
-    saved = {k: config_value(krema, k) for k in ("IconSize", "ZoomAnimationDuration", "BackgroundStyle", "VisibilityMode")}
-    assert saved == {"IconSize": "64", "ZoomAnimationDuration": "200", "BackgroundStyle": "3", "VisibilityMode": "1"}
+    saved = {k: config_value(krema, k) for k in ("IconSize", "ZoomAnimationPreset", "BackgroundStyle", "VisibilityMode")}
+    assert saved == {"IconSize": "64", "ZoomAnimationPreset": "2", "BackgroundStyle": "3", "VisibilityMode": "1"}
     close_settings(krema)
 
     old_pid = krema.pid
@@ -478,8 +515,9 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     open_settings(krema)
     spin = krema.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
     assert float(spin.get_attribute("value")) == 64.0
-    duration = scroll_into_view(krema, duration_xpath)
-    assert float(duration.get_attribute("value")) == 200.0
+    assert has_state(scroll_into_view(krema, preset_radio("Relaxed")), "checked")
+    assert not has_state(krema.wait_for(preset_radio("Natural")), "checked")
+    assert zoom_tab_selected(krema.wait_for(PRESET_TAB))
     wait_until(lambda: current_choice(krema, "Style") == "Acrylic", message="Style shows Acrylic")
     open_page(krema, "Behavior")
     assert current_choice(krema, "Visibility mode") == "Auto hide"
@@ -777,8 +815,20 @@ def test_set009_quit_while_settings_is_open_exits_cleanly(tmp_path: Path, apps: 
 
 # ------------------------------------------------------------------- SET-010
 ZOOM_STYLE = "Zoom style"
-ZOOM_DURATION = "Zoom animation duration (ms)"
+#: Zoom animation card (Appearance): Preset/Custom TabButtons (AT-SPI
+#: ``page_tab``) and one FormRadioDelegate (``radio_button``) per preset.
+PRESET_TAB = f"{SETTINGS}//page_tab[@name='Preset']"
+CUSTOM_TAB = f"{SETTINGS}//page_tab[@name='Custom']"
 PARABOLIC, IN_PLACE = "Parabolic - neighbors move aside", "In place - icons overlap"
+
+
+def preset_radio(name: str) -> str:
+    return f"{SETTINGS}//radio_button[@name='{name}']"
+
+
+def zoom_tab_selected(tab) -> bool:
+    """A checkable TabButton reports its current tab as checked (or selected)."""
+    return has_state(tab, "checked") or has_state(tab, "selected")
 
 
 def hovered_middle_layout(krema: Krema) -> tuple[int, int, list[Rect], list[Rect]]:
@@ -828,15 +878,14 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     assert len(options) == 2 and set(options) == {PARABOLIC, IN_PLACE}, f"zoom style options: {options}"
     click_el(krema, first)
     wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
-    duration_xpath = f"{SETTINGS}//list_item[label[@name='{ZOOM_DURATION}']]//spin_button"
-    duration = scroll_into_view(krema, duration_xpath)
-    assert has_state(duration, "enabled")
-    assert float(duration.get_attribute("value")) == 100.0
-    click_el(krema, duration)
-    for _ in range(4):
-        inp.key("down")
-    wait_until(lambda: float(duration.get_attribute("value")) == 0.0, message="instant zoom selected")
-    wait_until(lambda: config_value(krema, "ZoomAnimationDuration") == "0", message="instant zoom saved")
+    # Instant zoom keeps the hovered layouts below free of transitions.
+    instant_xpath = preset_radio("Instant")
+    instant = scroll_into_view(krema, instant_xpath)
+    assert has_state(instant, "enabled") and has_state(krema.wait_for(PRESET_TAB), "enabled")
+    assert has_state(krema.wait_for(preset_radio("Natural")), "checked")
+    click_el(krema, instant)
+    wait_until(lambda: has_state(krema.wait_for(instant_xpath), "checked"), message="instant zoom selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "3", message="instant zoom saved")
 
     # Parabolic: neighbours move aside.
     mid, base, rest, drawn = hovered_middle_layout(krema)
@@ -871,13 +920,139 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     inp.click(r.x + 1, r.center[1])
     wait_until(lambda: float(config_value(krema, "MaxZoomFactor") or 0) == 1.0, message="kremarc MaxZoomFactor=1")
     wait_until(lambda: not has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo disabled at zoom 1.0")
-    assert not has_state(krema.wait_for(duration_xpath), "enabled"), "zoom duration must be disabled when zoom is off"
+    assert not has_state(krema.wait_for(instant_xpath), "enabled"), "zoom animation presets must be disabled when zoom is off"
+    assert not has_state(krema.wait_for(PRESET_TAB), "enabled"), "zoom animation tabs must be disabled when zoom is off"
     for _ in range(6):
         inp.key("right")
     wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 0) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
     wait_until(lambda: has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo enabled again")
-    wait_until(lambda: has_state(krema.wait_for(duration_xpath), "enabled"), message="zoom duration enabled again")
-    assert float(krema.wait_for(duration_xpath).get_attribute("value")) == 0.0, "disabling zoom must preserve the duration"
+    wait_until(lambda: has_state(krema.wait_for(instant_xpath), "enabled"), message="zoom animation presets enabled again")
+    assert has_state(krema.wait_for(PRESET_TAB), "enabled"), "zoom animation tabs enabled again"
+    assert has_state(krema.wait_for(instant_xpath), "checked"), "disabling zoom must preserve the zoom animation preset"
+    assert config_value(krema, "ZoomAnimationPreset") == "3"
+
+
+# ------------------------------------------------------------------- SET-011
+ZOOM_IN_DURATION = f"{SETTINGS}//list_item[label[@name='Zoom-in duration (ms)']]//spin_button"
+ZOOM_OUT_EASING = "Zoom-out easing"
+
+
+@pytest.mark.kremarc({"PinnedLaunchers": [], "PreviewEnabled": False})
+def test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist(krema: Krema, apps: TestWindows) -> None:
+    apps.open("Alpha")
+    open_settings(krema)
+    quick_xpath = preset_radio("Quick")
+    click_el(krema, scroll_into_view(krema, quick_xpath))
+    wait_until(lambda: has_state(krema.wait_for(quick_xpath), "checked"), message="Quick preset selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "1", message="kremarc ZoomAnimationPreset=1")
+
+    # Custom tab: stores the Custom preset and shows the custom controls,
+    # whose defaults equal Natural.
+    click_el(krema, scroll_into_view(krema, CUSTOM_TAB))
+    wait_until(lambda: zoom_tab_selected(krema.wait_for(CUSTOM_TAB)), message="Custom tab selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "4", message="kremarc ZoomAnimationPreset=4")
+    spin = scroll_into_view(krema, ZOOM_IN_DURATION)
+    assert float(spin.get_attribute("value")) == 180.0
+    assert current_choice(krema, ZOOM_OUT_EASING) == "Ease in and out"
+    click_el(krema, spin)
+    for _ in range(2):
+        inp.key("up")
+    wait_until(lambda: float(spin.get_attribute("value")) == 200.0, message="zoom-in duration changed in 10 ms steps")
+    wait_until(lambda: config_value(krema, "ZoomInDuration") == "200", message="kremarc ZoomInDuration=200")
+    choose(krema, ZOOM_OUT_EASING, "Linear")
+    wait_until(lambda: config_value(krema, "ZoomOutEasing") == "0", message="kremarc ZoomOutEasing=0")
+
+    # Smoke only: hover still magnifies without a restart after the custom
+    # edits. Whether the custom timing really drives the dock is covered by
+    # tests/qml/tst_dock_main.qml::test_customZoomTimingDrivesProductionDock.
+    pid = krema.pid
+    hover_ready(krema, "Alpha")
+    krema.move_away()
+    assert krema.pid == pid and krema.is_running(), "zoom animation change must not restart krema"
+
+    # Preset tab restores the preset chosen before Custom, and only that
+    # radio is checked.
+    click_el(krema, scroll_into_view(krema, PRESET_TAB))
+    wait_until(lambda: zoom_tab_selected(krema.wait_for(PRESET_TAB)), message="Preset tab selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "1", message="Quick preset restored")
+    assert has_state(scroll_into_view(krema, quick_xpath), "checked")
+    for name in ("Natural", "Relaxed", "Instant"):
+        assert not has_state(krema.wait_for(preset_radio(name)), "checked"), f"{name} must stay unchecked"
+
+    # A second preset switch: exactly the selected radio is checked.
+    relaxed_xpath = preset_radio("Relaxed")
+    click_el(krema, scroll_into_view(krema, relaxed_xpath))
+    wait_until(lambda: has_state(krema.wait_for(relaxed_xpath), "checked"), message="Relaxed preset selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "2", message="kremarc ZoomAnimationPreset=2")
+    for name in ("Natural", "Quick", "Instant"):
+        assert not has_state(krema.wait_for(preset_radio(name)), "checked"), f"{name} must stay unchecked"
+    click_el(krema, scroll_into_view(krema, quick_xpath))
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "1", message="Quick preset selected again")
+    assert has_state(krema.wait_for(quick_xpath), "checked")
+    assert not has_state(krema.wait_for(relaxed_xpath), "checked")
+    # Clicking the already-checked radio keeps it checked and the preset unchanged.
+    click_el(krema, scroll_into_view(krema, quick_xpath))
+    holds(
+        lambda: has_state(krema.wait_for(quick_xpath), "checked") and config_value(krema, "ZoomAnimationPreset") == "1",
+        1.0,
+        "re-clicking the checked Quick radio must keep it checked and ZoomAnimationPreset=1",
+    )
+
+    # Regression: wheel over the Preset/Custom tab bar scrolls the page (the
+    # org.kde.desktop style's TabBar wheel handler once hijacked the scroll);
+    # it must not switch the tab or rewrite the preset.
+    tab = scroll_into_view(krema, PRESET_TAB)
+    wheel_x, wheel_y = krema.screen_rect(tab, "settings").center
+    tab_y0 = Rect.of(krema.wait_for(PRESET_TAB)).y
+    # Let Kirigami's WheelHandler leave its scrolling state (400 ms after the
+    # last step): until then its filter item covers the page and takes the
+    # wheel before the tab bar could.
+    time.sleep(0.5)
+    inp.scroll(wheel_x, wheel_y, dy=60)
+    wait_until(
+        lambda: Rect.of(krema.wait_for(PRESET_TAB)).y < tab_y0 - 10,
+        message="wheel over the tab bar scrolls the page",
+    )
+    assert config_value(krema, "ZoomAnimationPreset") == "1", "wheel over the tab bar must not switch to Custom"
+    assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
+    assert has_state(krema.wait_for(quick_xpath), "checked")
+    # Scroll back up over the scroll bar: the old tab centre now lies over
+    # whatever row scrolled under it, possibly a ComboBox that takes the wheel.
+    tab_y1 = wait_stable(lambda: Rect.of(krema.wait_for(PRESET_TAB)).y, duration=0.3)
+    inp.scroll(*page_wheel_point(krema), dy=-60)
+    wait_until(
+        lambda: Rect.of(krema.wait_for(PRESET_TAB)).y > tab_y1 + 10,
+        message="wheel up over the scroll bar scrolls the page back",
+    )
+    assert config_value(krema, "ZoomAnimationPreset") == "1"
+    assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
+    assert has_state(krema.wait_for(quick_xpath), "checked")
+
+    # Custom tab keeps the custom values.
+    click_el(krema, scroll_into_view(krema, CUSTOM_TAB))
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "4", message="Custom preset selected again")
+    assert float(scroll_into_view(krema, ZOOM_IN_DURATION).get_attribute("value")) == 200.0
+    assert current_choice(krema, ZOOM_OUT_EASING) == "Linear"
+    close_settings(krema)
+
+    saved = {k: config_value(krema, k) for k in ("ZoomAnimationPreset", "ZoomInDuration", "ZoomOutEasing")}
+    assert saved == {"ZoomAnimationPreset": "4", "ZoomInDuration": "200", "ZoomOutEasing": "0"}
+    old_pid = krema.pid
+    krema.restart()
+    assert krema.pid != old_pid
+    assert {k: config_value(krema, k) for k in saved} == saved
+
+    open_settings(krema)
+    wait_until(lambda: zoom_tab_selected(scroll_into_view(krema, CUSTOM_TAB)), message="Custom tab restored")
+    assert not zoom_tab_selected(krema.wait_for(PRESET_TAB))
+    assert float(scroll_into_view(krema, ZOOM_IN_DURATION).get_attribute("value")) == 200.0
+    assert current_choice(krema, ZOOM_OUT_EASING) == "Linear"
+
+    # A new Settings session has no earlier preset: Preset falls back to Natural.
+    click_el(krema, scroll_into_view(krema, PRESET_TAB))
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") in ("0", None), message="Natural preset restored")
+    assert has_state(scroll_into_view(krema, preset_radio("Natural")), "checked")
+    close_settings(krema)
 
 
 # ------------------------------------------------------------------- QA-CLK-002 / QA-CLK-011

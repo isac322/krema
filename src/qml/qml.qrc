@@ -2,6 +2,7 @@
     <qresource prefix="/qml">
         <file>main.qml</file>
         <file>DockItem.qml</file>
+        <file>ZoomAnimationProfile.qml</file>
         <file>SettingsDialog.qml</file>
         <file>PreviewPopup.qml</file>
         <file>PreviewThumbnail.qml</file>

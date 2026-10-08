@@ -9,6 +9,7 @@ add_executable(krema_unit_tests
     test_output_order.cpp
     test_background_opacity.cpp
     test_settings_autosave.cpp
+    test_settings_migration.cpp
     test_taskiconprovider.cpp
 )
 

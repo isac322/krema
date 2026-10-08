@@ -993,20 +993,26 @@ Item {
             }
         }
 
-        // Global zoom amount (0 = rest, 1 = full zoom). For Parabolic this is
-        // the only animated zoom quantity: it eases in when the pointer enters
-        // and out when it leaves, and icons/background track the layout
-        // directly. InPlace smooths per-item scales instead.
+        // Global zoom amount (0 = rest, 1 = full zoom): the only animated zoom
+        // quantity, for both zoom styles. It eases in when the pointer enters
+        // and out when it leaves; per-icon scales/offsets and the background
+        // growth track the layout directly, so moving the pointer along the
+        // dock never lags.
         property real zoomAmount: mouseInside ? 1.0 : 0.0
-        // The setting is an unscaled baseline: 100 ms matches shortDuration at
-        // normal speed. Plasma scaling also makes Instant/reduced motion snap.
-        readonly property int _effectiveZoomAnimationDuration: Math.round(
-            DockSettings.zoomAnimationDuration * Kirigami.Units.shortDuration / 100.0)
+        ZoomAnimationProfile { id: zoomProfile }
+        // Direction comes from Behavior.targetValue (set before the animation
+        // starts), so binding evaluation order does not matter. A 0 ms
+        // direction snaps synchronously.
         Behavior on zoomAmount {
-            enabled: dockPanel.zoomStyle !== 1 && dockPanel._effectiveZoomAnimationDuration > 0
+            id: zoomAmountBehavior
+            enabled: zoomProfile.animated
             NumberAnimation {
-                duration: dockPanel._effectiveZoomAnimationDuration
-                easing.type: Easing.OutCubic
+                duration: zoomAmountBehavior.targetValue > 0.5
+                    ? zoomProfile.effectiveZoomInDuration
+                    : zoomProfile.effectiveZoomOutDuration
+                easing.type: zoomAmountBehavior.targetValue > 0.5
+                    ? zoomProfile.zoomInEasingType
+                    : zoomProfile.zoomOutEasingType
             }
         }
         // A drag snaps icons back to rest at once (drop targeting and the drop
@@ -1015,7 +1021,7 @@ Item {
 
         // Scales/offsets/growth computed from REST geometry only (dockRow
         // position and settings), so zoom never feeds back into layout.
-        // Parabolic output is a direct function of the cursor and zoomAmount.
+        // The output is a direct function of the cursor and zoomAmount.
         readonly property real _restStart: DockView.isVertical ? dockRow.y : dockRow.x
         // Surface bounds in this panel's primary-axis frame: the grown dock
         // background may not cross them.
@@ -1028,17 +1034,19 @@ Item {
             DockSettings.iconSize, DockSettings.iconSpacing,
             root.taskZoneBoundary, root.taskZoneGap,
             0, DockView.isVertical ? height : width,
-            zoomStyle === 1
-                ? DockSettings.maxZoomFactor
-                : 1.0 + (DockSettings.maxZoomFactor - 1.0) * _layoutZoomAmount,
+            1.0 + (DockSettings.maxZoomFactor - 1.0) * _layoutZoomAmount,
             zoomStyle,
-            zoomStyle === 1 ? mouseInside : _layoutZoomAmount > 0,
+            _layoutZoomAmount > 0,
             zoomCursor, _minZoomEdge, _maxZoomEdge)
-        // Parabolic icons keep moving under a still pointer (zoom-in/out via
-        // zoomAmount, edge clamping), so the icon under it can change without a
-        // mouse move: re-run the hit test, coalesced to once per event-loop turn.
+        // Icons keep changing under a still pointer while zoom is engaged
+        // (zoom-in/out via zoomAmount; Parabolic also moves them and clamps
+        // at the edges), so the icon under it can change without a mouse
+        // move: re-run the hit test, coalesced to once per event-loop turn.
+        // Only while engaged: a delegate's first scale/offset notification
+        // (e.g. an icon appearing under a resting pointer) must not engage
+        // zoom; that takes real pointer input, as for every other icon.
         function scheduleHoverUpdate() {
-            if (zoomStyle !== 1 && mouseX >= 0 && !root._dragActive && !root.keyboardNavigating)
+            if (mouseInside && !root.keyboardNavigating)
                 Qt.callLater(root.updateHoveredItem)
         }
 
@@ -1185,7 +1193,6 @@ Item {
                         && !dockPanel.mouseInside
                     zoomScale: dockPanel.zoomLayout.scales?.[index] ?? 1.0
                     zoomOffset: dockPanel.zoomLayout.offsets?.[index] ?? 0.0
-                    zoomStyle: dockPanel.zoomStyle
                     itemCenterX: DockView.isVertical
                         ? root._primaryRestSlotStart(taskDelegate) + height / 2
                         : root._primaryRestSlotStart(taskDelegate) + width / 2

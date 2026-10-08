@@ -230,7 +230,11 @@ class DockSettings : public QObject {
 | `IconOpacityMinimized` | qreal | 0.5 | Icon opacity for minimized windows (0.1 to 1.0) |
 | `MaxZoomFactor` | qreal | 2.0 | Maximum zoom magnification |
 | `ZoomStyle` | int | `0` | How magnified icons make room: 0 = Parabolic (neighbours pushed aside, background grows), 1 = InPlace (icons overlap) |
-| `ZoomAnimationDuration` | int | 100 | Unscaled hover zoom transition baseline in milliseconds (0 to 1000); 100 matches normal-speed `Kirigami.Units.shortDuration`, Plasma animation scaling still applies, and 0 = instant |
+| `ZoomAnimationPreset` | int | 0 | Hover zoom animation preset (0 to 4): 0 = Natural (180 ms in, 240 ms out, ease in and out), 1 = Quick (100 ms ease out both ways), 2 = Relaxed (300 ms in, 400 ms out, gentle ease in and out), 3 = Instant (no transition), 4 = Custom (uses the four entries below). Durations are unscaled baselines; Plasma animation scaling still applies |
+| `ZoomInDuration` | int | 180 | Custom preset: zoom-in duration in milliseconds at normal animation speed (0 to 1000; 0 = snap) |
+| `ZoomOutDuration` | int | 240 | Custom preset: zoom-out duration in milliseconds at normal animation speed (0 to 1000; 0 = snap) |
+| `ZoomInEasing` | int | 3 | Custom preset: zoom-in easing (0 to 4): 0 = Linear, 1 = Ease in (`InCubic`), 2 = Ease out (`OutCubic`), 3 = Ease in and out (`InOutCubic`), 4 = Gentle ease in and out (`InOutSine`) |
+| `ZoomOutEasing` | int | 3 | Custom preset: zoom-out easing, same values as `ZoomInEasing` |
 | `CornerRadius` | int | 12 | Panel corner radius |
 | `Floating` | bool | true | Floating panel mode |
 | `VisibilityMode` | int | 0 | Dock visibility behavior |

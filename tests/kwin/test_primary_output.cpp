@@ -349,7 +349,7 @@ TEST_CASE("Dock surfaces land on and follow the Plasma primary output", "[primar
         // The preview surface lives on the same output as its dock.
         CHECK(QTest::qWaitFor(
             [&] {
-                return dockAndBoundMatch("krema-preview", newPrimary);
+                return dockAndBoundMatch("tooltip", newPrimary);
             },
             kTimeoutMs));
 
@@ -408,12 +408,12 @@ TEST_CASE("Each preview surface binds the same output as its dock (AllScreens)",
 
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return layerScreenNames("krema-preview") == dockScreens;
+            return layerScreenNames("tooltip") == dockScreens;
         },
         kTimeoutMs));
 
     // The bound wl_output must match the Qt screen for each preview too.
-    CHECK(boundOutputNames("krema-preview") == dockScreens);
+    CHECK(boundOutputNames("tooltip") == dockScreens);
 
     // Restore a neutral state for whichever case runs next under Randomized
     // ordering.

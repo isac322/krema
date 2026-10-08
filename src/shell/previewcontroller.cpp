@@ -87,7 +87,13 @@ void PreviewController::initialize()
             qCWarning(lcPreview) << "Dock view has no screen; preview surface not pinned";
         }
         layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-        layerWindow->setScope(QStringLiteral("krema-preview"));
+        // KWin types a layer surface only from its scope (layershellv1window.cpp
+        // scopeToType); an unknown name such as "krema-preview" becomes a Normal
+        // window. This surface stays mapped, so as a Normal window it would
+        // permanently top Slide Back's usable-window list (normal || dialog) and
+        // the effect would never fire. Plasma's own task-manager previews are
+        // tooltips too.
+        layerWindow->setScope(QStringLiteral("tooltip"));
         layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
         layerWindow->setExclusiveZone(0);
         layerWindow->setCloseOnDismissed(false);

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
-// Show Desktop must not hide the dock (issue #16).
+// Show Desktop must not hide the dock (issue #16), and no Krema surface may
+// block KWin's Slide Back effect.
 //
 // KWin decides what Show Desktop hides from the window type, and a layer-shell
 // surface gets its type only from its namespace (scope). The test drives the
@@ -9,6 +10,13 @@
 // Desktop through the same org.kde.KWin.showDesktop D-Bus call Meta+D reaches,
 // and reads KWin's own verdict (EffectWindow.hiddenByShowDesktop) from a
 // test-only scripted effect (effects/kremashowdesktopprobe) that logs it.
+//
+// The same probe logs EffectWindow.normalWindow and .dialog. Slide Back
+// (plugins/slideback/slideback.cpp) only fires when the topmost "usable"
+// window (normal or dialog, not keepAbove/minimized/deleted) changes, so an
+// always-mapped Krema surface typed Normal (any unknown scope) would
+// permanently top that list and disable the effect. Neither the dock nor the
+// pre-shown preview may be normal or dialog.
 //
 // A plain xdg toplevel from a child process is the control: it must be hidden,
 // which proves Show Desktop actually took effect.
@@ -109,6 +117,10 @@ struct ProbeWindow {
     QString windowClass;
     bool dock = false;
     bool hiddenByShowDesktop = false;
+    bool normal = false;
+    bool dialog = false;
+    bool keepAbove = false;
+    bool minimized = false;
     QSize size;
 };
 
@@ -155,6 +167,14 @@ QList<ProbeWindow> latestShowingWindows()
                 deleted = value == QLatin1String("true");
             } else if (key == QLatin1String("hiddenByShowDesktop")) {
                 window.hiddenByShowDesktop = value == QLatin1String("true");
+            } else if (key == QLatin1String("normal")) {
+                window.normal = value == QLatin1String("true");
+            } else if (key == QLatin1String("dialog")) {
+                window.dialog = value == QLatin1String("true");
+            } else if (key == QLatin1String("keepAbove")) {
+                window.keepAbove = value == QLatin1String("true");
+            } else if (key == QLatin1String("minimized")) {
+                window.minimized = value == QLatin1String("true");
             } else if (key == QLatin1String("size")) {
                 const auto wh = value.split(QLatin1Char('x'));
                 if (wh.size() == 2) {
@@ -178,10 +198,14 @@ std::string describe(const QList<ProbeWindow> &windows)
 {
     std::string out;
     for (const auto &w : windows) {
-        out += QStringLiteral("[%1 dock=%2 hiddenByShowDesktop=%3 %4x%5] ")
+        out += QStringLiteral("[%1 dock=%2 hiddenByShowDesktop=%3 normal=%4 dialog=%5 keepAbove=%6 minimized=%7 %8x%9] ")
                    .arg(w.windowClass)
                    .arg(w.dock)
                    .arg(w.hiddenByShowDesktop)
+                   .arg(w.normal)
+                   .arg(w.dialog)
+                   .arg(w.keepAbove)
+                   .arg(w.minimized)
                    .arg(w.size.width())
                    .arg(w.size.height())
                    .toStdString();
@@ -296,12 +320,14 @@ TEST_CASE("Show Desktop keeps the dock visible", "[show-desktop]")
     bool controlHidden = true;
     int docks = 0;
     bool dockKept = true;
+    QString kremaClass;
     for (const auto &w : windows) {
         if (isControl(w)) {
             controlHidden = controlHidden && w.hiddenByShowDesktop;
         } else if (isDock(w)) {
             ++docks;
             dockKept = dockKept && w.dock && !w.hiddenByShowDesktop;
+            kremaClass = w.windowClass;
         }
     }
 
@@ -311,6 +337,25 @@ TEST_CASE("Show Desktop keeps the dock visible", "[show-desktop]")
     // Exactly one dock surface, typed Dock by KWin and left on screen.
     REQUIRE(docks == 1);
     CHECK(dockKept);
+
+    // Slide Back: no Krema surface may be a usable window (normal or dialog).
+    // Krema surfaces share the dock's window class; the preview is the one
+    // that is not dock-sized. Requiring it to be present keeps the check from
+    // passing vacuously.
+    REQUIRE_FALSE(kremaClass.isEmpty());
+    int previews = 0;
+    bool kremaUnusable = true;
+    for (const auto &w : windows) {
+        if (isControl(w) || w.windowClass != kremaClass) {
+            continue;
+        }
+        if (!isDock(w)) {
+            ++previews;
+        }
+        kremaUnusable = kremaUnusable && !w.normal && !w.dialog;
+    }
+    REQUIRE(previews == 1);
+    CHECK(kremaUnusable);
 }
 
 int main(int argc, char *argv[])

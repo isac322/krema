@@ -29,7 +29,7 @@ FormCard.FormCardPage {
 
         FormCard.FormSpinBoxDelegate {
             label: i18n("Icon spacing")
-            from: 0; to: 16
+            from: 0; to: 64
             value: DockSettings.iconSpacing
             onValueChanged: DockSettings.iconSpacing = value
         }
@@ -142,6 +142,123 @@ FormCard.FormCardPage {
                     value: DockSettings.iconScale
                     onMoved: DockSettings.iconScale = value
                     Accessible.name: i18n("Icon scale")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.AbstractFormDelegate {
+            id: iconOpacityActiveDelegate
+            Accessible.name: i18n("Active window icon opacity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Active window icon opacity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconOpacityActiveDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconOpacityActiveSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconOpacityActiveSlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconOpacityActive
+                    onMoved: DockSettings.iconOpacityActive = value
+                    Accessible.name: i18n("Active window icon opacity")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.AbstractFormDelegate {
+            id: iconOpacityInactiveDelegate
+            Accessible.name: i18n("Inactive window and launcher icon opacity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Inactive window and launcher icon opacity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconOpacityInactiveDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconOpacityInactiveSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconOpacityInactiveSlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconOpacityInactive
+                    onMoved: DockSettings.iconOpacityInactive = value
+                    Accessible.name: i18n("Inactive window and launcher icon opacity")
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        FormCard.AbstractFormDelegate {
+            id: iconOpacityMinimizedDelegate
+            Accessible.name: i18n("Minimized window icon opacity")
+            background: null
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Minimized window icon opacity")
+                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        color: iconOpacityMinimizedDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    QQC2.Label {
+                        text: Math.round(iconOpacityMinimizedSlider.value * 100) + "%"
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                QQC2.Slider {
+                    id: iconOpacityMinimizedSlider
+                    Layout.fillWidth: true
+                    from: 0.1; to: 1.0; stepSize: 0.05
+                    value: DockSettings.iconOpacityMinimized
+                    onMoved: DockSettings.iconOpacityMinimized = value
+                    Accessible.name: i18n("Minimized window icon opacity")
                 }
             }
         }
@@ -470,7 +587,7 @@ FormCard.FormCardPage {
         FormCard.AbstractFormDelegate {
             id: lightZDelegate
             visible: DockSettings.shadowEnabled
-            Accessible.name: i18n("Light Z")
+            Accessible.name: i18n("Light height")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -481,7 +598,7 @@ FormCard.FormCardPage {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: i18n("Light Z (height)")
+                        text: i18n("Light height")
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -497,10 +614,10 @@ FormCard.FormCardPage {
                 QQC2.Slider {
                     id: lightZSlider
                     Layout.fillWidth: true
-                    from: 100; to: 2000; stepSize: 20
+                    from: 100; to: 2000; stepSize: 50
                     value: DockSettings.shadowLightZ
                     onMoved: DockSettings.shadowLightZ = value
-                    Accessible.name: i18n("Light Z")
+                    Accessible.name: i18n("Light height")
                 }
             }
         }
@@ -531,7 +648,7 @@ FormCard.FormCardPage {
                     }
 
                     QQC2.Label {
-                        text: lightRadiusSlider.value.toFixed(1) + "px"
+                        text: lightRadiusSlider.value.toFixed(1)
                         color: Kirigami.Theme.disabledTextColor
                     }
                 }
@@ -554,7 +671,7 @@ FormCard.FormCardPage {
         FormCard.AbstractFormDelegate {
             id: shadowElevationDelegate
             visible: DockSettings.shadowEnabled
-            Accessible.name: i18n("Elevation")
+            Accessible.name: i18n("Panel elevation")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -565,7 +682,7 @@ FormCard.FormCardPage {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: i18n("Elevation")
+                        text: i18n("Panel elevation")
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -584,7 +701,7 @@ FormCard.FormCardPage {
                     from: 1; to: 50; stepSize: 1
                     value: DockSettings.shadowElevation
                     onMoved: DockSettings.shadowElevation = value
-                    Accessible.name: i18n("Elevation")
+                    Accessible.name: i18n("Panel elevation")
                 }
             }
         }
@@ -650,7 +767,6 @@ FormCard.FormCardPage {
                 }
 
                 Rectangle {
-                    id: shadowColorPreview
                     width: Kirigami.Units.gridUnit * 2
                     height: Kirigami.Units.gridUnit * 1.5
                     radius: Kirigami.Units.smallSpacing

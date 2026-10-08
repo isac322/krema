@@ -14,6 +14,7 @@
 
 #include <QApplication>
 #include <QCursor>
+#include <QIcon>
 #include <QMenu>
 
 namespace krema
@@ -54,17 +55,17 @@ void DockContextMenu::showForTask(int index)
 
     // Pin / Unpin
     if (pinned) {
-        menu->addAction(i18nc("@action:inmenu", "Unpin from Dock"), this, [this, index]() {
+        menu->addAction(QIcon::fromTheme(QStringLiteral("window-unpin")), i18nc("@action:inmenu", "Unpin from Dock"), this, [this, index]() {
             m_actions->togglePinned(index);
         });
     } else {
-        menu->addAction(i18nc("@action:inmenu", "Pin to Dock"), this, [this, index]() {
+        menu->addAction(QIcon::fromTheme(QStringLiteral("window-pin")), i18nc("@action:inmenu", "Pin to Dock"), this, [this, index]() {
             m_actions->togglePinned(index);
         });
     }
 
     // New Instance
-    menu->addAction(i18nc("@action:inmenu", "New Instance"), this, [this, index]() {
+    menu->addAction(QIcon::fromTheme(QStringLiteral("list-add")), i18nc("@action:inmenu", "New Instance"), this, [this, index]() {
         m_actions->newInstance(index);
     });
 
@@ -72,7 +73,7 @@ void DockContextMenu::showForTask(int index)
     if (m_tracker != nullptr) {
         const QString appId = m_model->appId(index);
         if (!appId.isEmpty() && m_tracker->unreadCount(appId) > 0) {
-            menu->addAction(i18nc("@action:inmenu", "Clear Notifications"), this, [this, appId]() {
+            menu->addAction(QIcon::fromTheme(QStringLiteral("edit-clear-history")), i18nc("@action:inmenu", "Clear Notifications"), this, [this, appId]() {
                 m_tracker->clearUnreadNotifications(appId);
             });
         }
@@ -81,23 +82,23 @@ void DockContextMenu::showForTask(int index)
     // Close (only for running windows)
     if (isWindow) {
         menu->addSeparator();
-        menu->addAction(i18nc("@action:inmenu", "Close"), this, [this, index]() {
+        menu->addAction(QIcon::fromTheme(QStringLiteral("window-close")), i18nc("@action:inmenu", "Close"), this, [this, index]() {
             m_actions->closeTask(index);
         });
     }
 
     // Settings
     menu->addSeparator();
-    menu->addAction(i18nc("@action:inmenu", "Settings..."), this, [this]() {
+    menu->addAction(QIcon::fromTheme(QStringLiteral("configure")), i18nc("@action:inmenu", "Settings..."), this, [this]() {
         Q_EMIT settingsRequested();
     });
 
     // Standard KDE actions
     menu->addSeparator();
-    menu->addAction(i18nc("@action:inmenu", "About Krema"), this, [this]() {
+    menu->addAction(QIcon::fromTheme(QStringLiteral("help-about")), i18nc("@action:inmenu", "About Krema"), this, [this]() {
         Q_EMIT aboutRequested();
     });
-    menu->addAction(i18nc("@action:inmenu", "Quit"), qApp, &QApplication::quit);
+    menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18nc("@action:inmenu", "Quit"), qApp, &QApplication::quit);
 
     // Track menu visibility for interaction lock (dock stays visible while menu is open)
     Q_EMIT visibleChanged(true);

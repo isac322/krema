@@ -3,8 +3,10 @@
 
 // Test-only KWin effect for test_show_desktop.cpp. On every Show Desktop
 // toggle it logs KWin's own classification of each window, including
-// hiddenByShowDesktop, which only the effect API exposes. The test reads the
-// lines back from the KWin log (run-with-kwin.sh exports its path).
+// hiddenByShowDesktop, which only the effect API exposes, and the window-type
+// flags Slide Back uses to pick its usable windows (normal, dialog, keepAbove,
+// minimized). The test reads the lines back from the KWin log
+// (run-with-kwin.sh exports its path).
 let toggle = 0;
 effects.showingDesktopChanged.connect(function (showing) {
     toggle++;
@@ -17,6 +19,10 @@ effects.showingDesktopChanged.connect(function (showing) {
                      + " dock=" + w.dock
                      + " deleted=" + w.deleted
                      + " hiddenByShowDesktop=" + w.hiddenByShowDesktop
+                     + " normal=" + w.normalWindow
+                     + " dialog=" + w.dialog
+                     + " keepAbove=" + w.keepAbove
+                     + " minimized=" + w.minimized
                      + " size=" + Math.round(w.width) + "x" + Math.round(w.height));
     }
 });

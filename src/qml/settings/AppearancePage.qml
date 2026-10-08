@@ -470,7 +470,7 @@ FormCard.FormCardPage {
         FormCard.AbstractFormDelegate {
             id: lightZDelegate
             visible: DockSettings.shadowEnabled
-            Accessible.name: i18n("Light Z")
+            Accessible.name: i18n("Light height")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -481,7 +481,7 @@ FormCard.FormCardPage {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: i18n("Light Z (height)")
+                        text: i18n("Light height")
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -497,10 +497,10 @@ FormCard.FormCardPage {
                 QQC2.Slider {
                     id: lightZSlider
                     Layout.fillWidth: true
-                    from: 100; to: 2000; stepSize: 20
+                    from: 100; to: 2000; stepSize: 50
                     value: DockSettings.shadowLightZ
                     onMoved: DockSettings.shadowLightZ = value
-                    Accessible.name: i18n("Light Z")
+                    Accessible.name: i18n("Light height")
                 }
             }
         }
@@ -531,7 +531,7 @@ FormCard.FormCardPage {
                     }
 
                     QQC2.Label {
-                        text: lightRadiusSlider.value.toFixed(1) + "px"
+                        text: lightRadiusSlider.value.toFixed(1)
                         color: Kirigami.Theme.disabledTextColor
                     }
                 }
@@ -554,7 +554,7 @@ FormCard.FormCardPage {
         FormCard.AbstractFormDelegate {
             id: shadowElevationDelegate
             visible: DockSettings.shadowEnabled
-            Accessible.name: i18n("Elevation")
+            Accessible.name: i18n("Panel elevation")
             background: null
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
@@ -565,7 +565,7 @@ FormCard.FormCardPage {
 
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: i18n("Elevation")
+                        text: i18n("Panel elevation")
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -584,7 +584,7 @@ FormCard.FormCardPage {
                     from: 1; to: 50; stepSize: 1
                     value: DockSettings.shadowElevation
                     onMoved: DockSettings.shadowElevation = value
-                    Accessible.name: i18n("Elevation")
+                    Accessible.name: i18n("Panel elevation")
                 }
             }
         }
@@ -650,7 +650,6 @@ FormCard.FormCardPage {
                 }
 
                 Rectangle {
-                    id: shadowColorPreview
                     width: Kirigami.Units.gridUnit * 2
                     height: Kirigami.Units.gridUnit * 1.5
                     radius: Kirigami.Units.smallSpacing

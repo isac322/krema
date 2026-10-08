@@ -12,9 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
 
+### Changed
+
+- Dock right-click menu entries gained their standard KDE icons
+- The shadow settings were relabeled "Light height" and "Panel elevation" (formerly "Light Z (height)" and "Elevation"), the light height slider moved in steps of 50, and the light radius value stopped claiming to be in pixels
+
 ### Fixed
 
 - Pinned app-store screenshots to immutable image sources and corrected the settings screenshot caption
+- KWin's Slide Back effect never fired while Krema was running, because Krema's always-mapped window preview surface counted as an ordinary window stacked above all others; raising a window, including from the dock, slid covering windows aside again
 
 ## [0.10.0] - 2026-10-05
 

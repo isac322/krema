@@ -38,7 +38,7 @@ FormCard.FormCardPage {
             text: i18n("Only dodge active window")
             description: i18n("When off, hides for any overlapping window")
             checked: DockSettings.dodgeActiveOnly
-            onCheckedChanged: DockSettings.dodgeActiveOnly = checked
+            onToggled: DockSettings.dodgeActiveOnly = checked
             visible: DockSettings.visibilityMode === 2
         }
 

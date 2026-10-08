@@ -9,13 +9,130 @@ import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
 
 FormCard.FormCardPage {
+    id: page
+
     title: i18n("Behavior")
 
     // Responsive vertical padding: scales with page width
     topPadding: Math.round(Kirigami.Units.gridUnit * Math.max(0.5, Math.min(1.5, width / 800)))
     bottomPadding: topPadding
 
-    // --- Visibility Mode Card Picker ---
+    // Looping previews run only while the page is shown in a visible window.
+    readonly property bool previewsActive: page.visible
+        && page.Window.window !== null && page.Window.window.visible
+
+    // Simplified screen with a dock at its bottom edge. `mode` follows the
+    // VisibilityMode enum: 0 = static dock, 1 = auto hide (dock slides out
+    // and back), 2 = dodge (a window descends onto the dock, which hides).
+    component VisibilityPreview: Item {
+        id: preview
+
+        property int mode: 0
+        property bool running: false
+        // 0 = dock fully shown, 1 = dock fully hidden below the screen edge
+        property real dockHidden: 0
+        // 0 = window at the top of the screen, 1 = window overlapping the dock
+        property real windowDown: 0
+
+        Rectangle {
+            id: screen
+            anchors.centerIn: parent
+            height: parent.height
+            width: Math.min(parent.width, height * 1.6)
+            radius: Kirigami.Units.smallSpacing
+            clip: true
+            color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.06)
+            border.width: 1
+            border.color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.3)
+
+            // Application window (dodge mode only)
+            Rectangle {
+                visible: preview.mode === 2
+                width: screen.width * 0.6
+                height: screen.height * 0.55
+                x: (screen.width - width) / 2
+                y: Kirigami.Units.smallSpacing + preview.windowDown * (screen.height - height - Kirigami.Units.smallSpacing * 2)
+                radius: 2
+                color: Kirigami.Theme.alternateBackgroundColor
+                border.width: 1
+                border.color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.4)
+
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.margins: 1
+                    height: Math.max(3, parent.height * 0.15)
+                    color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.alternateBackgroundColor, Kirigami.Theme.textColor, 0.15)
+                }
+            }
+
+            // Dock
+            Rectangle {
+                id: dock
+                readonly property real shownY: screen.height - height - Kirigami.Units.smallSpacing
+                readonly property real hiddenY: screen.height + 1
+
+                width: dockIcons.implicitWidth + Kirigami.Units.smallSpacing * 2
+                height: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
+                x: (screen.width - width) / 2
+                y: shownY + preview.dockHidden * (hiddenY - shownY)
+                radius: Kirigami.Units.smallSpacing
+                color: Qt.alpha(Kirigami.Theme.highlightColor, 0.35)
+                border.width: 1
+                border.color: Kirigami.Theme.highlightColor
+
+                Row {
+                    id: dockIcons
+                    anchors.centerIn: parent
+                    spacing: 2
+
+                    Repeater {
+                        model: ["system-file-manager", "internet-web-browser", "utilities-terminal"]
+
+                        Kirigami.Icon {
+                            required property string modelData
+                            width: Kirigami.Units.iconSizes.small - 2
+                            height: width
+                            source: modelData
+                        }
+                    }
+                }
+            }
+        }
+
+        // Auto hide: dock slides away after inactivity, then comes back.
+        SequentialAnimation {
+            running: preview.running && preview.mode === 1
+            loops: Animation.Infinite
+            onStopped: preview.dockHidden = 0
+
+            PauseAnimation { duration: 1500 }
+            NumberAnimation { target: preview; property: "dockHidden"; to: 1; duration: 300; easing.type: Easing.InQuad }
+            PauseAnimation { duration: 1000 }
+            NumberAnimation { target: preview; property: "dockHidden"; to: 0; duration: 300; easing.type: Easing.OutQuad }
+        }
+
+        // Dodge: a window moves down onto the dock, the dock hides; the
+        // window moves away again and the dock returns.
+        SequentialAnimation {
+            running: preview.running && preview.mode === 2
+            loops: Animation.Infinite
+            onStopped: {
+                preview.dockHidden = 0
+                preview.windowDown = 0
+            }
+
+            PauseAnimation { duration: 800 }
+            NumberAnimation { target: preview; property: "windowDown"; to: 1; duration: 900; easing.type: Easing.InOutQuad }
+            NumberAnimation { target: preview; property: "dockHidden"; to: 1; duration: 200; easing.type: Easing.InQuad }
+            PauseAnimation { duration: 1000 }
+            NumberAnimation { target: preview; property: "windowDown"; to: 0; duration: 900; easing.type: Easing.InOutQuad }
+            NumberAnimation { target: preview; property: "dockHidden"; to: 0; duration: 200; easing.type: Easing.OutQuad }
+        }
+    }
+
+    // --- Visibility ---
     FormCard.FormHeader {
         title: i18n("Visibility")
     }
@@ -23,383 +140,167 @@ FormCard.FormCardPage {
     FormSection {
         FormCard.AbstractFormDelegate {
             background: null
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
+            hoverEnabled: false
+            focusPolicy: Qt.NoFocus
+            Accessible.role: Accessible.Grouping
+            Accessible.name: i18n("Visibility mode")
 
-                Repeater {
-                    model: ListModel {
-                        ListElement { modeIndex: 0; modeName: "Always Visible"; modeDesc: "Dock is always shown" }
-                        ListElement { modeIndex: 1; modeName: "Auto Hide"; modeDesc: "Hides after inactivity" }
-                        ListElement { modeIndex: 2; modeName: "Dodge Windows"; modeDesc: "Hides when windows overlap" }
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Visibility mode")
+                    wrapMode: Text.Wrap
+                    Accessible.ignored: true
+                }
+
+                GridLayout {
+                    id: visibilityGrid
+                    Layout.fillWidth: true
+                    columns: Math.max(1, Math.floor(width / (Kirigami.Units.gridUnit * 9)))
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.largeSpacing
+
+                    ChoiceCard {
+                        id: alwaysCard
+                        Layout.fillWidth: true
+                        text: i18n("Always visible")
+                        Binding { target: alwaysCard; property: "checked"; value: DockSettings.visibilityMode === 0 }
+                        onChosen: DockSettings.visibilityMode = 0
+
+                        VisibilityPreview {
+                            anchors.fill: parent
+                            mode: 0
+                        }
                     }
 
-                    Rectangle {
-                        required property int modeIndex
-                        required property string modeName
-                        required property string modeDesc
-
+                    ChoiceCard {
+                        id: autoHideCard
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 6
-                        radius: Kirigami.Units.smallSpacing
-                        color: Kirigami.Theme.backgroundColor
-                        border.color: DockSettings.visibilityMode === modeIndex
-                            ? Kirigami.Theme.highlightColor
-                            : "transparent"
-                        border.width: DockSettings.visibilityMode === modeIndex ? 2 : 0
+                        text: i18n("Auto hide")
+                        Binding { target: autoHideCard; property: "checked"; value: DockSettings.visibilityMode === 1 }
+                        onChosen: DockSettings.visibilityMode = 1
 
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: Kirigami.Units.smallSpacing
-
-                            // Mini animated preview
-                            Item {
-                                Layout.alignment: Qt.AlignHCenter
-                                width: Kirigami.Units.gridUnit * 5
-                                height: Kirigami.Units.gridUnit * 3
-
-                                // Monitor
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: "transparent"
-                                    border.color: Kirigami.Theme.textColor
-                                    border.width: 1
-                                    radius: 2
-
-                                    // Window (for dodge mode)
-                                    Rectangle {
-                                        id: windowRepr
-                                        visible: modeIndex === 2
-                                        width: parent.width * 0.5
-                                        height: parent.height * 0.6
-                                        x: (parent.width - width) / 2
-                                        color: Kirigami.Theme.alternateBackgroundColor
-                                        border.color: Kirigami.Theme.separatorColor ?? Kirigami.Theme.disabledTextColor
-                                        border.width: 1
-                                        radius: 1
-
-                                        SequentialAnimation on y {
-                                            running: DockSettings.visibilityMode === modeIndex && modeIndex === 2
-                                            loops: Animation.Infinite
-                                            NumberAnimation { from: 2; to: parent.height * 0.4; duration: 1000; easing.type: Easing.InOutQuad }
-                                            PauseAnimation { duration: 800 }
-                                            NumberAnimation { from: parent.height * 0.4; to: 2; duration: 1000; easing.type: Easing.InOutQuad }
-                                            PauseAnimation { duration: 800 }
-                                        }
-                                    }
-
-                                    // Dock bar
-                                    Rectangle {
-                                        id: miniDock
-                                        width: parent.width * 0.4
-                                        height: 4
-                                        x: (parent.width - width) / 2
-                                        color: Kirigami.Theme.highlightColor
-                                        radius: 1
-
-                                        property real baseY: parent.height - height - 2
-                                        property real hiddenY: parent.height + 2
-                                        y: baseY
-
-                                        // AutoHide animation
-                                        SequentialAnimation on y {
-                                            running: DockSettings.visibilityMode === modeIndex && modeIndex === 1
-                                            loops: Animation.Infinite
-                                            PauseAnimation { duration: 1500 }
-                                            NumberAnimation { to: miniDock.hiddenY; duration: 300; easing.type: Easing.InQuad }
-                                            PauseAnimation { duration: 1000 }
-                                            NumberAnimation { to: miniDock.baseY; duration: 300; easing.type: Easing.OutQuad }
-                                        }
-
-                                        // Dodge animation
-                                        SequentialAnimation on y {
-                                            running: DockSettings.visibilityMode === modeIndex && modeIndex === 2
-                                            loops: Animation.Infinite
-                                            PauseAnimation { duration: 1000 }
-                                            NumberAnimation { to: miniDock.hiddenY; duration: 200; easing.type: Easing.InQuad }
-                                            PauseAnimation { duration: 1600 }
-                                            NumberAnimation { to: miniDock.baseY; duration: 200; easing.type: Easing.OutQuad }
-                                            PauseAnimation { duration: 600 }
-                                        }
-                                    }
-                                }
-                            }
-
-                            QQC2.Label {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: i18n(modeName)
-                                font.bold: DockSettings.visibilityMode === modeIndex
-                            }
-                        }
-
-                        MouseArea {
+                        VisibilityPreview {
                             anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: DockSettings.visibilityMode = modeIndex
+                            mode: 1
+                            running: page.previewsActive
+                                && (autoHideCard.checked || autoHideCard.hovered || autoHideCard.activeFocus)
+                        }
+                    }
+
+                    ChoiceCard {
+                        id: dodgeCard
+                        Layout.fillWidth: true
+                        text: i18n("Dodge windows")
+                        Binding { target: dodgeCard; property: "checked"; value: DockSettings.visibilityMode === 2 }
+                        onChosen: DockSettings.visibilityMode = 2
+
+                        VisibilityPreview {
+                            anchors.fill: parent
+                            mode: 2
+                            running: page.previewsActive
+                                && (dodgeCard.checked || dodgeCard.hovered || dodgeCard.activeFocus)
                         }
                     }
                 }
             }
         }
 
-        // Dodge-only options
-        FormCard.FormDelegateSeparator { visible: DockSettings.visibilityMode === 2 }
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.visibilityMode === 0
+        }
 
         FormCard.FormSwitchDelegate {
+            text: i18n("Reserve screen space")
+            description: i18n("Maximized windows avoid the dock")
+            checked: DockSettings.reserveScreenSpace
+            onToggled: DockSettings.reserveScreenSpace = checked
+            visible: DockSettings.visibilityMode === 0
+        }
+
+        FormCard.FormDelegateSeparator {
             visible: DockSettings.visibilityMode === 2
+        }
+
+        FormCard.FormSwitchDelegate {
             text: i18n("Only dodge active window")
             description: i18n("When off, hides for any overlapping window")
             checked: DockSettings.dodgeActiveOnly
-            onCheckedChanged: DockSettings.dodgeActiveOnly = checked
+            onToggled: DockSettings.dodgeActiveOnly = checked
+            visible: DockSettings.visibilityMode === 2
         }
 
-        // Delay controls (AutoHide/Dodge)
-        FormCard.FormDelegateSeparator { visible: DockSettings.visibilityMode !== 0 }
-
-        FormCard.AbstractFormDelegate {
+        // Show/hide delay controls — only visible in hide-capable modes
+        FormCard.FormDelegateSeparator {
             visible: DockSettings.visibilityMode !== 0
-            Accessible.name: i18n("Show delay")
-            background: null
-            contentItem: ColumnLayout {
-                spacing: Kirigami.Units.smallSpacing
-                RowLayout {
-                    Layout.fillWidth: true
-                    QQC2.Label { Layout.fillWidth: true; text: i18n("Show delay") }
-                    QQC2.Label { text: showDelaySlider.value + "ms"; color: Kirigami.Theme.disabledTextColor }
-                }
-                QQC2.Slider {
-                    id: showDelaySlider
-                    Layout.fillWidth: true
-                    from: 0; to: 2000; stepSize: 50
-                    value: DockSettings.showDelay
-                    onMoved: DockSettings.showDelay = value
-                }
-            }
         }
 
-        FormCard.FormDelegateSeparator { visible: DockSettings.visibilityMode !== 0 }
-
-        FormCard.AbstractFormDelegate {
+        SliderDelegate {
             visible: DockSettings.visibilityMode !== 0
-            Accessible.name: i18n("Hide delay")
-            background: null
-            contentItem: ColumnLayout {
-                spacing: Kirigami.Units.smallSpacing
-                RowLayout {
-                    Layout.fillWidth: true
-                    QQC2.Label { Layout.fillWidth: true; text: i18n("Hide delay") }
-                    QQC2.Label { text: hideDelaySlider.value + "ms"; color: Kirigami.Theme.disabledTextColor }
-                }
-                QQC2.Slider {
-                    id: hideDelaySlider
-                    Layout.fillWidth: true
-                    from: 0; to: 2000; stepSize: 50
-                    value: DockSettings.hideDelay
-                    onMoved: DockSettings.hideDelay = value
-                }
-            }
+            text: i18n("Show delay (ms)")
+            from: 0; to: 2000; stepSize: 50
+            value: DockSettings.showDelay
+            valueText: i18nc("@label milliseconds", "%1 ms", value)
+            onMoved: (value) => DockSettings.showDelay = value
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.visibilityMode !== 0
+        }
+
+        SliderDelegate {
+            visible: DockSettings.visibilityMode !== 0
+            text: i18n("Hide delay (ms)")
+            from: 0; to: 2000; stepSize: 50
+            value: DockSettings.hideDelay
+            valueText: i18nc("@label milliseconds", "%1 ms", value)
+            onMoved: (value) => DockSettings.hideDelay = value
         }
     }
 
-    // --- Multi-Monitor ---
+    // --- Tasks ---
     FormCard.FormHeader {
-        title: i18n("Multi-Monitor")
+        title: i18n("Tasks")
     }
 
     FormSection {
-        FormCard.AbstractFormDelegate {
-            background: null
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
+        FormCard.FormSwitchDelegate {
+            text: i18n("Separate pinned and running apps")
+            description: i18n("Pinned apps, including running apps, stay together; unpinned running apps appear after the divider.")
+            checked: DockSettings.separateLaunchers
+            onToggled: DockSettings.separateLaunchers = checked
+        }
 
-                Repeater {
-                    model: ListModel {
-                        ListElement { modeIdx: 0; name: "Primary Only" }
-                        ListElement { modeIdx: 1; name: "All Monitors" }
-                        ListElement { modeIdx: 2; name: "Follow Active" }
-                    }
+        FormCard.FormDelegateSeparator {}
 
-                    Rectangle {
-                        required property int modeIdx
-                        required property string name
-
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 5
-                        radius: Kirigami.Units.smallSpacing
-                        color: Kirigami.Theme.backgroundColor
-                        border.color: DockSettings.monitorMode === modeIdx
-                            ? Kirigami.Theme.highlightColor
-                            : "transparent"
-                        border.width: DockSettings.monitorMode === modeIdx ? 2 : 0
-
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: Kirigami.Units.smallSpacing
-
-                            // Dual monitor diagram
-                            Row {
-                                Layout.alignment: Qt.AlignHCenter
-                                spacing: 3
-
-                                // Monitor 1
-                                Rectangle {
-                                    width: Kirigami.Units.gridUnit * 2.5; height: Kirigami.Units.gridUnit * 1.8
-                                    color: "transparent"; border.color: Kirigami.Theme.textColor; border.width: 1; radius: 1
-                                    Rectangle {
-                                        width: parent.width * 0.5; height: 3; radius: 1
-                                        x: (parent.width - width) / 2; y: parent.height - height - 2
-                                        color: (modeIdx === 0 || modeIdx === 1) ? Kirigami.Theme.highlightColor : "transparent"
-                                        border.color: modeIdx === 2 ? Kirigami.Theme.disabledTextColor : "transparent"
-                                        border.width: modeIdx === 2 ? 1 : 0
-                                    }
-                                }
-                                // Monitor 2
-                                Rectangle {
-                                    width: Kirigami.Units.gridUnit * 2.5; height: Kirigami.Units.gridUnit * 1.8
-                                    color: "transparent"; border.color: Kirigami.Theme.textColor; border.width: 1; radius: 1
-                                    Rectangle {
-                                        width: parent.width * 0.5; height: 3; radius: 1
-                                        x: (parent.width - width) / 2; y: parent.height - height - 2
-                                        color: modeIdx === 1 ? Kirigami.Theme.highlightColor : "transparent"
-                                        border.color: (modeIdx === 0 || modeIdx === 2) ? Kirigami.Theme.disabledTextColor : "transparent"
-                                        border.width: (modeIdx === 0 || modeIdx === 2) ? 1 : 0
-                                    }
-                                }
-                            }
-
-                            QQC2.Label {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: i18n(name)
-                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                font.bold: DockSettings.monitorMode === modeIdx
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: DockSettings.monitorMode = modeIdx
-                        }
-                    }
-                }
+        FormCard.FormComboBoxDelegate {
+            text: i18n("Single window click action")
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Activate window"),
+                i18n("Minimize active window")
+            ]
+            currentIndex: DockSettings.singleWindowClickAction
+            onActivated: function(index) {
+                DockSettings.singleWindowClickAction = index
             }
         }
 
-        // Follow Active options
-        FormCard.FormDelegateSeparator { visible: DockSettings.monitorMode === 2 }
+        FormCard.FormDelegateSeparator {}
 
         FormCard.FormComboBoxDelegate {
-            visible: DockSettings.monitorMode === 2
-            text: i18n("Follow trigger")
+            text: i18n("Grouped window click action")
             displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [i18n("Mouse position"), i18n("Active window focus"), i18n("Composite (focus + mouse)")]
-            currentIndex: DockSettings.followActiveTrigger
-            onActivated: function(index) { DockSettings.followActiveTrigger = index }
-        }
-
-        FormCard.FormDelegateSeparator { visible: DockSettings.monitorMode === 2 }
-
-        FormCard.FormComboBoxDelegate {
-            visible: DockSettings.monitorMode === 2
-            text: i18n("Screen transition")
-            displayMode: FormCard.FormComboBoxDelegate.Dialog
-            model: [i18n("Fade"), i18n("Slide"), i18n("Instant")]
-            currentIndex: DockSettings.screenTransition
-            onActivated: function(index) { DockSettings.screenTransition = index }
-        }
-    }
-
-    // --- Virtual Desktops ---
-    FormCard.FormHeader {
-        title: i18n("Virtual Desktops")
-    }
-
-    FormSection {
-        FormCard.AbstractFormDelegate {
-            background: null
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
-
-                Repeater {
-                    model: ListModel {
-                        ListElement { vdIndex: 0; vdName: "Show All" }
-                        ListElement { vdIndex: 1; vdName: "Dim Other" }
-                        ListElement { vdIndex: 2; vdName: "Current Only" }
-                    }
-
-                    Rectangle {
-                        required property int vdIndex
-                        required property string vdName
-
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 5
-                        radius: Kirigami.Units.smallSpacing
-                        color: Kirigami.Theme.backgroundColor
-                        border.color: DockSettings.virtualDesktopMode === vdIndex
-                            ? Kirigami.Theme.highlightColor
-                            : "transparent"
-                        border.width: DockSettings.virtualDesktopMode === vdIndex ? 2 : 0
-
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: Kirigami.Units.smallSpacing
-
-                            // Mini icon row with dimming
-                            Row {
-                                Layout.alignment: Qt.AlignHCenter
-                                spacing: 3
-                                // "Current desktop" icons
-                                Rectangle { width: 10; height: 10; radius: 2; color: Kirigami.Theme.textColor }
-                                Rectangle { width: 10; height: 10; radius: 2; color: Kirigami.Theme.textColor }
-                                // "Other desktop" icons
-                                Rectangle {
-                                    width: 10; height: 10; radius: 2
-                                    color: Kirigami.Theme.textColor
-                                    opacity: vdIndex === 0 ? 1.0 : (vdIndex === 1 ? DockSettings.otherDesktopOpacity : 0.0)
-                                    visible: vdIndex !== 2
-                                }
-                                Rectangle {
-                                    width: 10; height: 10; radius: 2
-                                    color: Kirigami.Theme.textColor
-                                    opacity: vdIndex === 0 ? 1.0 : (vdIndex === 1 ? DockSettings.otherDesktopOpacity : 0.0)
-                                    visible: vdIndex !== 2
-                                }
-                            }
-
-                            QQC2.Label {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: i18n(vdName)
-                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                font.bold: DockSettings.virtualDesktopMode === vdIndex
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: DockSettings.virtualDesktopMode = vdIndex
-                        }
-                    }
-                }
-            }
-        }
-
-        FormCard.FormDelegateSeparator { visible: DockSettings.virtualDesktopMode === 1 }
-
-        FormCard.AbstractFormDelegate {
-            visible: DockSettings.virtualDesktopMode === 1
-            Accessible.name: i18n("Other desktop opacity")
-            background: null
-            contentItem: ColumnLayout {
-                RowLayout {
-                    Layout.fillWidth: true
-                    QQC2.Label { text: i18n("Other desktop opacity"); Layout.fillWidth: true }
-                    QQC2.Label { text: Math.round(dimSlider.value * 100) + "%"; color: Kirigami.Theme.disabledTextColor }
-                }
-                QQC2.Slider {
-                    id: dimSlider
-                    Layout.fillWidth: true
-                    from: 0.1; to: 0.9; stepSize: 0.05
-                    value: DockSettings.otherDesktopOpacity
-                    onMoved: DockSettings.otherDesktopOpacity = value
-                }
+            model: [
+                i18n("Cycle through windows"),
+                i18n("Show window previews"),
+                i18n("Minimize active window")
+            ]
+            currentIndex: DockSettings.groupedWindowClickAction
+            onActivated: function(index) {
+                DockSettings.groupedWindowClickAction = index
             }
         }
     }

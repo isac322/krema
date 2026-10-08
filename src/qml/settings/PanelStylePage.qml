@@ -3,112 +3,252 @@
 
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Effects
 import QtQuick.Layouts
-import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
 
 FormCard.FormCardPage {
+    id: page
     title: i18n("Panel Style")
 
     // Responsive vertical padding: scales with page width
     topPadding: Math.round(Kirigami.Units.gridUnit * Math.max(0.5, Math.min(1.5, width / 800)))
     bottomPadding: topPadding
 
+    // Background style indices (BackgroundStyleType): 0 Panel Inherit,
+    // 1 Transparent, 2 Tinted, 3 Acrylic.
+    readonly property var styleNames: [
+        i18n("Panel Inherit"),
+        i18n("Transparent"),
+        i18n("Tinted"),
+        i18n("Acrylic")
+    ]
+    readonly property var styleDescriptions: [
+        i18n("Matches the Plasma panel"),
+        i18n("No background"),
+        i18n("Custom color overlay"),
+        i18n("Frosted glass blur")
+    ]
+
+    // Miniature dock drawn in one background style. Mirrors
+    // computeBackgroundColor() (src/style/backgroundstyle.cpp): Header color,
+    // or the Selection (accent) color when "Use accent color" is on, or the
+    // custom tint for Tinted without "Use system color"; alpha is the
+    // background opacity. Panel Inherit and Acrylic blur what is behind the
+    // dock; Acrylic adds the dock's tint + noise shader.
+    component StylePreview: Item {
+        id: preview
+
+        required property int styleIndex
+
+        readonly property bool blurred: styleIndex === 0 || styleIndex === 3
+        readonly property color baseColor: styleIndex === 2 && !DockSettings.useSystemColor
+            ? DockSettings.tintColor
+            : (DockSettings.useAccentColor ? accentColors.Kirigami.Theme.backgroundColor
+                                           : headerColors.Kirigami.Theme.backgroundColor)
+        readonly property color panelColor: Qt.alpha(baseColor, styleIndex === 1 ? 0.0 : DockSettings.backgroundOpacity)
+        readonly property real iconSize: Math.round(Kirigami.Units.gridUnit * 1.2)
+        readonly property real panelPadding: Kirigami.Units.smallSpacing
+
+        Accessible.ignored: true
+
+        Item {
+            id: headerColors
+            visible: false
+            Kirigami.Theme.colorSet: Kirigami.Theme.Header
+            Kirigami.Theme.inherit: false
+        }
+
+        Item {
+            id: accentColors
+            visible: false
+            Kirigami.Theme.colorSet: Kirigami.Theme.Selection
+            Kirigami.Theme.inherit: false
+        }
+
+        // Stand-in wallpaper with shapes behind the dock so transparency
+        // and blur are visible.
+        Rectangle {
+            id: backdrop
+            anchors.fill: parent
+            radius: Kirigami.Units.cornerRadius
+            clip: true
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: Kirigami.Theme.highlightColor }
+                GradientStop { position: 1.0; color: Kirigami.Theme.alternateBackgroundColor }
+            }
+
+            Rectangle {
+                width: backdrop.height * 0.7
+                height: width
+                radius: width / 2
+                x: backdrop.width * 0.12
+                y: backdrop.height * 0.45
+                color: Kirigami.Theme.positiveTextColor
+            }
+
+            Rectangle {
+                width: backdrop.height * 0.5
+                height: width
+                radius: width / 2
+                x: backdrop.width * 0.5
+                y: backdrop.height * 0.15
+                color: Kirigami.Theme.neutralTextColor
+            }
+
+            Rectangle {
+                width: backdrop.height * 0.6
+                height: width
+                radius: width / 2
+                x: backdrop.width * 0.68
+                y: backdrop.height * 0.55
+                color: Kirigami.Theme.negativeTextColor
+            }
+        }
+
+        Item {
+            id: dock
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Kirigami.Units.smallSpacing
+            width: Math.min(parent.width - 2 * Kirigami.Units.smallSpacing, iconRow.implicitWidth + 2 * preview.panelPadding)
+            height: preview.iconSize + 2 * preview.panelPadding
+
+            // Corner radius scaled from the real dock (cornerRadius at iconSize).
+            readonly property real radius: Math.min(height / 2,
+                DockSettings.cornerRadius * preview.iconSize / Math.max(1, DockSettings.iconSize))
+
+            ShaderEffectSource {
+                id: backdropSource
+                visible: false
+                sourceItem: preview.blurred ? backdrop : null
+                sourceRect: Qt.rect(dock.x, dock.y, dock.width, dock.height)
+            }
+
+            Rectangle {
+                id: dockMask
+                anchors.fill: parent
+                visible: false
+                radius: dock.radius
+                color: Kirigami.Theme.textColor
+                layer.enabled: preview.blurred
+            }
+
+            MultiEffect {
+                anchors.fill: parent
+                visible: preview.blurred
+                source: backdropSource
+                autoPaddingEnabled: false
+                blurEnabled: true
+                blur: 1.0
+                blurMax: 24
+                maskEnabled: true
+                maskSource: dockMask
+                maskThresholdMin: 0.5
+                maskSpreadAtMin: 1.0
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                visible: preview.styleIndex !== 3
+                radius: dock.radius
+                color: preview.panelColor
+                // Transparent has no background; outline the dock bounds faintly.
+                border.width: preview.styleIndex === 1 ? 1 : 0
+                border.color: Qt.alpha(Kirigami.Theme.textColor, 0.35)
+            }
+
+            // Acrylic: the dock's own tint + noise overlay (see main.qml).
+            ShaderEffect {
+                anchors.fill: parent
+                visible: preview.styleIndex === 3
+                property real tintR: preview.panelColor.r
+                property real tintG: preview.panelColor.g
+                property real tintB: preview.panelColor.b
+                property real tintOpacity: preview.panelColor.a
+                property real noiseStrength: 0.02
+                property real resX: width
+                property real resY: height
+                property real cornerRadius: dock.radius
+                fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
+            }
+
+            Row {
+                id: iconRow
+                anchors.centerIn: parent
+                spacing: Kirigami.Units.smallSpacing
+
+                Repeater {
+                    model: ["system-file-manager", "internet-web-browser", "utilities-terminal", "preferences-system"]
+
+                    Kirigami.Icon {
+                        required property string modelData
+                        width: preview.iconSize
+                        height: preview.iconSize
+                        source: modelData
+                    }
+                }
+            }
+        }
+    }
+
     // --- Style Card Picker ---
     FormCard.FormHeader {
-        title: i18n("Background Style")
+        title: i18n("Background")
     }
 
     FormSection {
         FormCard.AbstractFormDelegate {
+            id: stylePicker
             background: null
-            contentItem: GridLayout {
-                columns: 2
-                columnSpacing: Kirigami.Units.largeSpacing
-                rowSpacing: Kirigami.Units.largeSpacing
+            // The cards are the focusable controls; the wrapper only groups them.
+            focusPolicy: Qt.NoFocus
+            Accessible.role: Accessible.Grouping
+            Accessible.name: i18n("Style")
 
-                Repeater {
-                    model: ListModel {
-                        ListElement { styleIndex: 0; styleName: "Panel Inherit"; styleDesc: "Matches Plasma panel" }
-                        ListElement { styleIndex: 1; styleName: "Transparent"; styleDesc: "Fully transparent" }
-                        ListElement { styleIndex: 2; styleName: "Tinted"; styleDesc: "Custom color overlay" }
-                        ListElement { styleIndex: 3; styleName: "Acrylic"; styleDesc: "Frosted glass blur" }
-                    }
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
 
-                    Rectangle {
-                        required property int styleIndex
-                        required property string styleName
-                        required property string styleDesc
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Style")
+                    wrapMode: Text.Wrap
+                    Accessible.ignored: true
+                }
 
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 5
-                        radius: Kirigami.Units.smallSpacing
-                        color: Kirigami.Theme.backgroundColor
-                        border.color: DockSettings.backgroundStyle === styleIndex
-                            ? Kirigami.Theme.highlightColor
-                            : "transparent"
-                        border.width: DockSettings.backgroundStyle === styleIndex ? 2 : 0
-                        opacity: SettingsWindow.isStyleAvailable(styleIndex) ? 1.0 : 0.4
+                GridLayout {
+                    id: styleGrid
+                    Layout.fillWidth: true
+                    columns: Math.max(1, Math.min(4, Math.floor(width / (Kirigami.Units.gridUnit * 9))))
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.largeSpacing
 
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: Kirigami.Units.smallSpacing
+                    Repeater {
+                        model: 4
 
-                            // Mini dock preview with this style
-                            Rectangle {
-                                Layout.alignment: Qt.AlignHCenter
-                                width: Kirigami.Units.gridUnit * 6
-                                height: Kirigami.Units.gridUnit * 1.5
-                                radius: DockSettings.cornerRadius * 0.2
-                                color: {
-                                    switch (styleIndex) {
-                                    case 0: return Kirigami.Theme.backgroundColor
-                                    case 1: return "transparent"
-                                    case 2: return DockSettings.useSystemColor
-                                        ? (Kirigami.Theme.headerBackgroundColor ?? Kirigami.Theme.backgroundColor)
-                                        : DockSettings.tintColor
-                                    case 3: return Qt.rgba(
-                                        Kirigami.Theme.backgroundColor.r,
-                                        Kirigami.Theme.backgroundColor.g,
-                                        Kirigami.Theme.backgroundColor.b,
-                                        0.7)
-                                    }
-                                    return Kirigami.Theme.backgroundColor
-                                }
-                                opacity: styleIndex === 1 ? 0.3 : DockSettings.backgroundOpacity
-                                border.color: styleIndex === 1 ? Kirigami.Theme.separatorColor ?? Kirigami.Theme.disabledTextColor : "transparent"
-                                border.width: styleIndex === 1 ? 1 : 0
+                        ChoiceCard {
+                            id: styleCard
+                            required property int index
 
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 3
-                                    Repeater {
-                                        model: 4
-                                        Rectangle {
-                                            width: 8; height: 8; radius: 2
-                                            color: Kirigami.Theme.textColor
-                                            opacity: 0.6
-                                        }
-                                    }
-                                }
+                            Layout.fillWidth: true
+                            text: page.styleNames[index]
+                            description: page.styleDescriptions[index]
+                            available: SettingsWindow.isStyleAvailable(index)
+                            unavailableReason: i18n("Unavailable: not supported in this session")
+
+                            Binding {
+                                target: styleCard
+                                property: "checked"
+                                value: DockSettings.backgroundStyle === styleCard.index
                             }
+                            onChosen: DockSettings.backgroundStyle = index
 
-                            QQC2.Label {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: i18n(styleName)
-                                font.bold: DockSettings.backgroundStyle === styleIndex
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (SettingsWindow.isStyleAvailable(styleIndex)) {
-                                    DockSettings.backgroundStyle = styleIndex
-                                }
+                            StylePreview {
+                                anchors.fill: parent
+                                styleIndex: styleCard.index
                             }
                         }
                     }
@@ -117,48 +257,24 @@ FormCard.FormCardPage {
         }
     }
 
-    // --- Opacity ---
-    FormCard.FormHeader {
-        title: i18n("Appearance")
-        visible: DockSettings.backgroundStyle !== 1
-    }
-
+    // --- Controls for the selected style (none for Transparent) ---
     FormSection {
         visible: DockSettings.backgroundStyle !== 1
 
-        FormCard.AbstractFormDelegate {
-            id: opacityDelegate
-            Accessible.name: i18n("Opacity")
-            background: null
-            contentItem: ColumnLayout {
-                spacing: Kirigami.Units.smallSpacing
-                RowLayout {
-                    Layout.fillWidth: true
-                    QQC2.Label {
-                        Layout.fillWidth: true
-                        text: i18n("Opacity")
-                        color: opacityDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
-                    }
-                    QQC2.Label {
-                        text: Math.round(opacitySlider.value * 100) + "%"
-                        color: Kirigami.Theme.disabledTextColor
-                    }
-                }
-                QQC2.Slider {
-                    id: opacitySlider
-                    Layout.fillWidth: true
-                    from: 0.0; to: 1.0; stepSize: 0.05
-                    value: DockSettings.backgroundOpacity
-                    onMoved: DockSettings.backgroundOpacity = value
-                    Accessible.name: i18n("Opacity")
-                }
-            }
+        // Opacity (hidden for Transparent only)
+        SliderDelegate {
+            text: i18n("Opacity")
+            from: 0; to: 100; stepSize: 5
+            value: Math.round(DockSettings.backgroundOpacity * 100)
+            valueText: i18nc("@label percentage", "%1%", value)
+            onMoved: (value) => DockSettings.backgroundOpacity = value / 100
         }
 
         FormCard.FormDelegateSeparator {
-            visible: DockSettings.backgroundStyle === 2
+            visible: DockSettings.backgroundStyle === 2  // Tinted
         }
 
+        // Use system color (Tinted only)
         FormCard.FormSwitchDelegate {
             visible: DockSettings.backgroundStyle === 2
             text: i18n("Use system color")
@@ -171,43 +287,40 @@ FormCard.FormCardPage {
             visible: DockSettings.backgroundStyle === 2 && !DockSettings.useSystemColor
         }
 
+        // Tint color (Tinted with custom color)
         FormCard.AbstractFormDelegate {
             id: tintDelegate
             visible: DockSettings.backgroundStyle === 2 && !DockSettings.useSystemColor
             background: null
+            // The swatch is the focusable, accessible control; clicking the
+            // row opens the same dialog.
+            focusPolicy: Qt.NoFocus
+            Accessible.ignored: true
+            onClicked: tintSwatch.clicked()
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
+
                 QQC2.Label {
                     Layout.fillWidth: true
                     text: i18n("Tint color")
+                    elide: Text.ElideRight
                     color: tintDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    Accessible.ignored: true
                 }
-                Rectangle {
-                    width: Kirigami.Units.gridUnit * 2
-                    height: Kirigami.Units.gridUnit * 1.5
-                    radius: Kirigami.Units.smallSpacing
+
+                ColorSwatchButton {
+                    id: tintSwatch
+                    accessibleName: i18n("Tint color")
+                    dialogTitle: i18n("Choose tint color")
                     color: DockSettings.tintColor
-                    border.color: Kirigami.Theme.disabledTextColor
-                    border.width: 1
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: tintColorDialog.open()
-                    }
+                    onPicked: (color) => DockSettings.tintColor = color.toString()
                 }
             }
         }
 
-        ColorDialog {
-            id: tintColorDialog
-            title: i18n("Choose tint color")
-            selectedColor: DockSettings.tintColor
-            onAccepted: DockSettings.tintColor = selectedColor
-        }
-
         FormCard.FormDelegateSeparator {
-            visible: DockSettings.backgroundStyle !== 1
-                     && (DockSettings.backgroundStyle !== 2 || DockSettings.useSystemColor)
+            // Use accent color: Panel Inherit, Acrylic, or Tinted + system color
+            visible: DockSettings.backgroundStyle !== 2 || DockSettings.useSystemColor
         }
 
         FormCard.FormSwitchDelegate {

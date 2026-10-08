@@ -3,12 +3,14 @@
 
 #pragma once
 
+#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
 
 class KremaSettings;
-class QQmlApplicationEngine;
+class QQmlComponent;
+class QQmlEngine;
 class QQuickWindow;
 class QScreen;
 
@@ -18,9 +20,9 @@ namespace krema
 /**
  * Settings dialog window.
  *
- * Loads SettingsDialog.qml, whose root object is the settings window itself:
- * a sidebar of pages next to the selected page. The window is created once
- * per engine and only hidden on close.
+ * Creates the window from SettingsDialog.qml (a sidebar of pages next to the
+ * selected page) on every open and destroys it once it is closed. The QML
+ * engine and the compiled component are kept for faster reopening.
  *
  * One instance serves every dock and must outlive dock shells: settings
  * handlers (e.g. Monitor mode) rebuild the shells while they are running.
@@ -62,14 +64,18 @@ Q_SIGNALS:
 
 private:
     void open(const QString &defaultModule);
-    void ensureEngine();
-    void trackConfigWindow(QQuickWindow *win);
+    QQuickWindow *createWindow(const QString &defaultModule);
+    void onWindowHidden(QQuickWindow *win);
     void watchScreen(QScreen *screen);
     void updateAvailableScreens();
 
     KremaSettings *m_settings;
-    QQmlApplicationEngine *m_engine = nullptr;
+    QQmlEngine *m_engine = nullptr;
+    QQmlComponent *m_component = nullptr;
+    // The open window, if any.
     QPointer<QQuickWindow> m_configWindow;
+    // Closed windows whose deferred deletion has not run yet.
+    QList<QPointer<QQuickWindow>> m_closedWindows;
     QVariantList m_availableScreens;
     bool m_hasSelectedMonitorFallback = false;
     bool m_visible = false;

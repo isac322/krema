@@ -7,12 +7,16 @@
         <file>PreviewPopup.qml</file>
         <file>PreviewThumbnail.qml</file>
         <file>settings/FormSection.qml</file>
+        <file>settings/ChoiceCard.qml</file>
+        <file>settings/SliderDelegate.qml</file>
+        <file>settings/ColorSwatchButton.qml</file>
         <file>settings/IconsPage.qml</file>
         <file>settings/LayoutPage.qml</file>
         <file>settings/PanelStylePage.qml</file>
         <file>settings/ShadowPage.qml</file>
         <file>settings/AnimationsPage.qml</file>
         <file>settings/BehaviorPage.qml</file>
+        <file>settings/MonitorsPage.qml</file>
         <file>settings/PreviewPage.qml</file>
     </qresource>
 </RCC>

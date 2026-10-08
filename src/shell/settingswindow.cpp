@@ -12,7 +12,7 @@
 
 #include <QGuiApplication>
 #include <QLoggingCategory>
-#include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWindow>
@@ -50,17 +50,26 @@ SettingsWindow::SettingsWindow(KremaSettings *settings, QObject *parent)
 
 SettingsWindow::~SettingsWindow()
 {
-    // The settings window is the engine's root object, so deleting the engine
-    // below destroys it while its pages and bindings are still intact.
-    // Disconnect first so no close handling runs from here.
-    if (m_configWindow) {
-        disconnect(m_configWindow, nullptr, this, nullptr);
+    // Destroy the open window and any closed window still awaiting deferred
+    // deletion (#27) here, while the engine and the "SettingsWindow" context
+    // property are intact. Disconnect first so no close handling runs from
+    // here.
+    auto windows = std::exchange(m_closedWindows, {});
+    windows.append(m_configWindow);
+    m_configWindow = nullptr;
+    for (const auto &win : std::as_const(windows)) {
+        if (win) {
+            disconnect(win, nullptr, this, nullptr);
+            delete win.data();
+        }
     }
 
     // Delete the engine while the "SettingsWindow" context property still
     // resolves to this object. m_engine is only a QObject child, so a default
     // destructor would destroy it after this object's QML bindings are gone
     // and teardown would log TypeError (e.g. "isStyleAvailable of null").
+    delete m_component;
+    m_component = nullptr;
     delete m_engine;
     m_engine = nullptr;
 }
@@ -150,30 +159,16 @@ void SettingsWindow::show(const QString &defaultModule)
 
 void SettingsWindow::open(const QString &defaultModule)
 {
-    ensureEngine();
-
-    if (m_engine->rootObjects().isEmpty()) {
-        m_engine->load(QUrl(QStringLiteral("qrc:/qml/SettingsDialog.qml")));
-
-        if (m_engine->rootObjects().isEmpty()) {
-            qCWarning(lcSettingsWindow) << "Failed to load SettingsDialog.qml";
+    if (m_configWindow) {
+        // Already open: switch to the requested page and raise it.
+        if (!defaultModule.isEmpty()) {
+            QMetaObject::invokeMethod(m_configWindow, "openModule", Q_ARG(QVariant, defaultModule));
+        }
+    } else {
+        m_configWindow = createWindow(defaultModule);
+        if (!m_configWindow) {
             return;
         }
-    }
-
-    // The root object IS the settings window. It lives as long as the engine
-    // and is only hidden on close, so it is tracked and connected once.
-    if (!m_configWindow) {
-        auto *win = qobject_cast<QQuickWindow *>(m_engine->rootObjects().first());
-        if (!win) {
-            qCWarning(lcSettingsWindow) << "Root object of SettingsDialog.qml is not a QQuickWindow";
-            return;
-        }
-        trackConfigWindow(win);
-    }
-
-    if (!defaultModule.isEmpty()) {
-        QMetaObject::invokeMethod(m_configWindow, "openModule", Q_ARG(QVariant, defaultModule));
     }
 
     m_configWindow->show();
@@ -188,36 +183,73 @@ void SettingsWindow::open(const QString &defaultModule)
     }
 }
 
-void SettingsWindow::ensureEngine()
+QQuickWindow *SettingsWindow::createWindow(const QString &defaultModule)
 {
-    if (m_engine) {
+    if (!m_engine) {
+        m_engine = new QQmlEngine(this);
+        KLocalization::setupLocalizedContext(m_engine);
+
+        // Expose this object so settings QML can call
+        // SettingsWindow.isStyleAvailable() without process-global singleton
+        // registration or a per-dock object.
+        m_engine->rootContext()->setContextProperty(QStringLiteral("SettingsWindow"), this);
+
+        m_component = new QQmlComponent(m_engine, QUrl(QStringLiteral("qrc:/qml/SettingsDialog.qml")), QQmlComponent::PreferSynchronous, m_engine);
+    }
+
+    if (!m_component->isReady()) {
+        qCWarning(lcSettingsWindow) << "Failed to load SettingsDialog.qml:" << m_component->errorString();
+        return nullptr;
+    }
+
+    QObject *object = m_component->createWithInitialProperties({{QStringLiteral("defaultModule"), defaultModule}});
+    if (!object) {
+        qCWarning(lcSettingsWindow) << "Failed to create SettingsDialog.qml:" << m_component->errorString();
+        return nullptr;
+    }
+    auto *win = qobject_cast<QQuickWindow *>(object);
+    if (!win) {
+        qCWarning(lcSettingsWindow) << "Root object of SettingsDialog.qml is not a QQuickWindow";
+        delete object;
+        return nullptr;
+    }
+
+    // This object owns the window: it is destroyed on close and at teardown,
+    // never by the QML garbage collector.
+    QQmlEngine::setObjectOwnership(win, QQmlEngine::CppOwnership);
+    win->setIcon(QGuiApplication::windowIcon());
+
+    connect(win, &QWindow::visibleChanged, this, [this, win](bool visible) {
+        // Only forward close events — open is emitted by open().
+        if (!visible) {
+            onWindowHidden(win);
+        }
+    });
+
+    qCDebug(lcSettingsWindow) << "Created settings window:" << win;
+    return win;
+}
+
+void SettingsWindow::onWindowHidden(QQuickWindow *win)
+{
+    if (win != m_configWindow) {
         return;
     }
 
-    m_engine = new QQmlApplicationEngine(this);
-    KLocalization::setupLocalizedContext(m_engine);
+    // A closed window is destroyed rather than kept hidden; the next open
+    // creates a fresh one.
+    disconnect(win, nullptr, this, nullptr);
+    m_configWindow = nullptr;
+    m_closedWindows.removeIf([](const QPointer<QQuickWindow> &closed) {
+        return closed.isNull();
+    });
+    m_closedWindows.append(win);
+    win->deleteLater();
 
-    // Expose this object so settings QML can call
-    // SettingsWindow.isStyleAvailable() without process-global singleton
-    // registration or a per-dock object.
-    m_engine->rootContext()->setContextProperty(QStringLiteral("SettingsWindow"), this);
-}
-
-void SettingsWindow::trackConfigWindow(QQuickWindow *win)
-{
-    m_configWindow = win;
-    win->setIcon(QGuiApplication::windowIcon());
-
-    connect(win, &QWindow::visibleChanged, this, [this](bool visible) {
-        // Only forward close events — open is emitted by open().
-        if (visible || !m_visible) {
-            return;
-        }
+    if (m_visible) {
         m_visible = false;
         Q_EMIT visibleChanged(false);
-    });
-
-    qCDebug(lcSettingsWindow) << "Tracking settings window:" << win;
+    }
 }
 
 } // namespace krema

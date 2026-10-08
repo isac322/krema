@@ -42,7 +42,7 @@ Depends: ${shlibs:Depends},
          kirigami-addons-data,
          qml6-module-org-kde-pipewire,
          qml6-module-org-kde-kirigamiaddons-formcard,
-         qml6-module-org-kde-kirigamiaddons-settings,
+         qml6-module-org-kde-kirigamiaddons-delegates,
          qml6-module-qtquick-effects,
          plasma-workspace,
          liblayershellqtinterface6

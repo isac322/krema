@@ -29,7 +29,7 @@ FormCard.FormCardPage {
 
         FormCard.FormSpinBoxDelegate {
             label: i18n("Icon spacing")
-            from: 0; to: 16
+            from: 0; to: 64
             value: DockSettings.iconSpacing
             onValueChanged: DockSettings.iconSpacing = value
         }

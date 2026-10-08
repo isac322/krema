@@ -17,7 +17,7 @@
       <label>Spacing between icons</label>
       <default>4</default>
       <min>0</min>
-      <max>16</max>
+      <max>64</max>
     </entry>
 
     <entry name="MaxZoomFactor" type="Double">

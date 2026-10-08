@@ -31,18 +31,18 @@ TOOLBAR_XPATH = "//tool_bar[@name='Krema Dock']"
 ITEMS_XPATH = TOOLBAR_XPATH + "/button"
 PREVIEW_XPATH = "//popup_menu"
 THUMBNAILS_XPATH = PREVIEW_XPATH + "/button"
-#: The Settings window's frame (ConfigWindow, accessible name "Settings").
+#: The Settings window's frame (SettingsDialog.qml, title "Settings").
 SETTINGS_XPATH = "/*/frame[@name='Settings']"
 #: AT-SPI role of a Kirigami/QQC2 Page: QQuickPage::accessibleRole() is
-#: PageTab before Qt 6.11 and Pane (AT-SPI "panel") since.
+#: PageTab before Qt 6.11 and Pane (AT-SPI "panel") since. Each settings
+#: page is a FormCardPage named after its sidebar entry.
 PAGE_ROLE = "panel" if env.QT_VERSION >= (6, 11) else "page_tab"
-#: The Settings window's page stack (PageRow's StackView): the child of the
-#: window's content filler that holds the pages. Its own role differs across
-#: distros' Qt/Kirigami (panel on Debian 13 and Fedora, layered_pane on Ubuntu
-#: 25.04), so it is matched by its page children. Qt 6.11 makes every
-#: QQuickControl accessible, so ApplicationWindow's content control adds a
-#: filler level above the PageRow.
-SETTINGS_STACK_XPATH = SETTINGS_XPATH + ("/filler/filler/panel" if env.QT_VERSION >= (6, 11) else "/filler/*[page_tab]")
+#: The Settings window's sidebar ListView (Accessible.List "Settings pages").
+SETTINGS_SIDEBAR_XPATH = SETTINGS_XPATH + "//list[@name='Settings pages']"
+#: The sidebar's page entries (checkable RoundedItemDelegates; the checked one
+#: is the shown page). Matched by their description so the "About" section
+#: header is never counted as a page.
+SETTINGS_PAGES_XPATH = SETTINGS_SIDEBAR_XPATH + "//list_item[starts-with(@description, 'Settings page: ')]"
 
 #: Default kremarc for tests: nothing pinned, so the dock shows only what the
 #: test opens. Override per test via Krema(config=...).

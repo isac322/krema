@@ -17,6 +17,7 @@
 - src/qml/main.qml
 - src/qml/DockItem.qml
 - src/qml/ZoomAnimationProfile.qml
+- src/qml/settings/IconsPage.qml
 - src/utils/zoomcalculator.h
 - src/config/krema.kcfg
 - src/shell/dockview.h
@@ -220,8 +221,8 @@ neighbour's zoomed position as a click target.
 
 **Precondition:** Dock visible with multiple items. `ZoomAnimationPreset=0` (Natural, the default: 180 ms ease in and out on entering, 240 ms on leaving, at normal Plasma animation speed).
 **Steps:**
-1. Set `ZoomStyle=1` in `kremarc` (or choose "In place - icons overlap" in the "Zoom style" combo
-   in Appearance settings) and restart krema
+1. Set `ZoomStyle=1` in `kremarc` (or click the "In place - icons overlap" card in the "Zoom style"
+   group on the Icons settings page) and restart krema
 2. Record rest bounding boxes of all dock items from the AT-SPI tree
 3. Move the pointer to the center of a middle dock item
 4. Wait 300ms for the zoom-in animation

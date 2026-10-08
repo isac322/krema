@@ -18,7 +18,7 @@ asserted outcome::
     0  Pin to Dock / Unpin from Dock   CTX-002 / CTX-003 (kremarc PinnedLaunchers)
     1  New Instance                    CTX-004 (KWin window count +1)
     2  Close                           CTX-005 (KWin windows of the app gone)
-    3  Settings...                     CTX-006 (Settings window, Appearance page)
+    3  Settings...                     CTX-006 (Settings window, Icons page)
     4  About Krema                     CTX-001 (Settings window, About Krema page)
     5  Quit                            CTX-001 (krema exits with status 0)
 
@@ -37,7 +37,7 @@ from PIL import Image, ImageChops
 
 from krema_e2e import config, dbus, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import PAGE_ROLE, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state
+from krema_e2e.krema import PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state
 from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 
@@ -174,10 +174,11 @@ def test_ctx001_about_krema_is_the_fifth_entry(krema: Krema, apps: TestWindows) 
 
     win = wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from About Krema")
     assert win.pid == krema.pid
-    tab = krema.wait_for(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='About Krema']", timeout=15)
-    assert has_state(tab, "showing")
-    assert krema.find(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='Appearance']") is None
-    assert has_state(krema.wait_for(SETTINGS_XPATH + "//list_item[@name='About Krema']"), "checked")
+    page = krema.wait_for(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='About Krema']", timeout=15)
+    assert has_state(page, "showing")
+    assert krema.find(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='Icons']") is None
+    checked = [e.get_attribute("name") for e in krema.find_all(SETTINGS_PAGES_XPATH) if has_state(e, "checked")]
+    assert checked == ["About Krema"], f"sidebar selection {checked}"
 
 
 def test_ctx001_quit_is_the_last_entry(krema: Krema, apps: TestWindows) -> None:
@@ -342,15 +343,18 @@ def test_ctx006_settings_entry_opens_the_settings_window(krema: Krema, apps: Tes
     assert [w.internal_id for w in after] == [win.internal_id]
     assert win.pid == krema.pid and win.title == "Settings — Krema"
 
-    # AT-SPI: the Kirigami settings frame at the KWin window's position.
+    # AT-SPI: the settings frame at the KWin window's position.
     frame = krema.wait_for(SETTINGS_XPATH, timeout=10)
     assert has_state(frame, "showing")
     assert krema.surface_rect("settings") == Rect(*win.client_geometry)
-    pages = [e.get_attribute("name") for e in krema.find_all(SETTINGS_XPATH + "//list_item[@name!='']")]
-    for page in ("Appearance", "Behavior", "Window Preview", "About Krema", "About KDE"):
+    pages = [e.get_attribute("name") for e in krema.find_all(SETTINGS_PAGES_XPATH)]
+    for page in ("Icons", "Panel Style", "Behavior", "Monitors & Desktops", "Window Preview", "About Krema", "About KDE"):
         assert page in pages, f"{page!r} missing from settings pages {pages}"
-    krema.wait_for(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='Appearance']")
-    assert krema.find(SETTINGS_XPATH + "//label[@name='Icon size']") is not None
+    # The Icons page is shown by default and selected in the sidebar.
+    krema.wait_for(SETTINGS_XPATH + f"//{PAGE_ROLE}[@name='Icons']")
+    checked = [e.get_attribute("name") for e in krema.find_all(SETTINGS_PAGES_XPATH) if has_state(e, "checked")]
+    assert checked == ["Icons"], f"sidebar selection {checked}"
+    assert krema.find(SETTINGS_XPATH + "//slider[@name='Icon size']") is not None
     slider = krema.find(SETTINGS_XPATH + "//slider[@name='Zoom factor']")
     assert slider is not None and has_state(slider, "focusable")
 

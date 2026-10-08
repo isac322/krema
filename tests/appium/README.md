@@ -588,7 +588,7 @@ AT-SPI lookup (XPath tags are role names with `_`: `tool_bar`, `button`,
 | `settings() -> WebElement \| None` | The Settings window frame (`SETTINGS_XPATH`). |
 | `page_source() -> str` | Whole tree as XML. |
 | `has_state(element, state) -> bool` (module function) | `focused`, `showing`, `visible`, `focusable`, `sensitive`, `active`, ... |
-| Constants | `TOOLBAR_XPATH`, `ITEMS_XPATH`, `PREVIEW_XPATH`, `THUMBNAILS_XPATH`, `SETTINGS_XPATH`, `DEFAULT_CONFIG`; `PAGE_ROLE` (a Settings page is `page_tab` before Qt 6.11, `panel` since) and `SETTINGS_STACK_XPATH` (the Settings page stack, matched by its page children because its own role varies by distro; Qt 6.11 adds a `filler` level), both from `env.QT_VERSION` (runtime `qVersion()`) |
+| Constants | `TOOLBAR_XPATH`, `ITEMS_XPATH`, `PREVIEW_XPATH`, `THUMBNAILS_XPATH`, `SETTINGS_XPATH`, `SETTINGS_SIDEBAR_XPATH` (the Settings sidebar list "Settings pages"), `SETTINGS_PAGES_XPATH` (its page entries; the checked one is the shown page), `DEFAULT_CONFIG`; `PAGE_ROLE` (a Settings page is `page_tab` before Qt 6.11, `panel` since, from `env.QT_VERSION`, the runtime `qVersion()`) |
 
 Lookup cost. Every XPath lookup (`find`, `find_all`, `wait_for`, every
 `item*`/`preview*`/`surface_rect` helper) makes selenium-webdriver-at-spi
@@ -654,7 +654,7 @@ Input and UI flows:
 | `open_context_menu(name) -> kwin.Window` | Right-click and wait for the QMenu popup; returns its KWin window (screen geometry). |
 | `choose_context_menu_entry(label, entries)` | Keyboard selection (Down x position, Return) in the open menu. |
 | `context_menu_entries(pinned, is_window, has_notifications=False) -> list[str]` (module function) | Enabled menu entries in order, mirroring `src/models/dockcontextmenu.cpp`. |
-| `open_settings(via_item, entries=None) -> kwin.Window` | Open Settings through an item's context menu; returns the "Settings — Krema" window. |
+| `open_settings(via_item, entries=None) -> kwin.Window` | Open Settings through an item's context menu; returns the "Settings" window. |
 | `screenshot(name, area=None) -> PIL.Image.Image` | RGB screen image, also saved to `artifacts/<name of krema>/<name>.png`. With `area` only that part is captured, the rest is black, and the PNG holds only the area (see "Screenshots and previews"). |
 
 ### `krema_e2e.windows` (fixture windows)

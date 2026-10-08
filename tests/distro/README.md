@@ -331,9 +331,9 @@ two- and three-output legs cover those cases.
 All cases collected for the matching output count are expected to pass;
 no Krema bug is pinned with an xfail.
 Differences in distro libraries are handled in the harness rather than
-in expectations: Qt's AT-SPI roles and extents (`PAGE_ROLE`,
-`SETTINGS_STACK_XPATH`, `painted_rect()` in
-`tests/appium/krema_e2e/krema.py`, keyed on runtime `env.QT_VERSION`).
+in expectations: Qt's AT-SPI roles and extents (`PAGE_ROLE` and
+`painted_rect()` in `tests/appium/krema_e2e/krema.py`, keyed on runtime
+`env.QT_VERSION`).
 
 Per-phase wall time of a job when the images are published and the ccache
 is warm (4-vCPU runner; the runtime phases overlap the package phases):

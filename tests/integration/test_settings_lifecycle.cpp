@@ -3,10 +3,10 @@
 
 // Settings dialog lifecycle across dock shell rebuilds (issue #16).
 //
-// Drives the real settings QML (SettingsDialog.qml + BehaviorPage.qml) and the
-// real MultiDockManager against a KWin virtual compositor. Must run under
-// run-with-kwin.sh, which provides WAYLAND_DISPLAY, a private session bus and
-// throwaway XDG directories.
+// Drives the real settings QML (SettingsDialog.qml and its pages under
+// qml/settings/) and the real MultiDockManager against a KWin virtual
+// compositor. Must run under run-with-kwin.sh, which provides WAYLAND_DISPLAY,
+// a private session bus and throwaway XDG directories.
 
 #include "krema.h"
 #include "models/dockcontextmenu.h"
@@ -58,12 +58,19 @@ constexpr int kHideDelayMs = 50;
 // QML runtime errors (TypeError, ReferenceError, ...) raised by Krema's own
 // QML.
 QStringList g_qmlErrors;
+// Every warning raised by the settings window's QML (load errors, binding
+// loops, unknown properties, ...).
+QStringList g_settingsQmlWarnings;
 QtMessageHandler g_previousHandler = nullptr;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
 {
     if (type != QtDebugMsg && type != QtInfoMsg && message.startsWith(QLatin1String("qrc:/qml/")) && message.contains(QLatin1String("Error"))) {
         g_qmlErrors.append(message);
+    }
+    if (type != QtDebugMsg && type != QtInfoMsg
+        && (message.contains(QLatin1String("qrc:/qml/settings/")) || message.contains(QLatin1String("qrc:/qml/SettingsDialog.qml")))) {
+        g_settingsQmlWarnings.append(message);
     }
     g_previousHandler(type, context, message);
 }
@@ -199,18 +206,19 @@ int settingsWindowObjectCount()
     }));
 }
 
-// Item in the open settings dialog whose text is @p text and that exposes
-// @p signal (a sidebar entry's clicked() or a combobox's activated(int)).
-// Popup content such as the sidebar drawer is not always parented into the
-// window's item tree, so the window's QObject tree is searched as well.
-QQuickItem *findInSettings(const QString &text, const char *signal, bool mustBeVisible)
+// Item in the open settings dialog whose text is @p text and, when @p signal
+// is given, that exposes it (a sidebar entry's clicked(), a choice card's
+// chosen(), a switch's toggled(), ...). @p extra narrows the match further.
+// Items outside the window's item tree are found through its QObject tree.
+QQuickItem *findInSettings(const QString &text, const char *signal, bool mustBeVisible, const std::function<bool(QQuickItem *)> &extra = {})
 {
     auto *window = settingsWindow();
     if (!window) {
         return nullptr;
     }
     const auto match = [&](QQuickItem *item) {
-        return (!mustBeVisible || item->isVisible()) && item->property("text").toString() == text && item->metaObject()->indexOfSignal(signal) >= 0;
+        return (!mustBeVisible || item->isVisible()) && item->property("text").toString() == text && (!signal || item->metaObject()->indexOfSignal(signal) >= 0)
+            && (!extra || extra(item));
     };
     if (auto *item = findItem(window->contentItem(), match)) {
         return item;
@@ -220,10 +228,10 @@ QQuickItem *findInSettings(const QString &text, const char *signal, bool mustBeV
     return it != items.end() ? *it : nullptr;
 }
 
-// Settings page controls; pages stay cached (hidden) after switching away.
-QQuickItem *findControl(const QString &label)
+// A visible ChoiceCard (qml/settings/ChoiceCard.qml) labelled @p text.
+QQuickItem *findCard(const QString &text)
 {
-    return findInSettings(label, "activated(int)", true);
+    return findInSettings(text, "chosen()", true);
 }
 
 void openSettingsFrom(DockShell *shell)
@@ -237,7 +245,8 @@ void openSettingsFrom(DockShell *shell)
         kTimeoutMs));
 }
 
-// Selects a sidebar module the way a click does.
+// Selects a sidebar page the way a click does and waits until the page shows
+// the item labelled @p expectedControl.
 void showPage(const QString &moduleText, const QString &expectedControl)
 {
     // The sidebar creates its entries a few frames after the window maps.
@@ -251,20 +260,70 @@ void showPage(const QString &moduleText, const QString &expectedControl)
     QMetaObject::invokeMethod(entry, "clicked");
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return findControl(expectedControl) != nullptr;
+            return findInSettings(expectedControl, nullptr, true) != nullptr;
         },
         kTimeoutMs));
 }
 
-// Picks an entry in a settings combobox the way a user selection does: the
-// delegate's activated(int) signal runs the page's onActivated handler.
-void chooseInCombo(const QString &label, int index)
+// Selects a choice card the way a user selection does: the card's chosen()
+// signal runs the page's onChosen handler, which writes the setting.
+void chooseCard(const QString &text)
 {
-    auto *combo = findControl(label);
-    REQUIRE(combo);
-    QPointer<QQuickItem> guard(combo);
-    QMetaObject::invokeMethod(combo, "activated", Q_ARG(int, index));
+    auto *card = findCard(text);
+    REQUIRE(card);
+    REQUIRE(card->property("available").toBool());
+    QPointer<QQuickItem> guard(card);
+    QMetaObject::invokeMethod(card, "chosen");
     // The control the user just used must survive its own handler.
+    REQUIRE(guard);
+}
+
+// Monitor mode card labels on the "Monitors & Desktops" page
+// (MonitorsPage.qml monitorModeNames), indexed by
+// MultiDockManager::MonitorMode.
+QString monitorModeCard(MultiDockManager::MonitorMode mode)
+{
+    switch (mode) {
+    case MultiDockManager::PrimaryOnly:
+        return QStringLiteral("Primary monitor only");
+    case MultiDockManager::AllScreens:
+        return QStringLiteral("All monitors");
+    case MultiDockManager::FollowActive:
+        return QStringLiteral("Follow active screen");
+    case MultiDockManager::SelectedScreens:
+        return QStringLiteral("Selected monitors");
+    }
+    return {};
+}
+
+void showMonitorsPage()
+{
+    showPage(QStringLiteral("Monitors & Desktops"), monitorModeCard(MultiDockManager::PrimaryOnly));
+}
+
+void chooseMonitorMode(MultiDockManager::MonitorMode mode)
+{
+    chooseCard(monitorModeCard(mode));
+}
+
+// Screen edge zone labels on the "Layout & Position" page (LayoutPage.qml
+// edgeNames), indexed by the kcfg Edge enum.
+QString edgeZoneText(int edge)
+{
+    static const QStringList names{QStringLiteral("Top"), QStringLiteral("Bottom"), QStringLiteral("Left"), QStringLiteral("Right")};
+    return names.at(edge);
+}
+
+// Picks a screen edge the way a click on the monitor schematic does: the edge
+// zone's clicked() runs its onClicked handler, which writes DockSettings.edge.
+void chooseEdge(int edge)
+{
+    auto *zone = findInSettings(edgeZoneText(edge), "clicked()", true, [](QQuickItem *item) {
+        return item->property("edgeIdx").isValid();
+    });
+    REQUIRE(zone);
+    QPointer<QQuickItem> guard(zone);
+    QMetaObject::invokeMethod(zone, "clicked");
     REQUIRE(guard);
 }
 
@@ -344,10 +403,10 @@ TEST_CASE(
 
     openSettingsFrom(app().manager->primaryShell());
     QPointer<QQuickWindow> dialog = settingsWindow();
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
+    showMonitorsPage();
 
-    // QA-01, QA-03: PrimaryOnly -> AllScreens from the dialog's own combobox
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::AllScreens);
+    // QA-01, QA-03: PrimaryOnly -> AllScreens from the dialog's own mode cards
+    chooseMonitorMode(MultiDockManager::AllScreens);
     CHECK(app().settings->monitorMode() == MultiDockManager::AllScreens);
     CHECK(app().manager->shells().size() == 2);
 
@@ -356,9 +415,9 @@ TEST_CASE(
     CHECK(dialog == settingsWindow());
 
     // QA-08: further changes from the same dialog keep working
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::FollowActive);
+    chooseMonitorMode(MultiDockManager::FollowActive);
     CHECK(app().manager->shells().size() == 2);
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::PrimaryOnly);
+    chooseMonitorMode(MultiDockManager::PrimaryOnly);
     CHECK(app().manager->shells().size() == 1);
     CHECK(dialog == settingsWindow());
     CHECK(g_qmlErrors.isEmpty());
@@ -423,8 +482,8 @@ TEST_CASE(
     openSettingsFrom(app().manager->primaryShell());
     QPointer<QQuickWindow> dialog = settingsWindow();
     REQUIRE(dialog);
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::SelectedScreens);
+    showMonitorsPage();
+    chooseMonitorMode(MultiDockManager::SelectedScreens);
     REQUIRE(QTest::qWaitFor(
         [&] {
             return dialog->isActive();
@@ -487,11 +546,11 @@ TEST_CASE(
 {
     resetTo(MultiDockManager::PrimaryOnly);
     openSettingsFrom(app().manager->primaryShell());
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
+    showMonitorsPage();
 
     // QA-04: new shells created by the mode change inherit the open dialog's
     // lock (an unlocked auto-hide dock is hidden as soon as it is set up)
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::AllScreens);
+    chooseMonitorMode(MultiDockManager::AllScreens);
     REQUIRE(app().manager->shells().size() == 2);
     CHECK(allDocksVisible());
 
@@ -581,8 +640,8 @@ TEST_CASE("Settings requested from a rebuilt dock reuses the open dialog", "[set
     resetTo(MultiDockManager::PrimaryOnly);
     openSettingsFrom(app().manager->primaryShell());
     QPointer<QQuickWindow> dialog = settingsWindow();
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::AllScreens);
+    showMonitorsPage();
+    chooseMonitorMode(MultiDockManager::AllScreens);
 
     // QA-05: every shell, including the rebuilt ones, opens the same single
     // dialog, from both the "Settings..." and the "About" menu entries
@@ -605,9 +664,8 @@ TEST_CASE("Settings requested from a rebuilt dock reuses the open dialog", "[set
     CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
 }
 
-// Issue #24: on kirigami-addons < 1.8 ConfigurationView has no configViewItem,
-// so the window open() creates has to be found another way. The same contract
-// holds on every kirigami-addons version.
+// Issue #24: repeated requests must reuse the one open window, whatever
+// created it.
 TEST_CASE("Opening settings twice keeps one tracked window", "[settings][single-window]")
 {
     resetTo(MultiDockManager::PrimaryOnly);
@@ -651,7 +709,7 @@ TEST_CASE("Settings reopen cleanly after being closed", "[settings][reopen-after
     };
 
     openSettingsFrom(shell());
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
+    showMonitorsPage();
 
     // QA-06: Escape closes the dialog, releases the lock and destroys the
     // window instead of leaving a hidden one behind
@@ -685,24 +743,24 @@ TEST_CASE("Settings reopen cleanly after being closed", "[settings][reopen-after
     CHECK(g_qmlErrors.isEmpty());
 }
 
-TEST_CASE("Background style list reports style availability", "[settings][appearance]")
+TEST_CASE("Background style cards report style availability", "[settings][panel-style]")
 {
     resetTo(MultiDockManager::PrimaryOnly);
     openSettingsFrom(app().manager->primaryShell());
     // Rebuild the shells first so the dialog outlives the dock it was opened
     // from.
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::AllScreens);
-    showPage(QStringLiteral("Appearance"), QStringLiteral("Style"));
+    showMonitorsPage();
+    chooseMonitorMode(MultiDockManager::AllScreens);
+    showPage(QStringLiteral("Panel Style"), QStringLiteral("Panel Inherit"));
 
-    // QA-06: every style is available on this system, so none is marked
-    // unavailable
-    auto *combo = findControl(QStringLiteral("Style"));
-    REQUIRE(combo);
-    const auto entries = combo->property("model").toStringList();
-    CHECK(entries.size() == 4);
-    for (const auto &entry : entries) {
-        CHECK_FALSE(entry.contains(QLatin1String("unavailable")));
+    // QA-06: every style is available on this system, so none of the four
+    // style cards is marked unavailable
+    static const QStringList styles{QStringLiteral("Panel Inherit"), QStringLiteral("Transparent"), QStringLiteral("Tinted"), QStringLiteral("Acrylic")};
+    for (const auto &style : styles) {
+        INFO("style " << style.toStdString());
+        auto *card = findCard(style);
+        REQUIRE(card);
+        CHECK(card->property("available").toBool());
     }
     CHECK(g_qmlErrors.isEmpty());
 }
@@ -750,15 +808,15 @@ TEST_CASE("Settings reopen after a monitor mode round trip", "[settings][monitor
 {
     resetTo(MultiDockManager::PrimaryOnly);
     openSettingsFrom(app().manager->primaryShell());
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::AllScreens);
-    chooseInCombo(QStringLiteral("Monitor mode"), MultiDockManager::PrimaryOnly);
+    showMonitorsPage();
+    chooseMonitorMode(MultiDockManager::AllScreens);
+    chooseMonitorMode(MultiDockManager::PrimaryOnly);
     closeSettings();
 
     // QA-16: the docks torn down by the round trip leave nothing behind that
     // the compositor can still address when the next window is mapped
     openSettingsFrom(app().manager->primaryShell());
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Monitor mode"));
+    showMonitorsPage();
     CHECK(app().settings->monitorMode() == MultiDockManager::PrimaryOnly);
     closeSettings();
 }
@@ -768,14 +826,14 @@ TEST_CASE("Control: non-topology settings change from the dialog", "[settings][c
     resetTo(MultiDockManager::PrimaryOnly);
     openSettingsFrom(app().manager->primaryShell());
     QPointer<QQuickWindow> dialog = settingsWindow();
-    showPage(QStringLiteral("Behavior"), QStringLiteral("Screen edge"));
+    showPage(QStringLiteral("Layout & Position"), edgeZoneText(0));
 
     // QA-09: changing the edge (Top) is applied without rebuilding the dock
-    chooseInCombo(QStringLiteral("Screen edge"), 0);
+    chooseEdge(0);
     CHECK(app().settings->edge() == 0);
     CHECK(app().manager->primaryShell()->view()->edge() == 0);
     CHECK(dialog == settingsWindow());
-    chooseInCombo(QStringLiteral("Screen edge"), 1);
+    chooseEdge(1);
     closeSettings();
 }
 
@@ -821,6 +879,40 @@ void checkSettingsTornDown(const QPointer<QQuickWindow> &window)
 }
 
 } // namespace
+
+TEST_CASE("Every settings page loads without QML warnings", "[settings][pages]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    g_settingsQmlWarnings.clear();
+    openSettingsFrom(app().manager->primaryShell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
+    REQUIRE(dialog);
+    auto *loader = dialog->findChild<QQuickItem *>(QStringLiteral("settingsPageLoader"));
+    REQUIRE(loader);
+
+    const auto modules = dialog->property("modules").toList();
+    REQUIRE(modules.size() == 10);
+    for (const auto &entry : modules) {
+        const QString moduleId = entry.toMap().value(QStringLiteral("moduleId")).toString();
+        INFO("module " << moduleId.toStdString());
+        QMetaObject::invokeMethod(dialog, "openModule", Q_ARG(QVariant, moduleId));
+        CHECK(dialog->property("currentModule").toString() == moduleId);
+        REQUIRE(QTest::qWaitFor(
+            [loader] {
+                return loader->property("status").toInt() == 1 /* Loader.Ready */ && loader->property("item").value<QQuickItem *>();
+            },
+            kTimeoutMs));
+        // Let delayed bindings, nested Loaders and animations of the page start.
+        QTest::qWait(300);
+        CHECK(g_settingsQmlWarnings.isEmpty());
+        if (!g_settingsQmlWarnings.isEmpty()) {
+            UNSCOPED_INFO(g_settingsQmlWarnings.join(QLatin1Char('\n')).toStdString());
+            g_settingsQmlWarnings.clear();
+        }
+    }
+    closeSettings();
+    CHECK(g_settingsQmlWarnings.isEmpty());
+}
 
 TEST_CASE("Shutting down with the settings dialog open", "[settings][shutdown]")
 {

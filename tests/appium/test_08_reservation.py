@@ -20,16 +20,19 @@ from krema_e2e.krema import Krema, Rect, has_state
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindow, TestWindows
 from test_06_settings import (
+    ICON_SIZE_SLIDER,
     RESERVE_SWITCH,
     SETTINGS,
-    choose,
     click_el,
     close_settings,
     config_value,
+    focus_slider,
     open_page,
     open_settings,
+    pick,
     reveal_dock,
     scroll_into_view,
+    slider_value,
 )
 from test_07_visibility import maximize
 
@@ -321,16 +324,16 @@ def test_vis009_live_icon_size_and_floating_update_maximized_consumer(krema: Kre
     initial = _geometry(krema, win, edge, True, "initial-size-flat")
     pid = krema.pid
     _behavior(krema, edge=edge)
-    open_page(krema, "Appearance")
-    spin = scroll_into_view(krema, f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
-    click_el(krema, spin)
-    before_size = float(spin.get_attribute("value"))
-    inp.key("up")
-    wait_until(lambda: float(spin.get_attribute("value")) > before_size, message="icon size increased through native control")
+    open_page(krema, "Icons")
+    slider = focus_slider(krema, ICON_SIZE_SLIDER, 24, 96)
+    before_size = slider_value(slider)
+    inp.key("right")
+    wait_until(lambda: slider_value(slider) > before_size, message="icon size increased through native control")
     _park()
     resized = _geometry(krema, win, edge, True, "larger-icons")
     assert resized["workarea"][2] * resized["workarea"][3] < initial["workarea"][2] * initial["workarea"][3], (initial, resized)
     assert resized["icon"][2] > initial["icon"][2], (initial, resized)
+    open_page(krema, "Layout & Position")
     floating_xpath = f"{SETTINGS}//check_box[@name='Floating']"
     for floating in (True, False):
         switch = scroll_into_view(krema, floating_xpath)
@@ -381,7 +384,7 @@ def test_vis009_visibility_policy_ignores_and_retains_reservation_preference(
     pid = krema.pid
     for label, mode in (("Auto hide", config.AUTO_HIDE), ("Dodge windows", config.DODGE_WINDOWS)):
         _behavior(krema, edge=edge)
-        choose(krema, "Visibility mode", label)
+        pick(krema, "Visibility mode", label)
         wait_until(lambda: config_value(krema, "VisibilityMode") == str(mode), message=f"visibility policy {label} saved")
         _geometry(krema, win, edge, False, f"{label}-settings-open")
         close_settings(krema)
@@ -391,7 +394,7 @@ def test_vis009_visibility_policy_ignores_and_retains_reservation_preference(
         _geometry(krema, win, edge, False, f"{label}-hidden")
         assert config.as_bool(config_value(krema, "ReserveScreenSpace") or "true") == reserved
     _behavior(krema, edge=edge)
-    choose(krema, "Visibility mode", "Always visible")
+    pick(krema, "Visibility mode", "Always visible")
     assert has_state(scroll_into_view(krema, RESERVE_SWITCH), "checked") == reserved
     close_settings(krema)
     _park()
@@ -535,11 +538,11 @@ def test_vis009_fresh_config_default_reserves_screen_space_for_maximized_consume
         encoding="utf-8",
     )
     for mode in ("Auto hide", "Dodge windows"):
-        choose(krema, "Visibility mode", mode)
+        pick(krema, "Visibility mode", mode)
         assert not any(has_state(row, "showing") for row in krema.find_all(RESERVE_SWITCH)), (
             f"reservation preference must not be available in {mode}"
         )
-    choose(krema, "Visibility mode", "Always visible")
+    pick(krema, "Visibility mode", "Always visible")
     restored = scroll_into_view(krema, RESERVE_SWITCH)
     assert has_state(restored, "showing") and has_state(restored, "checked")
     _park()

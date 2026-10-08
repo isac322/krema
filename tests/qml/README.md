@@ -93,7 +93,8 @@ properties they expose (for example, the indicator `Flow` or the badge's
 - Real rendering: icons (the `image://icon` provider is absent),
   shaders/`MultiEffect` (software backend), and PipeWire frames. Tier 2
   (`tests/appium`, a real KWin session) covers these.
-- `SettingsDialog.qml` and `settings/*.qml` (Kirigami Addons
-  `ConfigurationView`).
+- `SettingsDialog.qml` and `settings/*.qml`: the integration test
+  `tests/integration/test_settings_lifecycle.cpp` loads every page in a KWin
+  session, and Tier 2 drives them.
 - The external file drop in `main.qml` (`DropArea` with URLs). Qt Quick Test
   has no API to synthesize a drag carrying MIME data.

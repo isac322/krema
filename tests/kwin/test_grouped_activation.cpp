@@ -343,6 +343,45 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
         kTimeoutMs));
 }
 
+TEST_CASE("A launcher pinned by file URL counts as pinned and toggles off", "[grouped-activation]")
+{
+    const QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    REQUIRE(QDir().mkpath(dataHome + QStringLiteral("/applications")));
+    QFile desktop(dataHome + QStringLiteral("/applications/krema-pintest.desktop"));
+    REQUIRE(desktop.open(QIODevice::WriteOnly));
+    desktop.write("[Desktop Entry]\nType=Application\nName=Krema Pin Test\nExec=true\nIcon=application-x-executable\n");
+    desktop.close();
+    QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+
+    // A pinned-launcher list loaded from settings keeps the file URL string,
+    // while the row reports an applications: URL, so a string lookup in
+    // launcherList() misses it.
+    const QUrl url = QUrl::fromLocalFile(desktop.fileName());
+    auto *tasks = model().tasksModel();
+    const QStringList saved = model().pinnedLaunchers();
+    model().setPinnedLaunchers(saved + QStringList{url.toString()});
+    const auto restore = qScopeGuard([&] {
+        model().setPinnedLaunchers(saved);
+    });
+    INFO("launchers " << tasks->launcherList().join(u'|').toStdString());
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return launcherRow(url) >= 0;
+        },
+        kTimeoutMs));
+    INFO("row url " << tasks->index(launcherRow(url), 0).data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl().toString().toStdString());
+    CHECK(model().isPinned(launcherRow(url)));
+
+    krema::DockActions actions(&model());
+    actions.togglePinned(launcherRow(url));
+    CHECK(tasks->launcherPosition(url) == -1);
+    CHECK(QTest::qWaitFor(
+        [&] {
+            return launcherRow(url) < 0;
+        },
+        kTimeoutMs));
+}
+
 TEST_CASE("Clicking a group returns to its most recently used window", "[grouped-activation]")
 {
     REQUIRE(noStaleTestWindows());

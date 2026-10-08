@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Pinned app-store screenshots to immutable image sources and corrected the settings screenshot caption
 - KWin's Slide Back effect never fired while Krema was running, because Krema's always-mapped window preview surface counted as an ordinary window stacked above all others; raising a window, including from the dock, slid covering windows aside again
+- Apps pinned by a `.desktop` file path, or pinned only to specific Plasma Activities, are now recognized as pinned: the context menu offers "Unpin from Dock" instead of "Pin to Dock" and unpinning works, and "Separate pinned and running apps" keeps them on the pinned side
 
 ## [0.10.0] - 2026-10-05
 

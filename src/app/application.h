@@ -7,6 +7,7 @@
 
 #include <memory>
 
+class KAboutData;
 class KActionCollection;
 class KremaSettings;
 
@@ -26,7 +27,13 @@ public:
     Application(int &argc, char **argv);
     ~Application() override;
 
-    int run();
+    /// Starts the dock with @p aboutData, the metadata main() built with
+    /// makeAboutData() and updated from the command line (--desktopfile).
+    int run(const KAboutData &aboutData);
+
+    /// The application metadata, defined once; usable before a QApplication
+    /// exists.
+    static KAboutData makeAboutData();
 
     /// Saves @p settings to disk whenever one of its user-facing entries
     /// changes. PinnedLaunchers is saved by its own handler in run().

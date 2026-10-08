@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
+- `krema --version`, `--help`, `--author` and `--license` now print their information and exit, also without a display (handy for package smoke checks) and while the dock is already running; unknown options stop with an error instead of being silently ignored
 - Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
 
 ### Changed

@@ -50,6 +50,17 @@ Application::~Application()
     TaskIconProvider::clearRawIcons();
 }
 
+KAboutData Application::makeAboutData()
+{
+    KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral(KREMA_VERSION_STRING), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
+    aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
+    aboutData.setOrganizationDomain(QByteArrayLiteral("bhyoo.com"));
+    aboutData.setHomepage(QStringLiteral("https://krema.bhyoo.com/"));
+    aboutData.setBugAddress(QByteArrayLiteral("https://github.com/isac322/krema/issues"));
+    aboutData.setDesktopFileName(QStringLiteral("com.bhyoo.krema"));
+    return aboutData;
+}
+
 void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *context)
 {
     auto saveSettings = [settings]() {
@@ -104,7 +115,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::SeparateLaunchersChanged, context, saveSettings);
 }
 
-int Application::run()
+int Application::run(const KAboutData &aboutData)
 {
     // Ensure Qt Quick Controls use the KDE Plasma style (needed for Kirigami theming)
     if (QQuickStyle::name().isEmpty()) {
@@ -114,14 +125,9 @@ int Application::run()
     // Initialize KDE crash handler (must be called early)
     KCrash::initialize();
 
-    // Set up KDE application metadata (required for KGlobalAccel, D-Bus, etc.)
-    KAboutData aboutData(QStringLiteral("krema"), i18n("Krema"), QStringLiteral(KREMA_VERSION_STRING), i18n("A dock for KDE Plasma 6"), KAboutLicense::GPL_V3);
-    aboutData.addAuthor(i18n("Byeonghoon Yoo"), {}, QStringLiteral("bhyoo@bhyoo.com"));
-    aboutData.setOrganizationDomain(QByteArrayLiteral("bhyoo.com"));
-    aboutData.setHomepage(QStringLiteral("https://krema.bhyoo.com/"));
-    aboutData.setBugAddress(QByteArrayLiteral("https://github.com/isac322/krema/issues"));
+    // Set up KDE application metadata (required for KGlobalAccel, D-Bus, etc.);
+    // also sets the desktop file name.
     KAboutData::setApplicationData(aboutData);
-    setDesktopFileName(QStringLiteral("com.bhyoo.krema"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("com.bhyoo.krema")));
 
     // Enforce single instance via D-Bus (exits if another instance is already running)

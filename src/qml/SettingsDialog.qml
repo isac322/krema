@@ -208,6 +208,10 @@ Kirigami.AbstractApplicationWindow {
                     Layout.fillWidth: true
                     Layout.margins: Kirigami.Units.smallSpacing
                     Accessible.name: i18n("Search settings")
+                    // Filtering follows `text` live; only Return opens a
+                    // match (the default auto-accept would switch pages
+                    // while the user is still typing).
+                    autoAccept: false
 
                     KeyNavigation.down: sidebarList
                     KeyNavigation.tab: sidebarList

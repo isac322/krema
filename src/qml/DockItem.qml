@@ -207,8 +207,6 @@ Item {
     // shift of the icon centre from its rest centre (always 0 for InPlace).
     property real zoomScale: 1.0
     property real zoomOffset: 0.0
-    // ZoomStyle (krema.kcfg): 0 = Parabolic, 1 = InPlace.
-    property int zoomStyle: 0
 
     // --- KDE state-driven launch tracking ---
     //
@@ -399,54 +397,17 @@ Item {
         }
     }
 
-    // Rendered zoom state. Parabolic tracks the layout directly (its zoom-in/out
-    // is smoothed by main.qml's zoomAmount, so nothing retargets per mouse move);
-    // InPlace eases each icon's scale towards its target instead.
-    property real currentScale: 1.0
+    // Rendered zoom state: a direct function of the zoom layout. Both zoom
+    // styles ease in/out through main.qml's global zoomAmount, so nothing here
+    // animates or retargets per mouse move.
+    readonly property real currentScale: zoomScale
     readonly property real currentOffset: zoomOffset
     readonly property real primaryTranslate: currentOffset + restOffset
-    property bool _zoomAnimReady: false
-    // The setting is an unscaled baseline: 100 ms matches shortDuration at
-    // normal speed. Plasma scaling also makes Instant/reduced motion snap.
-    readonly property int _effectiveZoomAnimationDuration: Math.round(
-        DockSettings.zoomAnimationDuration * Kirigami.Units.shortDuration / 100.0)
 
-    Behavior on currentScale {
-        enabled: dockItem._zoomAnimReady && dockItem.zoomStyle === 1 && dockItem._effectiveZoomAnimationDuration > 0
-        NumberAnimation {
-            duration: dockItem._effectiveZoomAnimationDuration
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    onZoomScaleChanged: currentScale = zoomScale
-
-    // When item position shifts due to model reorganization (e.g. hideActivatedLaunchers
-    // merges a launcher with its window, causing other delegates to shift), suppress
-    // zoom animation to prevent the visual glitch where shifted icons animate their scale.
-    // Normal mouse-driven zoom doesn't change itemCenterX, so this only fires during
-    // model/layout changes.
-    onItemCenterXChanged: {
-        if (_zoomAnimReady) {
-            _zoomAnimReady = false
-            currentScale = zoomScale
-            Qt.callLater(function() { _zoomAnimReady = true })
-        }
-    }
-
-    // On delegate creation: apply zoom instantly (no animation) to avoid glitch
-    // when Repeater recreates delegates due to model changes.
-    // Qt.callLater() defers _zoomAnimReady until AFTER the Flow layout has set
-    // the delegate's x position, ensuring itemCenterX and zoom targets are correct.
     Component.onCompleted: {
         _prevChildCount = _childCount
-        currentScale = zoomScale    // best guess pre-layout
         _delegateGeometryReady = true
         scheduleDelegateGeometryPublication()
-        Qt.callLater(function() {
-            currentScale = zoomScale  // correct value after layout
-            _zoomAnimReady = true
-        })
 
         // Debug: log appId for notification matching verification
         Qt.callLater(function() {

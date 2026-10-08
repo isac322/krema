@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
+- Added zoom animation presets in Appearance (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
+
+### Changed
+
+- Hover zoom now eased in and out by default (180 ms in, 240 ms out at normal animation speed) for a smoother, macOS-like magnification
+- In place zoom now followed the pointer directly and only animated when the pointer entered or left the dock, like Parabolic
+- Zoom animation presets replaced the single zoom duration setting; a previously customized duration was kept as a Custom setting with the old ease-out curve
 
 ### Fixed
 

@@ -73,6 +73,17 @@ Item {
             return T.findAll(dock, T.isDockItem).sort((a, b) => a.index - b.index)
         }
 
+        property int settledTurns: 0
+
+        // Lets deferred (Qt.callLater) post-layout delegate setup run.
+        function settleDeferredCallbacks() {
+            let next = settledTurns + 1
+            Qt.callLater(function() {
+                Qt.callLater(function() { tc.settledTurns = next })
+            })
+            tryCompare(tc, "settledTurns", next)
+        }
+
         function makeDock(count) {
             let comp = Qt.createComponent(Qt.resolvedUrl("../../src/qml/main.qml"))
             compare(comp.status, Component.Ready, comp.errorString())
@@ -80,7 +91,8 @@ Item {
             verify(dock)
             tryVerify(() => items(dock).length === count, 2000, "expected " + count + " dock items")
             for (let it of items(dock))
-                tryVerify(() => it._zoomAnimReady, 2000)
+                tryVerify(() => it._delegateGeometryReady, 2000)
+            settleDeferredCallbacks()
             tryVerify(() => DockVisibility.panelRect.width > 0)
             return dock
         }
@@ -450,6 +462,10 @@ Item {
             for (let it of its) compare(it.currentOffset, 0)
             compare(panelEdges().left, rest.left)
             compare(panelEdges().right, rest.right)
+            // Leaving eases zoomAmount out: every icon settles back at rest.
+            mouseMove(stage, stage.width / 2, 2)
+            for (let it of its) tryCompare(it, "currentScale", 1.0)
+            for (let it of its) compare(it.currentOffset, 0)
         }
 
         function test_zoomSettlesWhenPointerLeavesPanel() {

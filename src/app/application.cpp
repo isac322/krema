@@ -17,16 +17,20 @@
 
 #include <KAboutData>
 #include <KActionCollection>
+#include <KConfigGroup>
 #include <KCrash>
 #include <KDBusService>
 #include <KGlobalAccel>
 #include <KLocalizedString>
+#include <KSharedConfig>
 
 #include <QAction>
 #include <QIcon>
 #include <QLoggingCategory>
 #include <QQuickStyle>
 #include <QtQml>
+
+#include <algorithm>
 
 Q_LOGGING_CATEGORY(lcApp, "krema.app")
 
@@ -59,7 +63,11 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::IconSpacingChanged, context, saveSettings);
     connect(settings, &KremaSettings::MaxZoomFactorChanged, context, saveSettings);
     connect(settings, &KremaSettings::ZoomStyleChanged, context, saveSettings);
-    connect(settings, &KremaSettings::ZoomAnimationDurationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ZoomAnimationPresetChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ZoomInDurationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ZoomOutDurationChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ZoomInEasingChanged, context, saveSettings);
+    connect(settings, &KremaSettings::ZoomOutEasingChanged, context, saveSettings);
     connect(settings, &KremaSettings::CornerRadiusChanged, context, saveSettings);
     connect(settings, &KremaSettings::FloatingChanged, context, saveSettings);
     connect(settings, &KremaSettings::BackgroundOpacityChanged, context, saveSettings);
@@ -101,6 +109,34 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::SeparateLaunchersChanged, context, saveSettings);
 }
 
+void Application::migrateLegacySettings(KremaSettings *settings)
+{
+    // Krema 0.10 stored a single ZoomAnimationDuration (only when changed from
+    // its 100 ms default) applied with an ease-out curve to both directions.
+    // Map it to the Custom preset with the same duration and easing, so the
+    // upgraded dock keeps exactly the old feel, and drop the obsolete key.
+    // "General" is the krema.kcfg group holding the zoom entries.
+    KConfigGroup group = settings->config()->group(QStringLiteral("General"));
+    const QString legacyKey = QStringLiteral("ZoomAnimationDuration");
+    if (!group.hasKey(legacyKey)) {
+        return;
+    }
+
+    if (!group.hasKey(QStringLiteral("ZoomAnimationPreset"))) {
+        constexpr int customPreset = 4;
+        constexpr int easeOut = 2;
+        const int duration = std::clamp(group.readEntry(legacyKey, 100), 0, 1000);
+        settings->setZoomAnimationPreset(customPreset);
+        settings->setZoomInDuration(duration);
+        settings->setZoomOutDuration(duration);
+        settings->setZoomInEasing(easeOut);
+        settings->setZoomOutEasing(easeOut);
+    }
+
+    group.deleteEntry(legacyKey);
+    settings->save();
+}
+
 int Application::run()
 {
     // Ensure Qt Quick Controls use the KDE Plasma style (needed for Kirigami theming)
@@ -138,6 +174,7 @@ int Application::run()
     // Load settings from KConfig (~/.config/kremarc)
     m_settings = std::make_unique<KremaSettings>();
     m_settings->load();
+    migrateLegacySettings(m_settings.get());
 
     // Create data model
     m_dockModel = std::make_unique<DockModel>();

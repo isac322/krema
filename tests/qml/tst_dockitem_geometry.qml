@@ -213,7 +213,7 @@ Item {
             DockSettings.iconSize = 0
             let item = makeRow([{ display: "Kate", IsWindow: true }]).itemAt(0)
             compare(item.width, 0)
-            tryVerify(() => item._zoomAnimReady)
+            tryVerify(() => item._delegateGeometryReady)
             settleGeometryCallbacks()
             compare(DockModel.delegateGeometryRequests.length, 0,
                     "a window task must not publish an empty layout slot")
@@ -235,7 +235,7 @@ Item {
             let task = { display: "Kate", IsWindow: false }
             task[data.role] = true
             let item = makeRow([task]).itemAt(0)
-            tryVerify(() => item._zoomAnimReady)
+            tryVerify(() => item._delegateGeometryReady)
             settleGeometryCallbacks()
             compare(DockModel.delegateGeometryRequests.length, 0,
                     "launcher/startup delegates must not request window geometry")

@@ -8,9 +8,42 @@ import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
+import ".."
 
 FormCard.FormCardPage {
+    id: page
     title: i18n("Appearance")
+
+    readonly property ZoomAnimationProfile zoomProfile: ZoomAnimationProfile {}
+    readonly property bool zoomCustom: DockSettings.zoomAnimationPreset === zoomProfile.customPreset
+    // Last non-custom preset chosen in this page session; the Preset tab restores it.
+    // Seeded once (not bound) so switching to Custom does not reset it.
+    property int lastZoomPreset: 0
+
+    Component.onCompleted: {
+        const preset = DockSettings.zoomAnimationPreset
+        if (preset >= 0 && preset < zoomProfile.customPreset) {
+            lastZoomPreset = preset
+        }
+    }
+
+    function selectZoomPreset(preset) {
+        lastZoomPreset = preset
+        DockSettings.zoomAnimationPreset = preset
+    }
+
+    function zoomTimingSummary(preset) {
+        const timing = zoomProfile.presets[preset]
+        return i18n("Zoom in %1 ms, zoom out %2 ms", timing.inDuration, timing.outDuration)
+    }
+
+    readonly property var zoomEasingNames: [
+        i18n("Linear"),
+        i18n("Ease in"),
+        i18n("Ease out"),
+        i18n("Ease in and out"),
+        i18n("Gentle ease in and out")
+    ]
 
     // --- Icons ---
     FormCard.FormHeader {
@@ -86,16 +119,6 @@ FormCard.FormCardPage {
             ]
             currentIndex: DockSettings.zoomStyle
             onActivated: function(index) { DockSettings.zoomStyle = index }
-        }
-
-        FormCard.FormDelegateSeparator {}
-
-        FormCard.FormSpinBoxDelegate {
-            label: i18n("Zoom animation duration (ms)")
-            from: 0; to: 1000; stepSize: 25
-            value: DockSettings.zoomAnimationDuration
-            onValueChanged: DockSettings.zoomAnimationDuration = value
-            enabled: DockSettings.maxZoomFactor > 1.0
         }
 
         FormCard.FormDelegateSeparator {}
@@ -188,6 +211,147 @@ FormCard.FormCardPage {
             ]
             currentIndex: DockSettings.badgeDisplayMode
             onActivated: function(index) { DockSettings.badgeDisplayMode = index }
+        }
+    }
+
+    // --- Zoom animation ---
+    FormCard.FormHeader {
+        title: i18n("Zoom animation")
+    }
+
+    FormCard.FormCard {
+        enabled: DockSettings.maxZoomFactor > 1.0
+
+        FormCard.AbstractFormDelegate {
+            background: null
+            contentItem: QQC2.TabBar {
+                id: zoomAnimationTabs
+                currentIndex: page.zoomCustom ? 1 : 0
+
+                QQC2.TabButton {
+                    text: i18n("Preset")
+                    Accessible.name: text
+                    onClicked: {
+                        if (page.zoomCustom) {
+                            DockSettings.zoomAnimationPreset = page.lastZoomPreset
+                        }
+                    }
+                }
+
+                QQC2.TabButton {
+                    text: i18n("Custom")
+                    Accessible.name: text
+                    onClicked: DockSettings.zoomAnimationPreset = page.zoomProfile.customPreset
+                }
+            }
+        }
+
+        // Preset tab. autoExclusive is off so clicks never break the
+        // other delegates' `checked` bindings; onToggled restores our own.
+        FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
+
+        FormCard.FormRadioDelegate {
+            visible: !page.zoomCustom
+            autoExclusive: false
+            text: i18n("Natural")
+            description: i18n("Eases in and out, similar to the macOS Dock (default)")
+                + "\n" + page.zoomTimingSummary(0)
+            Accessible.name: text
+            checked: DockSettings.zoomAnimationPreset === 0
+            onToggled: {
+                page.selectZoomPreset(0)
+                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 0)
+            }
+        }
+
+        FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
+
+        FormCard.FormRadioDelegate {
+            visible: !page.zoomCustom
+            autoExclusive: false
+            text: i18n("Quick")
+            description: i18n("Fast ease-out, the previous Krema default")
+                + "\n" + page.zoomTimingSummary(1)
+            Accessible.name: text
+            checked: DockSettings.zoomAnimationPreset === 1
+            onToggled: {
+                page.selectZoomPreset(1)
+                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 1)
+            }
+        }
+
+        FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
+
+        FormCard.FormRadioDelegate {
+            visible: !page.zoomCustom
+            autoExclusive: false
+            text: i18n("Relaxed")
+            description: i18n("Slow, gentle magnification")
+                + "\n" + page.zoomTimingSummary(2)
+            Accessible.name: text
+            checked: DockSettings.zoomAnimationPreset === 2
+            onToggled: {
+                page.selectZoomPreset(2)
+                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 2)
+            }
+        }
+
+        FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
+
+        FormCard.FormRadioDelegate {
+            visible: !page.zoomCustom
+            autoExclusive: false
+            text: i18n("Instant")
+            description: i18n("No zoom transition")
+            Accessible.name: text
+            checked: DockSettings.zoomAnimationPreset === 3
+            onToggled: {
+                page.selectZoomPreset(3)
+                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 3)
+            }
+        }
+
+        // Custom tab
+        FormCard.FormDelegateSeparator { visible: page.zoomCustom }
+
+        FormCard.FormSpinBoxDelegate {
+            visible: page.zoomCustom
+            label: i18n("Zoom-in duration (ms)")
+            from: 0; to: 1000; stepSize: 10
+            value: DockSettings.zoomInDuration
+            onValueChanged: DockSettings.zoomInDuration = value
+        }
+
+        FormCard.FormDelegateSeparator { visible: page.zoomCustom }
+
+        FormCard.FormComboBoxDelegate {
+            visible: page.zoomCustom
+            text: i18n("Zoom-in easing")
+            Accessible.name: text
+            model: page.zoomEasingNames
+            currentIndex: DockSettings.zoomInEasing
+            onActivated: function(index) { DockSettings.zoomInEasing = index }
+        }
+
+        FormCard.FormDelegateSeparator { visible: page.zoomCustom }
+
+        FormCard.FormSpinBoxDelegate {
+            visible: page.zoomCustom
+            label: i18n("Zoom-out duration (ms)")
+            from: 0; to: 1000; stepSize: 10
+            value: DockSettings.zoomOutDuration
+            onValueChanged: DockSettings.zoomOutDuration = value
+        }
+
+        FormCard.FormDelegateSeparator { visible: page.zoomCustom }
+
+        FormCard.FormComboBoxDelegate {
+            visible: page.zoomCustom
+            text: i18n("Zoom-out easing")
+            Accessible.name: text
+            model: page.zoomEasingNames
+            currentIndex: DockSettings.zoomOutEasing
+            onActivated: function(index) { DockSettings.zoomOutEasing = index }
         }
     }
 

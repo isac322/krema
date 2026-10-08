@@ -71,12 +71,12 @@ If the dock is hidden (Auto hide / Dodge windows), show it first (README "Showin
 
 ## TC MOUSE-003: Parabolic Zoom on Hover
 
-**Precondition:** Dock visible with multiple items. `ZoomStyle=0` (Parabolic, the default) and `ZoomAnimationDuration=100` (the default unscaled baseline; 100 ms matches normal-speed `Kirigami.Units.shortDuration`).
+**Precondition:** Dock visible with multiple items. `ZoomStyle=0` (Parabolic, the default) and `ZoomAnimationPreset=0` (Natural, the default: 180 ms ease in and out on entering, 240 ms on leaving, at normal Plasma animation speed).
 **Steps:**
 1. Screenshot — capture baseline dock state
 2. Record rest bounding boxes (position + size) of all dock items from the AT-SPI tree
 3. Move the pointer to the center of a middle dock item
-4. Wait 200ms for animation
+4. Wait 300ms for the zoom-in animation
 5. Screenshot — capture zoomed state
 6. Record zoomed bounding boxes from the AT-SPI tree
 7. Move the pointer horizontally across several middle items in small steps, taking a screenshot and reading the AT-SPI bounding boxes after each step
@@ -89,7 +89,8 @@ If the dock is hidden (Auto hide / Dodge windows), show it first (README "Showin
 - The dock background grows to contain the magnified icons
 - While the pointer sweeps across the middle of the dock, both background edges and the far icons stay still (no shaking or back-and-forth)
 - Toward a dock end, the background grows smoothly toward that end in one direction only
-- All items and the background return to the rest layout when the pointer leaves the dock, using the configured hover transition baseline and Plasma animation scaling
+- Moving the pointer along the dock updates the zoom directly, without animating or lagging; only entering and leaving the dock animate
+- All items and the background return to the rest layout when the pointer leaves the dock, using the zoom-out duration and easing of the configured zoom animation preset with Plasma animation scaling
 
 **Verification:** screenshot comparison (zoomed vs baseline), AT-SPI (item bounding boxes: shifted positions, grown sizes, no overlap)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse003_parabolic_zoom_on_hover
@@ -216,13 +217,13 @@ neighbour's zoomed position as a click target.
 
 ## TC MOUSE-009: In-Place Zoom Style
 
-**Precondition:** Dock visible with multiple items. `ZoomAnimationDuration=100` (the default unscaled baseline; 100 ms matches normal-speed `Kirigami.Units.shortDuration`).
+**Precondition:** Dock visible with multiple items. `ZoomAnimationPreset=0` (Natural, the default: 180 ms ease in and out on entering, 240 ms on leaving, at normal Plasma animation speed).
 **Steps:**
 1. Set `ZoomStyle=1` in `kremarc` (or choose "In place - icons overlap" in the "Zoom style" combo
    in Appearance settings) and restart krema
 2. Record rest bounding boxes of all dock items from the AT-SPI tree
 3. Move the pointer to the center of a middle dock item
-4. Wait 200ms for animation
+4. Wait 300ms for the zoom-in animation
 5. Screenshot — capture zoomed state
 6. Record zoomed bounding boxes from the AT-SPI tree
 7. Move the pointer away from the dock; restore `ZoomStyle=0`
@@ -231,10 +232,11 @@ neighbour's zoomed position as a click target.
 - Hovered item and its neighbours grow via the same parabolic zoom curve
 - Icons scale in place: bounding-box centres do not move and the dock background does not grow
 - Magnified icons may overlap each other
-- All icons return to base size when the pointer leaves the dock, using the configured hover transition baseline and Plasma animation scaling
+- Moving the pointer along the dock rescales icons directly, without per-icon animation or lag; only entering and leaving the dock animate
+- All icons return to base size when the pointer leaves the dock, using the zoom-out duration and easing of the configured zoom animation preset with Plasma animation scaling
 
 **Verification:** screenshot comparison (zoomed vs baseline), AT-SPI (bounding-box sizes grow while centres stay fixed)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them
+**Automated:** tests/appium/test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them; pointer tracking without lag: tests/qml/tst_dockitem_zoom.qml::test_inPlaceTracksPointerWithoutLag
 
 ---
 

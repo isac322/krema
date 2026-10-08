@@ -17,9 +17,11 @@ FormCard.FormCardPage {
     topPadding: Math.round(Kirigami.Units.gridUnit * Math.max(0.5, Math.min(1.5, width / 800)))
     bottomPadding: topPadding
 
-    // Looping previews run only while the page is shown in a visible window.
+    // Looping previews run only while the page is shown in a visible,
+    // non-minimized window (a minimized window keeps animations ticking).
     readonly property bool previewsActive: page.visible
         && page.Window.window !== null && page.Window.window.visible
+        && page.Window.window.visibility !== Window.Minimized
 
     // Simplified screen with a dock at its bottom edge. `mode` follows the
     // VisibilityMode enum: 0 = static dock, 1 = auto hide (dock slides out

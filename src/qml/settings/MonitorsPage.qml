@@ -51,7 +51,9 @@ FormCard.FormCardPage {
 
     // Looping previews only run while shown and when animations are enabled
     // (zero durations would make an infinite loop spin).
+    // Also paused while the window is minimized, which keeps animations ticking.
     readonly property bool animationsEnabled: Kirigami.Units.longDuration > 0
+        && Window.window !== null && Window.window.visibility !== Window.Minimized
 
     readonly property color frameColor: Kirigami.ColorUtils.linearInterpolation(
         Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.5)

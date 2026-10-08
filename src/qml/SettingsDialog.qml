@@ -9,14 +9,16 @@ import org.kde.kirigamiaddons.delegates as Delegates
 import org.kde.kirigamiaddons.formcard as FormCard
 
 // Settings window: a searchable sidebar of pages next to the selected page.
-// Uses QQC2.ApplicationWindow (not Kirigami.ApplicationWindow) to avoid
-// pageStack input interception. AT-SPI2 accessibility works correctly —
-// sidebar and content share one coordinate space.
+// Kirigami.AbstractApplicationWindow has no pageStack (Kirigami's
+// ApplicationWindow PageRow intercepts input) but provides
+// showPassiveNotification(), which FormCard's AboutPage calls. AT-SPI2
+// accessibility works correctly — sidebar and content share one coordinate
+// space.
 //
 // SettingsWindow (C++) creates one window per open, passing `defaultModule`
 // as an initial property, calls openModule() to switch pages while open and
 // destroys the window once it is closed.
-QQC2.ApplicationWindow {
+Kirigami.AbstractApplicationWindow {
     id: root
 
     title: i18n("Settings")

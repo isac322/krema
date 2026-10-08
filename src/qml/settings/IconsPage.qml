@@ -25,8 +25,9 @@ FormCard.FormCardPage {
     property int lastZoomPreset: 0
 
     readonly property bool zoomEnabled: DockSettings.maxZoomFactor > 1.0
-    // Looping preview animations only run while the settings window is shown.
-    readonly property bool windowVisible: Window.window ? Window.window.visible : false
+    // Looping preview animations only run while the settings window is shown
+    // and not minimized (a minimized window keeps animations ticking).
+    readonly property bool windowVisible: Window.window ? Window.window.visible && Window.window.visibility !== Window.Minimized : false
 
     Component.onCompleted: {
         const preset = DockSettings.zoomAnimationPreset

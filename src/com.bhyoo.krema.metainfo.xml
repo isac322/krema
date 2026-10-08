@@ -30,16 +30,16 @@
   <url type="vcs-browser">https://github.com/isac322/krema</url>
   <screenshots>
     <screenshot type="default">
-      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/master/branding/screenshots/dock-zoom.png</image>
+      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/b2ac9249f0f3eb7467e24582ca27f624cd5ec0c1/branding/screenshots/dock-zoom.png</image>
       <caption>Parabolic zoom magnifies the icon under the pointer</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/master/branding/screenshots/dock-overview.png</image>
+      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/b2ac9249f0f3eb7467e24582ca27f624cd5ec0c1/branding/screenshots/dock-overview.png</image>
       <caption>Pinned launchers and running apps on the Plasma desktop</caption>
     </screenshot>
     <screenshot>
-      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/master/branding/screenshots/settings.png</image>
-      <caption>Kirigami settings for size, zoom, background and behavior</caption>
+      <image type="source" width="1920" height="1080">https://media.githubusercontent.com/media/isac322/krema/b2ac9249f0f3eb7467e24582ca27f624cd5ec0c1/branding/screenshots/settings.png</image>
+      <caption>Appearance settings for icon size, spacing, zoom and attention animations</caption>
     </screenshot>
   </screenshots>
   <developer id="com.bhyoo">

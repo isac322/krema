@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# AI-authored local packaging artifact. Not a Flathub submission.
+app-id: com.bhyoo.krema
+default-branch: stable
+runtime: org.kde.Platform
+runtime-version: '6.10'
+sdk: org.kde.Sdk
+command: krema
+rename-icon: krema
+separate-locales: false
+finish-args:
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=host-os:ro
+  - --filesystem=xdg-data/applications:ro
+  - --filesystem=xdg-data/icons:ro
+  - --filesystem=xdg-data/flatpak/exports/share:ro
+  - --filesystem=/var/lib/flatpak/exports/share:ro
+  - --talk-name=org.kde.KWin
+  - --talk-name=org.kde.kglobalaccel
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=com.canonical.Unity
+  - --env=QT_QPA_PLATFORM=wayland
+  - --env=XDG_DATA_DIRS=/app/share:/usr/share:/usr/share/runtime/share:/run/host/usr/share:/run/host/share:/var/lib/flatpak/exports/share
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/pkgconfig
+  - /share/doc
+  - /share/man
+  - '*.a'
+  - '*.la'
+modules:
+  # The KDE SDK supplies ECM/KF6, Kirigami Addons, PlasmaActivities,
+  # KWayland, PlasmaWaylandProtocols, Canberra, Wayland, and PipeWire.
+  - name: libplasma
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_TESTING=OFF
+      - -DBUILD_EXAMPLES=OFF
+    sources:
+      - type: archive
+        url: https://download.kde.org/stable/plasma/6.7.5/libplasma-6.7.5.tar.xz
+        sha256: 27b28823254aa489c094c40a314ce1575fd7906eeb521e636bb8fd2dc2981f2f
+  - name: libkscreen
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_TESTING=OFF
+      - -DBUILD_QCH=OFF
+    sources:
+      - type: archive
+        url: https://download.kde.org/stable/plasma/6.7.5/libkscreen-6.7.5.tar.xz
+        sha256: df317e03acfadfcbc68981b78131750103fadf4d5c5df6368c9e91e698677219
+  - name: layer-shell-qt
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: archive
+        url: https://download.kde.org/stable/plasma/6.7.5/layer-shell-qt-6.7.5.tar.xz
+        sha256: ccdcfec7081ca956f7a52c9113a4df3a226575bfbe98b56a2a9a4d7d7e19e8f0
+  - name: kpipewire
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: archive
+        url: https://download.kde.org/stable/plasma/6.7.5/kpipewire-6.7.5.tar.xz
+        sha256: 20af39d9450d495468c56a50930810d82137f7ccd3a710592e02b6f620758f55
+  - name: plasma-workspace-libraries
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: archive
+        url: https://download.kde.org/stable/plasma/6.7.5/plasma-workspace-6.7.5.tar.xz
+        sha256: 94ab21e2243b7876f65c315f1e545081c6437f5bd0a041ca4fb6c2533ae874c9
+        dest: upstream
+      - type: archive
+        url: https://download.kde.org/stable/plasma/6.7.5/kscreenlocker-6.7.5.tar.xz
+        sha256: 6c41ce2cb79d2b85d4fbe5a3a61c09e40c70e5a869ae6f0352c7e1cb3b44606b
+        dest: kscreenlocker
+      - type: file
+        path: plasma-workspace-libraries/CMakeLists.txt
+  - name: krema
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DBUILD_TESTING=OFF
+      - -DKREMA_E2E_TESTS=OFF
+      - -DKDE_INSTALL_USE_QT_SYS_PATHS=OFF
+      - -DKDE_INSTALL_AUTOSTARTDIR=etc/xdg/autostart
+    post-install:
+      - install -Dm644 "${FLATPAK_BUILDER_BUILDDIR}/krema.svg" "${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/krema.svg"
+    sources:
+      - type: archive
+        url: https://github.com/isac322/krema/archive/v0.9.0.tar.gz
+        sha256: 6dbb0de97339119371e6cb403b0d1e9dca525cdaaf3b78792865ee94c91fa6f3
+      # The unchanged v0.9.0 release has no icon assets. Supply the official
+      # post-release brand icon as separately pinned packaging metadata.
+      - type: file
+        url: https://raw.githubusercontent.com/isac322/krema/84184ca07e226a96ef468d33d4a3afc16a1cc533/branding/logo/krema-icon.svg
+        sha256: 65f419d4d6ee5534a66ec141bf3810bf91ca3296db1ee5603164035735966782
+        dest-filename: krema.svg
+      - type: patch
+        path: metainfo.patch

@@ -1,0 +1,27 @@
+Krema is a standalone dock for KDE Plasma 6 on Wayland and a spiritual successor to Latte Dock. It combines pinned launchers and running applications in a native KDE desktop surface.
+
+Parabolic hover zoom enlarges the icon under the pointer and moves neighboring icons aside. An in-place zoom option and an adjustable zoom animation duration are also available. Krema provides live window previews through PipeWire, notification badges, task progress indicators, grouped-window cycling and multi-window previews, and keyboard navigation with AT-SPI screen reader support.
+
+Krema supports Primary Only, All Screens, Follow Active Screen, and Selected monitors modes, with per-screen dock settings and virtual desktop filtering. Independent left-click actions for single and grouped windows, screen-space reservation in Always visible mode, and separate pinned and running app sections are available alongside the Kirigami settings for dock size, zoom, appearance, visibility, and behavior. Krema is built with C++23, Qt 6, and KDE Frameworks 6.
+
+Krema is a compiled desktop application for KDE Plasma 6 on Wayland. It is not a Plasmoid, widget, KPackage, or Get New Widgets add-on, so it cannot be installed through Plasma's widget installer.
+
+Install from a public package channel:
+
+- Arch Linux and Manjaro: AUR, https://aur.archlinux.org/packages/krema
+- Fedora: COPR, https://copr.fedorainfracloud.org/coprs/isac322/krema/
+- openSUSE: OBS, https://build.opensuse.org/package/show/home:isac322/krema
+- Ubuntu: PPA, https://launchpad.net/~isac322/+archive/ubuntu/krema
+
+For a source build, follow the procedure in the {{tag}} README:
+https://github.com/{{repository}}/blob/{{tag}}/README.md#build--run
+
+Contribution guidance is available at:
+https://github.com/{{repository}}/blob/{{tag}}/README.md#contributing
+
+Project links:
+
+- Homepage: https://krema.bhyoo.com/
+- Issue tracker: https://github.com/isac322/krema/issues
+- Source repository: https://github.com/isac322/krema
+

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "channel": "alternativeto",
+  "observed_release": {
+    "version": "0.10.0",
+    "tag": "v0.10.0",
+    "commit": "a964a908ecb8904c079a8148403bebaaa427a821"
+  },
+  "name": "Krema",
+  "short_summary": "A Wayland-native dock for KDE Plasma 6 with parabolic zoom, PipeWire window previews, and multi-monitor support.",
+  "fields": {
+    "Cost / License": ["Free", "Open Source"],
+    "Licensing": "GPL-3.0-or-later",
+    "Application type": "Application Launcher",
+    "Platforms": ["Linux", "KDE"],
+    "AlternativeTo Category": "OS & Utilities",
+    "Developed by": "Byeonghoon Yoo",
+    "Written in": "C++",
+    "Supported Languages": ["English"],
+    "Official Website": "https://krema.bhyoo.com/",
+    "GitHub repository": "https://github.com/isac322/krema"
+  },
+  "description_file": "packaging/submissions/alternativeto.txt",
+  "media": [
+    {
+      "source": "branding/social/avatar-400.png",
+      "filename": "krema-avatar-400.png",
+      "role": "icon",
+      "width": 400,
+      "height": 400,
+      "caption": "Krema application icon",
+      "alt": "Krema's Zoom K mark with a cream stem and caramel tiles on a dark square background."
+    },
+    {
+      "source": "branding/screenshots/dock-overview.png",
+      "filename": "krema-dock-overview.png",
+      "role": "screenshot",
+      "width": 1920,
+      "height": 1080,
+      "caption": "Pinned launchers and running applications on KDE Plasma",
+      "alt": "Krema dock at the bottom of a KDE Plasma desktop with Dolphin and Konsole open and running application indicators below the icons."
+    },
+    {
+      "source": "branding/screenshots/dock-zoom.png",
+      "filename": "krema-dock-zoom.png",
+      "role": "screenshot",
+      "width": 1920,
+      "height": 1080,
+      "caption": "Parabolic hover zoom over the Okular launcher",
+      "alt": "Krema's parabolic zoom enlarges the Okular launcher under the pointer, with neighboring dock icons magnified and an Okular tooltip above it."
+    },
+    {
+      "source": "branding/screenshots/settings.png",
+      "filename": "krema-settings.png",
+      "role": "screenshot",
+      "width": 1920,
+      "height": 1080,
+      "caption": "Appearance settings for dock icons, zoom, and attention animations",
+      "alt": "Krema's Kirigami Appearance settings show icon size and spacing, zoom factor and style, icon normalization and scale, and attention animation controls."
+    }
+  ],
+  "downloads": [],
+  "relation": {
+    "target_name": "Latte Dock",
+    "entry_url": "https://alternativeto.net/software/latte-dock/",
+    "target_status": "existing",
+    "listing_url": "https://alternativeto.net/software/krema/",
+    "rationale": "Krema is a spiritual successor to Latte Dock for KDE Plasma 6 on Wayland. Both organize application launchers and running windows in a dock. Krema supports parabolic hover zoom, PipeWire window previews, and multi-monitor dock layouts."
+  },
+  "optional_fee": {
+    "chosen": false,
+    "review_path": "Normal free review"
+  },
+  "submission": {
+    "entry_url": "https://alternativeto.net/software/krema/",
+    "target_status": "existing",
+    "steps": [
+      "When authorized to submit, sign in to the intended AlternativeTo contributor account and verify its email address. This preparation kit does not sign in or submit anything.",
+      "Open the existing Krema listing at submission.entry_url. Review its current metadata and available contribution controls; do not create a duplicate application.",
+      "Verify that Krema remains listed among the Latte Dock alternatives at relation.entry_url. Maintain the existing relationship rather than adding it again.",
+      "Update the existing listing's name and summary only where needed using name and short_summary. Use alternativeto.txt for the full description without adding URLs, email addresses, postal addresses, or phone numbers.",
+      "Map the public catalog metadata in fields to the corresponding authenticated controls: Free and Open Source; GPL version 3 or later (GPL3+, represented here as GPL-3.0-or-later); Linux and KDE; Application Launcher; OS & Utilities; Byeonghoon Yoo; C++; and English. The authenticated control labels have not been verified.",
+      "Enter fields.Official Website and fields.GitHub repository in their dedicated link controls only. Keep these links out of the summary, full description, and alternative rationale, and do not add tracking parameters.",
+      "Review the existing icon and screenshots. Update media where needed with krema-avatar-400.png, krema-dock-overview.png, krema-dock-zoom.png, and krema-settings.png, using captions and alt text where controls are available. Avoid duplicate gallery images and review previews for clipping and readability.",
+      "Use relation.rationale only if updating the existing Latte Dock relationship through an available explanation or opinion control. Do not create a duplicate relationship.",
+      "Leave optional paid priority review unselected. Review the name, summary, URL-free description, license, platforms, category, links, media, and existing Latte Dock relationship.",
+      "Stop before final submission or publication until the maintainer authorizes the update. Record any resulting reference and status without claiming moderator approval or a published update before it is observed."
+    ]
+  },
+  "evidence_urls": [
+    "https://alternativeto.net/software/krema/",
+    "https://alternativeto.net/faq/",
+    "https://alternativeto.net/about/terms/",
+    "https://alternativeto.net/software/latte-dock/",
+    "https://alternativeto.net/software/latte-dock/about/",
+    "https://alternativeto.net/software/docking/about/",
+    "https://github.com/{{repository}}/releases/tag/{{tag}}",
+    "https://raw.githubusercontent.com/{{repository}}/{{commit}}/src/com.bhyoo.krema.metainfo.xml"
+  ],
+  "limitations": [
+    "The authenticated submission form was not inspected. The fields object uses public catalog labels, not verified private input names or an AlternativeTo submission API. Name and short_summary are kit handoff values, not claims about private field labels.",
+    "The public FAQ publishes no short-description character limit or screenshot dimension limit. This kit does not invent either restriction.",
+    "The FAQ suggests a square PNG or SVG icon at least 280 by 280 pixels with a transparent background. The supplied 400 by 400 PNG meets the format, square shape, and size recommendation; its dark background is opaque, so it does not follow the suggested transparency.",
+    "The screenshots are existing repository product captures, not verified captures of the exact {{tag}} binary. They show the dock, zoom, and Appearance settings, and do not demonstrate a live PipeWire window preview.",
+    "Krema already has a public listing at https://alternativeto.net/software/krema/ and appears among the Latte Dock alternatives. Preparing this kit does not update either destination; authenticated validation and any moderation remain external steps.",
+    "No optional payment is chosen, and this kit promises no review turnaround or approval."
+  ]
+}

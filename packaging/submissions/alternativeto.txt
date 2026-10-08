@@ -1,0 +1,7 @@
+Krema is a free, open source dock for Linux desktops running KDE Plasma 6 on Wayland. As a spiritual successor to Latte Dock, it combines pinned application launchers and running windows in a configurable KDE Plasma dock.
+
+Parabolic hover zoom enlarges the icon under the pointer and moves neighboring icons aside. You can also choose in-place zoom and adjust the zoom animation duration. PipeWire window previews help you find the window you want, while notification badges and task progress indicators keep application activity visible on the dock.
+
+For multi-monitor setups, choose Primary Only, All Screens, Follow Active Screen, or Selected monitors, with per-screen dock overrides and virtual desktop filtering. Independent single and grouped-window click actions, screen-space reservation for Always visible mode, and separate pinned and running app sections complement the Kirigami settings. Keyboard navigation and AT-SPI screen reader support provide ways to use the dock beyond the mouse.
+
+Krema is built with C++23, Qt 6, and KDE Frameworks 6. It is licensed under the GNU General Public License version 3 or later.

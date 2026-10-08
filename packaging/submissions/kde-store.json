@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "channel": "kde-store",
+  "observed_release": {
+    "version": "0.10.0",
+    "tag": "v0.10.0",
+    "commit": "a964a908ecb8904c079a8148403bebaaa427a821"
+  },
+  "name": "Krema",
+  "short_summary": "A lightweight dock for KDE Plasma 6, native to Wayland and a spiritual successor to Latte Dock.",
+  "fields": {
+    "Name": "Krema",
+    "Version": "{{version}}",
+    "Category": "Various Plasma 6 Improvements",
+    "Category ID": 713,
+    "Summary": "A lightweight dock for KDE Plasma 6, native to Wayland and a spiritual successor to Latte Dock.",
+    "License": "GPL-3.0-or-later",
+    "Tags": [
+      "dock",
+      "kde",
+      "plasma",
+      "wayland",
+      "cpp",
+      "qt6",
+      "linux",
+      "gplv3"
+    ],
+    "Homepage": "https://krema.bhyoo.com/",
+    "Issue tracker": "https://github.com/isac322/krema/issues",
+    "Source repository": "https://github.com/isac322/krema"
+  },
+  "description_file": "packaging/submissions/kde-store.txt",
+  "media": [
+    {
+      "source": "branding/social/kde-store-logo.png",
+      "filename": "krema-kde-store-logo.png",
+      "role": "logo",
+      "width": 256,
+      "height": 256,
+      "caption": "Krema application logo",
+      "alt": "Krema's Zoom K logo with a light dock stem and caramel tiles on a dark square background."
+    },
+    {
+      "source": "branding/social/store-banner.png",
+      "filename": "krema-kde-store-banner.png",
+      "role": "banner",
+      "width": 1920,
+      "height": 480,
+      "caption": "Krema, a dock for KDE Plasma 6 on Wayland",
+      "alt": "Krema wordmark and dock motif on a wide KDE Plasma 6 store banner."
+    },
+    {
+      "source": "branding/screenshots/dock-zoom.png",
+      "filename": "krema-dock-zoom.png",
+      "role": "screenshot",
+      "width": 1920,
+      "height": 1080,
+      "caption": "Parabolic hover zoom magnifies the icon under the pointer",
+      "alt": "Krema's parabolic zoom enlarges the launcher under the pointer and moves neighboring dock icons aside on KDE Plasma."
+    },
+    {
+      "source": "branding/screenshots/dock-overview.png",
+      "filename": "krema-dock-overview.png",
+      "role": "screenshot",
+      "width": 1920,
+      "height": 1080,
+      "caption": "Pinned launchers and running applications on the Plasma desktop",
+      "alt": "Krema dock at the bottom of a KDE Plasma desktop with pinned launchers, running application indicators, Dolphin, and Konsole."
+    },
+    {
+      "source": "branding/screenshots/settings.png",
+      "filename": "krema-settings.png",
+      "role": "screenshot",
+      "width": 1920,
+      "height": 1080,
+      "caption": "Kirigami Appearance settings for dock icon size, spacing, zoom, style, normalization, scale, and attention animation",
+      "alt": "Krema's Kirigami Appearance settings show controls for icon size and spacing, zoom factor and style, icon normalization and scale, and attention animation."
+    }
+  ],
+  "downloads": [
+    {
+      "url": "{{source_url}}",
+      "filename": "{{source_filename}}",
+      "sha256": "{{source_sha256}}",
+      "label": "Krema {{version}} source code (tarball, requires compilation)",
+      "kind": "source-archive"
+    }
+  ],
+  "submission": {
+    "entry_url": "https://store.kde.org/p/2376676",
+    "target_status": "existing",
+    "steps": [
+      "When publication is authorized, sign in to the intended KDE Store/OpenDesktop account in a normal browser. This preparation kit does not authenticate or submit anything.",
+      "Open the existing Krema listing at submission.entry_url and compare its displayed version and source download with {{version}} and {{source_filename}}. If the listing already shows {{version}} with a source file whose SHA-256 matches, the update is already published; stop without re-uploading. Otherwise update its version to {{version}} and review the prepared metadata against the available authenticated controls. Do not create a duplicate listing. The KDE Store/OpenDesktop/Pling OCS mirrors use this same content record, so update the canonical listing once and verify the mirrors afterward.",
+      "Paste the complete contents of kde-store.txt into the listing description. Keep the standalone-application and Wayland-only wording, package links, source-build links, and warning that Krema is not a Plasmoid or widget.",
+      "Review the existing logo, banner, and screenshot gallery. Update media where needed with krema-kde-store-logo.png, krema-kde-store-banner.png, krema-dock-zoom.png, krema-dock-overview.png, and krema-settings.png, using each media entry's caption and alt text where controls are available; avoid duplicate images.",
+      "Update the current source download with {{source_filename}}. Use the label 'Krema {{version}} source code (tarball, requires compilation)' and verify the SHA-256 value {{source_sha256}} before accepting the upload. Do not upload a fake binary, installer, widget, or Plasmoid archive.",
+      "Review the rendered listing, category, version, links, captions, alt text, and source-file label. Stop before the final publish or submit action until the maintainer explicitly authorizes publication."
+    ]
+  },
+  "evidence_urls": [
+    "https://store.kde.org/p/2376676",
+    "https://www.opendesktop.org/p/2376676/",
+    "https://www.pling.com/p/2376676/",
+    "https://www.linux-apps.org/p/2376676/",
+    "https://api.kde-look.org/ocs/v1/content/data/2376676",
+    "https://www.opendesktop.org/p/2105085/",
+    "https://api.kde-look.org/ocs/v1/content/data/2105085",
+    "https://github.com/{{repository}}/releases/tag/{{tag}}",
+    "https://raw.githubusercontent.com/{{repository}}/{{commit}}/src/com.bhyoo.krema.metainfo.xml",
+    "{{source_url}}",
+    "https://aur.archlinux.org/packages/krema",
+    "https://build.opensuse.org/package/show/home:isac322/krema",
+    "https://copr.fedorainfracloud.org/coprs/isac322/krema/",
+    "https://launchpad.net/~isac322/+archive/ubuntu/krema"
+  ],
+  "evidence_notes": [
+    "The public Krema listing exists at https://store.kde.org/p/2376676; it showed v0.9.0 when the v0.10.0 packet was first prepared. Each packet prepares an update of this listing to the target release, not a new listing.",
+    "The KDE Store/OpenDesktop/Pling frontends expose the same OCS content record #2376676; after updating the canonical listing, verify the mirrored record and public pages. linux-apps.org is an additional OCS frontend; linux-apps.com is unrelated.",
+    "The verified Crystal Dock peer record uses system-style tags including plasma##majorversion=6 and original-product. Those peer tags are evidence for the category and product type, not claims about private KDE Store form controls for Krema."
+  ],
+  "limitations": [
+    "The authenticated KDE Store/OpenDesktop form was not inspected. Private field labels, character bounds, upload limits, and required-field behavior are not asserted; fields contains the final values to map to the corresponding controls.",
+    "Preparing this kit does not authenticate, upload, or update the existing KDE Store listing or its mirrors. Final submission or publication requires maintainer action.",
+    "The staged download is a genuine {{tag}} source archive and requires a local CMake/C++23 build. No binary package or Plasmoid is represented as a KDE Store download.",
+    "Distro package links are public external installation channels and are included in the description; they are not substituted for the source archive upload.",
+    "The supplied media are repository PNG assets for staging. The update's final rendering, moderation, mirror propagation, and publication remain unverified."
+  ]
+}

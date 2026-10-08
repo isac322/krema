@@ -226,89 +226,122 @@ FormCard.FormCardPage {
             background: null
             contentItem: QQC2.TabBar {
                 id: zoomAnimationTabs
-                currentIndex: page.zoomCustom ? 1 : 0
+                // Guards onCurrentIndexChanged until the Binding below has
+                // applied: with a Custom preset the tab bar starts at index 0
+                // and must not write the preset back before construction ends.
+                property bool _zoomTabsReady: false
+                Component.onCompleted: _zoomTabsReady = true
+
+                // Plain item in place of the org.kde.desktop style's
+                // background MouseArea, whose onWheel flipped tabs and
+                // swallowed page scrolling under the pointer.
+                background: Item {}
+
+                // Binding element (not a property binding) so imperative
+                // currentIndex writes — clicks, keys — re-sync to the setting.
+                Binding {
+                    target: zoomAnimationTabs
+                    property: "currentIndex"
+                    value: page.zoomCustom ? 1 : 0
+                }
+
+                // Covers every currentIndex change source (clicks reach us via
+                // Container's internal checked->currentIndex write), so the
+                // TabButtons need no onClicked handlers. Loop-safe: each branch
+                // writes the preset only when it disagrees with the tab.
+                onCurrentIndexChanged: {
+                    if (!_zoomTabsReady) {
+                        return
+                    }
+                    if (currentIndex === 1 && !page.zoomCustom) {
+                        DockSettings.zoomAnimationPreset = page.zoomProfile.customPreset
+                    } else if (currentIndex === 0 && page.zoomCustom) {
+                        DockSettings.zoomAnimationPreset = page.lastZoomPreset
+                    }
+                }
 
                 QQC2.TabButton {
                     text: i18n("Preset")
                     Accessible.name: text
-                    onClicked: {
-                        if (page.zoomCustom) {
-                            DockSettings.zoomAnimationPreset = page.lastZoomPreset
-                        }
-                    }
                 }
 
                 QQC2.TabButton {
                     text: i18n("Custom")
                     Accessible.name: text
-                    onClicked: DockSettings.zoomAnimationPreset = page.zoomProfile.customPreset
                 }
             }
+
         }
 
-        // Preset tab. autoExclusive is off so clicks never break the
-        // other delegates' `checked` bindings; onToggled restores our own.
+        // Preset tab. Auto-exclusive radios keep a click on the checked radio
+        // from unchecking it; the per-delegate Binding below re-applies the
+        // setting after the delegate's internal RadioButton assigns
+        // root.checked, so programmatic preset changes stay in sync.
         FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
 
         FormCard.FormRadioDelegate {
+            id: zoomNaturalRadio
             visible: !page.zoomCustom
-            autoExclusive: false
             text: i18n("Natural")
             description: i18n("Eases in and out, similar to the macOS Dock (default)")
                 + "\n" + page.zoomTimingSummary(0)
             Accessible.name: text
-            checked: DockSettings.zoomAnimationPreset === 0
-            onToggled: {
-                page.selectZoomPreset(0)
-                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 0)
+            Binding {
+                target: zoomNaturalRadio
+                property: "checked"
+                value: DockSettings.zoomAnimationPreset === 0
             }
+            onToggled: if (checked) page.selectZoomPreset(0)
         }
 
         FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
 
         FormCard.FormRadioDelegate {
+            id: zoomQuickRadio
             visible: !page.zoomCustom
-            autoExclusive: false
             text: i18n("Quick")
             description: i18n("Fast ease-out, the previous Krema default")
                 + "\n" + page.zoomTimingSummary(1)
             Accessible.name: text
-            checked: DockSettings.zoomAnimationPreset === 1
-            onToggled: {
-                page.selectZoomPreset(1)
-                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 1)
+            Binding {
+                target: zoomQuickRadio
+                property: "checked"
+                value: DockSettings.zoomAnimationPreset === 1
             }
+            onToggled: if (checked) page.selectZoomPreset(1)
         }
 
         FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
 
         FormCard.FormRadioDelegate {
+            id: zoomRelaxedRadio
             visible: !page.zoomCustom
-            autoExclusive: false
             text: i18n("Relaxed")
             description: i18n("Slow, gentle magnification")
                 + "\n" + page.zoomTimingSummary(2)
             Accessible.name: text
-            checked: DockSettings.zoomAnimationPreset === 2
-            onToggled: {
-                page.selectZoomPreset(2)
-                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 2)
+            Binding {
+                target: zoomRelaxedRadio
+                property: "checked"
+                value: DockSettings.zoomAnimationPreset === 2
             }
+            onToggled: if (checked) page.selectZoomPreset(2)
         }
 
         FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
 
         FormCard.FormRadioDelegate {
+            id: zoomInstantRadio
             visible: !page.zoomCustom
-            autoExclusive: false
             text: i18n("Instant")
             description: i18n("No zoom transition")
             Accessible.name: text
-            checked: DockSettings.zoomAnimationPreset === 3
-            onToggled: {
-                page.selectZoomPreset(3)
-                checked = Qt.binding(() => DockSettings.zoomAnimationPreset === 3)
+            Binding {
+                target: zoomInstantRadio
+                property: "checked"
+                value: DockSettings.zoomAnimationPreset === 3
             }
+            onToggled: if (checked) page.selectZoomPreset(3)
         }
 
         // Custom tab

@@ -923,17 +923,65 @@ def test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist(krema: K
     choose(krema, ZOOM_OUT_EASING, "Linear")
     wait_until(lambda: config_value(krema, "ZoomOutEasing") == "0", message="kremarc ZoomOutEasing=0")
 
-    # The custom profile applies live: hover still magnifies without a restart.
+    # Smoke only: hover still magnifies without a restart after the custom
+    # edits. Whether the custom timing really drives the dock is covered by
+    # tests/qml/tst_dock_main.qml::test_customZoomTimingDrivesProductionDock.
     pid = krema.pid
     hover_ready(krema, "Alpha")
     krema.move_away()
     assert krema.pid == pid and krema.is_running(), "zoom animation change must not restart krema"
 
-    # Preset tab restores the preset chosen before Custom; Custom keeps its values.
+    # Preset tab restores the preset chosen before Custom, and only that
+    # radio is checked.
     click_el(krema, scroll_into_view(krema, PRESET_TAB))
     wait_until(lambda: zoom_tab_selected(krema.wait_for(PRESET_TAB)), message="Preset tab selected")
     wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "1", message="Quick preset restored")
     assert has_state(scroll_into_view(krema, quick_xpath), "checked")
+    for name in ("Natural", "Relaxed", "Instant"):
+        assert not has_state(krema.wait_for(preset_radio(name)), "checked"), f"{name} must stay unchecked"
+
+    # A second preset switch: exactly the selected radio is checked.
+    relaxed_xpath = preset_radio("Relaxed")
+    click_el(krema, scroll_into_view(krema, relaxed_xpath))
+    wait_until(lambda: has_state(krema.wait_for(relaxed_xpath), "checked"), message="Relaxed preset selected")
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "2", message="kremarc ZoomAnimationPreset=2")
+    for name in ("Natural", "Quick", "Instant"):
+        assert not has_state(krema.wait_for(preset_radio(name)), "checked"), f"{name} must stay unchecked"
+    click_el(krema, scroll_into_view(krema, quick_xpath))
+    wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "1", message="Quick preset selected again")
+    assert has_state(krema.wait_for(quick_xpath), "checked")
+    assert not has_state(krema.wait_for(relaxed_xpath), "checked")
+    # Clicking the already-checked radio keeps it checked and the preset unchanged.
+    click_el(krema, scroll_into_view(krema, quick_xpath))
+    holds(
+        lambda: has_state(krema.wait_for(quick_xpath), "checked") and config_value(krema, "ZoomAnimationPreset") == "1",
+        1.0,
+        "re-clicking the checked Quick radio must keep it checked and ZoomAnimationPreset=1",
+    )
+
+    # Regression: wheel over the Preset/Custom tab bar scrolls the page (the
+    # org.kde.desktop style's TabBar wheel handler once hijacked the scroll);
+    # it must not switch the tab or rewrite the preset.
+    tab = scroll_into_view(krema, PRESET_TAB)
+    wheel_x, wheel_y = krema.screen_rect(tab, "settings").center
+    tab_y0 = Rect.of(krema.wait_for(PRESET_TAB)).y
+    inp.scroll(wheel_x, wheel_y, dy=60)
+    wait_until(
+        lambda: Rect.of(krema.wait_for(PRESET_TAB)).y < tab_y0 - 10,
+        message="wheel over the tab bar scrolls the page",
+    )
+    assert config_value(krema, "ZoomAnimationPreset") == "1", "wheel over the tab bar must not switch to Custom"
+    assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
+    assert has_state(krema.wait_for(quick_xpath), "checked")
+    inp.scroll(wheel_x, wheel_y, dy=-60)
+    wait_until(
+        lambda: abs(Rect.of(krema.wait_for(PRESET_TAB)).y - tab_y0) <= 2,
+        message="wheel back scrolls the page to the tab bar position",
+    )
+    assert config_value(krema, "ZoomAnimationPreset") == "1"
+    assert has_state(krema.wait_for(quick_xpath), "checked")
+
+    # Custom tab keeps the custom values.
     click_el(krema, scroll_into_view(krema, CUSTOM_TAB))
     wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "4", message="Custom preset selected again")
     assert float(scroll_into_view(krema, ZOOM_IN_DURATION).get_attribute("value")) == 200.0

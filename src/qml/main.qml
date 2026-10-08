@@ -1038,12 +1038,15 @@ Item {
             zoomStyle,
             _layoutZoomAmount > 0,
             zoomCursor, _minZoomEdge, _maxZoomEdge)
-        // Icons keep changing under a still pointer (zoom-in/out via
-        // zoomAmount; Parabolic also moves them and clamps at the edges), so
-        // the icon under it can change without a mouse move: re-run the hit
-        // test, coalesced to once per event-loop turn.
+        // Icons keep changing under a still pointer while zoom is engaged
+        // (zoom-in/out via zoomAmount; Parabolic also moves them and clamps
+        // at the edges), so the icon under it can change without a mouse
+        // move: re-run the hit test, coalesced to once per event-loop turn.
+        // Only while engaged: a delegate's first scale/offset notification
+        // (e.g. an icon appearing under a resting pointer) must not engage
+        // zoom; that takes real pointer input, as for every other icon.
         function scheduleHoverUpdate() {
-            if (mouseX >= 0 && !root._dragActive && !root.keyboardNavigating)
+            if (mouseInside && !root.keyboardNavigating)
                 Qt.callLater(root.updateHoveredItem)
         }
 

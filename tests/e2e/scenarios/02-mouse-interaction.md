@@ -6,7 +6,7 @@
 - mouse-minimize-state: Active, background, minimized, MRU, and current-child state
 - mouse-membership: 1→2→1 membership reselects the current action
 - mouse-new-instance: Middle-click launches new instance
-- mouse-hover-zoom: Parabolic zoom on mouse hover; magnified icons push neighbours aside, the dock background grows, and in the middle of the dock the background edges and far icons stay still; the unscaled hover transition baseline is configurable from 0 to 1000 ms (default 100 ms, matching normal-speed `Kirigami.Units.shortDuration`), Plasma animation scaling still applies, and 0 ms makes zoom snap instantly
+- mouse-hover-zoom: Parabolic zoom on mouse hover; magnified icons push neighbours aside, the dock background grows, and in the middle of the dock the background edges and far icons stay still; only entering and leaving the dock animate (pointer movement along the dock never lags). The hover transition follows the Zoom animation preset: Natural (default, 180 ms in / 240 ms out, ease in and out), Quick (100 ms ease-out both ways, the Krema 0.10 behaviour), Relaxed (300 ms in / 400 ms out, gentle ease in and out), Instant (snap), or Custom (separate zoom-in/zoom-out duration 0–1000 ms and easing). Durations are unscaled baselines: Plasma animation scaling still applies, and a 0 ms direction snaps
 - mouse-hover-tooltip: Tooltip shows app name on hover
 - mouse-wheel-cycle: Scroll wheel cycles windows of grouped app; it never launches a pinned app that isn't running
 - mouse-drag-reorder: Drag to reorder dock items
@@ -16,6 +16,7 @@
 ## Affected Files
 - src/qml/main.qml
 - src/qml/DockItem.qml
+- src/qml/ZoomAnimationProfile.qml
 - src/utils/zoomcalculator.h
 - src/config/krema.kcfg
 - src/shell/dockview.h

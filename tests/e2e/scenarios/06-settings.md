@@ -277,21 +277,26 @@ and task-section rows check their real controls and consumer effects.
 5. Select "Quick", then click the "Custom" tab. Verify `ZoomAnimationPreset=4` and the tab shows "Zoom-in duration (ms)", "Zoom-in easing", "Zoom-out duration (ms)", and "Zoom-out easing" with the Natural defaults (180 ms / 240 ms, "Ease in and out")
 6. Raise "Zoom-in duration (ms)" by two steps (10 ms each) to 200 and choose "Linear" for "Zoom-out easing". Verify `ZoomInDuration=200` and `ZoomOutEasing=0`; the easing combos offer exactly "Linear", "Ease in", "Ease out", "Ease in and out", "Gentle ease in and out"
 7. Hover a dock item: zoom-in and zoom-out follow the custom durations and curves without a restart
-8. Click the "Preset" tab: "Quick" is restored (`ZoomAnimationPreset=1`). Click "Custom" again: the custom values are unchanged
-9. Select "In place - icons overlap" and repeat a hover check: moving the pointer along the dock tracks it directly without lag; only entering and leaving the dock animate
-10. Set "Zoom factor" to 1.0 and verify the whole card is disabled; restore zoom factor > 1.0
-11. With the "Custom" tab selected, close Settings, restart Krema, and reopen Settings. Verify the "Custom" tab and values are restored. Click "Preset": with no earlier preset in this Settings session, "Natural" is selected
+8. Click the "Preset" tab: "Quick" is restored (`ZoomAnimationPreset=1`) and its radio is checked; "Natural", "Relaxed", and "Instant" are unchecked
+9. Select "Relaxed" (`ZoomAnimationPreset=2`), then "Quick" again (`ZoomAnimationPreset=1`): each time only the selected radio is checked. Click the already-checked "Quick" radio once more: it stays checked and `ZoomAnimationPreset` stays 1
+10. Scroll the mouse wheel down one step with the pointer over the "Preset"/"Custom" tab bar, then back up: the Settings page scrolls (the tab bar moves with the page and returns), the "Preset" tab stays selected, "Quick" stays checked, and `ZoomAnimationPreset` stays 1
+11. Click "Custom" again: the custom values are unchanged
+12. Select "In place - icons overlap" and repeat a hover check: moving the pointer along the dock tracks it directly without lag; only entering and leaving the dock animate
+13. Set "Zoom factor" to 1.0 and verify the whole card is disabled; restore zoom factor > 1.0
+14. With the "Custom" tab selected, close Settings, restart Krema, and reopen Settings. Verify the "Custom" tab and values are restored. Click "Preset": with no earlier preset in this Settings session, "Natural" is selected
 
 **Expected:**
 - Preset and custom changes apply to hover zoom immediately in both Parabolic and In place styles; durations are unscaled baselines, so Plasma animation scaling remains active and Plasma "Instant" animation speed still snaps
 - Only entering and leaving the dock animate; pointer movement along the dock never lags
 - Zoom-in and zoom-out use independent durations and easing; a 0 ms direction snaps
 - The "Custom" tab stores `ZoomAnimationPreset=4`; the "Preset" tab restores the last preset chosen in the current Settings session, otherwise Natural
+- Radio checked state always mirrors the stored preset, including after a Custom → Preset round trip and after clicking the already-checked radio
+- The mouse wheel over the tab bar scrolls the page; it never switches the tab or changes the preset
 - The card is disabled while zoom factor is 1.0
 - Preset, custom durations, and custom easing persist across restart
 
 **Verification:** AT-SPI (tab and radio checked/enabled state, spin box value and step, combo choice), screenshot (hover transitions), `kremarc` (`ZoomAnimationPreset`, `ZoomInDuration`, `ZoomOutDuration`, `ZoomInEasing`, `ZoomOutEasing` keys)
-**Automated:** `tests/appium/test_06_settings.py::test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist` covers the tabs, custom spin box and easing combo, live hover, Preset restore, and restart. `test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the Natural default, preset persistence, the Instant preset, and the disabled state. `tests/qml/tst_dockitem_zoom.qml::test_scaleEasesInAndSettlesBackOnExit`, `test_zeroDurationSnapsInAndOut`, `test_customInOutDurationsUseConfiguredTimelines`, `test_presetsResolveTimingAndEasing`, `test_naturalEasesInSlowerThanQuick`, `test_zeroZoomInDurationSnapsInButAnimatesOut`, and `test_inPlaceTracksPointerWithoutLag` cover timing, easing, and pointer tracking in both styles. `tests/unit/test_settings_migration.cpp` covers migrating a legacy duration to the Custom preset. The live-dock screenshot checks of the curve shape remain manual.
+**Automated:** `tests/appium/test_06_settings.py::test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist` covers the tabs, custom spin box and easing combo, Preset restore with exactly one checked radio (steps 8–9, including re-clicking the checked radio), the tab-bar wheel regression (step 10), and restart; its hover check after the custom edits is only a smoke check (hover still zooms, no restart), not a timing check. `tests/qml/tst_dock_main.qml::test_customZoomTimingDrivesProductionDock` covers the custom zoom-in/zoom-out timing driving the production `main.qml` dock (step 7). `test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the Natural default, preset persistence, the Instant preset, and the disabled state. `tests/qml/tst_dockitem_zoom.qml::test_scaleEasesInAndSettlesBackOnExit`, `test_zeroDurationSnapsInAndOut`, `test_customInOutDurationsUseConfiguredTimelines`, `test_presetsResolveTimingAndEasing`, `test_naturalEasesInSlowerThanQuick`, `test_zeroZoomInDurationSnapsInButAnimatesOut`, and `test_inPlaceTracksPointerWithoutLag` cover timing, easing, and pointer tracking in both styles. `tests/unit/test_settings_migration.cpp` covers migrating a legacy duration to the Custom preset. The live-dock screenshot checks of the curve shape remain manual.
 
 ---
 

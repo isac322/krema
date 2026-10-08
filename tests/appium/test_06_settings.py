@@ -116,23 +116,21 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
 
 
 def page_wheel_point(krema: Krema) -> tuple[int, int]:
-    """Screen centre of the current settings page's vertical scroll bar.
+    """A screen point over the settings page's empty right margin.
 
-    Wheel events there always scroll the page: Kirigami's WheelHandler
-    filters the ScrollView's scroll bars. Over the page body a wheel at rest
-    goes to the control under the pointer first, and org.kde.desktop
+    Wheel events there always scroll the page. Over the page body a wheel
+    at rest goes to the control under the pointer first, and org.kde.desktop
     ComboBox/SpinBox set ``wheelEnabled: true``, so they would eat it (and
-    change their value).
+    change their value). FormCards are width-capped and centred, so the
+    margin between the card edge and the scroll bar is empty for the full
+    page height (about 60 px at the usual window size); the left margin
+    proved unreliable (the column's SeparatorHandle), and the scroll bar's
+    accessible has no Component so its rect cannot be measured. On
+    full-width list pages the same x lands on plain rows, which ignore the
+    wheel.
     """
-
-    def bar():
-        for b in krema.find_all(SETTINGS_STACK_XPATH + "//scroll_bar"):
-            r = Rect.of(b)
-            if has_state(b, "showing") and r.width and r.height > r.width:
-                return b
-        return None
-
-    return krema.screen_rect(wait_until(bar, message="settings page vertical scroll bar"), "settings").center
+    view = Rect.of(krema.wait_for(SETTINGS_STACK_XPATH))
+    return krema.to_screen(Rect(view.x + view.width - 40, view.y + view.height // 2, 1, 1), "settings")[:2]
 
 
 def scroll_into_view(krema: Krema, xpath: str):

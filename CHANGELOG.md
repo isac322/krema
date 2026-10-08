@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
+- Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
+
+### Changed
+
+- Icon spacing can now be set up to 64 pixels instead of 16
 
 ### Changed
 

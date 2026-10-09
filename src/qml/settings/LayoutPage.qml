@@ -141,6 +141,12 @@ SettingsPage {
                             // behind the label, accent fill when selected.
                             color: zone.isSelected ? Kirigami.Theme.highlightColor
                                 : Qt.alpha(Kirigami.Theme.backgroundColor, zone.hovered || pillMouse.containsMouse || zone.visualFocus ? 0.95 : 0.8)
+                            // The selected pill sits where the dock's measurement
+                            // draws its value; step aside while it is shown.
+                            opacity: zone.isSelected && stage.measureTarget !== null ? 0 : 1
+                            Behavior on opacity {
+                                NumberAnimation { duration: Kirigami.Units.shortDuration; easing.type: Easing.OutCubic }
+                            }
 
                             x: {
                                 if (zone.isHorizontalEdge)

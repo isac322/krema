@@ -79,6 +79,9 @@ Item {
     property int hoveredIndex: -1
     /// Zoom in and out on `focusIndex` in a loop (picker previews).
     property bool pulse: false
+    /// Icon not drawn, for a page that draws its own animated copy in its
+    /// place (-1: none). Its cell, indicator and badge stay.
+    property int hiddenIconIndex: -1
 
     /// Zoom transition timing: effective milliseconds and Easing.Type values.
     property int zoomInDuration: zoomProfile.effectiveZoomInDuration
@@ -361,6 +364,7 @@ Item {
                         height: width
                         source: slot.modelData.icon
                         fallback: slot.modelData.fallback ?? "application-x-executable"
+                        visible: slot.index !== dock.hiddenIconIndex
                         opacity: slot.windowState === "active" ? dock.opacityActive
                             : slot.windowState === "minimized" ? dock.opacityMinimized
                             : dock.opacityInactive

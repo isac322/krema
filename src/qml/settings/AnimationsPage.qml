@@ -290,6 +290,9 @@ SettingsPage {
                 // The middle icon is magnified as if hovered, so the
                 // attention animation plays at dock-zoom size.
                 hoveredIndex: middleIndex
+                // The overlay below is the only copy of this icon, so a
+                // bounce or blink leaves nothing behind.
+                hiddenIconIndex: attentionIcon.visible ? focusIndex : -1
             }
 
             // Sum of positions from `item` up to this item's parent (the

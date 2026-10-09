@@ -2,9 +2,9 @@
 
 ## Features
 - settings-window: Sidebar of 8 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
-- settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a sample dock preview
-- settings-layout: Screen edge picker on a monitor schematic, floating, corner radius
-- settings-visual-pickers: Card pickers (ChoiceCard) and schematic radios that work by mouse, keyboard, and AT-SPI
+- settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a live desktop preview (real wallpaper, miniature dock with real theme icons) and measurement guides
+- settings-layout: Screen edge picker on the live desktop preview, floating, corner radius
+- settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
 - settings-behavior: Visibility mode cards, reservation, dodge and delay controls
@@ -16,13 +16,16 @@
 - settings-live-preview: Changes apply in real-time without restart
 - settings-tint-color: Custom tint color selection through a color swatch button
 - settings-background-style: Background style cards (Panel Inherit, Transparent, Tinted, Acrylic) with live previews
-- settings-shadow: Light-source editor, advanced exact values, shadow color
+- settings-shadow: 3D light-source scene (drag lamp, wheel height, Shift+wheel softness, drag dock elevation), "Result" inset with the real shadow, advanced exact values, shadow color
 
 ## Affected Files
+- src/qml/settings/SettingsPage.qml
+- src/qml/settings/DesktopStage.qml
+- src/qml/settings/MiniDock.qml
+- src/qml/settings/ShadowScene3D.qml
 - src/qml/settings/ChoiceCard.qml
 - src/qml/settings/SliderDelegate.qml
 - src/qml/settings/ColorSwatchButton.qml
-- src/qml/settings/FormSection.qml
 - src/qml/settings/IconsPage.qml
 - src/qml/settings/LayoutPage.qml
 - src/qml/settings/PanelStylePage.qml
@@ -108,7 +111,7 @@ and task-section rows check their real controls and consumer effects.
 **Expected:**
 - Dock icons resize in real-time as the value changes
 - No restart required
-- The sample dock at the top of the Icons page resizes too
+- The miniature dock on the Icons page desktop preview resizes too; while the slider is hovered, dragged, or focused, the preview outlines an icon and shows measurement guides with the value (e.g. "48 px")
 - Zoom proportions adjust accordingly (the Parabolic zoom style keeps icons separated while scaling)
 
 **Verification:** screenshot comparison (icon size changed)
@@ -182,7 +185,7 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Settings dialog open, Layout & Position page. Dock currently at Bottom.
 **Steps:**
-1. Click the top edge of the monitor schematic in the "Screen edge" group (AT-SPI: radio button "Top"; also selectable with Tab + Space/Return)
+1. Click the top edge of the desktop preview in the "Screen edge" group (AT-SPI: radio button "Top"; also selectable with Tab + Space/Return)
 2. Wait 500ms
 3. Screenshot — verify dock moved to top of screen
 
@@ -190,10 +193,10 @@ and task-section rows check their real controls and consumer effects.
 - Dock repositions to top edge of screen
 - Layer-shell anchor updates correctly
 - All items render correctly in new position
-- The schematic shows the mini dock on the top edge and only the "Top" radio is checked
+- The desktop preview shows the miniature dock on the top edge and only the "Top" radio is checked
 
 **Verification:** screenshot (dock at top), AT-SPI (radio checked state)
-**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top ("Screen edge" schematic on the Layout & Position page)
+**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top ("Screen edge" picker on the Layout & Position page)
 
 ---
 
@@ -538,16 +541,19 @@ the window, Orca or an AT-SPI inspector available.
 5. Open Shadow. Tab to the light source: AT-SPI reports a slider named "Light
    position" whose description lists X, Y, height, and radius. Press Right
    arrow, Shift+Right, Page Up, and plus; verify the description and the
-   "Advanced settings" values change accordingly.
+   "Advanced settings" values change accordingly. Tab to the "Panel
+   elevation" slider over the dock and press Up and Page Up; verify the
+   "Panel elevation" value rises by 1 and then by 10.
 6. Tab to a slider such as "Shadow intensity": its accessible name equals the
    visible label and Increase/Decrease actions change the value.
 
 **Expected:**
-- Every card picker and the edge schematic can be operated without a mouse,
-  announce their option names, and expose one checked option per group.
-- Space or Return selects a card; the arrow keys pick schematic edges.
+- Every card picker and the screen edge picker can be operated without a
+  mouse, announce their option names, and expose one checked option per group.
+- Space or Return selects a card; the arrow keys pick screen edges.
 - Color swatches announce the setting and its current color.
-- The light source can be moved and resized from the keyboard.
+- The light source can be moved, raised, and softened, and the panel
+  elevation changed, from the keyboard.
 
 **Verification:** AT-SPI (roles, names, `checked`/`focused` states,
 descriptions), `kremarc`, screenshot of the dock edge.
@@ -557,35 +563,47 @@ paths remain manual checks.
 
 ---
 
-## TC SET-018: Shadow light-source editor and advanced values
+## TC SET-018: Shadow 3D light scene and advanced values
 
 **Precondition:** Settings dialog open on the Shadow page, "Enable shadow"
 on, dock visible.
 
 **Steps:**
-1. Drag the light circle in the editor to the upper left. Verify the shadow
-   preview below the editor and the real dock shadow move away from the
-   light, and the value line ("X … · Y … · Height … · Radius … · Elevation …")
-   updates.
-2. Drag the light's outer ring outward, then scroll over the light. Verify
-   the radius (softness) and height values change.
-3. Drag the dock rectangle, or use the vertical "Panel elevation" slider beside
-   it. Verify the elevation value changes.
-4. Click "Advanced settings". Verify the expander reports "Expanded" and shows
-   the "Light X", "Light Y", "Light height", "Light radius", "Panel
-   elevation", and "Shadow intensity" sliders with the values set above.
-   Change "Light X" and verify the light circle moves.
-5. Turn "Enable shadow" off. Verify the editor and the controls below it are
-   hidden and the dock shadow disappears.
+1. Verify the stage shows the 3D scene: the bottom of the desktop with the
+   real Plasma wallpaper in perspective, the dock with real theme icons
+   floating above it, a glowing lamp, and a "Result" inset (AT-SPI graphic
+   "Shadow preview") in the bottom-right corner. The hint below reads "Drag
+   the light to move it, scroll for its height, Shift+scroll for softness,
+   and drag the dock for its elevation."
+2. Drag the lamp to the left. Verify the shadow cast on the wallpaper, the
+   shadow in the "Result" inset, and the real dock shadow move away from the
+   light, and the "Light position" description reports the new X and Y.
+3. With the pointer over the scene, scroll up one notch: the light height
+   rises by 50. Hold Shift and scroll up one notch: the light radius rises by
+   0.5 and the shadow softens.
+4. Drag the dock upward. Verify the panel elevation increases (up to 50) and
+   the cast shadow moves farther from the dock.
+5. Drag empty space in the scene: the view orbits within a limited angle.
+   Double-click the scene: the view returns to its default angle. No shadow
+   setting changes.
+6. Click "Advanced settings". Verify the expander reports "Expanded" and shows
+   the "Light X", "Light Y", "Light height", "Light radius", and "Panel
+   elevation" sliders with the values set above. Change "Light X" and verify
+   the lamp moves in the scene. "Shadow intensity" and "Shadow color" stay in
+   the Shadow group above the expander.
+7. Turn "Enable shadow" off. Verify the 3D scene and the controls below the
+   switch are hidden and the dock shadow disappears.
 
 **Expected:**
-- Editor drags, advanced sliders, and the real dock shadow stay in sync live.
+- Scene drags, wheel input, advanced sliders, the "Result" inset, and the
+  real dock shadow stay in sync live.
 - Values persist in `kremarc` (`ShadowLightX`, `ShadowLightY`,
   `ShadowLightZ`, `ShadowLightRadius`, `ShadowElevation`,
   `ShadowIntensity`).
 
-**Verification:** AT-SPI (slider values, expander description), screenshot
-(editor, preview, dock shadow), `kremarc`.
+**Verification:** AT-SPI (slider values, "Light position" description,
+expander description), screenshot (3D scene, "Result" inset, dock shadow),
+`kremarc`.
 **Automated:** none (manual).
 
 ---

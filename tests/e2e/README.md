@@ -177,7 +177,8 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
 | `src/models/launcherentrytracker.*` | 01 |
-| `src/qml/settings/ChoiceCard.qml`, `SliderDelegate.qml`, `ColorSwatchButton.qml`, `FormSection.qml` | 06, 07 |
+| `src/qml/settings/SettingsPage.qml`, `DesktopStage.qml`, `MiniDock.qml`, `ChoiceCard.qml`, `SliderDelegate.qml`, `ColorSwatchButton.qml` | 06, 07 |
+| `src/qml/settings/ShadowScene3D.qml` | 06 |
 | `src/qml/settings/IconsPage.qml` | 02, 06, 07 |
 | `src/qml/settings/LayoutPage.qml` | 06, 07 |
 | `src/qml/settings/BehaviorPage.qml` | 06, 07 |

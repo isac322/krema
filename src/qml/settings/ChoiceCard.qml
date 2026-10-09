@@ -3,23 +3,29 @@
 
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Effects
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-// One option of a visual picker: a selectable card with a preview area above
-// its label. Exposed to assistive technology as a radio button named after
-// `text`. Cards sharing a parent are auto-exclusive. The owner binds `checked`
-// to the setting with a Binding element (re-applied whenever the setting
-// changes, also after a click toggled the card) and writes the setting in
-// onChosen, which only fires for available cards.
+// One option of a visual picker: a rounded thumbnail tile with the label and
+// description centered below it. The selected option gets an accent ring
+// around the tile and a bold label; hover shows a faint ring. Exposed to
+// assistive technology as a radio button named after `text`. Cards sharing a
+// parent are auto-exclusive. The owner binds `checked` to the setting with a
+// Binding element (re-applied whenever the setting changes, also after a
+// click toggled the card) and writes the setting in onChosen, which only
+// fires for available cards.
 //
 //     ChoiceCard {
 //         id: alwaysCard
 //         text: i18n("Always visible")
 //         Binding { target: alwaysCard; property: "checked"; value: DockSettings.visibilityMode === 0 }
 //         onChosen: DockSettings.visibilityMode = 0
-//         Rectangle { anchors.fill: parent }   // preview content
+//         DesktopStage { anchors.fill: parent; elevated: false }   // tile content
 //     }
+//
+// Children fill the tile and are clipped to its rounded corners. Cards of one
+// picker row should share `previewHeight` so their tiles have one aspect.
 QQC2.AbstractButton {
     id: card
 
@@ -28,13 +34,20 @@ QQC2.AbstractButton {
     /// False dims the card, blocks selection and shows `unavailableReason`.
     property bool available: true
     property string unavailableReason
-    /// Height of the preview area; children of the card fill it.
+    /// Height of the thumbnail tile; children of the card fill it.
     property real previewHeight: Kirigami.Units.gridUnit * 4
 
     default property alias previewData: previewArea.data
 
     /// The user selected this card (click, Space, Return or AT-SPI action).
     signal chosen()
+
+    readonly property real ringWidth: 3
+    // Space between the tile edge and the selection ring.
+    readonly property real ringGap: 2
+    readonly property real tileRadius: Kirigami.Units.cornerRadius * 2
+    readonly property color secondaryTextColor: Kirigami.ColorUtils.linearInterpolation(
+        Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.7)
 
     // An auto-exclusive card cannot be unchecked by clicking it again, which
     // keeps the owner's Binding on `checked` intact.
@@ -48,11 +61,11 @@ QQC2.AbstractButton {
     implicitHeight: column.implicitHeight
 
     // Cards of one picker row share the tallest card's height, with their
-    // previews and labels aligned to the top.
+    // tiles and labels aligned to the top.
     Layout.fillWidth: true
     Layout.fillHeight: true
 
-    opacity: available ? 1.0 : 0.45
+    opacity: available && enabled ? 1.0 : 0.45
 
     Accessible.role: Accessible.RadioButton
     Accessible.name: text
@@ -77,61 +90,92 @@ QQC2.AbstractButton {
     QQC2.ToolTip.text: unavailableReason
     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
 
-    background: Rectangle {
-        Kirigami.Theme.colorSet: Kirigami.Theme.View
-        Kirigami.Theme.inherit: false
-        radius: Kirigami.Units.cornerRadius
-        color: card.checked
-            ? Qt.alpha(Kirigami.Theme.highlightColor, 0.12)
-            : (card.hovered && card.available ? Qt.alpha(Kirigami.Theme.highlightColor, 0.05) : Kirigami.Theme.backgroundColor)
-        border.width: card.checked || card.visualFocus ? 2 : 1
-        border.color: card.checked || card.visualFocus
-            ? Kirigami.Theme.highlightColor
-            : (card.hovered && card.available
-                ? Qt.alpha(Kirigami.Theme.highlightColor, 0.5)
-                : Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.2))
-
-        Behavior on border.color {
-            ColorAnimation { duration: Kirigami.Units.shortDuration }
-        }
-    }
+    background: null
 
     contentItem: ColumnLayout {
         id: column
         spacing: Kirigami.Units.smallSpacing
 
         Item {
-            id: previewArea
+            id: tileFrame
             Layout.fillWidth: true
-            Layout.preferredHeight: card.previewHeight
-            Layout.topMargin: Kirigami.Units.smallSpacing
-            Layout.leftMargin: Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
-            clip: true
+            Layout.preferredHeight: card.previewHeight + 2 * (card.ringWidth + card.ringGap)
+
+            // Selection ring (accent), keyboard focus ring (focus color) or
+            // hover ring (faint accent) around the tile.
+            Rectangle {
+                anchors.fill: parent
+                radius: card.tileRadius + card.ringWidth + card.ringGap
+                color: Qt.alpha(Kirigami.Theme.highlightColor, 0)
+                visible: border.width > 0
+                border.width: card.checked ? card.ringWidth
+                    : (card.visualFocus || (card.hovered && card.available)) ? 2 : 0
+                border.color: card.visualFocus ? Kirigami.Theme.focusColor
+                    : card.checked ? Kirigami.Theme.highlightColor
+                    : Qt.alpha(Kirigami.Theme.highlightColor, 0.45)
+
+                Behavior on border.color {
+                    ColorAnimation { duration: Kirigami.Units.shortDuration }
+                }
+            }
+
+            Item {
+                id: previewArea
+                anchors.fill: parent
+                anchors.margins: card.ringWidth + card.ringGap
+
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    maskEnabled: true
+                    maskSource: tileMask
+                    maskThresholdMin: 0.5
+                    maskSpreadAtMin: 1.0
+                }
+
+                // Tile ground under the preview.
+                Rectangle {
+                    anchors.fill: parent
+                    color: Kirigami.Theme.alternateBackgroundColor
+                }
+            }
+
+            Rectangle {
+                id: tileMask
+                anchors.fill: previewArea
+                radius: card.tileRadius
+                visible: false
+                layer.enabled: true
+            }
+
+            // Hairline edge so light tiles stay defined on light cards.
+            Rectangle {
+                anchors.fill: previewArea
+                radius: card.tileRadius
+                color: Qt.alpha(Kirigami.Theme.backgroundColor, 0)
+                border.width: 1
+                border.color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
+            }
         }
 
         QQC2.Label {
             Layout.fillWidth: true
-            Layout.leftMargin: Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
-            Layout.bottomMargin: descriptionLabel.visible ? 0 : Kirigami.Units.smallSpacing
             text: card.text
+            color: Kirigami.Theme.textColor
             font.bold: card.checked
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
             Accessible.ignored: true
         }
 
         QQC2.Label {
             id: descriptionLabel
             Layout.fillWidth: true
-            Layout.leftMargin: Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
-            Layout.bottomMargin: Kirigami.Units.smallSpacing
             visible: text.length > 0
             text: card.available ? card.description : card.unavailableReason
             font: Kirigami.Theme.smallFont
-            color: Kirigami.Theme.disabledTextColor
+            color: card.secondaryTextColor
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             Accessible.ignored: true

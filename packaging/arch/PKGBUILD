@@ -12,6 +12,7 @@ depends=(
     'qt6-base>=6.8'
     'qt6-declarative>=6.8'
     'qt6-wayland'
+    'qt6-quick3d>=6.8'
     'kwindowsystem>=6.0'
     'kconfig>=6.0'
     'kcoreaddons>=6.0'

@@ -10,13 +10,10 @@ import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
 import ".."
 
-FormCard.FormCardPage {
+SettingsPage {
     id: page
     title: i18n("Icons")
-
-    // Responsive vertical padding: scales with page width
-    topPadding: Math.round(Kirigami.Units.gridUnit * Math.max(0.5, Math.min(1.5, width / 800)))
-    bottomPadding: topPadding
+    subtitle: i18n("Size, spacing, hover zoom and opacity of the dock icons")
 
     readonly property ZoomAnimationProfile zoomProfile: ZoomAnimationProfile {}
     readonly property bool zoomCustom: DockSettings.zoomAnimationPreset === zoomProfile.customPreset
@@ -25,9 +22,8 @@ FormCard.FormCardPage {
     property int lastZoomPreset: 0
 
     readonly property bool zoomEnabled: DockSettings.maxZoomFactor > 1.0
-    // Looping preview animations only run while the settings window is shown
-    // and not minimized (a minimized window keeps animations ticking).
-    readonly property bool windowVisible: Window.window ? Window.window.visible && Window.window.visibility !== Window.Minimized : false
+    // The stage's middle icon is shown magnified until the pointer hovers it.
+    property bool showStaticHover: true
 
     Component.onCompleted: {
         const preset = DockSettings.zoomAnimationPreset
@@ -79,136 +75,31 @@ FormCard.FormCardPage {
         }
     ]
 
-    // Fill colour of the schematic icon tiles in the small card previews.
-    readonly property color sketchTileColor: Kirigami.ColorUtils.linearInterpolation(
-        Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.35)
-
     // --- Inline preview components ---
 
-    // Five schematic icons with the middle one magnified, laid out the way a
-    // zoom style makes room for it.
-    component ZoomStyleSketch: Item {
-        id: sketch
+    // Picker thumbnail: the desktop cropped around a dock sized to fit the
+    // tile. Configure the dock through `dock`.
+    component DockTile: DesktopStage {
+        id: tile
 
-        property bool parabolic
-        readonly property var scales: [1.0, 1.35, 1.7, 1.35, 1.0]
-        readonly property real unit: Math.min(height / 2.4, width / 8.4)
+        property alias dock: tileDock
 
-        Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            width: sketchRow.width + sketch.unit * 0.6
-            height: sketch.unit * 1.5
-            radius: sketch.unit * 0.35
-            color: Kirigami.Theme.alternateBackgroundColor
-        }
+        anchors.fill: parent
+        elevated: false
+        radius: 0
+        active: page.windowActive
+        // Fit the resting dock along the edge and the zoomed icons across it.
+        unit: Math.min(0.85 * (tileDock.vertical ? height : width) / tileDock.restLengthReal,
+                       0.7 * (tileDock.vertical ? width : height)
+                           / (tileDock.iconSize * Math.max(1.0, tileDock.maxZoomFactor) + 2 * Kirigami.Units.largeSpacing + 8))
+        Accessible.ignored: true
 
-        Row {
-            id: sketchRow
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: sketch.unit * 0.25
-            spacing: sketch.unit * 0.2
-
-            Repeater {
-                model: sketch.scales
-
-                Item {
-                    required property real modelData
-                    required property int index
-
-                    width: sketch.parabolic ? sketch.unit * modelData : sketch.unit
-                    height: sketch.unit
-                    z: modelData
-
-                    Rectangle {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.bottom: parent.bottom
-                        width: sketch.unit
-                        height: sketch.unit
-                        radius: sketch.unit * 0.25
-                        scale: parent.modelData
-                        transformOrigin: Item.Bottom
-                        color: parent.index === 2 ? Kirigami.Theme.highlightColor : page.sketchTileColor
-                        // Outline in the card colour makes overlapping tiles readable.
-                        border.width: 1
-                        border.color: Kirigami.Theme.backgroundColor
-                    }
-                }
-            }
-        }
-    }
-
-    // One icon on a dock strip that zooms in and out in a loop with the given
-    // timing. Durations are effective (already scaled) milliseconds; easings
-    // are Easing.Type values.
-    component ZoomMotion: Item {
-        id: motion
-
-        property int inDuration
-        property int outDuration
-        property int inEasing: Easing.InOutCubic
-        property int outEasing: Easing.InOutCubic
-        property bool active
-        property real amount: 0
-
-        readonly property real unit: Math.min(height / 2.2, width / 3)
-
-        function restartIfRunning() {
-            if (motionAnimation.running) {
-                motionAnimation.restart()
-            }
-        }
-        onInDurationChanged: restartIfRunning()
-        onOutDurationChanged: restartIfRunning()
-        onInEasingChanged: restartIfRunning()
-        onOutEasingChanged: restartIfRunning()
-
-        Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            width: motion.unit * 2.4
-            height: motion.unit * 1.3
-            radius: motion.unit * 0.3
-            color: Kirigami.Theme.alternateBackgroundColor
-        }
-
-        Kirigami.Icon {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: motion.unit * 0.15
-            // Rendered at the full zoom size and scaled down, so the zoomed
-            // icon stays crisp (never magnified past its rendered size).
-            readonly property real maxZoom: 1.7
-            width: motion.unit * maxZoom
-            height: width
-            source: "preferences-system"
-            scale: (1.0 + (maxZoom - 1.0) * motion.amount) / maxZoom
-            transformOrigin: Item.Bottom
-        }
-
-        SequentialAnimation {
-            id: motionAnimation
-            loops: Animation.Infinite
-            running: motion.active
-            onRunningChanged: if (!running) motion.amount = 0
-
-            PauseAnimation { duration: 500 }
-            NumberAnimation {
-                target: motion
-                property: "amount"
-                to: 1
-                duration: motion.inDuration
-                easing.type: motion.inEasing
-            }
-            PauseAnimation { duration: 700 }
-            NumberAnimation {
-                target: motion
-                property: "amount"
-                to: 0
-                duration: motion.outDuration
-                easing.type: motion.outEasing
-            }
+        MiniDock {
+            id: tileDock
+            unit: tile.unit
+            edge: tile.edge
+            backdrop: tile.backdrop
+            active: tile.active
         }
     }
 
@@ -265,14 +156,14 @@ FormCard.FormCardPage {
             y: curve.height - curve.margin
             width: curve.width - curve.margin * 2
             height: 1
-            color: Kirigami.Theme.disabledTextColor
+            color: page.secondaryTextColor
         }
         Rectangle {
             x: curve.margin
             y: curve.margin
             width: curve.width - curve.margin * 2
             height: 1
-            color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.disabledTextColor, 0.5)
+            color: Qt.alpha(page.secondaryTextColor, 0.4)
         }
 
         Shape {
@@ -282,7 +173,7 @@ FormCard.FormCardPage {
             ShapePath {
                 strokeColor: Kirigami.Theme.highlightColor
                 strokeWidth: 2
-                fillColor: "transparent"
+                fillColor: Qt.alpha(Kirigami.Theme.highlightColor, 0)
                 capStyle: ShapePath.RoundCap
                 joinStyle: ShapePath.RoundJoin
 
@@ -293,7 +184,7 @@ FormCard.FormCardPage {
         }
     }
 
-    // A padded icon inside its cell outline, for the normalization comparison.
+    // A padded icon on a small tile, for the normalization comparison.
     component NormalizationSample: ColumnLayout {
         id: sample
 
@@ -307,18 +198,17 @@ FormCard.FormCardPage {
             Layout.alignment: Qt.AlignHCenter
             implicitWidth: Kirigami.Units.gridUnit * 2.5
             implicitHeight: implicitWidth
-            radius: Kirigami.Units.smallSpacing
-            color: Qt.alpha(Kirigami.Theme.textColor, 0.04)
-            border.width: sample.current ? 2 : 1
-            border.color: sample.current
-                ? Kirigami.Theme.highlightColor
-                : Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.3)
+            radius: Kirigami.Units.cornerRadius * 2
+            color: Kirigami.Theme.alternateBackgroundColor
+            border.width: sample.current ? 2 : 0
+            border.color: Kirigami.Theme.highlightColor
 
             Kirigami.Icon {
                 anchors.centerIn: parent
-                width: (parent.width - 4) * sample.fill
+                width: (parent.width - Kirigami.Units.smallSpacing * 2) * sample.fill
                 height: width
-                source: "application-x-executable"
+                source: "org.kde.kate"
+                fallback: "accessories-text-editor"
             }
         }
 
@@ -327,250 +217,86 @@ FormCard.FormCardPage {
             text: sample.label
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             font.bold: sample.current
-            color: sample.current ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+            color: sample.current ? Kirigami.Theme.textColor : page.secondaryTextColor
         }
     }
 
-    // --- Mini Dock Preview ---
-    FormCard.FormCard {
-        id: previewCard
+    // --- Stage: the desktop with a live dock ---
 
-        FormCard.AbstractFormDelegate {
-            id: dockPreviewDelegate
-            background: null
-            focusPolicy: Qt.NoFocus
-            activeFocusOnTab: false
-            Accessible.role: Accessible.Graphic
-            Accessible.name: i18n("Dock preview")
-            Accessible.description: i18n("Sample dock showing the icon size, spacing, zoom, zoom animation, normalization, scale and icon opacities")
+    stage: Component {
+        Item {
+            implicitHeight: stage.implicitHeight
 
-            contentItem: Item {
-                id: previewArea
-                implicitHeight: previewStage.height * previewStage.scale + Kirigami.Units.smallSpacing + hoverToggleRow.implicitHeight
+            DesktopStage {
+                id: stage
 
-                Item {
-                    id: previewStage
+                readonly property real coverUnit: Math.max(width / screenSize.width, height / screenSize.height)
 
-                    // Icons chosen for: (1) guaranteed on KDE (Breeze), (2) mix of
-                    // padding-heavy vs padding-free to demonstrate normalization.
-                    // "application-x-executable" and "preferences-desktop-theme" have
-                    // visible internal padding; "folder" and "utilities-terminal" fill
-                    // the canvas, making normalization differences obvious.
-                    readonly property var iconNames: [
-                        "system-file-manager",
-                        "utilities-terminal",
-                        "application-x-executable",
-                        "preferences-system",
-                        "internet-web-browser",
-                        "accessories-text-editor",
-                        "preferences-desktop-theme"
-                    ]
-                    // Window state per icon, so every opacity setting is visible.
-                    readonly property var iconStates: [
-                        "inactive", "active", "launcher", "inactive", "minimized", "inactive", "launcher"
-                    ]
+                anchors.fill: parent
+                active: page.windowActive
+                // Default framing around the dock, shrunk when a large dock
+                // would not fit along its edge.
+                unit: Math.max(coverUnit, Math.min(framingUnit,
+                    0.85 * (dock.vertical ? height : width) / dock.restLengthReal))
 
-                    readonly property real size: DockSettings.iconSize
-                    readonly property real gap: DockSettings.iconSpacing
-                    readonly property int count: iconNames.length
-                    readonly property real pitch: size + gap
-                    readonly property real restWidth: count * size + (count - 1) * gap
-                    readonly property real pad: Kirigami.Units.largeSpacing
-                    readonly property real sigma: size * 1.2
-                    readonly property bool parabolic: DockSettings.zoomStyle !== 1
-                    // Upper bound of the total width Parabolic zoom adds.
-                    readonly property real maxGrowth: parabolic
-                        ? (DockSettings.maxZoomFactor - 1.0) * size * sigma * Math.sqrt(Math.PI) / pitch
-                        : 0
-                    readonly property real restLeft: (width - restWidth) / 2
+                Accessible.role: Accessible.Graphic
+                Accessible.name: i18n("Dock preview")
+                Accessible.description: i18n("Sample dock showing the icon size, spacing, zoom, zoom animation, normalization, scale and icon opacities")
 
-                    width: restWidth + pad * 2 + maxGrowth
-                    height: size * DockSettings.maxZoomFactor + pad * 2
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    transformOrigin: Item.Top
-                    scale: Math.min(1.0, previewArea.width / width)
+                // Measurement overlay for the geometry sliders.
+                measureOrientation: dock.vertical ? Qt.Vertical : Qt.Horizontal
+                measureTarget: iconSizeSlider.active ? dock.focusIcon
+                    : iconSpacingSlider.active ? dock.spacingMarker
+                    : zoomFactorSlider.active ? dock.focusIcon
+                    : null
+                measureText: iconSpacingSlider.active
+                    ? i18nc("@label pixels", "%1 px", DockSettings.iconSpacing)
+                    : zoomFactorSlider.active
+                        ? i18nc("@label zoom factor and zoomed icon size", "%1x · %2 px",
+                                DockSettings.maxZoomFactor.toFixed(1),
+                                Math.round(DockSettings.iconSize * DockSettings.maxZoomFactor))
+                        : i18nc("@label pixels", "%1 px", DockSettings.iconSize)
 
-                    // Static hover: the middle icon is magnified by default.
-                    property bool showStaticHover: true
-                    readonly property real staticCursor: Math.floor(count / 2) * pitch + size / 2
-                    // Cursor in rest-row coordinates, kept when the pointer leaves
-                    // so zoom-out collapses around where it left (as in the dock).
-                    property real mouseCursor: staticCursor
-                    // Not readonly: a Behavior intercepts its writes.
-                    property real cursor: previewHoverArea.containsMouse || !showStaticHover
-                        ? mouseCursor
-                        : staticCursor
-                    Behavior on cursor {
-                        enabled: !previewHoverArea.containsMouse
-                        NumberAnimation {
-                            duration: Kirigami.Units.longDuration
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-
-                    // 0 = rest, 1 = full zoom; animated with the current zoom
-                    // animation preset or custom timing, like the dock.
-                    property real zoomAmount: previewHoverArea.containsMouse || showStaticHover ? 1.0 : 0.0
-                    Behavior on zoomAmount {
-                        id: previewZoomBehavior
-                        enabled: page.zoomProfile.animated
-                        NumberAnimation {
-                            duration: previewZoomBehavior.targetValue > 0.5
-                                ? page.zoomProfile.effectiveZoomInDuration
-                                : page.zoomProfile.effectiveZoomOutDuration
-                            easing.type: previewZoomBehavior.targetValue > 0.5
-                                ? page.zoomProfile.zoomInEasingType
-                                : page.zoomProfile.zoomOutEasingType
-                        }
-                    }
-
-                    // Gaussian magnification, same curve as the dock.
-                    readonly property var zoomScales: {
-                        const extra = (DockSettings.maxZoomFactor - 1.0) * zoomAmount
-                        const result = []
-                        for (let i = 0; i < count; ++i) {
-                            const d = cursor - (i * pitch + size / 2)
-                            result.push(1.0 + extra * Math.exp(-(d * d) / (sigma * sigma)))
-                        }
-                        return result
-                    }
-                    // Parabolic: growth left of the cursor shifts the row left so
-                    // the icon under the cursor stays put.
-                    readonly property real leftGrowth: {
-                        if (!parabolic) {
-                            return 0
-                        }
-                        let growth = 0
-                        for (let i = 0; i < count; ++i) {
-                            const before = Math.max(0, Math.min(1, (cursor - (i * pitch + size / 2)) / pitch + 0.5))
-                            growth += (zoomScales[i] - 1.0) * size * before
-                        }
-                        return growth
-                    }
-
-                    function paddingRatio(index) {
-                        if (DockSettings.iconNormalization) {
-                            return 1.0
-                        }
-                        // Simulated internal padding of padding-heavy icons,
-                        // which normalization removes in the real dock.
-                        switch (index) {
-                        case 2: return 0.78  // application-x-executable
-                        case 6: return 0.82  // preferences-desktop-theme
-                        case 3: return 0.90  // preferences-system
-                        default: return 1.0
-                        }
-                    }
-
-                    function stateOpacity(state) {
-                        switch (state) {
-                        case "active": return DockSettings.iconOpacityActive
-                        case "minimized": return DockSettings.iconOpacityMinimized
-                        default: return DockSettings.iconOpacityInactive
-                        }
-                    }
-
-                    // Dock background
-                    Rectangle {
-                        x: previewRow.x - previewStage.pad
-                        width: previewRow.width + previewStage.pad * 2
-                        height: previewStage.size + previewStage.pad * 2
-                        anchors.bottom: parent.bottom
-                        radius: Kirigami.Units.largeSpacing
-                        color: Kirigami.Theme.alternateBackgroundColor
-                    }
-
-                    Row {
-                        id: previewRow
-                        x: previewStage.restLeft - previewStage.leftGrowth
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: previewStage.pad
-                        height: previewStage.size
-                        spacing: previewStage.gap
-
-                        Repeater {
-                            model: previewStage.iconNames
-
-                            Item {
-                                id: previewItem
-                                required property string modelData
-                                required property int index
-
-                                readonly property real zoomScale: previewStage.zoomScales[index] ?? 1.0
-                                readonly property string windowState: previewStage.iconStates[index]
-
-                                // Parabolic: the slot widens and pushes neighbours
-                                // aside. In place: the slot keeps its width and
-                                // the icon magnifies over its neighbours.
-                                width: previewStage.parabolic ? previewStage.size * zoomScale : previewStage.size
-                                height: previewStage.size
-                                z: zoomScale
-
-                                // Cell rendered at the maximum zoom size and
-                                // scaled DOWN to the current zoom from the
-                                // bottom edge, so magnified icons stay crisp.
-                                Item {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    anchors.bottom: parent.bottom
-                                    width: previewStage.size * DockSettings.maxZoomFactor
-                                    height: width
-                                    scale: previewItem.zoomScale / DockSettings.maxZoomFactor
-                                    transformOrigin: Item.Bottom
-
-                                    Kirigami.Icon {
-                                        anchors.centerIn: parent
-                                        width: parent.width * DockSettings.iconScale * previewStage.paddingRatio(previewItem.index)
-                                        height: width
-                                        source: previewItem.modelData
-                                        opacity: previewStage.stateOpacity(previewItem.windowState)
-                                    }
-                                }
-
-                                // Running indicator (launchers have none)
-                                Rectangle {
-                                    visible: previewItem.windowState !== "launcher"
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    anchors.top: parent.bottom
-                                    anchors.topMargin: (previewStage.pad - height) / 2
-                                    width: Math.max(4, Math.round(previewStage.size / 10))
-                                    height: width
-                                    radius: width / 2
-                                    color: previewItem.windowState === "active"
-                                        ? Kirigami.Theme.highlightColor
-                                        : Kirigami.Theme.textColor
-                                    opacity: previewItem.windowState === "active" ? 1.0
-                                        : previewItem.windowState === "minimized" ? 0.35 : 0.6
-                                }
-                            }
-                        }
-                    }
-
-                    MouseArea {
-                        id: previewHoverArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                        onPositionChanged: mouse => previewStage.mouseCursor = mouse.x - previewStage.restLeft
-                    }
+                MiniDock {
+                    id: dock
+                    unit: stage.unit
+                    backdrop: stage.backdrop
+                    active: stage.active
+                    // Zoomed while the zoom factor is adjusted, at rest while
+                    // size or spacing are measured.
+                    hoveredIndex: zoomFactorSlider.active ? middleIndex
+                        : (iconSizeSlider.active || iconSpacingSlider.active) ? -1
+                        : page.showStaticHover ? middleIndex : -1
                 }
+            }
 
-                // Toggle: show/hide static hover zoom in preview
+            // Toggle: show/hide the static hover zoom on the stage, as a pill
+            // in the stage's top corner.
+            Rectangle {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: Kirigami.Units.largeSpacing
+                implicitWidth: hoverToggleRow.implicitWidth + Kirigami.Units.largeSpacing * 2
+                implicitHeight: hoverToggleRow.implicitHeight + Kirigami.Units.smallSpacing
+                radius: height / 2
+                Kirigami.Theme.colorSet: Kirigami.Theme.Window
+                Kirigami.Theme.inherit: false
+                color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.92)
+
                 RowLayout {
                     id: hoverToggleRow
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
+                    anchors.centerIn: parent
                     spacing: Kirigami.Units.smallSpacing
 
                     QQC2.Label {
                         text: i18n("Hover")
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: Kirigami.Theme.disabledTextColor
+                        color: Kirigami.Theme.textColor
                         Accessible.ignored: true
                     }
                     QQC2.Switch {
-                        checked: previewStage.showStaticHover
-                        onToggled: previewStage.showStaticHover = checked
+                        checked: page.showStaticHover
+                        onToggled: page.showStaticHover = checked
                         Accessible.name: i18n("Show hover zoom in preview")
                     }
                 }
@@ -583,9 +309,9 @@ FormCard.FormCardPage {
         title: i18n("Size & Spacing")
     }
 
-    FormSection {
+    FormCard.FormCard {
         SliderDelegate {
-            Layout.fillWidth: true
+            id: iconSizeSlider
             text: i18n("Icon size")
             from: 24; to: 96; stepSize: 4
             value: DockSettings.iconSize
@@ -596,7 +322,7 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator {}
 
         SliderDelegate {
-            Layout.fillWidth: true
+            id: iconSpacingSlider
             text: i18n("Icon spacing")
             from: 0; to: 64; stepSize: 1
             value: DockSettings.iconSpacing
@@ -610,13 +336,15 @@ FormCard.FormCardPage {
         title: i18n("Zoom")
     }
 
-    FormSection {
+    FormCard.FormCard {
         SliderDelegate {
-            Layout.fillWidth: true
+            id: zoomFactorSlider
             text: i18n("Zoom factor")
             from: 1.0; to: 2.0; stepSize: 0.1
             value: DockSettings.maxZoomFactor
             valueText: i18nc("@label zoom factor", "%1x", value.toFixed(1))
+            minLabel: i18nc("@label zoom factor slider minimum", "No zoom")
+            maxLabel: i18nc("@label zoom factor slider maximum", "Double size")
             onMoved: (value) => DockSettings.maxZoomFactor = value
         }
 
@@ -624,7 +352,6 @@ FormCard.FormCardPage {
 
         FormCard.AbstractFormDelegate {
             id: zoomStyleDelegate
-            Layout.fillWidth: true
             background: null
             enabled: page.zoomEnabled
             focusPolicy: Qt.NoFocus
@@ -647,42 +374,42 @@ FormCard.FormCardPage {
                     text: i18n("How neighboring icons make room for the magnified icon")
                     wrapMode: Text.Wrap
                     font: Kirigami.Theme.smallFont
-                    color: Kirigami.Theme.disabledTextColor
+                    color: page.secondaryTextColor
                     Accessible.ignored: true
                 }
 
                 GridLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    Layout.topMargin: Kirigami.Units.largeSpacing
                     columns: Math.max(1, Math.min(2, Math.floor(width / (Kirigami.Units.gridUnit * 9))))
-                    columnSpacing: Kirigami.Units.largeSpacing
+                    columnSpacing: Kirigami.Units.largeSpacing * 2
                     rowSpacing: Kirigami.Units.largeSpacing
 
                     ChoiceCard {
                         id: parabolicCard
-                        Layout.fillWidth: true
                         text: i18n("Parabolic - neighbors move aside")
-                        previewHeight: Kirigami.Units.gridUnit * 3
+                        previewHeight: Kirigami.Units.gridUnit * 5
                         Binding { target: parabolicCard; property: "checked"; value: DockSettings.zoomStyle === 0 }
                         onChosen: DockSettings.zoomStyle = 0
 
-                        ZoomStyleSketch {
-                            anchors.fill: parent
-                            parabolic: true
+                        DockTile {
+                            dock.zoomStyle: 0
+                            dock.maxZoomFactor: Math.max(DockSettings.maxZoomFactor, 1.5)
+                            dock.hoveredIndex: dock.middleIndex
                         }
                     }
 
                     ChoiceCard {
                         id: inPlaceCard
-                        Layout.fillWidth: true
                         text: i18n("In place - icons overlap")
-                        previewHeight: Kirigami.Units.gridUnit * 3
+                        previewHeight: Kirigami.Units.gridUnit * 5
                         Binding { target: inPlaceCard; property: "checked"; value: DockSettings.zoomStyle === 1 }
                         onChosen: DockSettings.zoomStyle = 1
 
-                        ZoomStyleSketch {
-                            anchors.fill: parent
-                            parabolic: false
+                        DockTile {
+                            dock.zoomStyle: 1
+                            dock.maxZoomFactor: Math.max(DockSettings.maxZoomFactor, 1.5)
+                            dock.hoveredIndex: dock.middleIndex
                         }
                     }
                 }
@@ -695,11 +422,10 @@ FormCard.FormCardPage {
         title: i18n("Zoom animation")
     }
 
-    FormSection {
+    FormCard.FormCard {
         enabled: page.zoomEnabled
 
         FormCard.AbstractFormDelegate {
-            Layout.fillWidth: true
             background: null
             contentItem: QQC2.TabBar {
                 id: zoomAnimationTabs
@@ -756,7 +482,6 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator { visible: !page.zoomCustom }
 
         FormCard.AbstractFormDelegate {
-            Layout.fillWidth: true
             visible: !page.zoomCustom
             background: null
             focusPolicy: Qt.NoFocus
@@ -766,7 +491,7 @@ FormCard.FormCardPage {
 
             contentItem: GridLayout {
                 id: zoomPresetGrid
-                columns: Math.max(1, Math.min(4, Math.floor(width / (Kirigami.Units.gridUnit * 9))))
+                columns: Math.max(1, Math.min(4, Math.floor(width / (Kirigami.Units.gridUnit * 8))))
                 columnSpacing: Kirigami.Units.largeSpacing
                 rowSpacing: Kirigami.Units.largeSpacing
 
@@ -778,23 +503,25 @@ FormCard.FormCardPage {
                         required property var modelData
                         required property int index
 
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
+                        readonly property var timing: page.zoomProfile.presets[index]
+
                         text: modelData.text
                         description: modelData.description
-                        previewHeight: Kirigami.Units.gridUnit * 3
+                        previewHeight: Kirigami.Units.gridUnit * 3.5
 
                         Binding { target: presetCard; property: "checked"; value: DockSettings.zoomAnimationPreset === presetCard.index }
                         onChosen: page.selectZoomPreset(presetCard.index)
 
-                        ZoomMotion {
-                            readonly property var timing: page.zoomProfile.presets[presetCard.index]
-                            anchors.fill: parent
-                            inDuration: page.effectiveDuration(timing.inDuration)
-                            outDuration: page.effectiveDuration(timing.outDuration)
-                            inEasing: page.zoomProfile.easingType(timing.inEasing)
-                            outEasing: page.zoomProfile.easingType(timing.outEasing)
-                            active: visible && page.zoomEnabled && page.windowVisible
+                        // The middle icon zooms in and out in a loop with this
+                        // preset's timing.
+                        DockTile {
+                            active: presetCard.visible && page.zoomEnabled && page.windowActive
+                            dock.maxZoomFactor: Math.max(DockSettings.maxZoomFactor, 1.5)
+                            dock.pulse: true
+                            dock.zoomInDuration: page.effectiveDuration(presetCard.timing.inDuration)
+                            dock.zoomOutDuration: page.effectiveDuration(presetCard.timing.outDuration)
+                            dock.zoomInEasing: page.zoomProfile.easingType(presetCard.timing.inEasing)
+                            dock.zoomOutEasing: page.zoomProfile.easingType(presetCard.timing.outEasing)
                         }
                     }
                 }
@@ -805,7 +532,6 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator { visible: page.zoomCustom }
 
         FormCard.AbstractFormDelegate {
-            Layout.fillWidth: true
             visible: page.zoomCustom
             background: null
             focusPolicy: Qt.NoFocus
@@ -815,7 +541,7 @@ FormCard.FormCardPage {
             Accessible.description: i18n("Zoom in %1 ms, zoom out %2 ms", DockSettings.zoomInDuration, DockSettings.zoomOutDuration)
 
             contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.largeSpacing * 2
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -823,7 +549,7 @@ FormCard.FormCardPage {
 
                     ZoomCurve {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 3
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 3.5
                         inDuration: DockSettings.zoomInDuration
                         outDuration: DockSettings.zoomOutDuration
                         inEasing: DockSettings.zoomInEasing
@@ -833,20 +559,28 @@ FormCard.FormCardPage {
                     QQC2.Label {
                         Layout.fillWidth: true
                         text: i18n("Zoom in %1 ms, zoom out %2 ms", DockSettings.zoomInDuration, DockSettings.zoomOutDuration)
-                        font: Kirigami.Theme.smallFont
-                        color: Kirigami.Theme.disabledTextColor
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        font.features: ({ "tnum": 1 })
+                        color: page.secondaryTextColor
                         wrapMode: Text.Wrap
                     }
                 }
 
-                ZoomMotion {
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                    Layout.preferredHeight: Kirigami.Units.gridUnit * 3
-                    inDuration: page.effectiveDuration(DockSettings.zoomInDuration)
-                    outDuration: page.effectiveDuration(DockSettings.zoomOutDuration)
-                    inEasing: page.zoomProfile.easingType(DockSettings.zoomInEasing)
-                    outEasing: page.zoomProfile.easingType(DockSettings.zoomOutEasing)
-                    active: visible && page.zoomEnabled && page.windowVisible
+                // The middle icon zooms in and out with the custom timing.
+                Item {
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                    Layout.preferredHeight: Kirigami.Units.gridUnit * 4.5
+
+                    DockTile {
+                        radius: Kirigami.Units.cornerRadius * 2
+                        active: visible && page.zoomEnabled && page.windowActive
+                        dock.maxZoomFactor: Math.max(DockSettings.maxZoomFactor, 1.5)
+                        dock.pulse: true
+                        dock.zoomInDuration: page.effectiveDuration(DockSettings.zoomInDuration)
+                        dock.zoomOutDuration: page.effectiveDuration(DockSettings.zoomOutDuration)
+                        dock.zoomInEasing: page.zoomProfile.easingType(DockSettings.zoomInEasing)
+                        dock.zoomOutEasing: page.zoomProfile.easingType(DockSettings.zoomOutEasing)
+                    }
                 }
             }
         }
@@ -899,7 +633,7 @@ FormCard.FormCardPage {
         title: i18n("Icon appearance")
     }
 
-    FormSection {
+    FormCard.FormCard {
         RowLayout {
             Layout.fillWidth: true
             spacing: 0
@@ -914,7 +648,7 @@ FormCard.FormCardPage {
 
             // Before/After: the same padded icon without and with padding removal.
             RowLayout {
-                Layout.rightMargin: Kirigami.Units.largeSpacing
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
                 Layout.alignment: Qt.AlignVCenter
                 spacing: Kirigami.Units.smallSpacing
                 Accessible.role: Accessible.Graphic
@@ -933,7 +667,7 @@ FormCard.FormCardPage {
                     implicitWidth: Kirigami.Units.iconSizes.small
                     implicitHeight: implicitWidth
                     source: page.LayoutMirroring.enabled ? "go-previous-symbolic" : "go-next-symbolic"
-                    color: Kirigami.Theme.disabledTextColor
+                    color: page.secondaryTextColor
                 }
 
                 NormalizationSample {
@@ -959,25 +693,34 @@ FormCard.FormCardPage {
                 onMoved: (value) => DockSettings.iconScale = value
             }
 
-            // Enlarged single icon: cell outline vs icon at the chosen scale.
+            // Enlarged single icon: its cell vs the icon at the chosen scale.
             Rectangle {
-                Layout.rightMargin: Kirigami.Units.largeSpacing
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
                 Layout.alignment: Qt.AlignVCenter
                 implicitWidth: Kirigami.Units.gridUnit * 3.5
                 implicitHeight: implicitWidth
-                radius: Kirigami.Units.smallSpacing
-                color: Qt.alpha(Kirigami.Theme.textColor, 0.04)
-                border.width: 1
-                border.color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.3)
+                radius: Kirigami.Units.cornerRadius * 2
+                color: Kirigami.Theme.alternateBackgroundColor
                 Accessible.role: Accessible.Graphic
                 Accessible.name: i18n("Icon scale preview")
                 Accessible.description: i18n("The icon fills %1% of its cell", Math.round(DockSettings.iconScale * 100))
 
+                // Cell outline at full scale.
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.smallSpacing
+                    radius: Kirigami.Units.cornerRadius
+                    color: Qt.alpha(Kirigami.Theme.highlightColor, 0)
+                    border.width: 1
+                    border.color: Qt.alpha(Kirigami.Theme.highlightColor, 0.5)
+                }
+
                 Kirigami.Icon {
                     anchors.centerIn: parent
-                    width: (parent.width - 2) * DockSettings.iconScale
+                    width: (parent.width - Kirigami.Units.smallSpacing * 2) * DockSettings.iconScale
                     height: width
-                    source: "utilities-terminal"
+                    source: "org.kde.konsole"
+                    fallback: "utilities-terminal"
                 }
             }
         }
@@ -985,7 +728,6 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator {}
 
         SliderDelegate {
-            Layout.fillWidth: true
             text: i18n("Active window icon opacity")
             from: 0.1; to: 1.0; stepSize: 0.05
             value: DockSettings.iconOpacityActive
@@ -996,7 +738,6 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator {}
 
         SliderDelegate {
-            Layout.fillWidth: true
             text: i18n("Inactive window and launcher icon opacity")
             from: 0.1; to: 1.0; stepSize: 0.05
             value: DockSettings.iconOpacityInactive
@@ -1007,7 +748,6 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator {}
 
         SliderDelegate {
-            Layout.fillWidth: true
             text: i18n("Minimized window icon opacity")
             from: 0.1; to: 1.0; stepSize: 0.05
             value: DockSettings.iconOpacityMinimized

@@ -9,20 +9,11 @@ import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
 
-FormCard.FormCardPage {
+SettingsPage {
     id: page
 
     title: i18n("Animations & Badges")
-
-    // Responsive vertical padding: scales with page width
-    topPadding: Math.round(Kirigami.Units.gridUnit * Math.max(0.5, Math.min(1.5, width / 800)))
-    bottomPadding: topPadding
-
-    // Looping preview animations only run while the page is actually shown.
-    readonly property bool previewsActive: page.visible
-        && Window.window !== null
-        && Window.window.visible
-        && Window.window.visibility !== Window.Minimized
+    subtitle: i18n("How apps demand attention and how notification badges appear on the dock")
 
     // Option order matches the AttentionAnimation kcfg enum (0..6).
     readonly property var attentionOptions: [
@@ -44,60 +35,65 @@ FormCard.FormCardPage {
 
     readonly property int pickerColumnWidth: Kirigami.Units.gridUnit * 7
 
-    // Simplified dock tile: a strip of panel with one icon and a running
-    // indicator dot, animated like DockItem.qml does for the given type.
-    component AttentionSample: Item {
+    // Icon used by every sample on this page; mail naturally carries badges.
+    readonly property string sampleIcon: "internet-mail"
+    readonly property string sampleIconFallback: "applications-internet"
+
+    // A real theme icon playing one attention animation with the same
+    // timing and look as DockItem.qml. Set `x`/`y`/`width` (height follows
+    // width) to the resting bounds of the icon it stands in for. `edge`
+    // decides the bounce direction away from the screen edge (DockItem's
+    // _bounceProp and _attentionBounceTarget; 14 px for a 48 px icon, scaled
+    // to the sample size) and `baseOpacity` mirrors the window-state opacity
+    // of the icon it covers. `dotBlinkOpacity` is the animated state of the
+    // "Dot color" type — bind it to the sample's running indicator.
+    component AttentionIconSample: Item {
         id: sample
 
         property int animationType: 0
         property bool playing: false
-
-        readonly property real iconSize: Kirigami.Units.iconSizes.medium
-        // Mirrors DockItem's 14 px bounce for a 48 px icon, scaled to the sample.
-        readonly property real bounceHeight: Math.round(iconSize * 14 / 48)
-
-        // Dot color animation state (DockItem._dotBlinkOpacity)
-        property real dotBlinkOpacity: 1.0
-        // Blink animation state (DockItem._blinkOpacity)
+        // 0 Top, 1 Bottom, 2 Left, 3 Right (DockSettings.edge order).
+        property int edge: 1
+        property real baseOpacity: 1.0
+        property string iconSource: page.sampleIcon
+        property string iconFallback: page.sampleIconFallback
+        // Blink animation state (DockItem._blinkOpacity).
         property real blinkOpacity: 1.0
+        // Dot color animation state (DockItem._dotBlinkOpacity).
+        property real dotBlinkOpacity: 1.0
 
+        readonly property real bounceDistance: width * 14 / 48
+        readonly property bool verticalBounce: edge <= 1
+
+        height: width
         Accessible.ignored: true
 
-        Rectangle {
-            id: panelStrip
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            width: sample.iconSize + Kirigami.Units.largeSpacing * 2
-            height: sample.iconSize + Kirigami.Units.smallSpacing * 3
-            radius: Kirigami.Units.cornerRadius
-            color: Kirigami.Theme.alternateBackgroundColor
-            border.width: 1
-            border.color: Kirigami.ColorUtils.linearInterpolation(Kirigami.Theme.backgroundColor,
-                                                                  Kirigami.Theme.textColor, 0.15)
+        function reset() {
+            bounceT.x = 0
+            bounceT.y = 0
+            rotation = 0
+            scale = 1.0
+            blinkOpacity = 1.0
+            dotBlinkOpacity = 1.0
         }
+        onPlayingChanged: if (!playing) reset()
+        onAnimationTypeChanged: reset()
+
+        transform: Translate { id: bounceT }
 
         Kirigami.Icon {
-            id: sampleIcon
-            anchors.horizontalCenter: panelStrip.horizontalCenter
-            anchors.top: panelStrip.top
-            anchors.topMargin: Kirigami.Units.smallSpacing
-            width: sample.iconSize
-            height: sample.iconSize
-            source: "internet-mail"
-            opacity: sample.blinkOpacity
-
-            transform: [
-                Translate { id: bounceT; y: 0 },
-                Rotation { id: rotateT; origin.x: sample.iconSize / 2; origin.y: sample.iconSize / 2; angle: 0 },
-                Scale { id: scaleT; origin.x: sample.iconSize / 2; origin.y: sample.iconSize / 2; xScale: 1.0; yScale: xScale }
-            ]
+            id: iconImage
+            anchors.fill: parent
+            source: sample.iconSource
+            fallback: sample.iconFallback
+            opacity: sample.baseOpacity * sample.blinkOpacity
         }
 
-        // Type 4: Glow — highlight-colored halo pulsing around the icon
+        // Type 4: Glow — the MultiEffect shadow pulse of DockItem's
+        // attentionGlow, anchored on the icon like there.
         MultiEffect {
-            id: glow
-            source: sampleIcon
-            anchors.fill: sampleIcon
+            source: iconImage
+            anchors.fill: iconImage
             paddingRect: Qt.rect(16, 16, 16, 16)
             visible: sample.animationType === 4
             shadowEnabled: true
@@ -106,7 +102,7 @@ FormCard.FormCardPage {
             shadowScale: 1.12
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0
-            shadowOpacity: 0.5
+            shadowOpacity: 0
 
             SequentialAnimation on shadowOpacity {
                 running: sample.playing && sample.animationType === 4
@@ -116,25 +112,22 @@ FormCard.FormCardPage {
             }
         }
 
-        // Running indicator dot (type 5 recolors and blinks it)
-        Rectangle {
-            anchors.horizontalCenter: panelStrip.horizontalCenter
-            anchors.bottom: panelStrip.bottom
-            anchors.bottomMargin: Math.round(Kirigami.Units.smallSpacing / 2)
-            width: 4
-            height: width
-            radius: width / 2
-            color: sample.animationType === 5 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
-            opacity: sample.animationType === 5 ? sample.dotBlinkOpacity : 0.8
-        }
-
-        // Type 1: Bounce
+        // Type 1: Bounce — vertical on the top and bottom edges, horizontal
+        // on the left and right edges (DockItem._bounceProp).
         SequentialAnimation {
-            running: sample.playing && sample.animationType === 1
+            running: sample.playing && sample.animationType === 1 && sample.verticalBounce
             loops: Animation.Infinite
             onStopped: bounceT.y = 0
-            NumberAnimation { target: bounceT; property: "y"; to: -sample.bounceHeight; duration: 300; easing.type: Easing.OutQuad }
+            NumberAnimation { target: bounceT; property: "y"; to: (sample.edge === 0 ? 1 : -1) * sample.bounceDistance; duration: 300; easing.type: Easing.OutQuad }
             NumberAnimation { target: bounceT; property: "y"; to: 0; duration: 300; easing.type: Easing.InBounce }
+            PauseAnimation { duration: 800 }
+        }
+        SequentialAnimation {
+            running: sample.playing && sample.animationType === 1 && !sample.verticalBounce
+            loops: Animation.Infinite
+            onStopped: bounceT.x = 0
+            NumberAnimation { target: bounceT; property: "x"; to: (sample.edge === 2 ? 1 : -1) * sample.bounceDistance; duration: 300; easing.type: Easing.OutQuad }
+            NumberAnimation { target: bounceT; property: "x"; to: 0; duration: 300; easing.type: Easing.InBounce }
             PauseAnimation { duration: 800 }
         }
 
@@ -142,14 +135,14 @@ FormCard.FormCardPage {
         SequentialAnimation {
             running: sample.playing && sample.animationType === 2
             loops: Animation.Infinite
-            onStopped: rotateT.angle = 0
-            NumberAnimation { target: rotateT; property: "angle"; to: 5; duration: 80; easing.type: Easing.InOutSine }
-            NumberAnimation { target: rotateT; property: "angle"; to: -5; duration: 160; easing.type: Easing.InOutSine }
-            NumberAnimation { target: rotateT; property: "angle"; to: 3; duration: 120; easing.type: Easing.InOutSine }
-            NumberAnimation { target: rotateT; property: "angle"; to: -3; duration: 120; easing.type: Easing.InOutSine }
-            NumberAnimation { target: rotateT; property: "angle"; to: 1; duration: 100; easing.type: Easing.InOutSine }
-            NumberAnimation { target: rotateT; property: "angle"; to: -1; duration: 100; easing.type: Easing.InOutSine }
-            NumberAnimation { target: rotateT; property: "angle"; to: 0; duration: 80; easing.type: Easing.InOutSine }
+            onStopped: sample.rotation = 0
+            NumberAnimation { target: sample; property: "rotation"; to: 5; duration: 80; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "rotation"; to: -5; duration: 160; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "rotation"; to: 3; duration: 120; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "rotation"; to: -3; duration: 120; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "rotation"; to: 1; duration: 100; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "rotation"; to: -1; duration: 100; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "rotation"; to: 0; duration: 80; easing.type: Easing.InOutSine }
             PauseAnimation { duration: 2000 }
         }
 
@@ -157,13 +150,14 @@ FormCard.FormCardPage {
         SequentialAnimation {
             running: sample.playing && sample.animationType === 3
             loops: Animation.Infinite
-            onStopped: scaleT.xScale = 1.0
-            NumberAnimation { target: scaleT; property: "xScale"; to: 1.15; duration: 600; easing.type: Easing.InOutSine }
-            NumberAnimation { target: scaleT; property: "xScale"; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
+            onStopped: sample.scale = 1.0
+            NumberAnimation { target: sample; property: "scale"; to: 1.15; duration: 600; easing.type: Easing.InOutSine }
+            NumberAnimation { target: sample; property: "scale"; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
             PauseAnimation { duration: 400 }
         }
 
-        // Type 5: Dot color
+        // Type 5: Dot color — animates only the indicator state; the dot is
+        // drawn by the tile or MiniDock the sample belongs to.
         SequentialAnimation {
             running: sample.playing && sample.animationType === 5
             loops: Animation.Infinite
@@ -182,15 +176,207 @@ FormCard.FormCardPage {
         }
     }
 
+    // A dock strip on the miniature desktop of a picker tile: one rounded
+    // panel at the bottom edge holding a single real icon and its running
+    // indicator, playing `animationType` (AttentionIconSample). The panel
+    // tint mirrors MiniDock's background color (Header color set, or the
+    // accent color when enabled, at the configured opacity).
+    component AttentionTile: DesktopStage {
+        id: tile
+
+        // Attention animation type played by the sample (DockItem codes).
+        property int animationType: 0
+        // Whether the sample animation may loop.
+        property bool playing: false
+
+        elevated: false
+        radius: 0
+        edge: 1
+        active: page.windowActive
+        // Cover the tile with the screen so the wallpaper fills it; the
+        // strip is drawn at a readable size independent of the screen scale.
+        unit: Math.max(width / screenSize.width, height / screenSize.height)
+        Accessible.ignored: true
+
+        Item {
+            id: tileHeaderColors
+            visible: false
+            Kirigami.Theme.colorSet: Kirigami.Theme.Header
+            Kirigami.Theme.inherit: false
+        }
+        Item {
+            id: tileAccentColors
+            visible: false
+            Kirigami.Theme.colorSet: Kirigami.Theme.Selection
+            Kirigami.Theme.inherit: false
+        }
+
+        // Panel strip sized like the dock: icon plus the paddings that
+        // separate it from the screen edge.
+        Rectangle {
+            id: strip
+            readonly property real pad: Kirigami.Units.smallSpacing * 1.5
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            width: tileSample.width + 2 * pad
+            height: width
+            radius: Math.min(height / 2, Kirigami.Units.cornerRadius * 2)
+            color: Qt.alpha(DockSettings.useAccentColor
+                            ? tileAccentColors.Kirigami.Theme.backgroundColor
+                            : tileHeaderColors.Kirigami.Theme.backgroundColor,
+                            DockSettings.backgroundStyle === 1 ? 0.0 : DockSettings.backgroundOpacity)
+        }
+
+        AttentionIconSample {
+            id: tileSample
+            anchors.horizontalCenter: strip.horizontalCenter
+            anchors.top: strip.top
+            anchors.topMargin: strip.pad
+            width: Math.min(Kirigami.Units.iconSizes.medium, Math.max(16, tile.height * 0.4))
+            edge: tile.edge
+            animationType: tile.animationType
+            playing: tile.playing && tile.active
+        }
+
+        // Running indicator dot under the icon; "Dot color" recolors and
+        // blinks it like DockItem's indicator.
+        Rectangle {
+            anchors.horizontalCenter: strip.horizontalCenter
+            anchors.bottom: strip.bottom
+            anchors.bottomMargin: (strip.pad - height) / 2
+            width: Math.max(2, Math.round(tileSample.width / 10))
+            height: width
+            radius: width / 2
+            color: tileSample.animationType === 5 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+            opacity: tileSample.animationType === 5 ? tileSample.dotBlinkOpacity : 0.8
+        }
+    }
+
+    // --- Stage: the desktop with a live dock demanding attention ---
+
+    stage: Component {
+        DesktopStage {
+            id: stage
+
+            readonly property real coverUnit: Math.max(width / screenSize.width, height / screenSize.height)
+
+            Layout.fillWidth: true
+            active: page.windowActive
+            // Zoomed in around the dock like the Icons stage, shrunk when a
+            // tall dock would not fit along its edge.
+            unit: Math.max(coverUnit, Math.min(framingUnit,
+                0.85 * (dock.vertical ? height : width) / dock.restLengthReal))
+
+            Accessible.role: Accessible.Graphic
+            Accessible.name: i18n("Animations and badges preview")
+            Accessible.description: i18n("Sample dock where one icon plays the selected attention animation and another carries the selected badge")
+
+            MiniDock {
+                id: dock
+                unit: stage.unit
+                backdrop: stage.backdrop
+                active: stage.active
+                // Konsole carries the badge (shown in the selected badge
+                // display mode); the magnified middle icon — mail — plays
+                // the attention animation through the overlay below.
+                apps: [
+                    { icon: "org.kde.dolphin", fallback: "system-file-manager", state: "inactive", badge: 0, padding: 1.0 },
+                    { icon: "org.kde.konsole", fallback: "utilities-terminal", state: "inactive", badge: 8, padding: 1.0 },
+                    { icon: "org.kde.kate", fallback: "accessories-text-editor", state: "minimized", badge: 0, padding: 0.82 },
+                    { icon: page.sampleIcon, fallback: page.sampleIconFallback, state: "active", badge: 0, padding: 1.0 },
+                    { icon: "firefox", fallback: "org.kde.falkon", state: "inactive", badge: 0, padding: 1.0 },
+                    { icon: "systemsettings", fallback: "preferences-system", state: "launcher", badge: 0, padding: 0.88 }
+                ]
+                // The middle icon is magnified as if hovered, so the
+                // attention animation plays at dock-zoom size.
+                hoveredIndex: middleIndex
+            }
+
+            // Sum of positions from `item` up to this item's parent (the
+            // miniature screen) — the same live-positioning trick the
+            // measurement overlay uses, keeping bindings alive while the
+            // icon zooms.
+            function screenPos(item) {
+                let px = 0
+                let py = 0
+                let node = item
+                while (node && node !== stage.desktop) {
+                    px += node.x
+                    py += node.y
+                    node = node.parent
+                }
+                return Qt.point(px, py)
+            }
+
+            // Attention overlay: a copy of the focus icon, animated like
+            // DockItem.qml for the selected type, covering the real icon.
+            AttentionIconSample {
+                id: attentionIcon
+
+                readonly property Item focusIcon: dock.focusIcon
+                readonly property point focusPos: focusIcon ? stage.screenPos(focusIcon) : Qt.point(0, 0)
+                // MiniDock draws its icon at iconScale (and simulated
+                // internal padding without normalization) inside the cell;
+                // the overlay covers the visible icon, not the cell.
+                readonly property real drawSize: {
+                    if (!focusIcon) {
+                        return 0
+                    }
+                    const padding = dock.iconNormalization ? 1.0 : (dock.apps[dock.focusIndex].padding ?? 1.0)
+                    return focusIcon.width * dock.iconScale * padding
+                }
+                readonly property string focusState: dock.apps[dock.focusIndex].state ?? "launcher"
+
+                visible: focusIcon !== null && drawSize > 0
+                x: focusPos.x + (focusIcon ? (focusIcon.width - drawSize) / 2 : 0)
+                y: focusPos.y + (focusIcon ? (focusIcon.height - drawSize) / 2 : 0)
+                width: drawSize
+
+                baseOpacity: focusState === "active" ? dock.opacityActive
+                    : focusState === "minimized" ? dock.opacityMinimized
+                    : dock.opacityInactive
+                edge: dock.edge
+                animationType: DockSettings.attentionAnimation
+                playing: stage.active
+            }
+
+            // "Dot color" recolors the focus icon's running indicator: a
+            // negative-colored dot blinking over the slot's own indicator,
+            // mirrored from DockItem's indicator tint and MiniDock's dot
+            // placement between the icon and the screen edge.
+            Rectangle {
+                id: attentionDot
+                readonly property Item slot: dock.focusIcon ? dock.focusIcon.parent : null
+                readonly property point slotPos: slot ? stage.screenPos(slot) : Qt.point(0, 0)
+                readonly property real dotGap: (dock.padPx - width) / 2
+
+                visible: slot !== null && DockSettings.attentionAnimation === 5
+                width: Math.max(2, Math.round(dock.iconPx / 10))
+                height: width
+                radius: width / 2
+                x: dock.vertical
+                    ? slotPos.x + (dock.edge === 2 ? -dock.padPx + dotGap : (slot ? slot.width : 0) + dotGap)
+                    : slotPos.x + (slot ? (slot.width - width) / 2 : 0)
+                y: dock.vertical
+                    ? slotPos.y + (slot ? (slot.height - height) / 2 : 0)
+                    : slotPos.y + (dock.edge === 0 ? -dock.padPx + dotGap : (slot ? slot.height : 0) + dotGap)
+                color: Kirigami.Theme.negativeTextColor
+                opacity: attentionIcon.dotBlinkOpacity
+            }
+        }
+    }
+
     // --- Attention ---
     FormCard.FormHeader {
         title: i18n("Attention")
     }
 
-    FormSection {
+    FormCard.FormCard {
         FormCard.AbstractFormDelegate {
             id: attentionPicker
             background: null
+            focusPolicy: Qt.NoFocus
+            activeFocusOnTab: false
             Accessible.role: Accessible.Grouping
             Accessible.name: i18n("Attention animation")
             Accessible.description: i18n("Animation when an app demands attention")
@@ -209,16 +395,17 @@ FormCard.FormCardPage {
                     Layout.fillWidth: true
                     text: i18n("Animation when an app demands attention")
                     font: Kirigami.Theme.smallFont
-                    color: Kirigami.Theme.disabledTextColor
+                    color: page.secondaryTextColor
                     wrapMode: Text.Wrap
                     Accessible.ignored: true
                 }
 
                 GridLayout {
                     Layout.fillWidth: true
+                    Layout.topMargin: Kirigami.Units.largeSpacing
                     columns: Math.max(1, Math.floor(width / page.pickerColumnWidth))
-                    columnSpacing: Kirigami.Units.smallSpacing
-                    rowSpacing: Kirigami.Units.smallSpacing
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.largeSpacing
 
                     Repeater {
                         model: page.attentionOptions
@@ -232,6 +419,7 @@ FormCard.FormCardPage {
                             Layout.fillWidth: true
                             implicitWidth: page.pickerColumnWidth - Kirigami.Units.smallSpacing
                             text: modelData
+                            previewHeight: Kirigami.Units.gridUnit * 4.5
 
                             Binding {
                                 target: attentionCard
@@ -240,12 +428,14 @@ FormCard.FormCardPage {
                             }
                             onChosen: DockSettings.attentionAnimation = attentionCard.index
 
-                            AttentionSample {
+                            // Miniature desktop: the real wallpaper with a
+                            // dock strip whose icon loops this animation —
+                            // while the card is hovered or selected, never
+                            // when the window is hidden.
+                            AttentionTile {
                                 anchors.fill: parent
                                 animationType: attentionCard.index
-                                // The selected card always plays; others preview on hover or focus.
-                                playing: page.previewsActive
-                                    && (attentionCard.checked || attentionCard.hovered || attentionCard.activeFocus)
+                                playing: attentionCard.checked || attentionCard.hovered || attentionCard.activeFocus
                             }
                         }
                     }
@@ -282,9 +472,11 @@ FormCard.FormCardPage {
         title: i18n("Badges")
     }
 
-    FormSection {
+    FormCard.FormCard {
         FormCard.AbstractFormDelegate {
             background: null
+            focusPolicy: Qt.NoFocus
+            activeFocusOnTab: false
             Accessible.role: Accessible.Grouping
             Accessible.name: i18n("Badge display")
             Accessible.description: i18n("How notification badges appear on dock icons")
@@ -303,16 +495,17 @@ FormCard.FormCardPage {
                     Layout.fillWidth: true
                     text: i18n("How notification badges appear on dock icons")
                     font: Kirigami.Theme.smallFont
-                    color: Kirigami.Theme.disabledTextColor
+                    color: page.secondaryTextColor
                     wrapMode: Text.Wrap
                     Accessible.ignored: true
                 }
 
                 GridLayout {
                     Layout.fillWidth: true
+                    Layout.topMargin: Kirigami.Units.largeSpacing
                     columns: Math.max(1, Math.min(3, Math.floor(width / page.pickerColumnWidth)))
-                    columnSpacing: Kirigami.Units.smallSpacing
-                    rowSpacing: Kirigami.Units.smallSpacing
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.largeSpacing
 
                     Repeater {
                         model: page.badgeOptions
@@ -326,6 +519,7 @@ FormCard.FormCardPage {
                             Layout.fillWidth: true
                             implicitWidth: page.pickerColumnWidth - Kirigami.Units.smallSpacing
                             text: modelData
+                            previewHeight: Kirigami.Units.gridUnit * 4.5
 
                             Binding {
                                 target: badgeCard
@@ -334,18 +528,68 @@ FormCard.FormCardPage {
                             }
                             onChosen: DockSettings.badgeDisplayMode = badgeCard.index
 
-                            // Sample icon with the badge style, sized like DockItem's badge
-                            Item {
-                                id: badgeSample
-                                anchors.centerIn: parent
-                                width: Kirigami.Units.iconSizes.large
-                                height: width
+                            // Miniature desktop with a dock strip; the icon
+                            // wears this badge style, sized and offset like
+                            // DockItem's badge (38% pill, 18% dot, 20% bleed
+                            // past the icon's top-right corner).
+                            DesktopStage {
+                                id: badgeTile
+                                anchors.fill: parent
+                                elevated: false
+                                radius: 0
+                                edge: 1
+                                active: page.windowActive
+                                unit: Math.max(width / screenSize.width, height / screenSize.height)
                                 Accessible.ignored: true
+
+                                Item {
+                                    id: badgeHeaderColors
+                                    visible: false
+                                    Kirigami.Theme.colorSet: Kirigami.Theme.Header
+                                    Kirigami.Theme.inherit: false
+                                }
+                                Item {
+                                    id: badgeAccentColors
+                                    visible: false
+                                    Kirigami.Theme.colorSet: Kirigami.Theme.Selection
+                                    Kirigami.Theme.inherit: false
+                                }
+
+                                Rectangle {
+                                    id: badgeStrip
+                                    readonly property real pad: Kirigami.Units.smallSpacing * 1.5
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom
+                                    width: badgeIcon.width + 2 * pad
+                                    height: width
+                                    radius: Math.min(height / 2, Kirigami.Units.cornerRadius * 2)
+                                    color: Qt.alpha(DockSettings.useAccentColor
+                                                    ? badgeAccentColors.Kirigami.Theme.backgroundColor
+                                                    : badgeHeaderColors.Kirigami.Theme.backgroundColor,
+                                                    DockSettings.backgroundStyle === 1 ? 0.0 : DockSettings.backgroundOpacity)
+                                }
 
                                 Kirigami.Icon {
                                     id: badgeIcon
-                                    anchors.fill: parent
-                                    source: "internet-mail"
+                                    anchors.horizontalCenter: badgeStrip.horizontalCenter
+                                    anchors.top: badgeStrip.top
+                                    anchors.topMargin: badgeStrip.pad
+                                    width: Math.min(Kirigami.Units.iconSizes.medium, Math.max(16, badgeTile.height * 0.4))
+                                    height: width
+                                    source: page.sampleIcon
+                                    fallback: page.sampleIconFallback
+                                }
+
+                                // Running indicator dot (a running app).
+                                Rectangle {
+                                    anchors.horizontalCenter: badgeStrip.horizontalCenter
+                                    anchors.bottom: badgeStrip.bottom
+                                    anchors.bottomMargin: (badgeStrip.pad - height) / 2
+                                    width: Math.max(2, Math.round(badgeIcon.width / 10))
+                                    height: width
+                                    radius: width / 2
+                                    color: Kirigami.Theme.textColor
+                                    opacity: 0.8
                                 }
 
                                 Rectangle {
@@ -355,19 +599,34 @@ FormCard.FormCardPage {
                                     anchors.rightMargin: -width * 0.2
                                     anchors.topMargin: -height * 0.2
                                     width: badgeCard.index === 1
-                                        ? Math.round(badgeSample.width * 0.18)
-                                        : Math.round(badgeSample.width * 0.38)
+                                        ? Math.round(badgeIcon.width * 0.18)
+                                        : Math.round(badgeIcon.width * 0.38)
                                     height: width
                                     radius: width / 2
                                     color: Kirigami.Theme.highlightColor
 
+                                    layer.enabled: badgeCard.index === 0
+                                    layer.effect: MultiEffect {
+                                        shadowEnabled: true
+                                        shadowColor: Qt.alpha("black", 0.4)
+                                        shadowBlur: 0.3
+                                        shadowVerticalOffset: 1
+                                    }
+
                                     QQC2.Label {
                                         visible: badgeCard.index === 0
                                         anchors.centerIn: parent
+                                        width: parent.width - 2
+                                        height: parent.height - 2
                                         text: i18nc("@label sample badge count", "8")
                                         color: Kirigami.Theme.highlightedTextColor
-                                        font.pixelSize: parent.height * 0.55
+                                        font.pixelSize: Math.max(1, parent.height * 0.55)
                                         font.bold: true
+                                        fontSizeMode: Text.Fit
+                                        minimumPixelSize: 4
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        Accessible.ignored: true
                                     }
                                 }
                             }

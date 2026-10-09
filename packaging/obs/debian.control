@@ -43,6 +43,7 @@ Depends: ${shlibs:Depends},
          qml6-module-org-kde-pipewire,
          qml6-module-org-kde-kirigamiaddons-formcard,
          qml6-module-org-kde-kirigamiaddons-delegates,
+         qml6-module-qtquick3d,
          qml6-module-qtquick-effects,
          plasma-workspace,
          liblayershellqtinterface6

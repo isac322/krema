@@ -70,12 +70,14 @@ Requires:       hicolor-icon-theme
 Requires:       kf6-kirigami%{?_isa}
 Requires:       kirigami-addons6%{?_isa}
 Requires:       kpipewire6-imports%{?_isa}
+Requires:       qt6-quick3d-imports%{?_isa}
 Requires:       plasma6-workspace%{?_isa}
 Requires:       layer-shell-qt6%{?_isa}
 %else
 Requires:       kf6-kirigami%{?_isa}
 Requires:       kf6-kirigami-addons%{?_isa}
 Requires:       kpipewire%{?_isa}
+Requires:       qt6-qtquick3d%{?_isa}
 Requires:       plasma-workspace%{?_isa}
 Requires:       layer-shell-qt%{?_isa}
 %endif

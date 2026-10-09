@@ -22,8 +22,8 @@ Kirigami.AbstractApplicationWindow {
     id: root
 
     title: i18n("Settings")
-    width: Kirigami.Units.gridUnit * 52
-    height: Kirigami.Units.gridUnit * 36
+    width: Kirigami.Units.gridUnit * 56
+    height: Kirigami.Units.gridUnit * 40
     minimumWidth: Kirigami.Units.gridUnit * 36
     minimumHeight: Kirigami.Units.gridUnit * 24
 
@@ -191,12 +191,11 @@ Kirigami.AbstractApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
-        // Sidebar
+        // Sidebar: search pill on top, entries with color icons, the
+        // selected entry filled with the accent color.
         Rectangle {
-            Layout.preferredWidth: Kirigami.Units.gridUnit * 13
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 14
             Layout.fillHeight: true
-            Kirigami.Theme.colorSet: Kirigami.Theme.View
-            Kirigami.Theme.inherit: false
             color: Kirigami.Theme.backgroundColor
 
             ColumnLayout {
@@ -206,12 +205,22 @@ Kirigami.AbstractApplicationWindow {
                 Kirigami.SearchField {
                     id: searchField
                     Layout.fillWidth: true
-                    Layout.margins: Kirigami.Units.smallSpacing
+                    Layout.topMargin: Kirigami.Units.largeSpacing
+                    Layout.leftMargin: Kirigami.Units.largeSpacing
+                    Layout.rightMargin: Kirigami.Units.largeSpacing
+                    Layout.bottomMargin: Kirigami.Units.smallSpacing
                     Accessible.name: i18n("Search settings")
                     // Filtering follows `text` live; only Return opens a
                     // match (the default auto-accept would switch pages
                     // while the user is still typing).
                     autoAccept: false
+
+                    background: Rectangle {
+                        radius: height / 2
+                        color: Qt.alpha(Kirigami.Theme.textColor, searchField.hovered ? 0.1 : 0.07)
+                        border.width: searchField.activeFocus ? 2 : 0
+                        border.color: Kirigami.Theme.focusColor
+                    }
 
                     KeyNavigation.down: sidebarList
                     KeyNavigation.tab: sidebarList
@@ -228,6 +237,11 @@ Kirigami.AbstractApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
 
+                    // The list follows the ScrollView's available width; the
+                    // delegate already stops short of the side margins, so
+                    // no horizontal scrollbar appears.
+                    QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
                     ListView {
                         id: sidebarList
 
@@ -236,6 +250,9 @@ Kirigami.AbstractApplicationWindow {
                         currentIndex: root.moduleIndex(root.currentModule)
                         activeFocusOnTab: true
                         keyNavigationEnabled: false
+                        leftMargin: Kirigami.Units.smallSpacing
+                        rightMargin: Kirigami.Units.smallSpacing
+                        bottomMargin: Kirigami.Units.smallSpacing
                         Accessible.role: Accessible.List
                         Accessible.name: i18n("Settings pages")
 
@@ -269,17 +286,40 @@ Kirigami.AbstractApplicationWindow {
                             readonly property bool startsGroup: modelData.group.length > 0
                                 && (index === 0 || root.visibleModules[index - 1].group !== modelData.group)
 
-                            width: ListView.view.width
+                            width: ListView.view.width - ListView.view.leftMargin - ListView.view.rightMargin
                             spacing: 0
 
-                            Kirigami.ListSectionHeader {
+                            // Group title (e.g. "About"), not a page.
+                            QQC2.Label {
                                 Layout.fillWidth: true
+                                Layout.topMargin: Kirigami.Units.largeSpacing * 2
+                                Layout.bottomMargin: Kirigami.Units.smallSpacing
+                                Layout.leftMargin: Kirigami.Units.largeSpacing
                                 visible: entryItem.startsGroup
                                 text: entryItem.modelData.group
+                                elide: Text.ElideRight
+                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                font.weight: Font.DemiBold
+                                color: Kirigami.ColorUtils.linearInterpolation(
+                                    Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.7)
+                                Accessible.role: Accessible.Heading
                             }
 
                             Delegates.RoundedItemDelegate {
+                                id: entryDelegate
                                 Layout.fillWidth: true
+
+                                // The selected entry uses the Selection colors:
+                                // accent background, matching text color.
+                                Kirigami.Theme.colorSet: checked ? Kirigami.Theme.Selection : Kirigami.Theme.Window
+                                Kirigami.Theme.inherit: false
+
+                                verticalPadding: Math.round(Kirigami.Units.smallSpacing / 2)
+                                implicitHeight: Math.max(Math.round(Kirigami.Units.gridUnit * 1.5),
+                                                         Kirigami.Units.iconSizes.smallMedium + 2 * verticalPadding)
+                                    + topInset + bottomInset
+                                icon.width: Kirigami.Units.iconSizes.smallMedium
+                                icon.height: Kirigami.Units.iconSizes.smallMedium
 
                                 text: entryItem.modelData.text
                                 icon.name: entryItem.modelData.iconName
@@ -294,6 +334,20 @@ Kirigami.AbstractApplicationWindow {
                                 // Clicking the selected entry must keep it checked.
                                 onToggled: checked = Qt.binding(() => entryItem.modelData.moduleId === root.currentModule)
                                 onClicked: root.openModule(entryItem.modelData.moduleId)
+
+                                // Keyboard focus on the list marks the selected entry.
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: entryDelegate.leftInset + 2
+                                    anchors.rightMargin: entryDelegate.rightInset + 2
+                                    anchors.topMargin: entryDelegate.topInset + 2
+                                    anchors.bottomMargin: entryDelegate.bottomInset + 2
+                                    visible: entryDelegate.checked && sidebarList.activeFocus
+                                    radius: Kirigami.Units.cornerRadius
+                                    color: Qt.alpha(Kirigami.Theme.backgroundColor, 0)
+                                    border.width: 1
+                                    border.color: Qt.alpha(Kirigami.Theme.textColor, 0.8)
+                                }
                             }
                         }
                     }

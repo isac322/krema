@@ -3,19 +3,15 @@
 
 import QtQuick
 import QtQuick.Controls as QQC2
-import QtQuick.Effects
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
 
-FormCard.FormCardPage {
+SettingsPage {
     id: page
     title: i18n("Panel Style")
-
-    // Responsive vertical padding: scales with page width
-    topPadding: Math.round(Kirigami.Units.gridUnit * Math.max(0.5, Math.min(1.5, width / 800)))
-    bottomPadding: topPadding
+    subtitle: i18n("Background style, opacity and tint of the dock panel")
 
     // Background style indices (BackgroundStyleType): 0 Panel Inherit,
     // 1 Transparent, 2 Tinted, 3 Acrylic.
@@ -32,175 +28,76 @@ FormCard.FormCardPage {
         i18n("Frosted glass blur")
     ]
 
-    // Miniature dock drawn in one background style. Mirrors
-    // computeBackgroundColor() (src/style/backgroundstyle.cpp): Header color,
-    // or the Selection (accent) color when "Use accent color" is on, or the
-    // custom tint for Tinted without "Use system color"; alpha is the
-    // background opacity. Panel Inherit and Acrylic blur what is behind the
-    // dock; Acrylic adds the dock's tint + noise shader.
-    component StylePreview: Item {
-        id: preview
+    // --- Stage: the desktop with the dock in its current style ---
 
-        required property int styleIndex
-
-        readonly property bool blurred: styleIndex === 0 || styleIndex === 3
-        readonly property color baseColor: styleIndex === 2 && !DockSettings.useSystemColor
-            ? DockSettings.tintColor
-            : (DockSettings.useAccentColor ? accentColors.Kirigami.Theme.backgroundColor
-                                           : headerColors.Kirigami.Theme.backgroundColor)
-        readonly property color panelColor: Qt.alpha(baseColor, styleIndex === 1 ? 0.0 : DockSettings.backgroundOpacity)
-        readonly property real iconSize: Math.round(Kirigami.Units.gridUnit * 1.2)
-        readonly property real panelPadding: Kirigami.Units.smallSpacing
-
-        Accessible.ignored: true
-
+    stage: Component {
         Item {
-            id: headerColors
-            visible: false
-            Kirigami.Theme.colorSet: Kirigami.Theme.Header
-            Kirigami.Theme.inherit: false
-        }
+            implicitHeight: stage.implicitHeight
 
-        Item {
-            id: accentColors
-            visible: false
-            Kirigami.Theme.colorSet: Kirigami.Theme.Selection
-            Kirigami.Theme.inherit: false
-        }
+            DesktopStage {
+                id: stage
 
-        // Stand-in wallpaper with shapes behind the dock so transparency
-        // and blur are visible.
-        Rectangle {
-            id: backdrop
-            anchors.fill: parent
-            radius: Kirigami.Units.cornerRadius
-            clip: true
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: Kirigami.Theme.highlightColor }
-                GradientStop { position: 1.0; color: Kirigami.Theme.alternateBackgroundColor }
-            }
+                readonly property real coverUnit: Math.max(width / screenSize.width, height / screenSize.height)
 
-            Rectangle {
-                width: backdrop.height * 0.7
-                height: width
-                radius: width / 2
-                x: backdrop.width * 0.12
-                y: backdrop.height * 0.45
-                color: Kirigami.Theme.positiveTextColor
-            }
-
-            Rectangle {
-                width: backdrop.height * 0.5
-                height: width
-                radius: width / 2
-                x: backdrop.width * 0.5
-                y: backdrop.height * 0.15
-                color: Kirigami.Theme.neutralTextColor
-            }
-
-            Rectangle {
-                width: backdrop.height * 0.6
-                height: width
-                radius: width / 2
-                x: backdrop.width * 0.68
-                y: backdrop.height * 0.55
-                color: Kirigami.Theme.negativeTextColor
-            }
-        }
-
-        Item {
-            id: dock
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: Kirigami.Units.smallSpacing
-            width: Math.min(parent.width - 2 * Kirigami.Units.smallSpacing, iconRow.implicitWidth + 2 * preview.panelPadding)
-            height: preview.iconSize + 2 * preview.panelPadding
-
-            // Corner radius scaled from the real dock (cornerRadius at iconSize).
-            readonly property real radius: Math.min(height / 2,
-                DockSettings.cornerRadius * preview.iconSize / Math.max(1, DockSettings.iconSize))
-
-            ShaderEffectSource {
-                id: backdropSource
-                visible: false
-                sourceItem: preview.blurred ? backdrop : null
-                sourceRect: Qt.rect(dock.x, dock.y, dock.width, dock.height)
-            }
-
-            Rectangle {
-                id: dockMask
                 anchors.fill: parent
-                visible: false
-                radius: dock.radius
-                color: Kirigami.Theme.textColor
-                layer.enabled: preview.blurred
-            }
+                active: page.windowActive
+                // Zoomed in a little around the dock, shrunk when a large
+                // dock would not fit along its edge.
+                unit: Math.max(coverUnit, Math.min(framingUnit,
+                    0.85 * (dock.vertical ? height : width) / dock.restLengthReal))
 
-            MultiEffect {
-                anchors.fill: parent
-                visible: preview.blurred
-                source: backdropSource
-                autoPaddingEnabled: false
-                blurEnabled: true
-                blur: 1.0
-                blurMax: 24
-                maskEnabled: true
-                maskSource: dockMask
-                maskThresholdMin: 0.5
-                maskSpreadAtMin: 1.0
-            }
+                Accessible.role: Accessible.Graphic
+                Accessible.name: i18n("Dock preview")
+                Accessible.description: i18n("Sample dock showing the panel background style, opacity and tint")
 
-            Rectangle {
-                anchors.fill: parent
-                visible: preview.styleIndex !== 3
-                radius: dock.radius
-                color: preview.panelColor
-                // Transparent has no background; outline the dock bounds faintly.
-                border.width: preview.styleIndex === 1 ? 1 : 0
-                border.color: Qt.alpha(Kirigami.Theme.textColor, 0.35)
-            }
-
-            // Acrylic: the dock's own tint + noise overlay (see main.qml).
-            ShaderEffect {
-                anchors.fill: parent
-                visible: preview.styleIndex === 3
-                property real tintR: preview.panelColor.r
-                property real tintG: preview.panelColor.g
-                property real tintB: preview.panelColor.b
-                property real tintOpacity: preview.panelColor.a
-                property real noiseStrength: 0.02
-                property real resX: width
-                property real resY: height
-                property real cornerRadius: dock.radius
-                fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
-            }
-
-            Row {
-                id: iconRow
-                anchors.centerIn: parent
-                spacing: Kirigami.Units.smallSpacing
-
-                Repeater {
-                    model: ["system-file-manager", "internet-web-browser", "utilities-terminal", "preferences-system"]
-
-                    Kirigami.Icon {
-                        required property string modelData
-                        width: preview.iconSize
-                        height: preview.iconSize
-                        source: modelData
-                    }
+                MiniDock {
+                    id: dock
+                    unit: stage.unit
+                    edge: stage.edge
+                    backdrop: stage.backdrop
+                    active: stage.active
                 }
             }
         }
     }
 
-    // --- Style Card Picker ---
+    // Picker thumbnail: the desktop cropped around a dock drawn in one
+    // background style. MiniDock renders Panel Inherit and Acrylic as
+    // blurred wallpaper under a tinted panel, so `backdrop` is required.
+    component StyleTile: DesktopStage {
+        id: tile
+
+        property int styleIndex: 0
+
+        readonly property real coverUnit: Math.max(width / screenSize.width, height / screenSize.height)
+
+        anchors.fill: parent
+        elevated: false
+        radius: 0
+        active: page.windowActive
+        // Fit the resting dock along the edge and the zoomed icons across it.
+        unit: Math.max(coverUnit, Math.min(
+            0.85 * (styleDock.vertical ? height : width) / styleDock.restLengthReal,
+            0.7 * (styleDock.vertical ? width : height)
+                / (styleDock.iconSize * Math.max(1.0, styleDock.maxZoomFactor) + 2 * Kirigami.Units.largeSpacing + 8)))
+        Accessible.ignored: true
+
+        MiniDock {
+            id: styleDock
+            unit: tile.unit
+            edge: tile.edge
+            backdrop: tile.backdrop
+            active: tile.active
+            backgroundStyle: tile.styleIndex
+        }
+    }
+
+    // --- Style card picker ---
     FormCard.FormHeader {
         title: i18n("Background")
     }
 
-    FormSection {
+    FormCard.FormCard {
         FormCard.AbstractFormDelegate {
             id: stylePicker
             background: null
@@ -216,11 +113,11 @@ FormCard.FormCardPage {
                     Layout.fillWidth: true
                     text: i18n("Style")
                     wrapMode: Text.Wrap
+                    color: stylePicker.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
                     Accessible.ignored: true
                 }
 
                 GridLayout {
-                    id: styleGrid
                     Layout.fillWidth: true
                     columns: Math.max(1, Math.min(4, Math.floor(width / (Kirigami.Units.gridUnit * 9))))
                     columnSpacing: Kirigami.Units.largeSpacing
@@ -238,6 +135,7 @@ FormCard.FormCardPage {
                             description: page.styleDescriptions[index]
                             available: SettingsWindow.isStyleAvailable(index)
                             unavailableReason: i18n("Unavailable: not supported in this session")
+                            previewHeight: Kirigami.Units.gridUnit * 4.5
 
                             Binding {
                                 target: styleCard
@@ -246,8 +144,7 @@ FormCard.FormCardPage {
                             }
                             onChosen: DockSettings.backgroundStyle = index
 
-                            StylePreview {
-                                anchors.fill: parent
+                            StyleTile {
                                 styleIndex: styleCard.index
                             }
                         }
@@ -258,7 +155,7 @@ FormCard.FormCardPage {
     }
 
     // --- Controls for the selected style (none for Transparent) ---
-    FormSection {
+    FormCard.FormCard {
         visible: DockSettings.backgroundStyle !== 1
 
         // Opacity (hidden for Transparent only)

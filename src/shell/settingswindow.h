@@ -6,6 +6,9 @@
 #include <QList>
 #include <QObject>
 #include <QPointer>
+#include <QSize>
+#include <QSizeF>
+#include <QUrl>
 #include <QVariantList>
 
 class KremaSettings;
@@ -33,6 +36,12 @@ class SettingsWindow : public QObject
 
     Q_PROPERTY(QVariantList availableScreens READ availableScreens NOTIFY availableScreensChanged)
     Q_PROPERTY(bool hasSelectedMonitorFallback READ hasSelectedMonitorFallback NOTIFY hasSelectedMonitorFallbackChanged)
+    /// Current Plasma wallpaper image of the primary screen (empty if unknown).
+    Q_PROPERTY(QUrl wallpaperUrl READ wallpaperUrl NOTIFY wallpaperUrlChanged)
+    /// Width / height of the primary screen (16/9 when unknown).
+    Q_PROPERTY(qreal screenAspect READ screenAspect NOTIFY screenGeometryChanged)
+    /// Logical size of the primary screen (1920x1080 when unknown).
+    Q_PROPERTY(QSizeF screenSize READ screenSize NOTIFY screenGeometryChanged)
 
 public:
     explicit SettingsWindow(KremaSettings *settings, QObject *parent = nullptr);
@@ -52,6 +61,9 @@ public:
     /// disconnected selections remain present until the user removes them.
     [[nodiscard]] QVariantList availableScreens() const;
     [[nodiscard]] bool hasSelectedMonitorFallback() const;
+    [[nodiscard]] QUrl wallpaperUrl() const;
+    [[nodiscard]] qreal screenAspect() const;
+    [[nodiscard]] QSizeF screenSize() const;
 
     /// Check if a background style is available on this system (for settings
     /// QML).
@@ -61,6 +73,8 @@ Q_SIGNALS:
     void visibleChanged(bool visible);
     void availableScreensChanged();
     void hasSelectedMonitorFallbackChanged();
+    void wallpaperUrlChanged();
+    void screenGeometryChanged();
 
 private:
     void open(const QString &defaultModule);
@@ -68,6 +82,8 @@ private:
     void onWindowHidden(QQuickWindow *win);
     void watchScreen(QScreen *screen);
     void updateAvailableScreens();
+    void updateScreenGeometry();
+    void updateWallpaper();
 
     KremaSettings *m_settings;
     QQmlEngine *m_engine = nullptr;
@@ -79,6 +95,10 @@ private:
     QVariantList m_availableScreens;
     bool m_hasSelectedMonitorFallback = false;
     bool m_visible = false;
+    QUrl m_wallpaperUrl;
+    QSizeF m_screenSize;
+    // Device pixels of the primary screen, for picking the wallpaper size.
+    QSize m_screenPixels;
 };
 
 } // namespace krema

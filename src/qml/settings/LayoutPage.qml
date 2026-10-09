@@ -29,6 +29,9 @@ SettingsPage {
         DesktopStage {
             id: stage
 
+            // Every edge must be visible and clickable.
+            fitScreen: true
+            maximumHeight: Kirigami.Units.gridUnit * 15
             active: page.windowActive
 
             MiniDock {

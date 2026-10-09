@@ -1045,7 +1045,8 @@ def test_set010_zoom_style_cards_switch_zoom_live_and_persists(krema: Krema, app
     assert not has_state(krema.wait_for(PRESET_TAB), "enabled"), "zoom animation tabs must be disabled when zoom is off"
     for _ in range(6):
         inp.key("right")
-    wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 0) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
+    # 1.6 is the default, so KConfig may drop the key instead of writing it.
+    wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 1.6) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
     wait_until(lambda: has_state(krema.wait_for(parabolic_xpath), "enabled"), message="zoom style cards enabled again")
     assert current_card(krema, ZOOM_STYLE) == PARABOLIC, "disabling zoom must preserve the zoom style"
     wait_until(lambda: has_state(krema.wait_for(instant_xpath), "enabled"), message="zoom animation presets enabled again")

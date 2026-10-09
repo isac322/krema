@@ -16,7 +16,8 @@ import com.bhyoo.krema 1.0
 //
 // The stage shows the whole screen width at `magnification` 1; a larger
 // magnification (or a smaller height than the screen aspect needs) crops the
-// screen around the middle of `edge`, where the dock is.
+// screen around the middle of `edge`, where the dock is. `fitScreen` instead
+// shows the whole screen, centred, for pickers that need every edge.
 //
 // Measurement overlay: set `measureTarget` to an item inside the stage (e.g.
 // MiniDock.focusIcon) and `measureText` to the value; the stage outlines the
@@ -45,10 +46,15 @@ Item {
     /// default dock (about 320 px long) covers roughly half of it whatever
     /// the screen resolution.
     property real framedLength: 650
+    /// Show the whole screen, centred in the stage, instead of cropping.
+    property bool fitScreen: false
     /// Default scale: elevated stages frame `framedLength` along the edge
     /// (never showing less than the whole screen across it), tiles cover
-    /// the screen.
+    /// the screen; `fitScreen` stages contain it.
     readonly property real framingUnit: {
+        if (fitScreen) {
+            return Math.min(width / screenSize.width, height / screenSize.height)
+        }
         const cover = Math.max(width / screenSize.width, height / screenSize.height) * magnification
         if (!elevated) {
             return cover
@@ -132,8 +138,8 @@ Item {
             id: screenItem
             width: stage.screenSize.width * stage.unit
             height: stage.screenSize.height * stage.unit
-            x: stage._verticalEdge ? (stage.edge === 2 ? 0 : frame.width - width) : (frame.width - width) / 2
-            y: stage._verticalEdge ? (frame.height - height) / 2 : (stage.edge === 0 ? 0 : frame.height - height)
+            x: stage.fitScreen || !stage._verticalEdge ? (frame.width - width) / 2 : (stage.edge === 2 ? 0 : frame.width - width)
+            y: stage.fitScreen || stage._verticalEdge ? (frame.height - height) / 2 : (stage.edge === 0 ? 0 : frame.height - height)
 
             Item {
                 id: wallpaper

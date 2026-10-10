@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-10
+
+Krema v0.11.0 redesigns the settings window of this lightweight KDE Plasma 6 dock for Wayland around a live miniature of your own desktop and a 3D shadow editor, adds zoom animation presets with a smoother macOS-like parabolic zoom by default, and fixes KWin's Slide Back effect and pinned launchers stored as file paths.
+
 ### Added
 
-- Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
-- Published a Launchpad project page with the app icon, logo, and branding image
 - Added zoom animation presets on the Icons settings page (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
-- `krema --version`, `--help`, `--author` and `--license` now print their information and exit, also without a display (handy for package smoke checks) and while the dock is already running; unknown options stop with an error instead of being silently ignored
+- `krema --version`, `--help`, `--author` and `--license` now printed their information and exited, also without a display (handy for package smoke checks) and while the dock was already running; unknown options stopped with an error instead of being silently ignored
 - Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
-- Every visual picker in the settings window works from the keyboard and is announced to screen readers, including the screen-edge picker on the desktop preview and the 3D shadow light-source editor
+- Every visual picker in the settings window worked from the keyboard and was announced to screen readers, including the screen-edge picker on the desktop preview and the 3D shadow light-source editor
 
 ### Changed
 
@@ -27,15 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Hover zoom now eased in and out by default (180 ms in, 240 ms out at normal animation speed) for a smoother, macOS-like magnification
 - In place zoom now followed the pointer directly and only animated when the pointer entered or left the dock, like Parabolic
 - Zoom animation presets replaced the single zoom duration setting; a previously customized duration was kept as a Custom setting with the old ease-out curve
-- Icon spacing can now be set up to 64 pixels instead of 16
+- Icon spacing could be set up to 64 pixels instead of 16
 - Dock right-click menu entries gained their standard KDE icons
 - The shadow settings were relabeled "Light height" and "Panel elevation" (formerly "Light Z (height)" and "Elevation"), the light height slider moved in steps of 50, and the light radius value stopped claiming to be in pixels
 
 ### Fixed
 
-- Pinned app-store screenshots to immutable image sources and corrected the settings screenshot caption
+- Software-center screenshots (Discover, GNOME Software) pointed at fixed image versions, so they matched the installed release instead of changing with later repository updates, and the settings screenshot caption was corrected
 - KWin's Slide Back effect never fired while Krema was running, because Krema's always-mapped window preview surface counted as an ordinary window stacked above all others; raising a window, including from the dock, slid covering windows aside again
-- Apps pinned through a `.desktop` file path (as stored by hand-edited or imported configurations) are now recognized as pinned: the context menu offers "Unpin from Dock" instead of "Pin to Dock" and unpinning works, and "Separate pinned and running apps" keeps them on the pinned side
+- Apps pinned through a `.desktop` file path (as stored by hand-edited or imported configurations) were recognized as pinned: the context menu offered "Unpin from Dock" instead of "Pin to Dock", unpinning worked, and "Separate pinned and running apps" kept them on the pinned side
 
 ## [0.10.0] - 2026-10-05
 

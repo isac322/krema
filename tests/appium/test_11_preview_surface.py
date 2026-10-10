@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict
 
 import pytest
@@ -13,7 +14,7 @@ from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e import preview as pv
 from krema_e2e.krema import Krema, Rect
-from krema_e2e.waits import wait_until
+from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindow, TestWindows
 
 
@@ -69,8 +70,28 @@ def _assert_popup_inside(krema: Krema, titles: list[str], stage: str, *, shrinki
             return None
         return surface, popup_rect, rectangles
 
+    timeout = 10.0
+    deadline = time.monotonic() + timeout
+
+    def settled() -> tuple[Rect, Rect, list[tuple[str, Rect]]] | None:
+        # geometry() samples each element through its own AT-SPI round trip,
+        # and every screen_rect re-queries KWin for the surface origin, so a
+        # single pass takes tens of ms and can mix pre- and post-layout
+        # states: when the group grows, the popup still reports its old
+        # smaller rect while the row already shows the new thumbnail. The
+        # full-width surface contains both, so the checks inside geometry()
+        # pass, and the popup-containment assert below then fails on the
+        # torn sample. A real layout pass is frame-paced, so a sample that
+        # is unchanged for GEOMETRY_SETTLE is necessarily consistent.
+        return wait_stable(
+            geometry,
+            duration=pv.GEOMETRY_SETTLE,
+            timeout=max(pv.GEOMETRY_SETTLE, deadline - time.monotonic()),
+        )
+
     surface, popup, thumbs = wait_until(
-        geometry,
+        settled,
+        timeout=timeout,
         message=f"exact thumbnail membership and entire popup with all {len(titles)} thumbnails to fit the native preview surface"
         + (f" after its width shrinks below {shrinking_from}px" if shrinking_from is not None else ""),
     )

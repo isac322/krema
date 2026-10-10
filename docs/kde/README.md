@@ -66,6 +66,12 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | [accessibility-guide.md](accessibility-guide.md) | KDE/Qt accessibility best practices — QML Accessible API, AT-SPI2, keyboard navigation |
 | [accessibility-audit.md](accessibility-audit.md) | Krema accessibility audit baseline and implementation tracking |
 
+### Settings Window
+
+| Document | Description |
+|----------|-------------|
+| [settings-window-patterns.md](settings-window-patterns.md) | KDE settings window patterns — KConfigDialog, KQuickConfigModule, ConfigurationView+ConfigurationModule, StatefulWindow; Krema's custom sidebar window and its per-open lifecycle |
+
 ### Reference
 
 | Document | Description |

@@ -410,7 +410,7 @@ Item {
             row.mouseInside = true
             probe.start(inMs)
             tryCompare(probe, "finished", true, inMs + 2000)
-            tryCompare(row, "zoomAmount", 1.0)
+            tryVerify(() => row.zoomAmount === 1.0)
             verify(probe.samples.length >= 1, "zoom-in produced no intermediate frames")
             return probe.samples
         }
@@ -431,7 +431,7 @@ Item {
 
             row.mouseInside = false
             row.mouseX = -1
-            tryCompare(row, "zoomAmount", 0.0)
+            tryVerify(() => row.zoomAmount === 0.0)
             DockSettings.zoomAnimationPreset = 0
             compare(row.profile.zoomInEasingType, Easing.InOutCubic)
 
@@ -474,7 +474,9 @@ Item {
             row.mouseX = -1
             if (outMs > 0) {
                 verify(row.zoomAmount > 0.0, "zoom-out snapped instead of animating")
-                tryCompare(row, "zoomAmount", 0.0, outMs + 2000)
+                // Exact rest, not tryCompare: its 1e-5 tolerance passes on the
+                // animation's last frame, while offsets (px) are still nonzero.
+                tryVerify(() => row.zoomAmount === 0.0, outMs + 2000)
                 verify(spy.count >= 2, "scale jumped back to 1.0 in " + spy.count + " step(s) instead of easing out")
             } else {
                 compare(row.zoomAmount, 0.0, "Plasma Instant must return to rest synchronously")
@@ -555,7 +557,7 @@ Item {
             let row = makeRow(5)
             row.mouseInside = true
             row.mouseX = row.itemAt(2).itemCenterX
-            tryCompare(row, "zoomAmount", 1.0)
+            tryVerify(() => row.zoomAmount === 1.0)
             fuzzyCompare(row.itemAt(2).currentScale, DockSettings.maxZoomFactor, 1e-9)
             for (let i = 0; i < 5; i++) {
                 let item = row.itemAt(i)

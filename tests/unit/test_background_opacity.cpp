@@ -3,9 +3,9 @@
 
 // BackgroundOpacity range of the generated KremaSettings (krema.kcfg).
 //
-// The Appearance page slider offers 0% to 100%. Every value it can produce,
-// including 0% (fully transparent background, no blur), must be stored as
-// chosen and survive a restart instead of being clamped by KConfigXT.
+// The Panel Style page opacity slider offers 0% to 100%. Every value it can
+// produce, including 0% (fully transparent background, no blur), must be stored
+// as chosen and survive a restart instead of being clamped by KConfigXT.
 
 #include "krema.h"
 

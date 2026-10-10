@@ -11,12 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added local Flatpak packaging files and prepared KDE Store and AlternativeTo submission kits
 - Published a Launchpad project page with the app icon, logo, and branding image
-- Added zoom animation presets in Appearance (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
+- Added zoom animation presets on the Icons settings page (Natural, Quick, Relaxed, and Instant) and a Custom tab with separate zoom-in and zoom-out duration and easing
 - `krema --version`, `--help`, `--author` and `--license` now print their information and exit, also without a display (handy for package smoke checks) and while the dock is already running; unknown options stop with an error instead of being silently ignored
 - Added separate opacity settings for icons of active windows, minimized windows, and inactive windows or launchers
+- Every visual picker in the settings window works from the keyboard and is announced to screen readers, including the screen-edge picker on the desktop preview and the 3D shadow light-source editor
 
 ### Changed
 
+- Redesigned the settings window into 8 focused pages plus About, with a sidebar search that also matches setting names
+- Settings pages now opened with a live miniature of your own desktop, drawn with your Plasma wallpaper at your screen's proportions, holding a lifelike dock with real theme icons that followed every look setting and zoomed under the pointer; on Layout & Position the miniature itself was the screen-edge picker, and the style, zoom style, visibility, monitor, virtual desktop, attention animation, and badge pickers showed the same miniature in each option
+- Hovering, dragging, or keyboard-focusing the icon size, spacing, zoom factor, corner radius, or thumbnail width slider, or the Floating switch of a floating dock, drew measurement guides and the current value on the desktop preview
+- The Shadow page became a 3D view of your desktop with the dock floating above the wallpaper and a draggable lamp whose shadow fell on it: dragging the lamp moved the light, scrolling changed its height, Shift+scrolling its softness, and dragging the dock its elevation; a "Result" inset showed the shadow the real dock drew, and "Advanced settings" kept exact values
+- Distribution packages now depended on the Qt Quick 3D QML module for the 3D shadow editor (Arch `qt6-quick3d`, Debian/Ubuntu `qml6-module-qtquick3d`, Fedora `qt6-qtquick3d`, openSUSE `qt6-quick3d-imports`)
+- Monitor and virtual desktop options moved from Behavior to a new "Monitors & Desktops" page
 - Hover zoom now eased in and out by default (180 ms in, 240 ms out at normal animation speed) for a smoother, macOS-like magnification
 - In place zoom now followed the pointer directly and only animated when the pointer entered or left the dock, like Parabolic
 - Zoom animation presets replaced the single zoom duration setting; a previously customized duration was kept as a Custom setting with the old ease-out curve

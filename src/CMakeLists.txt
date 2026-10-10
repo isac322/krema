@@ -56,6 +56,7 @@ add_library(krema_lib STATIC
     models/launcherentrytracker.cpp
 
     utils/zoomcalculator.h
+    utils/zoomlayoutvariant.h
     utils/surfacegeometry.h
     utils/inputregion.h
     utils/inputregion.cpp

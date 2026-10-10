@@ -6,14 +6,17 @@
 #include <QList>
 #include <QObject>
 #include <QPointer>
+#include <QSize>
+#include <QSizeF>
+#include <QUrl>
 #include <QVariantList>
-#include <QWindowList>
+#include <QVariantMap>
 
 class KremaSettings;
-class QQmlApplicationEngine;
+class QQmlComponent;
+class QQmlEngine;
 class QQuickWindow;
 class QScreen;
-class QVariant;
 
 namespace krema
 {
@@ -21,9 +24,9 @@ namespace krema
 /**
  * Settings dialog window.
  *
- * Opens a ConfigurationView-based settings window with sidebar navigation.
- * Uses QQmlApplicationEngine to load a host ApplicationWindow, which then
- * opens a ConfigurationView (creates its own ConfigWindow on desktop).
+ * Creates the window from SettingsDialog.qml (a sidebar of pages next to the
+ * selected page) on every open and destroys it once it is closed. The QML
+ * engine and the compiled component are kept for faster reopening.
  *
  * One instance serves every dock and must outlive dock shells: settings
  * handlers (e.g. Monitor mode) rebuild the shells while they are running.
@@ -34,6 +37,12 @@ class SettingsWindow : public QObject
 
     Q_PROPERTY(QVariantList availableScreens READ availableScreens NOTIFY availableScreensChanged)
     Q_PROPERTY(bool hasSelectedMonitorFallback READ hasSelectedMonitorFallback NOTIFY hasSelectedMonitorFallbackChanged)
+    /// Current Plasma wallpaper image of the primary screen (empty if unknown).
+    Q_PROPERTY(QUrl wallpaperUrl READ wallpaperUrl NOTIFY wallpaperUrlChanged)
+    /// Width / height of the primary screen (16/9 when unknown).
+    Q_PROPERTY(qreal screenAspect READ screenAspect NOTIFY screenGeometryChanged)
+    /// Logical size of the primary screen (1920x1080 when unknown).
+    Q_PROPERTY(QSizeF screenSize READ screenSize NOTIFY screenGeometryChanged)
 
 public:
     explicit SettingsWindow(KremaSettings *settings, QObject *parent = nullptr);
@@ -42,7 +51,7 @@ public:
     /// Show the settings dialog, or raise it if already visible.
     void show();
 
-    /// Show the settings dialog with a specific module pre-selected.
+    /// Show the settings dialog with a specific module selected.
     void show(const QString &defaultModule);
 
     /// Whether the dialog is open (between visibleChanged(true) and
@@ -53,33 +62,69 @@ public:
     /// disconnected selections remain present until the user removes them.
     [[nodiscard]] QVariantList availableScreens() const;
     [[nodiscard]] bool hasSelectedMonitorFallback() const;
+    [[nodiscard]] QUrl wallpaperUrl() const;
+    [[nodiscard]] qreal screenAspect() const;
+    [[nodiscard]] QSizeF screenSize() const;
 
     /// Check if a background style is available on this system (for settings
     /// QML).
     Q_INVOKABLE bool isStyleAvailable(int styleType) const;
 
+    /// Zoom layout for settings previews (MiniDock), identical to
+    /// DockView::zoomLayout (see krema::computeDockZoom).
+    /// @p style is a krema::ZoomStyle int (0=Parabolic, 1=InPlace);
+    /// unknown values fall back to Parabolic. @p boundary is the first item
+    /// in the second zone, or -1 when no separator is present. @p boundaryGap
+    /// is the fixed extra primary-axis gap inserted before it.
+    /// minEdge/maxEdge bound the grown background (pass -Infinity/Infinity for
+    /// no bound).
+    /// Returns keys: scales, offsets (QVariantList of double), leadingGrowth
+    /// and trailingGrowth (double).
+    Q_INVOKABLE QVariantMap zoomLayout(int count,
+                                       qreal restStart,
+                                       qreal iconSize,
+                                       qreal spacing,
+                                       int boundary,
+                                       qreal boundaryGap,
+                                       qreal restBackgroundStart,
+                                       qreal restBackgroundEnd,
+                                       qreal maxZoomFactor,
+                                       int style,
+                                       bool active,
+                                       qreal cursor,
+                                       qreal minEdge,
+                                       qreal maxEdge) const;
+
 Q_SIGNALS:
     void visibleChanged(bool visible);
     void availableScreensChanged();
     void hasSelectedMonitorFallbackChanged();
+    void wallpaperUrlChanged();
+    void screenGeometryChanged();
 
 private:
-    void open(const QVariant &defaultModule);
-    void ensureEngine();
-    [[nodiscard]] QQuickWindow *windowCreatedSince(const QWindowList &windowsBefore) const;
-    void trackConfigWindow(QQuickWindow *win, bool deleteOnClose);
+    void open(const QString &defaultModule);
+    QQuickWindow *createWindow(const QString &defaultModule);
+    void onWindowHidden(QQuickWindow *win);
     void watchScreen(QScreen *screen);
     void updateAvailableScreens();
+    void updateScreenGeometry();
+    void updateWallpaper();
 
     KremaSettings *m_settings;
-    QQmlApplicationEngine *m_engine = nullptr;
+    QQmlEngine *m_engine = nullptr;
+    QQmlComponent *m_component = nullptr;
+    // The open window, if any.
     QPointer<QQuickWindow> m_configWindow;
-    // Every settings window open() created that still exists, including
-    // closed ones whose deletion is pending; destroyed before the engine.
-    QList<QPointer<QQuickWindow>> m_openedWindows;
+    // Closed windows whose deferred deletion has not run yet.
+    QList<QPointer<QQuickWindow>> m_closedWindows;
     QVariantList m_availableScreens;
     bool m_hasSelectedMonitorFallback = false;
     bool m_visible = false;
+    QUrl m_wallpaperUrl;
+    QSizeF m_screenSize;
+    // Device pixels of the primary screen, for picking the wallpaper size.
+    QSize m_screenPixels;
 };
 
 } // namespace krema

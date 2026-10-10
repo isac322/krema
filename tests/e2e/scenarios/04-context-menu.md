@@ -17,6 +17,7 @@
 - src/qml/main.qml
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
+- src/qml/SettingsDialog.qml
 - src/config/krema.kcfg
 - src/models/dockmodel.h
 - src/models/dockmodel.cpp
@@ -149,9 +150,9 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 6. Check the AT-SPI tree for the "Icon size" control
 
 **Expected:**
-- Kirigami-based settings dialog opens as separate window
-- Contains pages: Appearance, Behavior, Window Preview, About Krema, About KDE
-- FormCard-based layout with sliders, spinboxes, comboboxes
+- Settings window titled "Settings" opens as separate window, on the Icons page
+- Sidebar pages: Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE
+- FormCard-based layout with sliders, card pickers, switches, spin boxes and combo boxes
 - Settings UI is fully accessible via AT-SPI
 
 **Verification:** window list (krema window count +1), AT-SPI (FormCard widgets), screenshot (dialog layout)

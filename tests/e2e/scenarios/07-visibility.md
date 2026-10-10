@@ -20,6 +20,8 @@
 - src/shell/dockview.cpp
 - src/app/application.cpp
 - src/qml/settings/BehaviorPage.qml
+- src/qml/settings/LayoutPage.qml
+- src/qml/settings/IconsPage.qml
 - src/qml/main.qml
 - src/config/krema.kcfg
 **Tier:** Tier 2 (Appium) for real visibility, KWin, and multi-output state.
@@ -231,10 +233,10 @@ same maximized window alive throughout each toggle.
    the floating gap when enabled. Verify the dock remains visible in both
    states; do not accept a maximize-command echo as the result.
 3. Repeat on the top, left, and right edges using the real `Screen edge`
-   control. For top/left, compare the fixture frame's leading edge with the
+   picker on the Layout & Position page. For top/left, compare the fixture frame's leading edge with the
    output's leading edge; for bottom/right, compare its trailing edge.
-4. Repeat each edge with floating mode off and on. Change icon size in
-   Appearance while reservation is enabled and verify the existing maximized
+4. Repeat each edge with floating mode off and on. Change icon size on the
+   Icons page while reservation is enabled and verify the existing maximized
    frame updates to the current panel-bar thickness. Move the pointer away
    before sampling; hover zoom/tooltip surface space is not reserved.
 5. Disable reservation, restart Krema, and observe the same maximized

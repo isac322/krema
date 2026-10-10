@@ -1,20 +1,37 @@
 # Settings UI
 
 ## Features
-- settings-appearance: Icon size, icon scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style, zoom animation presets and custom zoom-in/zoom-out timing, spacing, opacity, background style
+- settings-window: Sidebar of 8 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
+- settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a live desktop preview (real wallpaper, miniature dock with real theme icons) and measurement guides
+- settings-layout: Screen edge picker on the live desktop preview, floating, corner radius
+- settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
-- settings-behavior: Visibility mode, dock position, monitor mode, selected monitor switches and temporary fallback
+- settings-behavior: Visibility mode cards, reservation, dodge and delay controls
+- settings-monitors: Monitor mode cards, selected monitor switches and temporary fallback, follow trigger, screen transition, virtual desktop display mode (Monitors & Desktops page)
 - settings-reserve-screen-space: Independent Always Visible reservation switch applies to maximized windows live and persists
 - settings-separate-launchers: Optional pinned/running sections apply live and persist without duplicating running pinned apps
 - settings-preview: Preview enable/disable, thumbnail size
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
-- settings-tint-color: Custom tint color selection
-- settings-background-style: Background style selection (Panel Inherit, Transparent, Tinted, Acrylic)
+- settings-tint-color: Custom tint color selection through a color swatch button
+- settings-background-style: Background style cards (Panel Inherit, Transparent, Tinted, Acrylic) with live previews
+- settings-shadow: 3D light-source scene (drag lamp, wheel height, Shift+wheel softness, drag dock elevation), "Result" inset with the real shadow, advanced exact values, shadow color
 
 ## Affected Files
-- src/qml/settings/AppearancePage.qml
+- src/qml/settings/SettingsPage.qml
+- src/qml/settings/DesktopStage.qml
+- src/qml/settings/MiniDock.qml
+- src/qml/settings/ShadowScene3D.qml
+- src/qml/settings/ChoiceCard.qml
+- src/qml/settings/SliderDelegate.qml
+- src/qml/settings/ColorSwatchButton.qml
+- src/qml/settings/IconsPage.qml
+- src/qml/settings/LayoutPage.qml
+- src/qml/settings/PanelStylePage.qml
+- src/qml/settings/ShadowPage.qml
+- src/qml/settings/AnimationsPage.qml
+- src/qml/settings/MonitorsPage.qml
 - src/qml/settings/BehaviorPage.qml
 - src/qml/settings/PreviewPage.qml
 - src/qml/SettingsDialog.qml
@@ -58,30 +75,35 @@ and task-section rows check their real controls and consumer effects.
 2. Choose "Settings..."
 3. Wait 1500ms (settings window creation)
 4. Check the window list — krema window count increased
-5. Check the AT-SPI tree for the "Icon size" control and the "Zoom animation" card: the "Preset" tab is selected and the "Natural" preset is checked
+5. Check the AT-SPI tree: frame "Settings", "Search settings" field, list "Settings pages" whose items are, in order, "Icons", "Layout & Position", "Panel Style", "Shadow", "Animations & Badges", "Behavior", "Monitors & Desktops", "Window Preview", "About Krema", "About KDE"; "Icons" is checked. The Icons page shows the "Icon size" slider and the "Zoom animation" card: the "Preset" tab is selected and the "Natural" preset card is checked
 6. Screenshot — verify settings dialog
 7. Right-click the dock again → "Settings..." while the dialog is open
 8. Check the window list — there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
+9. Click "Monitors & Desktops" in the sidebar — the item becomes checked and the page shows the "Monitor mode" cards. Click the checked item again — it stays checked
+10. Type "corner" in "Search settings" — the list shows "Layout & Position" (matched by the "Corner radius" setting) and keeps the current page's item; clear the field and all entries return
+11. Press Escape, then choose "Settings..." again — a new window opens on the Icons page
 
 **Expected:**
-- Settings dialog opens as separate window ("Settings — Krema" title, localized)
-- Left sidebar: Appearance, Behavior, Window Preview, About Krema, About KDE
-- Appearance page shown by default
-- FormCard layout with spinboxes, sliders, comboboxes
-- All controls accessible via AT-SPI (labels, sliders with Increase/Decrease)
+- Settings dialog opens as separate window ("Settings" title, localized)
+- Left sidebar: search field, then Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, and an "About" section with About Krema and About KDE
+- Icons page shown by default
+- FormCard layout with sliders, card pickers, switches, spin boxes and combo boxes
+- All controls accessible via AT-SPI (labels, sliders with Increase/Decrease, cards as radio buttons)
+- The search matches page names and setting names; the selected page never disappears from the list
 - Choosing "Settings..." again raises the same window; the dock stays shown while it is open
+- Escape closes the window; the next open creates a fresh window
 
-**Verification:** window list (window count +1), AT-SPI (FormCard widgets), screenshot
-**Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown (English session: title "Settings — Krema"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
+**Verification:** window list (window count +1), AT-SPI (sidebar list, FormCard widgets), screenshot
+**Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown checks the 10 sidebar entries in order, the Icons default, page switching (to Animations & Badges, which shows 7 "Attention animation" and 3 "Badge display" radio cards), and the single window (English session: title "Settings"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope). A fresh window after close is checked by `test_set005_changed_settings_persist_across_restart` and `test_set008_monitor_mode_all_monitors_from_open_settings` (closed with Alt+F4). The search (step 10) and Escape (step 11) remain manual checks.
 
 ---
 
 ## TC SET-002: Change Icon Size (Live Preview)
 
-**Precondition:** Settings dialog open, Appearance page active.
+**Precondition:** Settings dialog open, Icons page active.
 **Steps:**
 1. Screenshot of dock — capture baseline icon size
-2. In settings, find the "Icon size" spin box
+2. In settings, find the "Icon size" slider (its label shows the value, e.g. "48 px")
 3. Change icon size (e.g., increase it)
 4. Wait 300ms
 5. Screenshot of dock — verify icon size changed
@@ -89,10 +111,11 @@ and task-section rows check their real controls and consumer effects.
 **Expected:**
 - Dock icons resize in real-time as the value changes
 - No restart required
+- The miniature dock on the Icons page desktop preview resizes too; while the slider is hovered, dragged, or focused, the preview outlines an icon and shows measurement guides with the value (e.g. "48 px")
 - Zoom proportions adjust accordingly (the Parabolic zoom style keeps icons separated while scaling)
 
 **Verification:** screenshot comparison (icon size changed)
-**Automated:** tests/appium/test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion (the Icon size control is a spin box: real keyboard Up, dock item width checked after every step)
+**Automated:** tests/appium/test_06_settings.py::test_set002_icon_size_slider_resizes_dock_live_and_keeps_zoom_proportion (the Icon size control is a slider: real keyboard Right/Up, dock item width checked after every step)
 
 ---
 
@@ -100,14 +123,15 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Settings dialog open, Behavior page.
 **Steps:**
-1. Current visibility mode: AlwaysVisible
-2. Select "Auto hide" in the "Visibility mode" combo
+1. Current visibility mode: AlwaysVisible ("Always visible" card checked)
+2. Click the "Auto hide" card in the "Visibility mode" group (or focus it with Tab and press Space)
 3. Wait 500ms
 4. Move mouse to center of screen (away from dock)
 5. Wait for hide timer
 6. Screenshot — verify dock is hidden
 
 **Expected:**
+- Only the "Auto hide" card is checked; the "Reserve screen space" switch is hidden and the show/hide delay sliders appear
 - Dock hides when mouse moves away
 - Visibility mode change applies immediately
 - Setting persists in KConfig
@@ -119,18 +143,19 @@ and task-section rows check their real controls and consumer effects.
 
 ## TC SET-004: Change Background Style
 
-**Precondition:** Settings dialog open, Appearance page.
+**Precondition:** Settings dialog open, Panel Style page.
 **Steps:**
 1. Screenshot of dock — capture current background
-2. Change background style from current to "Acrylic"
+2. Click the "Acrylic" card in the "Style" group
 3. Wait 500ms
 4. Screenshot of dock — verify background changed
 
 **Expected:**
 - Dock background changes to acrylic/blur effect
 - Change applies in real-time
+- Only the "Acrylic" card is checked; each card's mini dock previews its own style
 
-**Verification:** screenshot comparison (background style changed)
+**Verification:** screenshot comparison (background style changed), AT-SPI (card checked state)
 **Automated:** tests/appium/test_06_settings.py::test_set004_acrylic_background_applies_live (pixel oracle: the Panel Inherit panel is flat, the Acrylic panel shows the acrylic shader's per-pixel noise grain over the same black background)
 
 ---
@@ -144,10 +169,11 @@ and task-section rows check their real controls and consumer effects.
 3. Restart krema
 4. Wait 2000ms
 5. Open settings dialog
-6. Verify all settings match previously set values
+6. Verify all settings match previously set values on the Icons, Behavior, and Panel Style pages
 
 **Expected:**
 - All settings restored from KConfig
+- Sliders, checked cards, and switches show the saved values
 - Dock appearance matches the saved settings
 
 **Verification:** AT-SPI (control values), screenshot (visual match)
@@ -157,9 +183,9 @@ and task-section rows check their real controls and consumer effects.
 
 ## TC SET-006: Dock Position Change
 
-**Precondition:** Settings dialog open, Behavior page. Dock currently at Bottom.
+**Precondition:** Settings dialog open, Layout & Position page. Dock currently at Bottom.
 **Steps:**
-1. Select "Top" in the "Screen edge" combo
+1. Click the top edge of the desktop preview in the "Screen edge" group (AT-SPI: radio button "Top"; also selectable with Tab + Space/Return)
 2. Wait 500ms
 3. Screenshot — verify dock moved to top of screen
 
@@ -167,18 +193,19 @@ and task-section rows check their real controls and consumer effects.
 - Dock repositions to top edge of screen
 - Layer-shell anchor updates correctly
 - All items render correctly in new position
+- The desktop preview shows the miniature dock on the top edge and only the "Top" radio is checked
 
-**Verification:** screenshot (dock at top)
-**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top ("Screen edge" row on the Behavior page)
+**Verification:** screenshot (dock at top), AT-SPI (radio checked state)
+**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top ("Screen edge" picker on the Layout & Position page)
 
 ---
 
 ## TC SET-007: Tint Color Selection
 
-**Precondition:** Settings dialog open, Appearance page. Background style set to "Tinted".
+**Precondition:** Settings dialog open, Panel Style page. Background style set to "Tinted", "Use system color" off.
 **Steps:**
-1. Find tint color button (Accessible.name contains "Tint color")
-2. Click to open color dialog
+1. Find the tint color swatch button (AT-SPI button named "Tint color: <current color>")
+2. Click it (or focus it and press Space) to open the color dialog
 3. Select a different color
 4. Confirm selection
 5. Screenshot — verify dock background uses new tint color
@@ -186,23 +213,24 @@ and task-section rows check their real controls and consumer effects.
 **Expected:**
 - Dock background tint color changes to selected color
 - Color saved to KConfig
+- The swatch and its accessible name show the new color; the style card previews use it
 
 **Verification:** screenshot (tint color changed)
-**Automated:** tests/appium/test_06_settings.py::test_set007_custom_tint_color_is_applied_and_saved ("Use system color" must be switched off first for the Tint color button to appear; the colour is entered in the dialog's Hex field)
+**Automated:** tests/appium/test_06_settings.py::test_set007_custom_tint_color_is_applied_and_saved ("Use system color" must be switched off first for the Tint color swatch to appear; the colour is entered in the dialog's Hex field)
 
 ---
 
 ## TC SET-008: Change Monitor Mode From Settings
 
-**Precondition:** Two outputs, monitor mode "Primary monitor only", settings dialog open, Behavior page. Visibility mode "Auto hide".
+**Precondition:** Two outputs, monitor mode "Primary monitor only", settings dialog open, Monitors & Desktops page. Visibility mode "Auto hide".
 **Steps:**
-1. Select "All monitors" in "Monitor mode"
+1. Click the "All monitors" card in "Monitor mode"
 2. Wait 500ms
 3. Check the window list — Krema is still running and one dock window exists per output
 4. Screenshot — the settings dialog is still open and docks on both outputs are shown
 5. Right-click the dock on the second output → "Settings..."
 6. Check the window list — there is still exactly one settings window
-7. Select "Primary monitor only", then close the settings dialog
+7. Click the "Primary monitor only" card, then close the settings dialog
 8. Move the mouse away from the dock and wait for the hide delay
 
 **Expected:**
@@ -239,50 +267,50 @@ and task-section rows check their real controls and consumer effects.
 
 ---
 
-## TC SET-010: Zoom Style Combo
+## TC SET-010: Zoom Style Cards
 
-**Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0.
+**Precondition:** Settings dialog open, Icons page. Dock visible with multiple items. Zoom factor > 1.0.
 **Steps:**
-1. Find the "Zoom style" combo box in the AT-SPI tree
-2. Verify the combo offers exactly two entries, "Parabolic - neighbors move aside" and "In place - icons overlap", and is set to "Parabolic - neighbors move aside" by default
+1. Find the "Zoom style" group in the AT-SPI tree
+2. Verify it holds exactly two radio cards, "Parabolic - neighbors move aside" and "In place - icons overlap", and "Parabolic - neighbors move aside" is checked by default
 3. Move the pointer to a middle dock item, wait 200ms, take a screenshot — neighbours are pushed aside and the dock background grows
-4. Select "In place - icons overlap", wait 500ms
+4. Click the "In place - icons overlap" card, wait 500ms
 5. Move the pointer away and back to the middle dock item, wait 200ms
 6. Screenshot and AT-SPI bounding boxes — icons magnify in place without moving; bounding-box centres unchanged, magnified icons may overlap
-7. Check `~/.config/kremarc` (or the combo after reopening Settings) — `ZoomStyle=1` persisted
-8. Select "Parabolic - neighbors move aside", verify `ZoomStyle=0` persisted (or the key is removed as the default)
-9. Set "Zoom factor" slider to 1.0 — verify the combo and the "Zoom animation" card controls become disabled
+7. Check `~/.config/kremarc` (or the cards after reopening Settings) — `ZoomStyle=1` persisted
+8. Click the "Parabolic - neighbors move aside" card, verify `ZoomStyle=0` persisted (or the key is removed as the default)
+9. Set "Zoom factor" slider to 1.0 — verify the zoom style cards and the "Zoom animation" card controls become disabled
 10. Restore zoom factor > 1.0
 
 **Expected:**
-- Combo defaults to "Parabolic - neighbors move aside" and applies live without restart
+- Cards default to "Parabolic - neighbors move aside", exactly one card is checked, and the choice applies live without restart
 - "In place - icons overlap" restores in-place zoom: icons scale in place (positions unchanged, overlap allowed)
 - "Parabolic - neighbors move aside" pushes neighbours aside and grows the dock background
 - Setting persists to `kremarc` as `ZoomStyle` (0 = Parabolic, 1 = In place)
-- Combo and "Zoom animation" controls are disabled while zoom factor is 1.0 (no zoom to lay out); the selected zoom animation preset is preserved
+- Zoom style cards and "Zoom animation" controls are disabled while zoom factor is 1.0 (no zoom to lay out); the selected zoom animation preset is preserved
 
-**Verification:** AT-SPI (combo entries/state/enabled, item bounding-box centres), screenshot (Parabolic vs In place zoom), kremarc (`ZoomStyle` key)
-**Automated:** tests/appium/test_06_settings.py::test_set010_zoom_style_combo_switches_zoom_live_and_persists
+**Verification:** AT-SPI (card checked/enabled state, item bounding-box centres), screenshot (Parabolic vs In place zoom), kremarc (`ZoomStyle` key)
+**Automated:** tests/appium/test_06_settings.py::test_set010_zoom_style_cards_switch_zoom_live_and_persists
 
 ---
 
 ## TC SET-011: Zoom Animation Presets and Custom Timing
 
-**Precondition:** Settings dialog open, Appearance page. Dock visible with multiple items. Zoom factor > 1.0 and Zoom style set to Parabolic. Fresh configuration (no `ZoomAnimationPreset` key).
+**Precondition:** Settings dialog open, Icons page. Dock visible with multiple items. Zoom factor > 1.0 and Zoom style set to Parabolic. Fresh configuration (no `ZoomAnimationPreset` key).
 **Steps:**
-1. Find the "Zoom animation" card and verify it has two tabs, "Preset" and "Custom"; "Preset" is selected and the "Natural" radio is checked. The radios are "Natural", "Quick", "Relaxed", and "Instant", each with a description and (except Instant) a "Zoom in … ms, zoom out … ms" summary
+1. Find the "Zoom animation" section and verify it has two tabs, "Preset" and "Custom"; "Preset" is selected and the "Natural" card is checked. The preset cards are "Natural", "Quick", "Relaxed", and "Instant", each with a description, a looping zoom motion preview, and (except Instant) a "Zoom in … ms, zoom out … ms" summary
 2. Move the pointer onto a middle dock item, wait 100ms, capture a screenshot; wait another 150ms and capture again; move the pointer away and repeat. Natural accelerates then decelerates into the peak (180 ms in, 240 ms out at normal animation speed)
 3. Select "Quick" and repeat the hover check: the zoom starts fast and decelerates (100 ms ease-out in both directions, the Krema 0.10 behaviour). Verify `ZoomAnimationPreset=1`
 4. Select "Relaxed" (300 ms in, 400 ms out, gentle ease in and out) and then "Instant" (hover zoom snaps), checking `ZoomAnimationPreset=2` and `3`
-5. Select "Quick", then click the "Custom" tab. Verify `ZoomAnimationPreset=4` and the tab shows "Zoom-in duration (ms)", "Zoom-in easing", "Zoom-out duration (ms)", and "Zoom-out easing" with the Natural defaults (180 ms / 240 ms, "Ease in and out")
+5. Select "Quick", then click the "Custom" tab. Verify `ZoomAnimationPreset=4` and the tab shows an easing curve and motion preview with a "Zoom in … ms, zoom out … ms" summary, then "Zoom-in duration (ms)", "Zoom-in easing", "Zoom-out duration (ms)", and "Zoom-out easing" with the Natural defaults (180 ms / 240 ms, "Ease in and out")
 6. Raise "Zoom-in duration (ms)" by two steps (10 ms each) to 200 and choose "Linear" for "Zoom-out easing". Verify `ZoomInDuration=200` and `ZoomOutEasing=0`; the easing combos offer exactly "Linear", "Ease in", "Ease out", "Ease in and out", "Gentle ease in and out"
 7. Hover a dock item: zoom-in and zoom-out follow the custom durations and curves without a restart
-8. Click the "Preset" tab: "Quick" is restored (`ZoomAnimationPreset=1`) and its radio is checked; "Natural", "Relaxed", and "Instant" are unchecked
-9. Select "Relaxed" (`ZoomAnimationPreset=2`), then "Quick" again (`ZoomAnimationPreset=1`): each time only the selected radio is checked. Click the already-checked "Quick" radio once more: it stays checked and `ZoomAnimationPreset` stays 1
+8. Click the "Preset" tab: "Quick" is restored (`ZoomAnimationPreset=1`) and its card is checked; "Natural", "Relaxed", and "Instant" are unchecked
+9. Select "Relaxed" (`ZoomAnimationPreset=2`), then "Quick" again (`ZoomAnimationPreset=1`): each time only the selected card is checked. Click the already-checked "Quick" card once more: it stays checked and `ZoomAnimationPreset` stays 1
 10. Scroll the mouse wheel down one step with the pointer over the "Preset"/"Custom" tab bar, then back up: the Settings page scrolls (the tab bar moves with the page and returns), the "Preset" tab stays selected, "Quick" stays checked, and `ZoomAnimationPreset` stays 1
 11. Click "Custom" again: the custom values are unchanged
-12. Select "In place - icons overlap" and repeat a hover check: moving the pointer along the dock tracks it directly without lag; only entering and leaving the dock animate
-13. Set "Zoom factor" to 1.0 and verify the whole card is disabled; restore zoom factor > 1.0
+12. Click the "In place - icons overlap" zoom style card and repeat a hover check: moving the pointer along the dock tracks it directly without lag; only entering and leaving the dock animate
+13. Set "Zoom factor" to 1.0 and verify the whole section is disabled; restore zoom factor > 1.0
 14. With the "Custom" tab selected, close Settings, restart Krema, and reopen Settings. Verify the "Custom" tab and values are restored. Click "Preset": with no earlier preset in this Settings session, "Natural" is selected
 
 **Expected:**
@@ -290,13 +318,13 @@ and task-section rows check their real controls and consumer effects.
 - Only entering and leaving the dock animate; pointer movement along the dock never lags
 - Zoom-in and zoom-out use independent durations and easing; a 0 ms direction snaps
 - The "Custom" tab stores `ZoomAnimationPreset=4`; the "Preset" tab restores the last preset chosen in the current Settings session, otherwise Natural
-- Radio checked state always mirrors the stored preset, including after a Custom → Preset round trip and after clicking the already-checked radio
+- Card checked state always mirrors the stored preset, including after a Custom → Preset round trip and after clicking the already-checked card
 - The mouse wheel over the tab bar scrolls the page; it never switches the tab or changes the preset
-- The card is disabled while zoom factor is 1.0
+- The section is disabled while zoom factor is 1.0
 - Preset, custom durations, and custom easing persist across restart
 
-**Verification:** AT-SPI (tab and radio checked/enabled state, spin box value and step, combo choice), screenshot (hover transitions), `kremarc` (`ZoomAnimationPreset`, `ZoomInDuration`, `ZoomOutDuration`, `ZoomInEasing`, `ZoomOutEasing` keys)
-**Automated:** `tests/appium/test_06_settings.py::test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist` covers the tabs, custom spin box and easing combo, Preset restore with exactly one checked radio (steps 8–9, including re-clicking the checked radio), the tab-bar wheel regression (step 10), and restart; its hover check after the custom edits is only a smoke check (hover still zooms, no restart), not a timing check. `tests/qml/tst_dock_main.qml::test_customZoomTimingDrivesProductionDock` covers the custom zoom-in/zoom-out timing driving the production `main.qml` dock (step 7). `test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_combo_switches_zoom_live_and_persists` cover the Natural default, preset persistence, the Instant preset, and the disabled state. `tests/qml/tst_dockitem_zoom.qml::test_scaleEasesInAndSettlesBackOnExit`, `test_zeroDurationSnapsInAndOut`, `test_customInOutDurationsUseConfiguredTimelines`, `test_presetsResolveTimingAndEasing`, `test_naturalEasesInSlowerThanQuick`, `test_zeroZoomInDurationSnapsInButAnimatesOut`, and `test_inPlaceTracksPointerWithoutLag` cover timing, easing, and pointer tracking in both styles. `tests/unit/test_settings_migration.cpp` covers migrating a legacy duration to the Custom preset. The live-dock screenshot checks of the curve shape remain manual.
+**Verification:** AT-SPI (tab and card checked/enabled state, spin box value and step, combo choice), screenshot (hover transitions), `kremarc` (`ZoomAnimationPreset`, `ZoomInDuration`, `ZoomOutDuration`, `ZoomInEasing`, `ZoomOutEasing` keys)
+**Automated:** `tests/appium/test_06_settings.py::test_set011_zoom_animation_preset_and_custom_tabs_apply_and_persist` covers the tabs, custom spin box and easing combo, Preset restore with exactly one checked card (steps 8–9, including re-clicking the checked card), the tab-bar wheel regression (step 10), and restart; its hover check after the custom edits is only a smoke check (hover still zooms, no restart), not a timing check. `tests/qml/tst_dock_main.qml::test_customZoomTimingDrivesProductionDock` covers the custom zoom-in/zoom-out timing driving the production `main.qml` dock (step 7). `test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown`, `test_set005_changed_settings_persist_across_restart`, and `test_set010_zoom_style_cards_switch_zoom_live_and_persists` cover the Natural default, preset persistence, the Instant preset, and the disabled state. `tests/qml/tst_dockitem_zoom.qml::test_scaleEasesInAndSettlesBackOnExit`, `test_zeroDurationSnapsInAndOut`, `test_customInOutDurationsUseConfiguredTimelines`, `test_presetsResolveTimingAndEasing`, `test_naturalEasesInSlowerThanQuick`, `test_zeroZoomInDurationSnapsInButAnimatesOut`, and `test_inPlaceTracksPointerWithoutLag` cover timing, easing, and pointer tracking in both styles. `tests/unit/test_settings_migration.cpp` covers migrating a legacy duration to the Custom preset. The live-dock screenshot checks of the curve shape remain manual.
 
 ---
 
@@ -305,8 +333,8 @@ and task-section rows check their real controls and consumer effects.
 **Precondition:** Three usable outputs A, B, and C, with A primary. Krema uses Auto hide. Open two windows of one app for preview checks. The two-output automation covers switches, fallback, and persistence; the three-output automation covers a subset that excludes the primary.
 
 **Steps:**
-1. Confirm "Primary monitor only" shows one dock on A and "All monitors" shows one dock on each output. Open Settings → Behavior and record the focused Settings window.
-2. Select "Selected monitors". Enable C, then B, leaving A off. Verify docks and their preview surfaces appear only on B and C, and `kremarc` saves `MonitorMode=3` with `SelectedOutputs` in the exact chosen order C, B.
+1. Confirm "Primary monitor only" shows one dock on A and "All monitors" shows one dock on each output. Open Settings → Monitors & Desktops and record the focused Settings window.
+2. Click the "Selected monitors" card. Enable C, then B, leaving A off. Verify docks and their preview surfaces appear only on B and C, and `kremarc` saves `MonitorMode=3` with `SelectedOutputs` in the exact chosen order C, B.
 3. Turn B off and on. Verify C's dock and preview surfaces keep their window identities. The same Settings window stays open and focused; the newly created B dock stays visible while Settings is open. Close Settings and verify both docks auto-hide normally.
 4. Put the pointer on unselected A and invoke Focus Dock. Verify it targets B when compositor order is A, B, C, despite saved order C, B. Check Toggle Dock, Meta+N, and Meta+Shift+N use B. Make C primary and verify those actions target C without recreating the retained B/C dock or preview surfaces. Restore A as primary.
 5. Disconnect and reconnect unselected A while B and C remain usable. Verify their retained dock and preview surfaces stay on their outputs with the same window identities.
@@ -340,8 +368,9 @@ labels `Single window click action` and `Grouped window click action`.
 2. Change both controls from their initial values and observe single and
    grouped windows without restarting.
 3. Restart Krema, reopen Settings, and repeat the state checks.
-4. In a two-output session, choose `All monitors`, recreate the second dock,
-   and verify the choices remain shared.
+4. In a two-output session, choose the `All monitors` card on the Monitors &
+   Desktops page, recreate the second dock, return to Behavior, and verify
+   the choices remain shared.
 
 **Expected:**
 - Each control applies independently and immediately.
@@ -487,3 +516,123 @@ unverified here. The PREV-010 vertical fixture intentionally uses two grouped
 windows for strict index/pin-transition coverage while the separate
 preview-surface fix owns whole-popup/thumbnail containment for wider vertical
 previews.
+
+---
+
+## TC SET-017: Visual pickers work from the keyboard and AT-SPI
+
+**Precondition:** Settings dialog open on the Behavior page, keyboard focus in
+the window, Orca or an AT-SPI inspector available.
+
+**Steps:**
+1. Press Tab until a "Visibility mode" card has focus. Verify the cards are
+   AT-SPI radio buttons named "Always visible", "Auto hide", and "Dodge
+   windows", with `checkable` and exactly one `checked`.
+2. Focus "Auto hide" and press Space; focus "Dodge windows" and press Return.
+   Verify each choice applies (`VisibilityMode` in `kremarc`) and only the
+   chosen card is checked. Return to "Always visible".
+3. Open Layout & Position. Tab to the "Screen edge" group: only the checked
+   edge is a Tab stop. Press Up, then Down: the dock moves to the top and
+   back to the bottom edge, and the "Top"/"Bottom" radio's checked state
+   follows.
+4. Open Panel Style with "Tinted" selected and "Use system color" off. Tab to
+   the tint swatch: AT-SPI reports a button named "Tint color: <color>".
+   Press Return: the color dialog opens; cancel it.
+5. Open Shadow. Tab to the light source: AT-SPI reports a slider named "Light
+   position" whose description lists X, Y, height, and radius. Press Right
+   arrow, Shift+Right, Page Up, and plus; verify the description and the
+   "Advanced settings" values change accordingly. Tab to the "Panel
+   elevation" slider over the dock and press Up and Page Up; verify the
+   "Panel elevation" value rises by 1 and then by 10.
+6. Tab to a slider such as "Shadow intensity": its accessible name equals the
+   visible label and Increase/Decrease actions change the value.
+
+**Expected:**
+- Every card picker and the screen edge picker can be operated without a
+  mouse, announce their option names, and expose one checked option per group.
+- Space or Return selects a card; the arrow keys pick screen edges.
+- Color swatches announce the setting and its current color.
+- The light source can be moved, raised, and softened, and the panel
+  elevation changed, from the keyboard.
+
+**Verification:** AT-SPI (roles, names, `checked`/`focused` states,
+descriptions), `kremarc`, screenshot of the dock edge.
+**Automated:** none; pointer clicks on the same cards and on the "Top" edge
+radio are covered by SET-003, SET-004, SET-006, and SET-010. The keyboard
+paths remain manual checks.
+
+---
+
+## TC SET-018: Shadow 3D light scene and advanced values
+
+**Precondition:** Settings dialog open on the Shadow page, "Enable shadow"
+on, dock visible.
+
+**Steps:**
+1. Verify the stage shows the 3D scene: the bottom of the desktop with the
+   real Plasma wallpaper in perspective, the dock with real theme icons
+   floating above it, a glowing lamp, and a "Result" inset (AT-SPI graphic
+   "Shadow preview") in the bottom-right corner. The hint below reads "Drag
+   the light to move it, scroll for its height, Shift+scroll for softness,
+   and drag the dock for its elevation."
+2. Drag the lamp to the left. Verify the shadow cast on the wallpaper, the
+   shadow in the "Result" inset, and the real dock shadow move away from the
+   light, and the "Light position" description reports the new X and Y.
+3. With the pointer over the scene, scroll up one notch: the light height
+   rises by 50. Hold Shift and scroll up one notch: the light radius rises by
+   0.5 and the shadow softens.
+4. Drag the dock upward. Verify the panel elevation increases (up to 50) and
+   the cast shadow moves farther from the dock.
+5. Drag empty space in the scene: the view orbits within a limited angle.
+   Double-click the scene: the view returns to its default angle. No shadow
+   setting changes.
+6. Click "Advanced settings". Verify the expander reports "Expanded" and shows
+   the "Light X", "Light Y", "Light height", "Light radius", and "Panel
+   elevation" sliders with the values set above. Change "Light X" and verify
+   the lamp moves in the scene. "Shadow intensity" and "Shadow color" stay in
+   the Shadow group above the expander.
+7. Turn "Enable shadow" off. Verify the 3D scene and the controls below the
+   switch are hidden and the dock shadow disappears.
+
+**Expected:**
+- Scene drags, wheel input, advanced sliders, the "Result" inset, and the
+  real dock shadow stay in sync live.
+- Values persist in `kremarc` (`ShadowLightX`, `ShadowLightY`,
+  `ShadowLightZ`, `ShadowLightRadius`, `ShadowElevation`,
+  `ShadowIntensity`).
+
+**Verification:** AT-SPI (slider values, "Light position" description,
+expander description), screenshot (3D scene, "Result" inset, dock shadow),
+`kremarc`.
+**Automated:** none (manual).
+
+---
+
+## TC SET-019: Monitors & Desktops follow, transition, and virtual desktop pickers
+
+**Precondition:** Settings dialog open on the Monitors & Desktops page.
+
+**Steps:**
+1. Click the "Follow active screen" card. Verify the "Follow trigger" radio
+   buttons ("Mouse position", "Active window focus", "Composite (focus +
+   mouse)") and the "Screen transition" cards ("Fade", "Slide", "Instant")
+   appear.
+2. Select "Mouse position" and "Slide". Verify `FollowActiveTrigger=0`
+   and `ScreenTransition=1` in `kremarc`, and only those options are checked.
+3. Click "Primary monitor only". Verify the follow trigger and transition
+   controls are hidden.
+4. In the "Display mode" group, click "Dim other desktops". Verify the "Other
+   desktop opacity" slider appears and moving it changes the opacity of
+   icons for windows on other virtual desktops.
+5. Click "Current desktop only", then "Show all windows". Verify the slider
+   hides and the dock content follows each mode.
+
+**Expected:**
+- Each card group has exactly one checked card and applies live.
+- Conditional controls appear only for the mode they belong to.
+- Card previews animate only while the page is shown.
+
+**Verification:** AT-SPI (checked state, control visibility), `kremarc`,
+dock item opacity/visibility.
+**Automated:** none; monitor mode cards and the selected monitor switches are
+covered by SET-008 and SET-012.

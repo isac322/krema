@@ -15,6 +15,7 @@ pkgbase = krema
 	depends = qt6-base>=6.8
 	depends = qt6-declarative>=6.8
 	depends = qt6-wayland
+	depends = qt6-quick3d>=6.8
 	depends = kwindowsystem>=6.0
 	depends = kconfig>=6.0
 	depends = kcoreaddons>=6.0

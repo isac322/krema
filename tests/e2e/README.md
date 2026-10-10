@@ -102,6 +102,18 @@ Key states used in assertions:
           [label] "<Title>"
 ```
 
+While Settings is open, the same application also has a settings frame
+(created on open, destroyed on close):
+
+```
+  [frame] "Settings"
+    [text] "Search settings"
+    [list] "Settings pages"
+      [list item] "Icons" … "Window Preview", "About Krema", "About KDE"   ← checkable; current page is checked
+    …page content…                    ← card pickers are [radio button]s named by option,
+                                         sliders are [slider]s named by their label
+```
+
 ### Important Patterns
 
 1. **Focus Dock shortcut**: Meta+Alt+D triggers the `focus-dock` global action.
@@ -165,13 +177,18 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
 | `src/models/launcherentrytracker.*` | 01 |
-| `src/qml/settings/*` | 06, 07 |
+| `src/qml/settings/SettingsPage.qml`, `DesktopStage.qml`, `MiniDock.qml`, `ChoiceCard.qml`, `SliderDelegate.qml`, `ColorSwatchButton.qml` | 06, 07 |
+| `src/qml/settings/ShadowScene3D.qml` | 06 |
+| `src/qml/settings/IconsPage.qml` | 02, 06, 07 |
+| `src/qml/settings/LayoutPage.qml` | 06, 07 |
+| `src/qml/settings/BehaviorPage.qml` | 06, 07 |
+| `src/qml/settings/PanelStylePage.qml`, `ShadowPage.qml`, `AnimationsPage.qml`, `MonitorsPage.qml`, `PreviewPage.qml` | 06 |
 | `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
 | `src/app/application.*` | 01, 06, 07 |
-| `src/qml/SettingsDialog.qml` | 06 |
-| `src/shell/settingswindow.*` | 06, 07 |
+| `src/qml/SettingsDialog.qml` | 04, 06 |
+| `src/shell/settingswindow.*` | 04, 06, 07 |
 | `src/shell/dockview.*` | 02, 06, 07 |
 | `src/models/dockmodel.*` | 01, 02, 03, 04, 05, 06 |
 | `src/models/taskiconprovider.*` | 01, 03, 05 |

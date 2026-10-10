@@ -10,8 +10,18 @@ geometry, rendered pixels).
 
 AT-SPI facts this relies on (probed in this harness):
 
-* The settings frame is ``frame[@name='Settings']``; its sidebar is a
-  ``dialog`` whose ``list_item`` children are the pages.
+* The settings frame is ``frame[@name='Settings']``; its sidebar is the
+  ``list[@name='Settings pages']`` whose ``list_item`` children described
+  "Settings page: <name>" are the pages (the checked one is shown; the
+  "About" section header is not a page). Pages are FormCardPages, named
+  after their entry, loaded one at a time next to the sidebar; Icons is the
+  default page.
+* Visual pickers (ChoiceCard, the Screen edge zones) are ``radio_button``
+  elements named after the option, inside the picker's group element
+  (``*[@name=<setting>]``); the selected option has the ``checked`` state.
+* SliderDelegate rows hold a ``slider[@name=<label>]`` whose ``value`` is
+  the setting. They are driven like a user: a click on the handle focuses
+  the slider, then arrow keys step it.
 * FormComboBoxDelegate rows are ``list_item[@name=<label>]`` whose first
   ``label`` child shows the current choice. Clicking a row opens an in-scene
   ``dialog`` (Dialog mode: named after the row; Popup mode: unnamed) whose
@@ -19,7 +29,7 @@ AT-SPI facts this relies on (probed in this harness):
   the real pointer.
 * Rows below the fold have no ``showing`` state and a 0x0 rect until the page
   is wheel-scrolled.
-* The QColorDialog is a separate toplevel ``frame[@name='Choose tint color']``.
+* The tint color dialog is a separate toplevel ``frame[@name='Choose tint color']``.
 
 SET-008 and SET-012 need two outputs and run in their own session:
 ``KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh -m outputs``.
@@ -40,16 +50,39 @@ from krema_e2e import config as kcfg
 from krema_e2e import env, kwin
 from krema_e2e import input as inp
 from krema_e2e import preview as pv
-from krema_e2e.krema import PREVIEW_XPATH, SETTINGS_STACK_XPATH, TOOLBAR_XPATH, Krema, Rect, context_menu_entries, has_state, painted_rect
+from krema_e2e.krema import (
+    PAGE_ROLE,
+    PREVIEW_XPATH,
+    SETTINGS_PAGES_XPATH,
+    SETTINGS_SIDEBAR_XPATH,
+    TOOLBAR_XPATH,
+    Krema,
+    Rect,
+    context_menu_entries,
+    has_state,
+    painted_rect,
+)
 from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.waits import WaitTimeout, wait_stable, wait_until
 from krema_e2e.windows import TestWindow, TestWindows
 
 SETTINGS = "//frame[@name='Settings']"
-SIDEBAR = SETTINGS + "/dialog//list_item"
+SIDEBAR = SETTINGS_PAGES_XPATH
 SETTINGS_TITLE = "Settings — Krema"
 COLOR_DIALOG = "//frame[@name='Choose tint color']"
-PAGES = ["Appearance", "Behavior", "Window Preview", "About Krema", "About KDE"]
+PAGES = [
+    "Icons",
+    "Layout & Position",
+    "Panel Style",
+    "Shadow",
+    "Animations & Badges",
+    "Behavior",
+    "Monitors & Desktops",
+    "Window Preview",
+    "About Krema",
+    "About KDE",
+]
+ICON_SIZE_SLIDER = f"{SETTINGS}//slider[@name='Icon size']"
 W, H = env.SCREEN_WIDTH, env.SCREEN_HEIGHT
 #: Dock item context menu of an unpinned single-window task.
 ENTRIES = context_menu_entries(pinned=False, is_window=True)
@@ -115,20 +148,38 @@ def holds(predicate: Callable[[], bool], duration: float, message: str) -> None:
         time.sleep(0.05)
 
 
+def current_page(krema: Krema) -> str | None:
+    """Name of the checked sidebar entry, i.e. the shown page."""
+    return next((e.get_attribute("name") for e in krema.find_all(SIDEBAR) if has_state(e, "checked")), None)
+
+
 def page_viewport(krema: Krema) -> Rect:
     """Rect of the current settings page's scrolling viewport: its ScrollView
-    (the showing element whose children include the scroll bars).
+    (the showing element whose children include the scroll bars) in the page
+    area right of the sidebar.
 
-    Not the page stack: on every distro the stack also holds the PageRow's
-    page title toolbar (``heading`` "Appearance", ~40 px), so an element
-    scrolled under that toolbar would count as visible and a click on it
-    would land on the toolbar."""
+    The sidebar's ListView sits in a ScrollView of its own, so scroll views
+    left of the sidebar's right edge are skipped; of the rest the largest is
+    the page's (nested scrolling controls are smaller). A page whose content
+    fits may expose no scroll bars: then the page itself is the viewport (the
+    window has no title toolbar above it)."""
 
     def scroll_view():
-        for el in krema.find_all(SETTINGS_STACK_XPATH + "//*[scroll_bar]"):
+        sidebar = krema.find(SETTINGS_SIDEBAR_XPATH)
+        if sidebar is None:
+            return None
+        s = Rect.of(sidebar)
+        views = []
+        for el in krema.find_all(SETTINGS + "//*[scroll_bar]"):
             r = Rect.of(el)
-            if has_state(el, "showing") and r.width and r.height:
-                return r
+            if has_state(el, "showing") and r.width and r.height and r.x >= s.x + s.width:
+                views.append(r)
+        if views:
+            return max(views, key=lambda r: r.width * r.height)
+        name = current_page(krema)
+        page = krema.find(f"{SETTINGS}//{PAGE_ROLE}[@name='{name}']") if name else None
+        if page is not None and has_state(page, "showing") and Rect.of(page).width:
+            return Rect.of(page)
         return None
 
     return wait_until(scroll_view, message="settings page scroll view")
@@ -139,14 +190,11 @@ def page_wheel_point(krema: Krema, view: Rect | None = None) -> tuple[int, int]:
 
     Wheel events there always scroll the page. Over the page body a wheel
     at rest goes to the control under the pointer first, and org.kde.desktop
-    ComboBox/SpinBox set ``wheelEnabled: true``, so they would eat it (and
-    change their value). FormCards are width-capped and centred, so the
+    ComboBox/SpinBox/Slider set ``wheelEnabled: true``, so they would eat it
+    (and change their value). FormCards are width-capped and centred, so the
     margin between the card edge and the scroll bar is empty for the full
-    page height (about 60 px at the usual window size); the left margin
-    proved unreliable (the column's SeparatorHandle), and the scroll bar's
-    accessible has no Component so its rect cannot be measured. On
-    full-width list pages the same x lands on plain rows, which ignore the
-    wheel.
+    page height; the scroll bar's accessible has no Component so its rect
+    cannot be measured.
     """
     view = view or page_viewport(krema)
     return krema.to_screen(Rect(view.x + view.width - 40, view.y + view.height // 2, 1, 1), "settings")[:2]
@@ -180,10 +228,11 @@ def scroll_into_view(krema: Krema, xpath: str):
 
 
 def open_page(krema: Krema, name: str) -> None:
+    """Show page ``name`` with a real click on its sidebar entry."""
     item = krema.wait_for(f"{SIDEBAR}[@name='{name}']")
     if not has_state(item, "checked"):
         click_el(krema, item)
-    wait_until(lambda: has_state(krema.find(f"{SIDEBAR}[@name='{name}']"), "checked"), message=f"page {name} selected")
+    wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")
 
 
 def current_choice(krema: Krema, row: str) -> str:
@@ -197,6 +246,58 @@ def choose(krema: Krema, row: str, option: str) -> None:
     wait_until(lambda: has_state(opt, "showing") and Rect.of(opt).width > 0, message=f"option {option} shown")
     click_el(krema, opt)
     wait_until(lambda: current_choice(krema, row) == option, message=f"{row} to show {option}")
+
+
+def card_xpath(group: str, option: str | None = None) -> str:
+    """Radio button ``option`` (all options when None) of the visual picker ``group``."""
+    xpath = f"{SETTINGS}//*[@name='{group}']//radio_button"
+    return xpath + (f"[@name='{option}']" if option is not None else "")
+
+
+def card_names(krema: Krema, group: str) -> list[str]:
+    return [e.get_attribute("name") for e in krema.find_all(card_xpath(group))]
+
+
+def current_card(krema: Krema, group: str) -> str | None:
+    """The checked option of picker ``group``; None unless exactly one is checked."""
+    checked = [e.get_attribute("name") for e in krema.find_all(card_xpath(group)) if has_state(e, "checked")]
+    return checked[0] if len(checked) == 1 else None
+
+
+def pick(krema: Krema, group: str, option: str) -> None:
+    """Select ``option`` of the visual picker ``group`` (ChoiceCards, Screen
+    edge zones) with a real click and wait until it is the only checked one."""
+    click_el(krema, scroll_into_view(krema, card_xpath(group, option)))
+    wait_until(lambda: current_card(krema, group) == option, message=f"{group} to select {option}")
+
+
+def slider_value(el) -> float:
+    return float(el.get_attribute("value"))
+
+
+def focus_slider(krema: Krema, xpath: str, lo: float, hi: float):
+    """Give the slider at ``xpath`` (range ``lo``..``hi``) keyboard focus with
+    a real click on its handle, keeping its value; returns the slider.
+
+    A QQC2.Slider takes the value under the release point of a click, so the
+    click aims at the handle (estimated from the value; the handle is about
+    as wide as the slider is tall). Should it land a step off, arrow keys put
+    the value back. Arrow keys on the focused slider then step it the way a
+    user does and emit moved(), which writes the setting."""
+    el = scroll_into_view(krema, xpath)
+    before = slider_value(el)
+    r = krema.screen_rect(el, "settings")
+    handle = min(r.height, 24)
+    frac = (before - lo) / (hi - lo) if hi > lo else 0.0
+    inp.click(round(r.x + handle / 2 + frac * (r.width - handle)), r.center[1])
+    wait_until(lambda: has_state(krema.wait_for(xpath), "focused"), message=f"{xpath} focused")
+    tolerance = (hi - lo) * 1e-4
+    for _ in range(50):
+        value = wait_stable(lambda: slider_value(krema.wait_for(xpath)), duration=0.2)
+        if abs(value - before) <= tolerance:
+            return krema.wait_for(xpath)
+        inp.key("right" if value < before else "left")
+    raise AssertionError(f"{xpath}: could not restore {before} after focusing (now {value})")
 
 
 def close_settings(krema: Krema) -> None:
@@ -333,20 +434,22 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     app_windows_after = [w for w in kwin.app_windows() if w.pid == krema.pid]
     assert len(app_windows_after) == len(app_windows_before) + 1
     assert win.title == SETTINGS_TITLE and win.normal_window
-    # Sidebar pages in order, Appearance shown by default.
+    # Sidebar pages in order, Icons shown by default.
     wait_until(lambda: [e.get_attribute("name") for e in krema.find_all(SIDEBAR)] == PAGES, message="sidebar pages")
-    assert has_state(krema.find(f"{SIDEBAR}[@name='Appearance']"), "checked")
-    assert krema.find(f"{SETTINGS}//heading[@name='Icons']") is not None
+    assert current_page(krema) == "Icons"
+    assert krema.find(f"{SETTINGS}//{PAGE_ROLE}[@name='Icons']") is not None
     # FormCard widgets exposed with labels.
-    spin = krema.find(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
-    assert spin is not None and float(spin.get_attribute("value")) == 48.0
+    size = krema.find(ICON_SIZE_SLIDER)
+    assert size is not None and slider_value(size) == 48.0
+    # Zoom style picker: Parabolic by default.
+    assert card_names(krema, ZOOM_STYLE) == [PARABOLIC, IN_PLACE]
+    assert current_card(krema, ZOOM_STYLE) == PARABOLIC
     # Zoom animation card: Preset tab selected with the default Natural preset.
     assert zoom_tab_selected(krema.wait_for(PRESET_TAB)) and not zoom_tab_selected(krema.wait_for(CUSTOM_TAB))
     assert has_state(krema.wait_for(preset_radio("Natural")), "checked")
     assert krema.find(f"{SETTINGS}//slider[@name='Zoom factor']") is not None
-    assert krema.find(f"{SETTINGS}//list_item[@name='Attention animation']/combo_box") is not None
     assert krema.find(f"{SETTINGS}//check_box[@name='Icon size normalization']") is not None
-    for role, name in (("slider", "Zoom factor"), ("spin button", "")):
+    for role, name in (("slider", "Zoom factor"), ("slider", "Icon size")):
         actions = atspi_actions(krema, role, name)
         assert {"Increase", "Decrease"} <= set(actions), f"{role} {name!r} actions: {actions}"
     krema.screenshot("settings-dialog")
@@ -366,11 +469,21 @@ def test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown(
     )
     assert [w.internal_id for w in settings_windows(krema)] == [win.internal_id]
     assert has_state(krema.item("Alpha"), "showing")
+    assert current_page(krema) == "Icons", "re-raising Settings must keep the shown page"
+
+    # Another page through the sidebar: the attention animation and badge
+    # pickers are radio-button cards with their defaults selected.
+    open_page(krema, "Animations & Badges")
+    assert card_names(krema, "Attention animation") == ["None", "Bounce", "Wiggle", "Pulse", "Glow", "Dot color", "Blink"]
+    assert current_card(krema, "Attention animation") == "Wiggle"
+    assert card_names(krema, "Badge display") == ["Number", "Dot", "Off"]
+    assert current_card(krema, "Badge display") == "Number"
+    assert krema.find(f"{SETTINGS}//slider[@name='Zoom factor']") is None, "the Icons page must be replaced"
 
 
 # ------------------------------------------------------------------- SET-002
 @pytest.mark.kremarc({"PinnedLaunchers": [], "MaxZoomFactor": 1.6})
-def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(krema: Krema, apps: TestWindows) -> None:
+def test_set002_icon_size_slider_resizes_dock_live_and_keeps_zoom_proportion(krema: Krema, apps: TestWindows) -> None:
     max_zoom = 1.6
     apps.open("Alpha")
     # apps.open waits for KWin only; the dock item follows through krema's task model.
@@ -404,11 +517,10 @@ def test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion(kr
     wait_until(lambda: zoomed_width(krema, "Alpha", rest) == 48, message=lambda: f"zoom reset (width {zoomed_width(krema, 'Alpha', rest)})")
 
     open_settings(krema)
-    spin = krema.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
-    click_el(krema, spin)
+    slider = focus_slider(krema, ICON_SIZE_SLIDER, 24, 96)
     for expected in (52, 56, 60, 64):  # stepSize 4: every key press resizes the dock
-        inp.key("up")
-        wait_until(lambda: float(spin.get_attribute("value")) == expected, message=f"spin box at {expected}")
+        inp.key("right")
+        wait_until(lambda: slider_value(slider) == expected, message=f"slider at {expected}")
         wait_until(lambda: item_width(krema, "Alpha") == expected, timeout=5, message=f"dock item {expected}px wide")
 
     assert config_value(krema, "IconSize") == "64"
@@ -427,12 +539,12 @@ def test_set003_auto_hide_applies_immediately_and_persists(krema: Krema, apps: T
     pid = krema.pid
     open_settings(krema)
     open_page(krema, "Behavior")
-    assert current_choice(krema, "Visibility mode") == "Always visible"
+    assert current_card(krema, "Visibility mode") == "Always visible"
 
-    choose(krema, "Visibility mode", "Auto hide")
+    pick(krema, "Visibility mode", "Auto hide")
     wait_until(lambda: config_value(krema, "VisibilityMode") == str(kcfg.AUTO_HIDE), message="kremarc VisibilityMode=1")
     # The auto-hide-only delay rows appear at once: the mode is live in the UI.
-    assert krema.find(f"{SETTINGS}//list_item[label[@name='Hide delay (ms)']]") is not None
+    assert krema.find(f"{SETTINGS}//slider[@name='Hide delay (ms)']") is not None
 
     # By design the open Settings dialog holds the dock shown (SET-008).
     pointer_to_center()
@@ -459,7 +571,10 @@ def test_set004_acrylic_background_applies_live(krema: Krema, apps: TestWindows)
     assert min(sum(p) for p in before) > 300, "panel background should be opaque-looking over the black desktop"
 
     open_settings(krema)
-    choose(krema, "Style", "Acrylic")
+    open_page(krema, "Panel Style")
+    assert card_names(krema, "Style") == ["Panel Inherit", "Transparent", "Tinted", "Acrylic"]
+    assert current_card(krema, "Style") == "Panel Inherit"
+    pick(krema, "Style", "Acrylic")
     wait_until(lambda: config_value(krema, "BackgroundStyle") == "3", message="kremarc BackgroundStyle=3")
     inp.move(W - 20, H // 3)
 
@@ -483,18 +598,18 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     requires_capture()
     apps.open("Alpha")
     open_settings(krema)
-    spin = krema.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
-    click_el(krema, spin)
+    slider = focus_slider(krema, ICON_SIZE_SLIDER, 24, 96)
     for _ in range(4):
-        inp.key("up")
-    wait_until(lambda: float(spin.get_attribute("value")) == 64.0)
+        inp.key("right")
+    wait_until(lambda: slider_value(slider) == 64.0, message="icon size slider at 64")
     relaxed = scroll_into_view(krema, preset_radio("Relaxed"))
     click_el(krema, relaxed)
     wait_until(lambda: has_state(krema.wait_for(preset_radio("Relaxed")), "checked"), message="Relaxed preset selected")
     wait_until(lambda: config_value(krema, "ZoomAnimationPreset") == "2", message="zoom animation preset saved")
-    choose(krema, "Style", "Acrylic")
+    open_page(krema, "Panel Style")
+    pick(krema, "Style", "Acrylic")
     open_page(krema, "Behavior")
-    choose(krema, "Visibility mode", "Auto hide")
+    pick(krema, "Visibility mode", "Auto hide")
     saved = {k: config_value(krema, k) for k in ("IconSize", "ZoomAnimationPreset", "BackgroundStyle", "VisibilityMode")}
     assert saved == {"IconSize": "64", "ZoomAnimationPreset": "2", "BackgroundStyle": "3", "VisibilityMode": "1"}
     close_settings(krema)
@@ -513,14 +628,15 @@ def test_set005_changed_settings_persist_across_restart(krema: Krema, apps: Test
     assert len(set(band)) >= 8, "restored panel should show the acrylic grain"
 
     open_settings(krema)
-    spin = krema.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]//spin_button")
-    assert float(spin.get_attribute("value")) == 64.0
+    assert current_page(krema) == "Icons"
+    assert slider_value(krema.wait_for(ICON_SIZE_SLIDER)) == 64.0
     assert has_state(scroll_into_view(krema, preset_radio("Relaxed")), "checked")
     assert not has_state(krema.wait_for(preset_radio("Natural")), "checked")
     assert zoom_tab_selected(krema.wait_for(PRESET_TAB))
-    wait_until(lambda: current_choice(krema, "Style") == "Acrylic", message="Style shows Acrylic")
+    open_page(krema, "Panel Style")
+    wait_until(lambda: current_card(krema, "Style") == "Acrylic", message="Style shows Acrylic")
     open_page(krema, "Behavior")
-    assert current_choice(krema, "Visibility mode") == "Auto hide"
+    assert current_card(krema, "Visibility mode") == "Auto hide"
 
 
 # ------------------------------------------------------------------- SET-006
@@ -530,10 +646,11 @@ def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindow
     dock = krema.surface_rect("dock")
     assert (dock.y + dock.height, dock.width) == (H, W)
     open_settings(krema)
-    open_page(krema, "Behavior")
-    assert current_choice(krema, "Screen edge") == "Bottom"
+    open_page(krema, "Layout & Position")
+    assert card_names(krema, "Screen edge") == ["Top", "Bottom", "Left", "Right"]
+    assert current_card(krema, "Screen edge") == "Bottom"
 
-    choose(krema, "Screen edge", "Top")
+    pick(krema, "Screen edge", "Top")
     wait_until(lambda: config_value(krema, "Edge") == str(kcfg.EDGE_TOP), message="kremarc Edge=0")
     def top_dock():
         r = krema.surface_rect("dock")
@@ -566,7 +683,8 @@ def test_set007_custom_tint_color_is_applied_and_saved(krema: Krema, apps: TestW
     assert max(r0, g0, b0) - min(r0, g0, b0) < 20, f"system-colour tint should be neutral: {(r0, g0, b0)}"
 
     open_settings(krema)
-    assert current_choice(krema, "Style") == "Tinted"
+    open_page(krema, "Panel Style")
+    assert current_card(krema, "Style") == "Tinted"
     use_system = scroll_into_view(krema, f"{SETTINGS}//check_box[@name='Use system color']")
     assert has_state(use_system, "checked")
     click_el(krema, use_system)
@@ -614,10 +732,12 @@ def test_set008_monitor_mode_all_monitors_from_open_settings(krema: Krema, apps:
     assert primary.client_x == 0
     reveal_dock(krema, "Alpha")
     win = open_settings(krema)
-    open_page(krema, "Behavior")
+    open_page(krema, "Monitors & Desktops")
+    assert card_names(krema, "Monitor mode") == ["Primary monitor only", "All monitors", "Follow active screen", "Selected monitors"]
+    assert current_card(krema, "Monitor mode") == "Primary monitor only"
     pid = krema.pid
 
-    choose(krema, "Monitor mode", "All monitors")
+    pick(krema, "Monitor mode", "All monitors")
     wait_until(lambda: config_value(krema, "MonitorMode") == "1", message="kremarc MonitorMode=1")
     docks = wait_until(lambda: d if len(d := dock_surfaces(krema)) == 2 else None, timeout=5, message="one dock per output")
     assert krema.pid == pid and krema.is_running()
@@ -669,18 +789,21 @@ def test_set008_monitor_mode_all_monitors_from_open_settings(krema: Krema, apps:
     krema.choose_context_menu_entry("Settings...", ENTRIES)
     wait_until(lambda: kwin.active_window() is not None and kwin.active_window().internal_id == win.internal_id, message="dialog raised")
     assert [w.internal_id for w in settings_windows(krema)] == [win.internal_id]
+    assert current_page(krema) == "Monitors & Desktops", "raising the dialog must keep the shown page"
 
     # Back to primary only, close the dialog: the dock auto-hides again.
-    choose(krema, "Monitor mode", "Primary monitor only")
+    pick(krema, "Monitor mode", "Primary monitor only")
     wait_until(lambda: len(dock_surfaces(krema)) == 1 and dock_surfaces(krema)[0].client_x == 0, timeout=5, message="one dock left")
     close_settings(krema)
     pointer_to_center()
     wait_until(lambda: not has_state(krema.item("Alpha"), "showing"), timeout=5, message="dock to auto-hide after close")
 
-    # Reopening Settings after switching back works.
+    # Reopening Settings after switching back works: the closed window was
+    # destroyed, the new one starts on the default page.
     reveal_dock(krema, "Alpha")
     reopened = open_settings(krema)
     assert len(settings_windows(krema)) == 1 and reopened.title == SETTINGS_TITLE
+    wait_until(lambda: current_page(krema) == "Icons", message="reopened Settings shows Icons")
     assert krema.pid == pid
 
 
@@ -806,7 +929,7 @@ def test_set009_quit_while_settings_is_open_exits_cleanly(tmp_path: Path, apps: 
         # 2. Settings fully drawn, then Quit.
         second.start()
         open_settings(second)
-        wait_until(lambda: has_state(second.wait_for(f"{SETTINGS}//list_item[label[@name='Icon size']]"), "showing"))
+        wait_until(lambda: has_state(second.wait_for(ICON_SIZE_SLIDER), "showing"))
         code = _quit_via_menu(second)
         _assert_clean_exit(second, code)
     finally:
@@ -814,16 +937,17 @@ def test_set009_quit_while_settings_is_open_exits_cleanly(tmp_path: Path, apps: 
 
 
 # ------------------------------------------------------------------- SET-010
+#: Zoom style picker (Icons page): one ChoiceCard (``radio_button``) per style.
 ZOOM_STYLE = "Zoom style"
-#: Zoom animation card (Appearance): Preset/Custom TabButtons (AT-SPI
-#: ``page_tab``) and one FormRadioDelegate (``radio_button``) per preset.
+#: Zoom animation card (Icons page): Preset/Custom TabButtons (AT-SPI
+#: ``page_tab``) and one ChoiceCard (``radio_button``) per preset.
 PRESET_TAB = f"{SETTINGS}//page_tab[@name='Preset']"
 CUSTOM_TAB = f"{SETTINGS}//page_tab[@name='Custom']"
 PARABOLIC, IN_PLACE = "Parabolic - neighbors move aside", "In place - icons overlap"
 
 
 def preset_radio(name: str) -> str:
-    return f"{SETTINGS}//radio_button[@name='{name}']"
+    return card_xpath("Zoom animation", name)
 
 
 def zoom_tab_selected(tab) -> bool:
@@ -853,31 +977,24 @@ def centre_shifts(rest: list[Rect], drawn: list[Rect]) -> list[int]:
         "PreviewEnabled": False,
     }
 )
-def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, apps: TestWindows) -> None:
+def test_set010_zoom_style_cards_switch_zoom_live_and_persists(krema: Krema, apps: TestWindows) -> None:
     apps.open("Alpha")
     krema.wait_for_item("Alpha")
     open_settings(krema)
-    open_page(krema, "Appearance")
-    row_xpath = f"{SETTINGS}//list_item[@name='{ZOOM_STYLE}']"
+    open_page(krema, "Icons")
+    parabolic_xpath = card_xpath(ZOOM_STYLE, PARABOLIC)
+    in_place_xpath = card_xpath(ZOOM_STYLE, IN_PLACE)
 
-    # Two entries, Parabolic by default.
-    assert current_choice(krema, ZOOM_STYLE) == PARABOLIC
-    click_el(krema, scroll_into_view(krema, row_xpath))
-    popup_xpath = (
-        f"{SETTINGS}/dialog[.//*[self::list_item or self::menu_item][@name='{PARABOLIC}']]"
+    # Two cards, Parabolic by default.
+    assert card_names(krema, ZOOM_STYLE) == [PARABOLIC, IN_PLACE]
+    assert current_card(krema, ZOOM_STYLE) == PARABOLIC
+    # Clicking the selected card keeps it selected and the style unchanged.
+    click_el(krema, scroll_into_view(krema, parabolic_xpath))
+    holds(
+        lambda: current_card(krema, ZOOM_STYLE) == PARABOLIC and config_value(krema, "ZoomStyle") in ("0", None),
+        0.5,
+        "re-clicking the checked Parabolic card must keep it selected",
     )
-    first = krema.wait_for(
-        f"{popup_xpath}//*[self::list_item or self::menu_item][@name='{PARABOLIC}']"
-    )
-    wait_until(lambda: has_state(first, "showing") and Rect.of(first).width > 0, message="zoom style options shown")
-    options = [
-        e.get_attribute("name")
-        for e in krema.find_all(f"{popup_xpath}//*[self::list_item or self::menu_item]")
-        if has_state(e, "showing")
-    ]
-    assert len(options) == 2 and set(options) == {PARABOLIC, IN_PLACE}, f"zoom style options: {options}"
-    click_el(krema, first)
-    wait_until(lambda: current_choice(krema, ZOOM_STYLE) == PARABOLIC, message="combo closed on Parabolic")
     # Instant zoom keeps the hovered layouts below free of transitions.
     instant_xpath = preset_radio("Instant")
     instant = scroll_into_view(krema, instant_xpath)
@@ -895,7 +1012,7 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
 
     # In place applies live (no restart), persists, and scales icons where they are.
     pid = krema.pid
-    choose(krema, ZOOM_STYLE, IN_PLACE)
+    pick(krema, ZOOM_STYLE, IN_PLACE)
     wait_until(lambda: config_value(krema, "ZoomStyle") == "1", message="kremarc ZoomStyle=1")
     mid, base, rest, drawn = hovered_middle_layout(krema)
     shifts = centre_shifts(rest, drawn)
@@ -905,27 +1022,33 @@ def test_set010_zoom_style_combo_switches_zoom_live_and_persists(krema: Krema, a
     assert krema.pid == pid and krema.is_running(), "zoom style change must not restart krema"
 
     # Back to Parabolic: 0 persisted (or the key dropped as the default).
-    choose(krema, ZOOM_STYLE, PARABOLIC)
+    pick(krema, ZOOM_STYLE, PARABOLIC)
     wait_until(lambda: config_value(krema, "ZoomStyle") in ("0", None), message="kremarc ZoomStyle=0")
     mid, base, rest, drawn = hovered_middle_layout(krema)
     shifts = centre_shifts(rest, drawn)
     assert shifts[mid - 1] < -2 and shifts[mid + 1] > 2, f"Parabolic again: neighbours not pushed aside, centre shifts {shifts}"
     krema.move_away()
 
-    # Zoom factor 1.0 (a press at the slider's left end) disables the combo;
-    # raising it again (arrow keys on the focused slider) re-enables it.
-    assert has_state(krema.wait_for(row_xpath), "enabled")
+    # Zoom factor 1.0 (a press at the slider's left end) disables the zoom
+    # style cards; raising it again (arrow keys on the focused slider)
+    # re-enables them.
+    assert has_state(krema.wait_for(parabolic_xpath), "enabled") and has_state(krema.wait_for(in_place_xpath), "enabled")
     slider = scroll_into_view(krema, f"{SETTINGS}//slider[@name='Zoom factor']")
     r = krema.screen_rect(slider, "settings")
     inp.click(r.x + 1, r.center[1])
     wait_until(lambda: float(config_value(krema, "MaxZoomFactor") or 0) == 1.0, message="kremarc MaxZoomFactor=1")
-    wait_until(lambda: not has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo disabled at zoom 1.0")
+    wait_until(
+        lambda: not has_state(krema.wait_for(parabolic_xpath), "enabled") and not has_state(krema.wait_for(in_place_xpath), "enabled"),
+        message="zoom style cards disabled at zoom 1.0",
+    )
     assert not has_state(krema.wait_for(instant_xpath), "enabled"), "zoom animation presets must be disabled when zoom is off"
     assert not has_state(krema.wait_for(PRESET_TAB), "enabled"), "zoom animation tabs must be disabled when zoom is off"
     for _ in range(6):
         inp.key("right")
-    wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 0) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
-    wait_until(lambda: has_state(krema.wait_for(row_xpath), "enabled"), message="zoom style combo enabled again")
+    # 1.6 is the default, so KConfig may drop the key instead of writing it.
+    wait_until(lambda: abs(float(config_value(krema, "MaxZoomFactor") or 1.6) - 1.6) < 1e-6, message="kremarc MaxZoomFactor=1.6")
+    wait_until(lambda: has_state(krema.wait_for(parabolic_xpath), "enabled"), message="zoom style cards enabled again")
+    assert current_card(krema, ZOOM_STYLE) == PARABOLIC, "disabling zoom must preserve the zoom style"
     wait_until(lambda: has_state(krema.wait_for(instant_xpath), "enabled"), message="zoom animation presets enabled again")
     assert has_state(krema.wait_for(PRESET_TAB), "enabled"), "zoom animation tabs enabled again"
     assert has_state(krema.wait_for(instant_xpath), "checked"), "disabling zoom must preserve the zoom animation preset"
@@ -1255,7 +1378,8 @@ def test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores
     open_page(krema, "Behavior")
     choose(krema, SINGLE_CLICK_ROW, SINGLE_CLICK_CHOICES[1])
     choose(krema, GROUPED_CLICK_ROW, GROUPED_CLICK_CHOICES[1])
-    choose(krema, "Monitor mode", "All monitors")
+    open_page(krema, "Monitors & Desktops")
+    pick(krema, "Monitor mode", "All monitors")
     wait_until(lambda: mapped_dock_xs(krema) == [0, W], message="both All monitors docks mapped")
     close_settings(krema)
     for output_x in (0, W):
@@ -1274,11 +1398,12 @@ def test_clk002_all_screens_share_live_click_choices_and_recreated_dock_restores
         assert_click_action_effects(krema, 1, 2, solo, alpha, beta, output_x)
 
     open_settings(krema, "Solo")
-    open_page(krema, "Behavior")
-    choose(krema, "Monitor mode", "Primary monitor only")
+    open_page(krema, "Monitors & Desktops")
+    pick(krema, "Monitor mode", "Primary monitor only")
     wait_until(lambda: mapped_dock_xs(krema) == [0], message="secondary dock removed")
-    choose(krema, "Monitor mode", "All monitors")
+    pick(krema, "Monitor mode", "All monitors")
     wait_until(lambda: mapped_dock_xs(krema) == [0, W], message="secondary dock recreated")
+    open_page(krema, "Behavior")
     assert current_choice(krema, SINGLE_CLICK_ROW) == SINGLE_CLICK_CHOICES[1]
     assert current_choice(krema, GROUPED_CLICK_ROW) == GROUPED_CLICK_CHOICES[2]
     close_settings(krema)
@@ -1327,20 +1452,19 @@ def test_clk011_preview_controls_follow_hover_and_explicit_group_choice(
     )
 
     preview_controls_enabled = hover_enabled or grouped_action == 1
-    for label, enabled, key in (
-        ("Thumbnail width (px)", preview_controls_enabled, "PreviewThumbnailSize"),
-        ("Hide delay (ms)", preview_controls_enabled, "PreviewHideDelay"),
-        ("Hover delay (ms)", hover_enabled, "PreviewHoverDelay"),
+    for label, enabled, key, lo, hi, step in (
+        ("Thumbnail width (px)", preview_controls_enabled, "PreviewThumbnailSize", 120, 320, 20),
+        ("Hide delay (ms)", preview_controls_enabled, "PreviewHideDelay", 0, 1000, 50),
+        ("Hover delay (ms)", hover_enabled, "PreviewHoverDelay", 0, 2000, 50),
     ):
-        xpath = f"{SETTINGS}//list_item[label[@name='{label}']]//spin_button"
-        spin = scroll_into_view(krema, xpath)
-        assert has_state(spin, "enabled") == enabled, f"{label} availability must match how previews can be opened"
+        xpath = f"{SETTINGS}//slider[@name='{label}']"
+        slider = scroll_into_view(krema, xpath)
+        assert has_state(slider, "enabled") == enabled, f"{label} availability must match how previews can be opened"
         if enabled:
-            old_value = float(spin.get_attribute("value"))
-            click_el(krema, spin)
-            inp.key("up")
-            step = 20 if key == "PreviewThumbnailSize" else 50
-            wait_until(lambda: float(spin.get_attribute("value")) == old_value + step, message=f"{label} changed through the UI")
+            slider = focus_slider(krema, xpath, lo, hi)
+            old_value = slider_value(slider)
+            inp.key("right")
+            wait_until(lambda: slider_value(slider) == old_value + step, message=f"{label} changed through the UI")
             wait_until(lambda: int(config_value(krema, key) or 0) == int(old_value + step), message=f"{label} saved")
     close_settings(krema)
 
@@ -1375,12 +1499,12 @@ def test_set012_selected_monitors_toggle_keeps_settings_open(krema: Krema, apps:
     wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="primary-only control dock")
     reveal_dock(krema, "Alpha")
     win = open_settings(krema)
-    open_page(krema, "Behavior")
+    open_page(krema, "Monitors & Desktops")
 
     # Healthy existing-mode control before exercising the new native option.
-    choose(krema, "Monitor mode", "All monitors")
+    pick(krema, "Monitor mode", "All monitors")
     wait_until(lambda: mapped_dock_xs(krema) == [0, W], timeout=5, message="all-monitors control docks")
-    choose(krema, "Monitor mode", "Selected monitors")
+    pick(krema, "Monitor mode", "Selected monitors")
     wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="only the saved selected output")
 
     second_xpath = f"{SETTINGS}//check_box[@name='{second}']"
@@ -1502,8 +1626,8 @@ def test_set012_selected_monitors_fallback_warns_and_keeps_saved_names(
     assert dock_surfaces(krema)[0].output == first
     reveal_dock(krema, "Alpha")
     win = open_settings(krema)
-    open_page(krema, "Behavior")
-    assert current_choice(krema, "Monitor mode") == "Selected monitors"
+    open_page(krema, "Monitors & Desktops")
+    assert current_card(krema, "Monitor mode") == "Selected monitors"
     scroll_into_view(krema, FALLBACK_WARNING)
     wait_until(lambda: fallback_warning_visible(krema), message="temporary primary fallback warning")
     assert selected_outputs(krema) == saved_names, "fallback rewrote the user's saved selection"
@@ -1513,15 +1637,15 @@ def test_set012_selected_monitors_fallback_warns_and_keeps_saved_names(
     if saved_names:
         missing_xpath = f"{SETTINGS}//check_box[@name='{DISCONNECTED_OUTPUT}']"
         assert has_state(krema.wait_for(missing_xpath), "checked"), "saved disconnected output is not removable"
-        choose(krema, "Monitor mode", "All monitors")
+        pick(krema, "Monitor mode", "All monitors")
         wait_until(lambda: mapped_dock_xs(krema) == [0, W], timeout=5, message="old all-monitors mode remains healthy")
         assert selected_outputs(krema) == saved_names
         assert not fallback_warning_visible(krema), "selected-mode warning remained visible in All monitors"
         assert not any(has_state(el, "showing") for el in krema.find_all(missing_xpath)), "output switches escaped Selected mode"
-        choose(krema, "Monitor mode", "Primary monitor only")
+        pick(krema, "Monitor mode", "Primary monitor only")
         wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="old primary-only mode remains healthy")
         assert selected_outputs(krema) == saved_names
-        choose(krema, "Monitor mode", "Selected monitors")
+        pick(krema, "Monitor mode", "Selected monitors")
         scroll_into_view(krema, FALLBACK_WARNING)
         wait_until(lambda: fallback_warning_visible(krema), message="fallback warning restored with saved unavailable selection")
 
@@ -1564,8 +1688,8 @@ def test_set012_selected_subset_preserves_docks_and_routes_shortcuts(krema: Krem
     wait_until(lambda: mapped_dock_xs(krema) == [0], timeout=5, message="primary-only control on three outputs")
     reveal_dock(krema, "Alpha")
     win = open_settings(krema)
-    open_page(krema, "Behavior")
-    choose(krema, "Monitor mode", "Selected monitors")
+    open_page(krema, "Monitors & Desktops")
+    pick(krema, "Monitor mode", "Selected monitors")
     wait_until(lambda: mapped_dock_xs(krema) == [W, 2 * W], timeout=5, message="selected subset excludes primary")
     assert [d.output for d in dock_surfaces(krema)] == [second, third]
     wait_until(
@@ -1656,11 +1780,11 @@ def test_set015_reservation_switch_is_native_conditional_and_autosaves(
         message="reservation change autosaved before Settings closes",
     )
     for mode in ("Auto hide", "Dodge windows"):
-        choose(krema, "Visibility mode", mode)
+        pick(krema, "Visibility mode", mode)
         assert not any(has_state(row, "showing") for row in krema.find_all(RESERVE_SWITCH)), (
             f"reservation switch must not be available in {mode}"
         )
         assert kcfg.as_bool(config_value(krema, "ReserveScreenSpace") or "true") == (not reserved)
-    choose(krema, "Visibility mode", "Always visible")
+    pick(krema, "Visibility mode", "Always visible")
     assert has_state(scroll_into_view(krema, RESERVE_SWITCH), "checked") == (not reserved)
     assert krema.pid == pid, "changing visibility policy must not restart Krema or discard the reservation preference"

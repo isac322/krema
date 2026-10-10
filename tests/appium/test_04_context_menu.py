@@ -93,6 +93,13 @@ def capture(krema: Krema, name: str, area: Rect | None = None) -> Image.Image:
     return krema.screenshot(name, area)
 
 
+def settled_capture(krema: Krema, name: str, area: Rect) -> Image.Image:
+    """``capture`` once ``area`` stops changing. A new item's AT-SPI rect
+    and the panel width reach their final values while its icon is still
+    sliding into the slot, so a single frame can show the slot empty."""
+    return wait_stable(lambda: capture(krema, name, area), duration=0.6, interval=0.2)
+
+
 def crop(image: Image.Image, r: Rect | tuple[int, int, int, int]) -> Image.Image:
     x, y, w, h = r
     return image.crop((x, y, x + w, y + h))
@@ -203,7 +210,8 @@ def test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes(krema: Krema, apps
     krema.wait_for_item("Alpha")
     assert LAUNCHER not in pinned_launchers(krema)
     krema.move_away()
-    running_strip = indicator_contrast(capture(krema, "running", krema.surface_rect("dock")), krema.screen_rect(krema.item("Alpha")))
+    shot = settled_capture(krema, "running", krema.surface_rect("dock"))
+    running_strip = indicator_contrast(shot, wait_stable(lambda: krema.screen_rect(krema.item("Alpha"))))
 
     krema.open_context_menu("Alpha")
     krema.choose_context_menu_entry("Pin to Dock", UNPINNED_WINDOW)
@@ -218,7 +226,7 @@ def test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes(krema: Krema, apps
     # No running indicator: the dot drawn under the icon while running is gone.
     krema.move_away()
     rect = wait_stable(lambda: krema.screen_rect(krema.item(APP_NAME)))
-    closed_strip = indicator_contrast(capture(krema, "closed", rect), rect)
+    closed_strip = indicator_contrast(settled_capture(krema, "closed", rect), rect)
     assert running_strip >= 120, f"oracle cannot see the running dot (contrast {running_strip})"
     assert closed_strip <= 40, f"indicator strip still shows a dot (contrast {closed_strip})"
 
@@ -325,7 +333,7 @@ def test_ctx005_close_keeps_a_pinned_app_without_indicator(krema: Krema, apps: T
     wait_until(lambda: "windows" not in description(krema, APP_NAME), timeout=5, message="window count to clear")
     krema.move_away()
     rect = wait_stable(lambda: krema.screen_rect(krema.item(APP_NAME)))
-    strip = indicator_contrast(capture(krema, "closed", rect), rect)
+    strip = indicator_contrast(settled_capture(krema, "closed", rect), rect)
     assert strip <= 40, f"indicator strip still shows a dot (contrast {strip})"
     assert pinned_launchers(krema) == [LAUNCHER]
 

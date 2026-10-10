@@ -1,3 +1,17 @@
+krema (0.11.0-1) unstable; urgency=medium
+
+  * New upstream release v0.11.0
+  * Redesigned settings window: 8 focused pages plus About, sidebar search,
+    a live miniature of the user's desktop and a 3D shadow editor
+  * Zoom animation presets (Natural, Quick, Relaxed, Instant) and a Custom
+    tab; hover zoom now eases in and out by default
+  * Separate icon opacity settings and icon spacing up to 64 pixels
+  * krema --version/--help/--author/--license print and exit without a display
+  * Runtime dependency on the Qt Quick 3D QML module
+  * Fixed KWin's Slide Back effect and pinned launchers stored as file paths
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Sat, 10 Oct 2026 00:00:00 +0900
+
 krema (0.10.0-1) unstable; urgency=medium
 
   * New upstream release v0.10.0

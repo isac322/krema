@@ -71,6 +71,11 @@
     <color type="primary" scheme_preference="dark">#231A14</color>
   </branding>
   <releases>
+    <release version="0.11.0" date="2026-10-10">
+      <description>
+        <p>The settings window was redesigned into focused pages around a live miniature of your own desktop, with a 3D editor for the dock shadow and full keyboard and screen reader support. Hover zoom gained presets with a smoother macOS-like default, icons gained per-state opacity settings, and KWin's Slide Back effect works again while Krema is running.</p>
+      </description>
+    </release>
     <release version="0.10.0" date="2026-10-05">
       <description>
         <p>Docks can now be kept on chosen monitors, left-click behaviour is configurable for single and grouped windows, and Always visible mode can reserve screen space so maximized windows no longer cover the dock. This release also ships Krema's own application icon, an option to separate pinned and running apps, and many fixes for dock resizing, icon clicks, drag cancellation and window previews.</p>

@@ -10,6 +10,7 @@
 #include <QSizeF>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 
 class KremaSettings;
 class QQmlComponent;
@@ -68,6 +69,31 @@ public:
     /// Check if a background style is available on this system (for settings
     /// QML).
     Q_INVOKABLE bool isStyleAvailable(int styleType) const;
+
+    /// Zoom layout for settings previews (MiniDock), identical to
+    /// DockView::zoomLayout (see krema::computeDockZoom).
+    /// @p style is a krema::ZoomStyle int (0=Parabolic, 1=InPlace);
+    /// unknown values fall back to Parabolic. @p boundary is the first item
+    /// in the second zone, or -1 when no separator is present. @p boundaryGap
+    /// is the fixed extra primary-axis gap inserted before it.
+    /// minEdge/maxEdge bound the grown background (pass -Infinity/Infinity for
+    /// no bound).
+    /// Returns keys: scales, offsets (QVariantList of double), leadingGrowth
+    /// and trailingGrowth (double).
+    Q_INVOKABLE QVariantMap zoomLayout(int count,
+                                       qreal restStart,
+                                       qreal iconSize,
+                                       qreal spacing,
+                                       int boundary,
+                                       qreal boundaryGap,
+                                       qreal restBackgroundStart,
+                                       qreal restBackgroundEnd,
+                                       qreal maxZoomFactor,
+                                       int style,
+                                       bool active,
+                                       qreal cursor,
+                                       qreal minEdge,
+                                       qreal maxEdge) const;
 
 Q_SIGNALS:
     void visibleChanged(bool visible);

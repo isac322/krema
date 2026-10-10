@@ -8,7 +8,7 @@
 #include "krema.h"
 #include "models/taskiconprovider.h"
 #include "utils/surfacegeometry.h"
-#include "utils/zoomcalculator.h"
+#include "utils/zoomlayoutvariant.h"
 
 #include <QDBusConnection>
 #include <QLoggingCategory>
@@ -231,40 +231,20 @@ QVariantMap DockView::zoomLayout(int count,
                                  qreal minEdge,
                                  qreal maxEdge) const
 {
-    // Unknown values fall back to the default, Parabolic.
-    const ZoomStyle zoomStyle = style == static_cast<int>(ZoomStyle::InPlace) ? ZoomStyle::InPlace : ZoomStyle::Parabolic;
-    const DockZoomLayout layout = computeDockZoom(count,
-                                                  restStart,
-                                                  iconSize,
-                                                  spacing,
-                                                  boundary,
-                                                  boundaryGap,
-                                                  restBackgroundStart,
-                                                  restBackgroundEnd,
-                                                  maxZoomFactor,
-                                                  zoomStyle,
-                                                  active,
-                                                  cursor,
-                                                  minEdge,
-                                                  maxEdge);
-
-    QVariantList scales;
-    scales.reserve(static_cast<qsizetype>(layout.scales.size()));
-    for (double scale : layout.scales) {
-        scales.append(scale);
-    }
-    QVariantList offsets;
-    offsets.reserve(static_cast<qsizetype>(layout.offsets.size()));
-    for (double offset : layout.offsets) {
-        offsets.append(offset);
-    }
-
-    return {
-        {QStringLiteral("scales"), scales},
-        {QStringLiteral("offsets"), offsets},
-        {QStringLiteral("leadingGrowth"), layout.leadingGrowth},
-        {QStringLiteral("trailingGrowth"), layout.trailingGrowth},
-    };
+    return zoomLayoutVariant(count,
+                             restStart,
+                             iconSize,
+                             spacing,
+                             boundary,
+                             boundaryGap,
+                             restBackgroundStart,
+                             restBackgroundEnd,
+                             maxZoomFactor,
+                             style,
+                             active,
+                             cursor,
+                             minEdge,
+                             maxEdge);
 }
 
 void DockView::updateSize()

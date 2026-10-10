@@ -7,6 +7,7 @@
 #include "multidockmanager.h"
 #include "outputordermonitor.h"
 #include "style/backgroundstyle.h"
+#include "utils/zoomlayoutvariant.h"
 
 #include <KConfigGroup>
 #include <KLocalizedQmlContext>
@@ -317,6 +318,37 @@ void SettingsWindow::updateAvailableScreens()
 bool SettingsWindow::isStyleAvailable(int styleType) const
 {
     return krema::isStyleAvailable(static_cast<BackgroundStyleType>(styleType));
+}
+
+QVariantMap SettingsWindow::zoomLayout(int count,
+                                       qreal restStart,
+                                       qreal iconSize,
+                                       qreal spacing,
+                                       int boundary,
+                                       qreal boundaryGap,
+                                       qreal restBackgroundStart,
+                                       qreal restBackgroundEnd,
+                                       qreal maxZoomFactor,
+                                       int style,
+                                       bool active,
+                                       qreal cursor,
+                                       qreal minEdge,
+                                       qreal maxEdge) const
+{
+    return zoomLayoutVariant(count,
+                             restStart,
+                             iconSize,
+                             spacing,
+                             boundary,
+                             boundaryGap,
+                             restBackgroundStart,
+                             restBackgroundEnd,
+                             maxZoomFactor,
+                             style,
+                             active,
+                             cursor,
+                             minEdge,
+                             maxEdge);
 }
 
 void SettingsWindow::show()

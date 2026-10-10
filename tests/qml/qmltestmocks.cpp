@@ -3,7 +3,7 @@
 
 #include "qmltestmocks.h"
 
-#include "utils/zoomcalculator.h"
+#include "utils/zoomlayoutvariant.h"
 
 #include <QMetaEnum>
 #include <QQmlEngine>
@@ -189,39 +189,21 @@ QVariantMap ZoomLayoutEngine::zoomLayout(int count,
                                          qreal minEdge,
                                          qreal maxEdge) const
 {
-    // Same mapping as DockView::zoomLayout: unknown styles fall back to
-    // Parabolic.
-    const auto zoomStyle = style == static_cast<int>(krema::ZoomStyle::InPlace) ? krema::ZoomStyle::InPlace : krema::ZoomStyle::Parabolic;
-    const krema::DockZoomLayout layout = krema::computeDockZoom(count,
-                                                                restStart,
-                                                                iconSize,
-                                                                spacing,
-                                                                boundary,
-                                                                boundaryGap,
-                                                                restBackgroundStart,
-                                                                restBackgroundEnd,
-                                                                maxZoomFactor,
-                                                                zoomStyle,
-                                                                active,
-                                                                cursor,
-                                                                minEdge,
-                                                                maxEdge);
-    QVariantList scales;
-    scales.reserve(static_cast<qsizetype>(layout.scales.size()));
-    for (double scale : layout.scales) {
-        scales.append(scale);
-    }
-    QVariantList offsets;
-    offsets.reserve(static_cast<qsizetype>(layout.offsets.size()));
-    for (double offset : layout.offsets) {
-        offsets.append(offset);
-    }
-    return {
-        {QStringLiteral("scales"), scales},
-        {QStringLiteral("offsets"), offsets},
-        {QStringLiteral("leadingGrowth"), layout.leadingGrowth},
-        {QStringLiteral("trailingGrowth"), layout.trailingGrowth},
-    };
+    // The production conversion, as DockView::zoomLayout uses it.
+    return krema::zoomLayoutVariant(count,
+                                    restStart,
+                                    iconSize,
+                                    spacing,
+                                    boundary,
+                                    boundaryGap,
+                                    restBackgroundStart,
+                                    restBackgroundEnd,
+                                    maxZoomFactor,
+                                    style,
+                                    active,
+                                    cursor,
+                                    minEdge,
+                                    maxEdge);
 }
 
 void registerMockTypes()

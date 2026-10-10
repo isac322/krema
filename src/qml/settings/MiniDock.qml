@@ -143,7 +143,7 @@ Item {
         id: zoomProfile
     }
 
-    // --- Hover zoom (same Gaussian curve as the dock) ---
+    // --- Hover zoom (same layout as the dock's computeDockZoom) ---
 
     property bool _pulseOn: false
     readonly property bool zoomed: hoverArea.containsMouse || hoveredIndex >= 0 || _pulseOn
@@ -172,29 +172,20 @@ Item {
         }
     }
 
-    readonly property real _sigma: iconPx * 1.2
-    readonly property real _extra: (maxZoomFactor - 1.0) * zoomAmount
-
-    function zoomScaleAt(index) {
-        const d = cursor - (index * pitch + iconPx / 2)
-        return 1.0 + _extra * Math.exp(-(d * d) / Math.max(1e-6, _sigma * _sigma))
-    }
-
-    // Parabolic: growth before the cursor shifts the row back so the icon
-    // under the cursor stays put.
-    readonly property real _leadingGrowth: {
-        if (zoomStyle === 1 || _extra <= 0) {
-            return 0
-        }
-        let growth = 0
-        for (let i = 0; i < count; ++i) {
-            const before = Math.max(0, Math.min(1, (cursor - (i * pitch + iconPx / 2)) / pitch + 0.5))
-            growth += (zoomScaleAt(i) - 1.0) * iconPx * before
-        }
-        return growth
-    }
-    readonly property real _rowLength: vertical ? row.height : row.width
-    readonly property real _totalGrowth: Math.max(0, _rowLength - restContentLength)
+    // Scales/offsets/growth from the same computeDockZoom the dock uses
+    // (via SettingsWindow.zoomLayout), in the rest frame of the row
+    // (0 = leading edge of the first icon; the panel's rest edges are the
+    // background bounds). The growth is split between both ends, so far
+    // icons and the background edges stay still while the pointer moves.
+    readonly property var zoomLayout: SettingsWindow.zoomLayout(
+        count, 0,
+        iconPx, gapPx,
+        -1, 0,
+        -restStart, restContentLength + restStart,
+        1.0 + (maxZoomFactor - 1.0) * zoomAmount,
+        zoomStyle,
+        zoomAmount > 0,
+        cursor, -Infinity, Infinity)
 
     SequentialAnimation {
         id: pulseAnimation
@@ -243,12 +234,15 @@ Item {
         readonly property color panelColor: Qt.alpha(baseColor, dock.backgroundStyle === 1 ? 0.0 : dock.backgroundOpacity)
         readonly property real radius: Math.min(dock.thickness / 2, dock.cornerRadius * dock.unit)
 
-        // Rests on the panel extent and grows by the zoom growth on each
-        // side (Parabolic only).
-        x: dock.vertical ? 0 : -dock._leadingGrowth
-        y: dock.vertical ? -dock._leadingGrowth : 0
-        width: dock.vertical ? dock.thickness : dock.length + dock._totalGrowth
-        height: dock.vertical ? dock.length + dock._totalGrowth : dock.thickness
+        // Rests on the panel extent and grows by the zoom layout's growth
+        // on each side (Parabolic only; In place never grows it).
+        readonly property real leadingGrowth: dock.zoomLayout.leadingGrowth ?? 0
+        readonly property real trailingGrowth: dock.zoomLayout.trailingGrowth ?? 0
+
+        x: dock.vertical ? 0 : -leadingGrowth
+        y: dock.vertical ? -leadingGrowth : 0
+        width: dock.vertical ? dock.thickness : dock.length + leadingGrowth + trailingGrowth
+        height: dock.vertical ? dock.length + leadingGrowth + trailingGrowth : dock.thickness
         visible: dock.backgroundStyle !== 1
 
         ShaderEffectSource {
@@ -306,12 +300,12 @@ Item {
 
     // --- Icons ---
 
-    Grid {
+    // Static rest-position container (rest frame: its primary-axis origin is
+    // the leading edge of the first icon). Zoom moves each slot explicitly.
+    Item {
         id: row
-        x: dock.vertical ? dock.padPx : dock.restStart - dock._leadingGrowth
-        y: dock.vertical ? dock.restStart - dock._leadingGrowth : dock.padPx
-        columns: dock.vertical ? 1 : Math.max(1, dock.count)
-        spacing: dock.gapPx
+        x: dock.vertical ? dock.padPx : dock.restStart
+        y: dock.vertical ? dock.restStart : dock.padPx
 
         Repeater {
             id: repeater
@@ -323,14 +317,20 @@ Item {
                 required property var modelData
                 required property int index
 
-                readonly property real zoomScale: dock.zoomScaleAt(index)
-                // Parabolic: the slot widens and pushes neighbours aside. In
-                // place: the slot keeps its size and the icon magnifies over
-                // its neighbours.
+                readonly property real zoomScale: dock.zoomLayout.scales?.[index] ?? 1.0
+                readonly property real zoomOffset: dock.zoomLayout.offsets?.[index] ?? 0.0
+                // Parabolic: the slot covers the zoomed icon's positional
+                // extent; neighbours are pushed aside through zoomOffset.
+                // In place: the slot keeps its rest size and the icon
+                // magnifies over its neighbours (offsets are always 0).
                 readonly property real slotLength: dock.zoomStyle === 1 ? dock.iconPx : dock.iconPx * zoomScale
+                // Slot centre = rest centre + the layout's centre shift.
+                readonly property real primaryCenter: index * dock.pitch + dock.iconPx / 2 + zoomOffset
                 readonly property string windowState: modelData.state ?? "launcher"
                 readonly property Item iconBox: box
 
+                x: dock.vertical ? 0 : primaryCenter - slotLength / 2
+                y: dock.vertical ? primaryCenter - slotLength / 2 : 0
                 width: dock.vertical ? dock.iconPx : slotLength
                 height: dock.vertical ? slotLength : dock.iconPx
                 z: zoomScale

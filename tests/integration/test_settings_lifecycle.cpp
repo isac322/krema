@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <memory>
 
 // Static library resources must be initialized from the global namespace.
@@ -912,6 +913,76 @@ TEST_CASE("Every settings page loads without QML warnings", "[settings][pages]")
     }
     closeSettings();
     CHECK(g_settingsQmlWarnings.isEmpty());
+}
+
+// The settings miniatures lay out Parabolic zoom with the dock's own
+// computeDockZoom, which splits the growth between both ends: with the
+// pointer in the middle of the row the panel background stays put. Pinning
+// the hovered icon to the pointer instead shifts the whole row by about a
+// pixel back and forth for every icon crossed (the shake #43 removed).
+TEST_CASE("Parabolic zoom in a settings preview keeps the panel still under a moving pointer", "[settings][preview-zoom]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    app().settings->setZoomStyle(0);
+    openSettingsFrom(app().manager->primaryShell());
+    QPointer<QQuickWindow> dialog = settingsWindow();
+    REQUIRE(dialog);
+    auto *loader = dialog->findChild<QQuickItem *>(QStringLiteral("settingsPageLoader"));
+    REQUIRE(loader);
+    QMetaObject::invokeMethod(dialog, "openModule", Q_ARG(QVariant, QStringLiteral("icons")));
+    REQUIRE(QTest::qWaitFor(
+        [loader] {
+            return loader->property("status").toInt() == 1 /* Loader.Ready */ && loader->property("item").value<QQuickItem *>();
+        },
+        kTimeoutMs));
+    QTest::qWait(300);
+
+    // The page's hero miniature: the largest visible MiniDock in the page's
+    // visual tree.
+    QQuickItem *dock = nullptr;
+    QList<QQuickItem *> items{loader->property("item").value<QQuickItem *>()};
+    for (qsizetype i = 0; i < items.size(); ++i) {
+        auto *item = items.at(i);
+        items.append(item->childItems());
+        if (item->metaObject()->indexOfProperty("panelItem") >= 0 && item->metaObject()->indexOfProperty("restStart") >= 0 && item->isVisible()
+            && (!dock || item->width() * item->height() > dock->width() * dock->height())) {
+            dock = item;
+        }
+    }
+    REQUIRE(dock);
+    auto *panel = dock->property("panelItem").value<QQuickItem *>();
+    REQUIRE(panel);
+    const qreal pitch = dock->property("pitch").toReal();
+    // Rest panel length (the page may already show the preview zoomed).
+    const qreal restLength = dock->property("length").toReal();
+    REQUIRE(pitch > 0);
+
+    // Sweep one icon pitch across the middle of the row in 1 px steps.
+    const QPointF centre = dock->mapToScene(QPointF(dock->width() / 2, dock->height() / 2));
+    const int from = qRound(centre.x() - pitch / 2);
+    const int to = qRound(centre.x() + pitch / 2);
+    const int y = qRound(centre.y());
+    QTest::mouseMove(dialog, QPoint(from, y));
+    REQUIRE(QTest::qWaitFor(
+        [dock] {
+            return dock->property("hovered").toBool() && dock->property("zoomAmount").toReal() == 1.0;
+        },
+        kTimeoutMs));
+    // Engaged: the background grew around the zoomed icons.
+    CHECK(panel->width() > restLength + pitch / 4);
+
+    qreal minLeft = std::numeric_limits<qreal>::max();
+    qreal maxLeft = std::numeric_limits<qreal>::lowest();
+    for (int x = from; x <= to; ++x) {
+        QTest::mouseMove(dialog, QPoint(x, y));
+        QCoreApplication::processEvents();
+        const qreal left = panel->mapToScene(QPointF(0, 0)).x();
+        minLeft = std::min(minLeft, left);
+        maxLeft = std::max(maxLeft, left);
+    }
+    INFO("panel left edge moved by " << maxLeft - minLeft << " px over a " << pitch << " px sweep");
+    CHECK(maxLeft - minLeft < 0.5);
+    closeSettings();
 }
 
 TEST_CASE("Shutting down with the settings dialog open", "[settings][shutdown]")

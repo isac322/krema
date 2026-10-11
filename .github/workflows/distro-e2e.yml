@@ -28,8 +28,10 @@
 # per-push entries would churn the repository's 10 GB Actions cache;
 # scheduled and dispatched runs save.
 #
-# Triggers: pull requests touching what this workflow builds or runs, a
-# weekly schedule to catch rolling-distro drift (arch,
+# Triggers: pull requests touching what this workflow builds or runs
+# (through ci.yml, workflow_call; its DISTRO_PATHS hold the path filter
+# below and its required `CI gate` check reports even when this suite does
+# not apply), a weekly schedule to catch rolling-distro drift (arch,
 # opensuse-tumbleweed/slowroll, ...), and manual dispatch, which the release
 # procedure (.agents/skills/release/SKILL.md) runs on master before tagging.
 # Path filter: the package is built with BUILD_TESTING=OFF from src/,
@@ -55,19 +57,13 @@
 name: Distro E2E
 
 on:
-  pull_request:
-    paths:
-      - "src/**"
-      - "packaging/**"
-      - "CMakeLists.txt"
-      - "LICENSES/**"
-      - "tests/appium/**"
-      - "!tests/appium/Dockerfile"
-      - "!tests/appium/CMakeLists.txt"
-      - "tests/distro/**"
-      - "!**/*.md"
-      - ".github/workflows/distro-e2e.yml"
-      - ".github/scripts/junit-summary.py"
+  workflow_call:
+    inputs:
+      targets:
+        description: "Targets (comma/space separated ids from tests/distro/targets.tsv or 'arch'), or 'all'"
+        type: string
+        required: false
+        default: all
   schedule:
     - cron: "41 2 * * 3"
   workflow_dispatch:

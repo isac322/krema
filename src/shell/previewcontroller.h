@@ -13,8 +13,7 @@
 class KremaSettings;
 class QQuickView;
 
-namespace krema
-{
+namespace krema {
 
 class DockModel;
 class DockView;
@@ -30,143 +29,154 @@ class DockView;
  * holds keyboard interactivity and forwards key events via Q_INVOKABLE methods.
  * This avoids unreliable focus transfer between layer-shell surfaces.
  */
-class PreviewController : public QObject
-{
-    Q_OBJECT
+class PreviewController : public QObject {
+  Q_OBJECT
 
-    Q_PROPERTY(bool visible READ isVisible NOTIFY visibleChanged)
-    Q_PROPERTY(int parentIndex READ parentIndex NOTIFY parentIndexChanged)
-    Q_PROPERTY(QModelIndex rootModelIndex READ rootModelIndex NOTIFY parentIndexChanged)
-    Q_PROPERTY(bool isGrouped READ isGrouped NOTIFY parentIndexChanged)
-    Q_PROPERTY(QVariantList windowIds READ windowIds NOTIFY parentIndexChanged)
-    Q_PROPERTY(QString appName READ appName NOTIFY parentIndexChanged)
-    Q_PROPERTY(qreal contentX READ contentX NOTIFY positionChanged)
-    Q_PROPERTY(qreal contentY READ contentY NOTIFY positionChanged)
-    Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
-    Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
+  Q_PROPERTY(bool visible READ isVisible NOTIFY visibleChanged)
+  Q_PROPERTY(int parentIndex READ parentIndex NOTIFY parentIndexChanged)
+  Q_PROPERTY(
+      QModelIndex rootModelIndex READ rootModelIndex NOTIFY parentIndexChanged)
+  Q_PROPERTY(bool isGrouped READ isGrouped NOTIFY parentIndexChanged)
+  Q_PROPERTY(QVariantList windowIds READ windowIds NOTIFY parentIndexChanged)
+  Q_PROPERTY(QString appName READ appName NOTIFY parentIndexChanged)
+  Q_PROPERTY(qreal contentX READ contentX NOTIFY positionChanged)
+  Q_PROPERTY(qreal contentY READ contentY NOTIFY positionChanged)
+  Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
+  Q_PROPERTY(qreal contentHeight READ contentHeight NOTIFY contentSizeChanged)
 
-    // Preview keyboard navigation state (driven from dock)
-    Q_PROPERTY(bool previewKeyboardActive READ isPreviewKeyboardActive NOTIFY previewKeyboardActiveChanged)
-    Q_PROPERTY(int focusedThumbnailIndex READ focusedThumbnailIndex NOTIFY focusedThumbnailIndexChanged)
+  // Preview keyboard navigation state (driven from dock)
+  Q_PROPERTY(bool previewKeyboardActive READ isPreviewKeyboardActive NOTIFY
+                 previewKeyboardActiveChanged)
+  Q_PROPERTY(int focusedThumbnailIndex READ focusedThumbnailIndex NOTIFY
+                 focusedThumbnailIndexChanged)
 
 public:
-    explicit PreviewController(DockModel *model, DockView *dockView, KremaSettings *settings, QObject *parent = nullptr);
-    ~PreviewController() override;
+  explicit PreviewController(DockModel *model, DockView *dockView,
+                             KremaSettings *settings,
+                             QObject *parent = nullptr);
+  ~PreviewController() override;
 
-    /// Create the preview QQuickView and configure layer-shell.
-    void initialize();
+  /// Create the preview QQuickView and configure layer-shell.
+  void initialize();
 
-    [[nodiscard]] bool isVisible() const;
-    [[nodiscard]] int parentIndex() const;
-    [[nodiscard]] QModelIndex rootModelIndex() const;
-    [[nodiscard]] bool isGrouped() const;
-    [[nodiscard]] QVariantList windowIds() const;
-    [[nodiscard]] QString appName() const;
-    [[nodiscard]] qreal contentX() const;
-    [[nodiscard]] qreal contentY() const;
-    [[nodiscard]] qreal contentWidth() const;
-    [[nodiscard]] qreal contentHeight() const;
+  [[nodiscard]] bool isVisible() const;
+  [[nodiscard]] int parentIndex() const;
+  [[nodiscard]] QModelIndex rootModelIndex() const;
+  [[nodiscard]] bool isGrouped() const;
+  [[nodiscard]] QVariantList windowIds() const;
+  [[nodiscard]] QString appName() const;
+  [[nodiscard]] qreal contentX() const;
+  [[nodiscard]] qreal contentY() const;
+  [[nodiscard]] qreal contentWidth() const;
+  [[nodiscard]] qreal contentHeight() const;
 
-    [[nodiscard]] bool isPreviewKeyboardActive() const;
-    [[nodiscard]] int focusedThumbnailIndex() const;
+  [[nodiscard]] bool isPreviewKeyboardActive() const;
+  [[nodiscard]] int focusedThumbnailIndex() const;
 
-    /// Show preview for the task at @p index, positioned near the icon.
-    /// @p itemGlobalPos is the icon's global X (horizontal) or Y (vertical),
-    /// as returned by QML mapToGlobal(); it is converted to dock-surface-local
-    /// coordinates by subtracting the dock window's position.
-    /// @p itemExtent is the icon's width (horizontal) or height (vertical).
-    Q_INVOKABLE void showPreview(int index, qreal itemGlobalPos, qreal itemExtent);
+  /// Show preview for the task at @p index, positioned near the icon.
+  /// @p itemGlobalPos is the icon's global X (horizontal) or Y (vertical),
+  /// as returned by QML mapToGlobal(); it is converted to dock-surface-local
+  /// coordinates by subtracting the dock window's position.
+  /// @p itemExtent is the icon's width (horizontal) or height (vertical).
+  Q_INVOKABLE void showPreview(int index, qreal itemGlobalPos,
+                               qreal itemExtent);
 
-    /// Reconfigure preview surface anchors/margins after edge change.
-    void updateEdge();
+  /// Reconfigure preview surface anchors/margins after edge change.
+  void updateEdge();
 
-    /// Hide the preview immediately.
-    Q_INVOKABLE void hidePreview();
+  /// Hide the preview immediately.
+  Q_INVOKABLE void hidePreview();
 
-    /// Hide the preview after a delay (for dock→preview mouse transition).
-    Q_INVOKABLE void hidePreviewDelayed();
+  /// Hide the preview after a delay (for dock→preview mouse transition).
+  Q_INVOKABLE void hidePreviewDelayed();
 
-    /// Cancel a pending delayed hide (mouse entered preview).
-    Q_INVOKABLE void cancelHide();
+  /// Cancel a pending delayed hide (mouse entered preview).
+  Q_INVOKABLE void cancelHide();
 
-    /// Update whether the mouse is hovering the preview surface.
-    Q_INVOKABLE void setPreviewHovered(bool hovered);
+  /// Update whether the mouse is hovering the preview surface.
+  Q_INVOKABLE void setPreviewHovered(bool hovered);
 
-    /// Update the content size from QML (after layout).
-    Q_INVOKABLE void setContentSize(qreal width, qreal height);
+  /// Hold the preview hidden while the dock context menu is open: hides it
+  /// now and ignores showPreview() until released. Releasing only clears
+  /// the hold; QML re-shows the preview through its normal hover pipeline.
+  void setHeld(bool held);
 
-    // --- Preview keyboard navigation (called from dock key handler) ---
+  /// Update the content size from QML (after layout).
+  Q_INVOKABLE void setContentSize(qreal width, qreal height);
 
-    /// Start keyboard navigation in the preview (focus first thumbnail).
-    Q_INVOKABLE void startPreviewKeyboardNav();
+  // --- Preview keyboard navigation (called from dock key handler) ---
 
-    /// End keyboard navigation in the preview.
-    Q_INVOKABLE void endPreviewKeyboardNav();
+  /// Start keyboard navigation in the preview (focus first thumbnail).
+  Q_INVOKABLE void startPreviewKeyboardNav();
 
-    /// Navigate preview thumbnails by delta (-1 = left, +1 = right).
-    Q_INVOKABLE void navigatePreviewThumbnail(int delta);
+  /// End keyboard navigation in the preview.
+  Q_INVOKABLE void endPreviewKeyboardNav();
 
-    /// Activate the currently focused preview thumbnail window.
-    Q_INVOKABLE void activatePreviewThumbnail();
+  /// Navigate preview thumbnails by delta (-1 = left, +1 = right).
+  Q_INVOKABLE void navigatePreviewThumbnail(int delta);
 
-    /// Close the currently focused preview thumbnail window.
-    Q_INVOKABLE void closePreviewThumbnail();
+  /// Activate the currently focused preview thumbnail window.
+  Q_INVOKABLE void activatePreviewThumbnail();
 
-    /// Get the number of preview thumbnails.
-    Q_INVOKABLE int previewThumbnailCount() const;
+  /// Close the currently focused preview thumbnail window.
+  Q_INVOKABLE void closePreviewThumbnail();
 
-    /// Get the title of the currently focused thumbnail (for screen reader).
-    Q_INVOKABLE QString focusedThumbnailTitle() const;
+  /// Get the number of preview thumbnails.
+  Q_INVOKABLE int previewThumbnailCount() const;
 
-    /// Get whether the focused thumbnail is active/minimized (for screen reader).
-    Q_INVOKABLE bool focusedThumbnailIsActive() const;
-    Q_INVOKABLE bool focusedThumbnailIsMinimized() const;
+  /// Get the title of the currently focused thumbnail (for screen reader).
+  Q_INVOKABLE QString focusedThumbnailTitle() const;
 
-    /// Set the hide delay timer interval (from settings).
-    void setHideDelay(int ms);
+  /// Get whether the focused thumbnail is active/minimized (for screen reader).
+  Q_INVOKABLE bool focusedThumbnailIsActive() const;
+  Q_INVOKABLE bool focusedThumbnailIsMinimized() const;
+
+  /// Set the hide delay timer interval (from settings).
+  void setHideDelay(int ms);
 
 Q_SIGNALS:
-    void visibleChanged(bool visible);
-    void parentIndexChanged();
-    void positionChanged();
-    void contentSizeChanged();
-    void previewKeyboardActiveChanged();
-    void focusedThumbnailIndexChanged();
+  void visibleChanged(bool visible);
+  void parentIndexChanged();
+  void positionChanged();
+  void contentSizeChanged();
+  void previewKeyboardActiveChanged();
+  void focusedThumbnailIndexChanged();
 
 private:
-    void updateInputRegion();
-    void commitInputRegion();
-    void applyEdgeLayout();
+  void updateInputRegion();
+  void commitInputRegion();
+  void applyEdgeLayout();
 
-    void recalcContentPosition();
-    void doShow();
-    void doHide();
+  void recalcContentPosition();
+  void doShow();
+  void doHide();
 
-    /// Get the model index for the currently focused thumbnail.
-    [[nodiscard]] QModelIndex focusedThumbnailModelIndex() const;
+  /// Get the model index for the currently focused thumbnail.
+  [[nodiscard]] QModelIndex focusedThumbnailModelIndex() const;
 
-    DockModel *m_model;
-    DockView *m_dockView;
-    KremaSettings *m_settings;
-    std::unique_ptr<QQuickView> m_previewView;
-    QRegion m_inputRegion;
+  DockModel *m_model;
+  DockView *m_dockView;
+  KremaSettings *m_settings;
+  std::unique_ptr<QQuickView> m_previewView;
+  QRegion m_inputRegion;
 
-    bool m_visible = false;
-    bool m_previewHovered = false;
-    int m_parentIndex = -1;
+  bool m_visible = false;
+  bool m_previewHovered = false;
+  bool m_held = false;
+  int m_parentIndex = -1;
 
-    qreal m_contentX = 0;
-    qreal m_contentY = 0;
-    qreal m_contentWidth = 280;
-    qreal m_contentHeight = 200;
-    qreal m_itemPos = 0; // icon position in dock-surface-local coordinates
-    qreal m_itemExtent = 0;
+  qreal m_contentX = 0;
+  qreal m_contentY = 0;
+  qreal m_contentWidth = 280;
+  qreal m_contentHeight = 200;
+  qreal m_itemPos = 0; // icon position in dock-surface-local coordinates
+  qreal m_itemExtent = 0;
 
-    // Preview keyboard navigation state
-    bool m_previewKeyboardActive = false;
-    int m_focusedThumbnailIndex = -1;
+  // Preview keyboard navigation state
+  bool m_previewKeyboardActive = false;
+  int m_focusedThumbnailIndex = -1;
 
-    QTimer m_hideTimer;
+  QTimer m_hideTimer;
 };
 
 } // namespace krema

@@ -14,6 +14,9 @@ QtObject {
     property color backgroundColor: "#99000000"
     property int floatingPadding: 8
     property int iconCacheVersion: 0
+    // Compositor pointer focus reported by isPointerInside().
+    property bool pointerInside: false
+    function isPointerInside() { return pointerInside }
 
     // Production DockView::zoomLayout (krema::computeDockZoom), not a copy.
     function zoomLayout(count, restStart, iconSize, spacing, boundary, boundaryGap,
@@ -26,7 +29,7 @@ QtObject {
     }
 
     // Restores every property listed in _resettable to its declared value.
-    readonly property var _resettable: ["edge", "backgroundStyleType", "backgroundColor", "floatingPadding", "iconCacheVersion"]
+    readonly property var _resettable: ["edge", "backgroundStyleType", "backgroundColor", "floatingPadding", "iconCacheVersion", "pointerInside"]
     property var _defaults: ({})
     Component.onCompleted: {
         for (const k of _resettable) _defaults[k] = this[k]

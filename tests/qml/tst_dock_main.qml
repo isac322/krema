@@ -710,6 +710,83 @@ Item {
             tryCompare(tooltip, "visible", true, 2000)
         }
 
+        // --- Context menu hover hold ---
+
+        // Opens the mock menu the way production does: DockShell holds the
+        // preview hidden (PreviewController::setHeld) while it is open.
+        function openContextMenu() {
+            DockContextMenu.open = true
+            PreviewController.hidePreview()
+        }
+
+        // Hovers item 1 of three windows until its preview is shown, then
+        // opens the menu and delivers the pointer events QtWayland produces
+        // under the popup grab (a fake leave) plus motion over another icon.
+        function holdHoverUnderContextMenu() {
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            let other = centerOf(its[0])
+            hoverItem(its[1])
+            tryCompare(its[1], "currentScale", DockSettings.maxZoomFactor)
+            tryCompare(PreviewController, "visible", true)
+            let panel = its[1].parent.parent
+            let anchor = Qt.point(panel.mouseX, panel.mouseY)
+
+            openContextMenu()
+            mouseMove(stage, -1, -1)
+            mouseMove(stage, other.x, other.y)
+            return { dock: dock, its: its, panel: panel, anchor: anchor }
+        }
+
+        function test_contextMenuHoldsHoverAndZoom() {
+            let s = holdHoverUnderContextMenu()
+            let shows = PreviewController.callsTo("showPreview").length
+            let deadline = Date.now() + DockSettings.previewHoverDelay + 200
+            tryVerify(() => PreviewController.callsTo("showPreview").length > shows
+                      || Date.now() >= deadline, 2000)
+
+            compare(s.dock.hoveredIndex, 1)
+            verify(s.dock._zoomActive)
+            compare(s.panel.mouseX, s.anchor.x)
+            compare(s.panel.mouseY, s.anchor.y)
+            compare(s.its[1].currentScale, DockSettings.maxZoomFactor)
+            compare(PreviewController.callsTo("showPreview").length, shows,
+                    "a preview was requested while the context menu was open")
+            verify(!PreviewController.visible)
+            verify(!dockTooltip(s.dock).visible)
+            compare(DockVisibility.hovered, true)
+        }
+
+        function test_contextMenuCloseWithPointerInsideResumesHover() {
+            let s = holdHoverUnderContextMenu()
+            let shows = PreviewController.callsTo("showPreview").length
+
+            DockView.pointerInside = true
+            DockContextMenu.open = false
+            tryVerify(() => PreviewController.callsTo("showPreview").length > shows, 2000,
+                      "the held item's preview did not return after the menu closed")
+            let calls = PreviewController.callsTo("showPreview")
+            compare(calls[calls.length - 1].args[0], 1)
+            compare(s.dock.hoveredIndex, 1)
+            verify(s.dock._zoomActive)
+            compare(s.panel.mouseX, s.anchor.x)
+            compare(s.its[1].currentScale, DockSettings.maxZoomFactor)
+            compare(DockVisibility.hovered, true)
+        }
+
+        function test_contextMenuCloseWithPointerOutsideReleasesHover() {
+            let s = holdHoverUnderContextMenu()
+
+            DockView.pointerInside = false
+            DockContextMenu.open = false
+            tryCompare(s.dock, "hoveredIndex", -1)
+            verify(!s.dock._zoomActive)
+            compare(s.panel.mouseX, -1)
+            for (let it of s.its) tryCompare(it, "currentScale", 1.0)
+            compare(DockVisibility.hovered, false)
+        }
+
         function test_fastLauncherTooltipAtZeroDelay() {
             DockSettings.previewHoverDelay = 0
             DockModel.tasksModel.addTask({

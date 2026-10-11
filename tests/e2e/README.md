@@ -170,7 +170,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/utils/zoomcalculator.h` | 01, 02, 05, 06, 07 |
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` (including the fallback icon) | 01, 03 |
-| `src/shell/previewcontroller.*` | 01, 03 |
+| `src/shell/previewcontroller.*` | 01, 03, 04 |
 | `src/shell/dockshell.*` | 01, 06 |
 | `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
 | `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
@@ -186,6 +186,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
+| `src/platform/pointerfocustracker.*` | 02, 03, 04 |
 | `src/app/application.*` | 01, 06, 07 |
 | `src/qml/SettingsDialog.qml` | 04, 06 |
 | `src/shell/settingswindow.*` | 04, 06, 07 |

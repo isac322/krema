@@ -303,6 +303,16 @@ Item {
     // on/off flickering when moving between icons through tiny gaps.
     property bool _zoomActive: false
 
+    // Hover hold while the context menu is open. Its popup grab makes
+    // QtWayland send the dock a fake leave (the compositor keeps pointer
+    // focus) and no enter when it closes, so dock pointer events must not
+    // change hover/zoom until the menu closes and the real focus is checked.
+    // Null-safe: the context property goes away first when a dock shell is torn down.
+    readonly property bool _hoverHeld: DockContextMenu?.open ?? false
+    // Pointer on the dock as the dock tracks it. Replaces
+    // dockMouseArea.containsMouse, which stays false after the fake leave.
+    property bool _pointerOnDock: false
+
     // --- Internal drag state ---
     property bool _dragActive: false
     property int _dragSourceIndex: -1
@@ -406,6 +416,7 @@ Item {
     }
 
     function _tryAutoPreview() {
+        if (_hoverHeld) return
         if (!DockSettings.previewEnabled) return
         if (hoveredIndex < 0 || PreviewController.visible) return
         let idx = DockModel.tasksModel.index(hoveredIndex, 0)
@@ -504,7 +515,7 @@ Item {
         // preview, onExited keeps mouseX/mouseY as the zoom anchor; icons that
         // move under that stale position (re-centring for a new task row) must
         // not re-hover an item, or its preview reopens with the pointer away.
-        if (!dockMouseArea.containsMouse)
+        if (!_pointerOnDock)
             return
 
         // Rough secondary-axis check: outside the dockRow + zoom extension on
@@ -621,6 +632,65 @@ Item {
         }
     }
 
+    // Pointer left the dock: release zoom and hover unless the preview keeps
+    // them (dock→preview transition), and end a drag as a drag-out.
+    function _pointerLeft() {
+        _pointerOnDock = false
+        // Keep zoom state when preview is visible (dock→preview mouse transition)
+        if (!PreviewController.visible) {
+            dockPanel.mouseX = -1
+            dockPanel.mouseY = -1
+            _zoomActive = false
+        }
+        hoveredIndex = -1
+        hoveredName = ""
+        // Hide preview with delay (allows mouse to move to preview surface)
+        PreviewController.hidePreviewDelayed()
+        // Drag-out: if an active drag leaves the dock, unpin the launcher
+        if (_dragActive) {
+            if (DockModel.isPinned(_dragSourceIndex)) {
+                DockActions.removeLauncher(_dragSourceIndex)
+            }
+            _dragActive = false
+            _dragPending = false
+            _dragSourceIndex = -1
+            _dragTargetIndex = -1
+            DockVisibility.setDragActive(false)
+        } else if (_dragPending) {
+            _dragPending = false
+            _dragSourceIndex = -1
+            _dragTargetIndex = -1
+            dragHoldTimer.stop()
+        }
+        // preview visible이면 dock hover 상태 유지 (입력 영역 축소 방지)
+        if (!PreviewController.visible) {
+            DockVisibility.setHovered(false)
+        }
+    }
+
+    // Hold hover state while the context menu is open; on close, reconcile
+    // with the compositor's pointer focus since Qt's hover is stale.
+    Connections {
+        target: DockContextMenu
+        function onOpenChanged() {
+            if (DockContextMenu.open) {
+                tooltipTimer.stop()
+                tooltipItem.show = false
+                return
+            }
+            if (root.keyboardNavigating)
+                return
+            if (DockView.isPointerInside()) {
+                // Next real motion arrives as enter + move and resumes tracking.
+                root._pointerOnDock = true
+                if (root.hoveredIndex >= 0)
+                    tooltipTimer.restart()
+            } else {
+                root._pointerLeft()
+            }
+        }
+    }
+
     MouseArea {
         id: dockMouseArea
         Accessible.ignored: true
@@ -628,39 +698,16 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
 
-        // Track hover state for visibility controller
-        onEntered: DockVisibility.setHovered(true)
+        // Track hover state for visibility controller. Ignored while the
+        // context menu holds hover (see _hoverHeld).
+        onEntered: {
+            if (root._hoverHeld) return
+            root._pointerOnDock = true
+            DockVisibility.setHovered(true)
+        }
         onExited: {
-            // Keep zoom state when preview is visible (dock→preview mouse transition)
-            if (!PreviewController.visible) {
-                dockPanel.mouseX = -1
-                dockPanel.mouseY = -1
-                root._zoomActive = false
-            }
-            root.hoveredIndex = -1
-            root.hoveredName = ""
-            // Hide preview with delay (allows mouse to move to preview surface)
-            PreviewController.hidePreviewDelayed()
-            // Drag-out: if an active drag leaves the dock, unpin the launcher
-            if (root._dragActive) {
-                if (DockModel.isPinned(root._dragSourceIndex)) {
-                    DockActions.removeLauncher(root._dragSourceIndex)
-                }
-                root._dragActive = false
-                root._dragPending = false
-                root._dragSourceIndex = -1
-                root._dragTargetIndex = -1
-                DockVisibility.setDragActive(false)
-            } else if (root._dragPending) {
-                root._dragPending = false
-                root._dragSourceIndex = -1
-                root._dragTargetIndex = -1
-                dragHoldTimer.stop()
-            }
-            // preview visible이면 dock hover 상태 유지 (입력 영역 축소 방지)
-            if (!PreviewController.visible) {
-                DockVisibility.setHovered(false)
-            }
+            if (root._hoverHeld) return
+            root._pointerLeft()
         }
 
         // Start drag hold timer on left-button press.
@@ -740,6 +787,7 @@ Item {
 
         // Mouse wheel: cycle through child windows of the hovered app
         onWheel: function(wheel) {
+            if (root._hoverHeld) return
             if (root.hoveredIndex < 0) return
             if (wheel.angleDelta.y > 0) {
                 DockActions.cycleWindows(root.hoveredIndex, false)
@@ -750,6 +798,9 @@ Item {
 
         // Track mouse position for parabolic zoom + drag handling
         onPositionChanged: function(mouse) {
+            if (root._hoverHeld) return
+            root._pointerOnDock = true
+
             // Mouse movement cancels keyboard navigation mode
             if (root.keyboardNavigating) {
                 root.keyboardNavigating = false
@@ -1400,7 +1451,7 @@ Item {
         id: autoPreviewTimer
         interval: 200
         repeat: true
-        running: tooltipItem.visible && !PreviewController.visible
+        running: tooltipItem.visible && !PreviewController.visible && !root._hoverHeld
         onTriggered: root._tryAutoPreview()
     }
 
@@ -1410,7 +1461,9 @@ Item {
     Connections {
         target: PreviewController
         function onVisibleChanged() {
-            if (!PreviewController.visible && !dockMouseArea.containsMouse) {
+            // The menu hold hides the preview; hover is reconciled on close.
+            if (root._hoverHeld) return
+            if (!PreviewController.visible && !root._pointerOnDock) {
                 // Preview closed and mouse not on dock → release zoom smoothly
                 dockPanel.mouseX = -1
                 dockPanel.mouseY = -1
@@ -1431,7 +1484,7 @@ Item {
         id: tooltipTimer
         interval: DockSettings.previewHoverDelay
         onTriggered: {
-            if (root.hoveredIndex < 0) return
+            if (root.hoveredIndex < 0 || root._hoverHeld) return
             let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
             let isWindow = DockModel.tasksModel.data(
                 idx, TaskManager.AbstractTasksModel.IsWindow)
@@ -1517,6 +1570,7 @@ Item {
             function onHoveredIndexChanged() {
                 tooltipItem.show = false
                 tooltipTimer.stop()
+                if (root._hoverHeld) return
                 if (root.hoveredIndex < 0) {
                     // Mouse left dock: start delayed preview hide
                     PreviewController.hidePreviewDelayed()

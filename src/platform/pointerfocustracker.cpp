@@ -42,7 +42,8 @@ void ignoreWarp(void *, wl_pointer *, wl_fixed_t, wl_fixed_t) {}
 
 } // namespace
 
-PointerFocusTracker::PointerFocusTracker(QWindow *window) : m_window(window) {
+PointerFocusTracker::PointerFocusTracker(QWindow *window, QObject *parent)
+    : QObject(parent), m_window(window) {
   ensurePointer();
 }
 
@@ -118,15 +119,26 @@ bool PointerFocusTracker::isPointerInside() {
   return surface && surface == m_focusedSurface;
 }
 
+void PointerFocusTracker::setFocusedSurface(wl_surface *surface) {
+  m_focusedSurface = surface;
+  // An enter on another surface of this client (e.g. the preview popup)
+  // also leaves the window, so compare the derived state, not the surface.
+  const bool inside = isPointerInside();
+  if (inside != m_lastInside) {
+    m_lastInside = inside;
+    Q_EMIT pointerInsideChanged();
+  }
+}
+
 void PointerFocusTracker::handleEnter(void *data, wl_pointer *, uint32_t,
                                       wl_surface *surface, int32_t, int32_t) {
-  static_cast<PointerFocusTracker *>(data)->m_focusedSurface = surface;
+  static_cast<PointerFocusTracker *>(data)->setFocusedSurface(surface);
 }
 
 void PointerFocusTracker::handleLeave(void *data, wl_pointer *, uint32_t,
                                       wl_surface *) {
   // Pointer focus is a single surface, so any leave ends it.
-  static_cast<PointerFocusTracker *>(data)->m_focusedSurface = nullptr;
+  static_cast<PointerFocusTracker *>(data)->setFocusedSurface(nullptr);
 }
 
 } // namespace krema

@@ -787,6 +787,35 @@ Item {
             compare(DockVisibility.hovered, false)
         }
 
+        // QtWayland sends no enter when the popup closes, so after a resume
+        // Qt still thinks the pointer is outside the dock. A real compositor
+        // leave then reaches no onExited and must end hover via pointerInside.
+        function test_compositorLeaveAfterResumeReleasesStaleHover() {
+            let s = holdHoverUnderContextMenu()
+            // Last Qt event leaves the dock: the stale state after the grab.
+            mouseMove(stage, -1, -1)
+            DockView.pointerInside = true
+            let shows = PreviewController.callsTo("showPreview").length
+            DockContextMenu.open = false
+            tryVerify(() => PreviewController.callsTo("showPreview").length > shows, 2000)
+            compare(s.dock.hoveredIndex, 1)
+
+            // Pointer jumps to another surface without moving over the dock.
+            let hides = PreviewController.callsTo("hidePreviewDelayed").length
+            DockView.pointerInside = false
+            tryCompare(s.dock, "hoveredIndex", -1)
+            verify(PreviewController.callsTo("hidePreviewDelayed").length > hides)
+            // Production's delayed hide fires; the preview must stay closed.
+            PreviewController.hidePreview()
+            shows = PreviewController.callsTo("showPreview").length
+            verify(!s.dock._zoomActive)
+            compare(DockVisibility.hovered, false)
+            wait(DockSettings.previewHoverDelay + 200)
+            compare(PreviewController.callsTo("showPreview").length, shows,
+                    "the preview reopened after the pointer left the dock")
+            verify(!PreviewController.visible)
+        }
+
         function test_fastLauncherTooltipAtZeroDelay() {
             DockSettings.previewHoverDelay = 0
             DockModel.tasksModel.addTask({

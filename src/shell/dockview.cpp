@@ -69,6 +69,9 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
   // Created once, before show(), so it already holds the compositor's
   // focus when a context menu's popup grab fakes a leave.
   m_pointerFocusTracker = std::make_unique<PointerFocusTracker>(this);
+  connect(m_pointerFocusTracker.get(),
+          &PointerFocusTracker::pointerInsideChanged, this,
+          &DockView::pointerInsideChanged);
 
   // Register the icon image provider for QML
   m_iconProvider = new TaskIconProvider(m_settings->iconNormalization());

@@ -14,9 +14,8 @@ QtObject {
     property color backgroundColor: "#99000000"
     property int floatingPadding: 8
     property int iconCacheVersion: 0
-    // Compositor pointer focus reported by isPointerInside().
+    // Compositor pointer focus (DockView::pointerInside).
     property bool pointerInside: false
-    function isPointerInside() { return pointerInside }
 
     // Production DockView::zoomLayout (krema::computeDockZoom), not a copy.
     function zoomLayout(count, restStart, iconSize, spacing, boundary, boundaryGap,

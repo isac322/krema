@@ -48,6 +48,11 @@ class DockView : public QQuickView {
   Q_PROPERTY(bool isVertical READ isVertical NOTIFY edgeChanged)
   Q_PROPERTY(int sideTooltipReserve READ sideTooltipReserve WRITE
                  setSideTooltipReserve NOTIFY sideTooltipReserveChanged)
+  /// Whether the compositor's pointer focus is on the dock surface. Unlike
+  /// Qt's hover state this ignores the leave QtWayland fakes for a popup
+  /// grab (see PointerFocusTracker). False without a Wayland pointer.
+  Q_PROPERTY(
+      bool pointerInside READ isPointerInside NOTIFY pointerInsideChanged)
 
 public:
   explicit DockView(std::unique_ptr<DockPlatform> platform,
@@ -111,10 +116,8 @@ public:
              qreal restBackgroundEnd, qreal maxZoomFactor, int style,
              bool active, qreal cursor, qreal minEdge, qreal maxEdge) const;
 
-  /// Whether the compositor's pointer focus is on the dock surface. Unlike
-  /// Qt's hover state this ignores the leave QtWayland fakes for a popup
-  /// grab (see PointerFocusTracker). False without a Wayland pointer.
-  Q_INVOKABLE bool isPointerInside() const;
+  /// See the pointerInside property.
+  [[nodiscard]] bool isPointerInside() const;
 
 public Q_SLOTS:
   void applyBackgroundStyle();
@@ -127,6 +130,7 @@ Q_SIGNALS:
   void iconCacheVersionChanged();
   void edgeChanged();
   void sideTooltipReserveChanged();
+  void pointerInsideChanged();
 
 private:
   /// Extra height above the panel needed for zoomed icons.

@@ -38,10 +38,10 @@ from PIL import Image, ImageChops
 
 from krema_e2e import config, dbus, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state
+from krema_e2e.krema import PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state, painted_rect
 from krema_e2e.waits import KWIN_POLL_INTERVAL, wait_stable, wait_until
 from krema_e2e.windows import TestWindows
-from test_02_mouse import ZOOM_KREMARC, _painted_rects, _require_capture, _settled_painted_rects, _zoom_rest_layout
+from test_02_mouse import ZOOM_KREMARC, _require_capture
 from test_06_settings import close_settings
 
 import pytest
@@ -376,32 +376,67 @@ def test_ctx006_settings_entry_opens_the_settings_window(krema: Krema, apps: Tes
 
 # ------------------------------------------------------------------ CTX-008
 #: A window of a pinned app takes the launcher's slot and its title as the
-#: item name: "Gamma" (org.kde.kfind, 4th of the 7 ZOOM_KREMARC launchers) is
-#: the middle item, and as a task it opens a window preview on hover.
+#: item name, and as a task it opens a window preview on hover. The target is
+#: the harness-installed second test app (2nd of the ZOOM_KREMARC launchers):
+#: its .desktop file resolves on every distro, unlike some stock launchers
+#: (org.kde.kfind is missing on fedora-rawhide), so the window never becomes
+#: an extra unpinned item.
 HOLD_TARGET = "Gamma"
-HOLD_TARGET_APP = "org.kde.kfind"
+HOLD_TARGET_APP = env.TEST_APP2_ID
+HOLD_TARGET_LAUNCHER = env.TEST_APP2_NAME
 HOLD_HOVER_DELAY_MS = 300
 HOLD_KREMARC = {**ZOOM_KREMARC, "PreviewEnabled": True, "PreviewHoverDelay": HOLD_HOVER_DELAY_MS}
 #: How long the hold is sampled while the menu is open.
 HOLD_SAMPLE_SECONDS = 1.5
 
 
-def hover_zoomed_with_preview(krema: Krema, apps: TestWindows) -> tuple[list[Rect], int, int, Rect, Rect]:
-    """Hover the middle item of the zoom layout until its window preview is
-    open. Returns the rest rects, the base item width, the target's index, its
-    zoomed painted rect (surface-local) and the dock surface's screen rect."""
+def hold_painted(krema: Krema, rest: dict[str, Rect], name: str = HOLD_TARGET) -> Rect:
+    """Where item ``name`` is drawn (surface-local), given the rest rects."""
+    return painted_rect(Rect.of(krema.wait_for_item(name)), rest[name])
+
+
+def hold_painted_sizes(krema: Krema, rest: dict[str, Rect]) -> dict[str, tuple[int, int]]:
+    """Painted (width, height) of the items in ``rest``, by name. Items added
+    later (the Settings window's task) are ignored; sizes rather than rects
+    are compared because such an item re-centres the row horizontally."""
+    sizes = {}
+    for e in krema.items():
+        name = e.get_attribute("name")
+        if name in rest:
+            r = painted_rect(Rect.of(e), rest[name])
+            sizes[name] = (r.width, r.height)
+    return sizes
+
+
+def hover_zoomed_with_preview(krema: Krema, apps: TestWindows) -> tuple[dict[str, Rect], int, Rect, Rect]:
+    """Open a window of a pinned app and hover its item until the window
+    preview is open. Returns the rest rects by item name, the base item
+    width, the target's zoomed painted rect (surface-local) and the dock
+    surface's screen rect."""
     _require_capture()
+    krema.wait_for_item(HOLD_TARGET_LAUNCHER, timeout=15)
+    before = wait_stable(krema.item_names, duration=0.6)
+    expected = [HOLD_TARGET if n == HOLD_TARGET_LAUNCHER else n for n in before]
     apps.open(HOLD_TARGET, app_id=HOLD_TARGET_APP, width=320, height=220)
-    krema.wait_for_item(HOLD_TARGET, timeout=15)
-    rest, base, dock = _zoom_rest_layout(krema)
-    index = krema.item_names().index(HOLD_TARGET)
-    assert index == len(rest) // 2, f"{HOLD_TARGET!r} is not the middle item: {krema.item_names()}"
+    wait_until(
+        lambda: krema.item_names() == expected,
+        timeout=15,
+        message=lambda: f"{HOLD_TARGET!r} window to take the {HOLD_TARGET_LAUNCHER!r} launcher slot: {expected} (have {krema.item_names()})",
+    )
+
+    krema.move_away(close_preview=False)
+    rest = wait_stable(lambda: {e.get_attribute("name"): Rect.of(e) for e in krema.items()})
+    assert sorted(rest) == sorted(expected), f"dock items changed while settling: {sorted(rest)} vs {sorted(expected)}"
+    widths = {r.width for r in rest.values()}
+    assert len(widths) == 1, f"all items at base size before hover: {rest}"
+    (base,) = widths
+    dock = wait_until(lambda: krema.surface_rect("dock"), message="dock surface geometry")
 
     krema.hover_item(HOLD_TARGET)
-    wait_until(krema.preview_visible, timeout=8, message=f"preview of {HOLD_TARGET!r} to open on hover")
-    zoomed = _settled_painted_rects(krema, rest)[index]
+    wait_until(krema.preview_visible, timeout=8, message=f"preview of {HOLD_TARGET!r} (a window item) to open on hover")
+    zoomed = wait_stable(lambda: hold_painted(krema, rest))
     assert zoomed.width >= base * 1.5, f"hovered item zoomed to {zoomed.width}px, base {base}px"
-    return rest, base, index, zoomed, dock
+    return rest, base, zoomed, dock
 
 
 def right_click_in_place(krema: Krema) -> kwin.Window:
@@ -428,73 +463,84 @@ def wait_menu_closed(menu: kwin.Window) -> None:
 
 @pytest.mark.kremarc(HOLD_KREMARC)
 def test_ctx008_zoom_and_hover_hold_while_menu_is_open(krema: Krema, apps: TestWindows) -> None:
-    rest, _, index, zoomed, _ = hover_zoomed_with_preview(krema, apps)
+    try:
+        rest, _, zoomed, _ = hover_zoomed_with_preview(krema, apps)
 
-    menu = right_click_in_place(krema)
+        menu = right_click_in_place(krema)
 
-    # The preview closes as soon as the menu opens, so it cannot cover it.
-    wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
+        # The preview closes as soon as the menu opens, so it cannot cover it.
+        wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
 
-    # While the menu is open the hovered item keeps its zoom and no preview
-    # comes back, although the pointer never moved.
-    samples: list[tuple[int, bool]] = []
-    deadline = time.monotonic() + HOLD_SAMPLE_SECONDS
-    while time.monotonic() < deadline:
-        samples.append((_painted_rects(krema, rest)[index].width, krema.preview_visible()))
-        time.sleep(0.05)
-    assert len(samples) >= 3, f"too few samples while the menu was open: {samples}"
-    widths = [w for w, _ in samples]
-    assert all(abs(w - zoomed.width) <= 2 for w in widths), f"zoom not held while the menu was open: {zoomed.width}px -> {widths}"
-    assert not any(visible for _, visible in samples), f"preview reappeared while the menu was open: {samples}"
-    assert any(w.internal_id == menu.internal_id for w in kwin.windows()), "context menu closed during the sampling window"
+        # While the menu is open the hovered item keeps its zoom and no
+        # preview comes back, although the pointer never moved.
+        samples: list[tuple[int, bool]] = []
+        deadline = time.monotonic() + HOLD_SAMPLE_SECONDS
+        while time.monotonic() < deadline:
+            samples.append((hold_painted(krema, rest).width, krema.preview_visible()))
+            time.sleep(0.05)
+        assert len(samples) >= 3, f"too few samples while the menu was open: {samples}"
+        widths = [w for w, _ in samples]
+        assert all(abs(w - zoomed.width) <= 2 for w in widths), f"zoom not held while the menu was open: {zoomed.width}px -> {widths}"
+        assert not any(visible for _, visible in samples), f"preview reappeared while the menu was open: {samples}"
+        assert any(w.internal_id == menu.internal_id for w in kwin.windows()), "context menu closed during the sampling window"
 
-    # Escape closes the menu with the pointer still on the item: zoom stays and
-    # the preview comes back after the normal hover delay.
-    inp.key("Escape")
-    wait_menu_closed(menu)
-    held = _settled_painted_rects(krema, rest)[index]
-    assert abs(held.width - zoomed.width) <= 2, f"zoom released after the menu closed over the item: {zoomed.width}px -> {held.width}px"
-    wait_until(
-        krema.preview_visible,
-        timeout=HOLD_HOVER_DELAY_MS / 1000 + 3,
-        message="preview to reopen after the menu closed with the pointer on the item",
-    )
-    assert abs(_painted_rects(krema, rest)[index].width - zoomed.width) <= 2, "zoom released once the preview reopened"
+        # Escape closes the menu with the pointer still on the item: zoom
+        # stays and the preview comes back after the normal hover delay.
+        inp.key("Escape")
+        wait_menu_closed(menu)
+        held = wait_stable(lambda: hold_painted(krema, rest))
+        assert abs(held.width - zoomed.width) <= 2, f"zoom released after the menu closed over the item: {zoomed.width}px -> {held.width}px"
+        wait_until(
+            krema.preview_visible,
+            timeout=HOLD_HOVER_DELAY_MS / 1000 + 3,
+            message="preview to reopen after the menu closed with the pointer on the item",
+        )
+        assert abs(hold_painted(krema, rest).width - zoomed.width) <= 2, "zoom released once the preview reopened"
+    finally:
+        # Never leave the pointer resting on the dock, even after a failure.
+        krema.move_away(close_preview=False)
 
 
 @pytest.mark.kremarc(HOLD_KREMARC)
 def test_ctx008_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, apps: TestWindows) -> None:
-    rest, base, index, zoomed, dock = hover_zoomed_with_preview(krema, apps)
+    try:
+        rest, base, zoomed, dock = hover_zoomed_with_preview(krema, apps)
 
-    menu = right_click_in_place(krema)
-    wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
+        menu = right_click_in_place(krema)
+        wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
 
-    # Locate the "Settings..." row: highlight it with the keyboard and diff the
-    # menu against its unhighlighted frame (QMenu is not in AT-SPI).
-    area = Rect(*menu.client_geometry)
-    shot = crop(settled_capture(krema, "hold-menu-open", area), area)
-    for _ in range(PINNED_WINDOW.index("Settings...") + 1):
-        inp.key("Down")
-    row = wait_stable(
-        lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-settings", area), area)).getbbox(),
-        duration=0.5,
-    )
-    assert row is not None, "keyboard highlight of 'Settings...' not visible in the menu"
-    target = (area.x + (row[0] + row[2]) // 2, area.y + (row[1] + row[3]) // 2)
-    zoomed_top = dock.y + zoomed.y
-    assert target[1] < zoomed_top, f"'Settings...' row at {target} is not above the magnified icon (top {zoomed_top})"
+        # Locate the "Settings..." row: highlight it with the keyboard and diff
+        # the menu against its unhighlighted frame (QMenu is not in AT-SPI).
+        area = Rect(*menu.client_geometry)
+        shot = crop(settled_capture(krema, "hold-menu-open", area), area)
+        for _ in range(PINNED_WINDOW.index("Settings...") + 1):
+            inp.key("Down")
+        row = wait_stable(
+            lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-settings", area), area)).getbbox(),
+            duration=0.5,
+        )
+        assert row is not None, "keyboard highlight of 'Settings...' not visible in the menu"
+        target = (area.x + (row[0] + row[2]) // 2, area.y + (row[1] + row[3]) // 2)
+        zoomed_top = dock.y + zoomed.y
+        assert target[1] < zoomed_top, f"'Settings...' row at {target} is not above the magnified icon (top {zoomed_top})"
 
-    # Click the entry with the pointer: the menu closes with the pointer on
-    # the menu's former place, off the dock.
-    inp.move(*target)
-    inp.click()
-    wait_menu_closed(menu)
-    wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from the 'Settings...' entry")
+        # Click the entry with the pointer: the menu closes with the pointer on
+        # the menu's former place, off the dock.
+        inp.move(*target)
+        inp.click()
+        wait_menu_closed(menu)
+        wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from the 'Settings...' entry")
 
-    wait_until(
-        lambda: _painted_rects(krema, rest) == rest,
-        timeout=5,
-        message=lambda: f"icons to return to the rest layout (base {base}px, now {[r.width for r in _painted_rects(krema, rest)]})",
-    )
-    assert not krema.preview_visible(), "preview reopened although the pointer left the dock"
-    close_settings(krema)
+        # The Settings window adds its own task item; only the items present
+        # before the menu opened are checked.
+        rest_sizes = {name: (r.width, r.height) for name, r in rest.items()}
+        wait_until(
+            lambda: hold_painted_sizes(krema, rest) == rest_sizes,
+            timeout=5,
+            message=lambda: f"icons to return to rest size (base {base}px, now {hold_painted_sizes(krema, rest)})",
+        )
+        assert not krema.preview_visible(), "preview reopened although the pointer left the dock"
+        close_settings(krema)
+    finally:
+        # Never leave the pointer resting on the dock, even after a failure.
+        krema.move_away(close_preview=False)

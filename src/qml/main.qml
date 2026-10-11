@@ -680,7 +680,7 @@ Item {
             }
             if (root.keyboardNavigating)
                 return
-            if (DockView.isPointerInside()) {
+            if (DockView.pointerInside) {
                 // Next real motion arrives as enter + move and resumes tracking.
                 root._pointerOnDock = true
                 if (root.hoveredIndex >= 0)
@@ -688,6 +688,17 @@ Item {
             } else {
                 root._pointerLeft()
             }
+        }
+    }
+
+    // After a popup grab Qt's hover is stale (it thinks the pointer is
+    // outside), so a real compositor leave reaches no onExited; end hover here.
+    Connections {
+        target: DockView
+        function onPointerInsideChanged() {
+            if (!DockView.pointerInside && !root._hoverHeld && root._pointerOnDock
+                    && !dockMouseArea.containsMouse)
+                root._pointerLeft()
         }
     }
 

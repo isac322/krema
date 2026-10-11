@@ -48,6 +48,10 @@ public:
     void setSeparateLaunchers(bool separate);
     [[nodiscard]] int pinnedTaskCount() const;
 
+    /// Move the task at @p fromIndex to @p toIndex as an explicit user
+    /// reorder and save the new launcher order. Returns true on success.
+    bool moveTask(int fromIndex, int toIndex);
+
     /// Virtual desktop display mode: 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     [[nodiscard]] int virtualDesktopMode() const;
     void setVirtualDesktopMode(int mode);
@@ -103,10 +107,18 @@ private:
         QString appId;
     };
 
+    /// A current row, resolved once per launcher-slot pass.
+    struct CurrentRow {
+        int launcherPosition = -1;
+        bool isLauncher = false;
+        QStringList windowIds;
+        QString appId;
+    };
+
     void scheduleTaskPartition();
     void reconcileTaskPartition();
     bool placeStartedTasksInLauncherSlots();
-    [[nodiscard]] int findRow(const SettledRow &settled, int excludedRow) const;
+    [[nodiscard]] static int findRow(const QList<CurrentRow> &rows, const SettledRow &settled, int settledLauncherPosition, int excludedRow);
     void snapshotSettledRows();
 
     bool m_separateLaunchers = false;

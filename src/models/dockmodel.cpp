@@ -19,6 +19,8 @@
 #include <QScreen>
 #include <QSet>
 
+#include <utility>
+
 Q_LOGGING_CATEGORY(lcModel, "krema.model")
 
 namespace krema
@@ -35,15 +37,6 @@ bool isPinnedTask(const TaskManager::TasksModel &model, const QModelIndex &index
     }
     const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
     return url.isValid() && model.launcherPosition(url) != -1;
-}
-
-bool sameLauncher(const TaskManager::TasksModel &model, const QUrl &a, const QUrl &b)
-{
-    if (!a.isValid() || !b.isValid()) {
-        return false;
-    }
-    const int position = model.launcherPosition(a);
-    return position != -1 && position == model.launcherPosition(b);
 }
 
 QStringList windowIdStrings(const QModelIndex &index)
@@ -242,6 +235,18 @@ int DockModel::pinnedTaskCount() const
     return m_pinnedTaskCount;
 }
 
+bool DockModel::moveTask(int fromIndex, int toIndex)
+{
+    if (!m_tasksModel->move(fromIndex, toIndex)) {
+        return false;
+    }
+    m_tasksModel->syncLaunchers();
+    // The user's order is the new settled order: a launcher-slot repair still
+    // pending from before the move must not undo it.
+    snapshotSettledRows();
+    return true;
+}
+
 void DockModel::scheduleTaskPartition()
 {
     if (m_partitionPending || m_reconcilingPartition) {
@@ -296,31 +301,58 @@ void DockModel::reconcileTaskPartition()
 
 bool DockModel::placeStartedTasksInLauncherSlots()
 {
-    bool moved = false;
-    // Settled order: a replaced predecessor is already back in its slot when
-    // a later launcher's task is placed after it.
-    for (qsizetype settledIndex = 0; settledIndex < m_settledRows.size(); ++settledIndex) {
-        const SettledRow &launcher = m_settledRows.at(settledIndex);
-        if (!launcher.isLauncher || !launcher.launcherUrl.isValid()) {
-            continue;
-        }
-        const bool hadTask = std::any_of(m_settledRows.cbegin(), m_settledRows.cend(), [&](const SettledRow &row) {
-            return !row.isLauncher && sameLauncher(*m_tasksModel, launcher.launcherUrl, row.launcherUrl);
-        });
-        if (hadTask) {
-            continue;
-        }
+    // Resolve every launcher URL against the launcher list once per pass.
+    QList<int> settledPositions;
+    settledPositions.reserve(m_settledRows.size());
+    for (const SettledRow &settled : std::as_const(m_settledRows)) {
+        settledPositions.append(settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1);
+    }
 
-        // The launcher must have given way to a task since the order settled.
+    // Settled launchers without a task of their own may since have given way
+    // to one. In settled order, a replaced predecessor is already back in its
+    // slot when a later launcher's task is placed after it.
+    QList<qsizetype> vacated;
+    for (qsizetype settledIndex = 0; settledIndex < m_settledRows.size(); ++settledIndex) {
+        const int position = settledPositions.at(settledIndex);
+        if (!m_settledRows.at(settledIndex).isLauncher || position == -1) {
+            continue;
+        }
+        bool hadTask = false;
+        for (qsizetype other = 0; other < m_settledRows.size() && !hadTask; ++other) {
+            hadTask = !m_settledRows.at(other).isLauncher && settledPositions.at(other) == position;
+        }
+        if (!hadTask) {
+            vacated.append(settledIndex);
+        }
+    }
+    if (vacated.isEmpty()) {
+        return false;
+    }
+
+    const int count = m_tasksModel->rowCount();
+    QList<CurrentRow> rows;
+    rows.reserve(count);
+    for (int row = 0; row < count; ++row) {
+        const QModelIndex index = m_tasksModel->index(row, 0);
+        const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        CurrentRow current;
+        current.launcherPosition = url.isValid() ? m_tasksModel->launcherPosition(url) : -1;
+        current.isLauncher = index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
+        current.windowIds = windowIdStrings(index);
+        current.appId = index.data(TaskManager::AbstractTasksModel::AppId).toString();
+        rows.append(current);
+    }
+
+    bool moved = false;
+    for (const qsizetype settledIndex : std::as_const(vacated)) {
+        const int position = settledPositions.at(settledIndex);
         int taskRow = -1;
         bool launcherVisible = false;
-        const int count = m_tasksModel->rowCount();
         for (int row = 0; row < count; ++row) {
-            const QModelIndex index = m_tasksModel->index(row, 0);
-            if (!sameLauncher(*m_tasksModel, launcher.launcherUrl, index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl())) {
+            if (rows.at(row).launcherPosition != position) {
                 continue;
             }
-            if (index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool()) {
+            if (rows.at(row).isLauncher) {
                 launcherVisible = true;
             } else if (taskRow < 0) {
                 taskRow = row;
@@ -333,7 +365,7 @@ bool DockModel::placeStartedTasksInLauncherSlots()
         // Right after the nearest settled predecessor still in the dock.
         int target = 0;
         for (qsizetype previous = settledIndex - 1; previous >= 0; --previous) {
-            const int anchorRow = findRow(m_settledRows.at(previous), taskRow);
+            const int anchorRow = findRow(rows, m_settledRows.at(previous), settledPositions.at(previous), taskRow);
             if (anchorRow >= 0) {
                 target = anchorRow < taskRow ? anchorRow + 1 : anchorRow;
                 break;
@@ -346,32 +378,35 @@ bool DockModel::placeStartedTasksInLauncherSlots()
             qCWarning(lcModel) << "Could not move started task" << taskRow << "into its launcher slot" << target;
             continue;
         }
+        // Keep the cached rows in model order.
+        if (target < taskRow) {
+            std::rotate(rows.begin() + target, rows.begin() + taskRow, rows.begin() + taskRow + 1);
+        } else {
+            std::rotate(rows.begin() + taskRow, rows.begin() + taskRow + 1, rows.begin() + target + 1);
+        }
         moved = true;
     }
     return moved;
 }
 
-int DockModel::findRow(const SettledRow &settled, int excludedRow) const
+int DockModel::findRow(const QList<CurrentRow> &rows, const SettledRow &settled, int settledLauncherPosition, int excludedRow)
 {
-    const int count = m_tasksModel->rowCount();
-    for (int row = 0; row < count; ++row) {
+    for (int row = 0; row < rows.size(); ++row) {
         if (row == excludedRow) {
             continue;
         }
-        const QModelIndex index = m_tasksModel->index(row, 0);
+        const CurrentRow &current = rows.at(row);
         if (settled.launcherUrl.isValid()) {
-            if (sameLauncher(*m_tasksModel, settled.launcherUrl, index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl())) {
+            if (settledLauncherPosition != -1 && current.launcherPosition == settledLauncherPosition) {
                 return row;
             }
         } else if (!settled.windowIds.isEmpty()) {
-            const QStringList windowIds = windowIdStrings(index);
-            if (std::any_of(windowIds.cbegin(), windowIds.cend(), [&](const QString &id) {
+            if (std::any_of(current.windowIds.cbegin(), current.windowIds.cend(), [&](const QString &id) {
                     return settled.windowIds.contains(id);
                 })) {
                 return row;
             }
-        } else if (!settled.appId.isEmpty() && !index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool()
-                   && index.data(TaskManager::AbstractTasksModel::AppId).toString() == settled.appId) {
+        } else if (!settled.appId.isEmpty() && !current.isLauncher && current.appId == settled.appId) {
             return row;
         }
     }

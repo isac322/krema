@@ -269,9 +269,8 @@ bool DockActions::moveTask(int fromIndex, int toIndex)
         }
     }
 
-    const bool ok = tasksModel->move(fromIndex, toIndex);
+    const bool ok = m_model->moveTask(fromIndex, toIndex);
     if (ok) {
-        tasksModel->syncLaunchers();
         Q_EMIT pinnedLaunchersChanged();
     }
     return ok;

@@ -4,7 +4,8 @@
 // A window started for a pinned launcher must take that launcher's place in
 // the real TaskManager -> DockModel order, in both zone modes. Plasma 6.8's
 // libtaskmanager appends such a window at the end under manual sorting
-// (plasma-workspace 4a513cce1), so DockModel restores the launcher slot.
+// (plasma-workspace 4a513cce1), so DockModel restores the launcher slot. An
+// explicit reorder made while that repair is pending must not be undone.
 //
 // Must run under run-with-kwin.sh.
 
@@ -27,7 +28,9 @@
 #include <QStringList>
 #include <QTest>
 
+#include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace
@@ -148,6 +151,29 @@ int childMain(int argc, char **argv)
     return application.exec();
 }
 
+// Runs a callback when it receives a posted QEvent::User.
+class PostedMove : public QObject
+{
+public:
+    explicit PostedMove(std::function<void()> callback)
+        : m_callback(std::move(callback))
+    {
+    }
+
+protected:
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::User) {
+            m_callback();
+            return true;
+        }
+        return QObject::event(event);
+    }
+
+private:
+    std::function<void()> m_callback;
+};
+
 } // namespace
 
 TEST_CASE("Started tasks replace their pinned launchers in place", "[launch-in-place]")
@@ -175,6 +201,78 @@ TEST_CASE("Started tasks replace their pinned launchers in place", "[launch-in-p
         // Children are gone: every launcher must return before the next mode.
         REQUIRE(reaches({QStringLiteral("L0"), QStringLiteral("L1"), QStringLiteral("L2")}));
     }
+}
+
+TEST_CASE("An explicit reorder wins over a pending launcher-slot repair", "[launch-in-place]")
+{
+    REQUIRE(installDesktopEntries());
+    configure(false);
+    REQUIRE(reaches({QStringLiteral("L0"), QStringLiteral("L1"), QStringLiteral("L2")}));
+
+    // An unpinned task to reorder: moving it keeps the launcher list as is,
+    // so the move does not reset the model behind the pending pass.
+    Children children;
+    REQUIRE(children.start(QStringLiteral("krema-inplace-unpinned")));
+    REQUIRE(reaches({QStringLiteral("L0"), QStringLiteral("L1"), QStringLiteral("L2"), QStringLiteral("W-1")}));
+
+    auto *tasks = model().tasksModel();
+    // Row of launcher 1's window task while that launcher is hidden, else -1.
+    // A startup notification row for the child comes and goes first.
+    const auto startedTaskRow = [tasks]() {
+        int taskRow = -1;
+        for (int row = 0; row < tasks->rowCount(); ++row) {
+            const QModelIndex index = tasks->index(row, 0);
+            if (tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) != 1) {
+                continue;
+            }
+            if (index.data(AbstractTasksModel::IsLauncher).toBool()) {
+                return -1;
+            }
+            if (index.data(AbstractTasksModel::IsWindow).toBool()) {
+                taskRow = row;
+            }
+        }
+        return taskRow;
+    };
+
+    // The model change that replaces launcher 1 with its task also queues
+    // DockModel's launcher-slot pass. A high-priority posted event runs after
+    // that change completes but before the queued pass, so the user's move
+    // lands while the repair is still pending. Moving the unpinned task
+    // right after launcher 0 parts the started task from that launcher,
+    // which the stale repair would undo.
+    bool posted = false;
+    bool movedOk = false;
+    QStringList startedLayout;
+    QStringList movedLayout;
+    PostedMove mover([&] {
+        startedLayout = layout();
+        const int unpinnedRow = static_cast<int>(startedLayout.indexOf(QStringLiteral("W-1")));
+        movedOk = startedTaskRow() >= 0 && unpinnedRow > 1 && model().moveTask(unpinnedRow, 1);
+        movedLayout = layout();
+    });
+    QObject watcher;
+    const auto watch = [&] {
+        if (!posted && startedTaskRow() >= 0) {
+            posted = true;
+            QCoreApplication::postEvent(&mover, new QEvent(QEvent::User), Qt::HighEventPriority);
+        }
+    };
+    QObject::connect(tasks, &QAbstractItemModel::rowsInserted, &watcher, watch);
+    QObject::connect(tasks, &QAbstractItemModel::rowsRemoved, &watcher, watch);
+    QObject::connect(tasks, &QAbstractItemModel::rowsMoved, &watcher, watch);
+    QObject::connect(tasks, &QAbstractItemModel::layoutChanged, &watcher, watch);
+    QObject::connect(tasks, &QAbstractItemModel::dataChanged, &watcher, watch);
+
+    REQUIRE(children.start(kAppIds[1]));
+    REQUIRE(QTest::qWaitFor([&movedLayout] { return !movedLayout.isEmpty(); }, kTimeoutMs));
+    INFO("started " << startedLayout.join(QLatin1Char(' ')).toStdString() << ", moved " << movedLayout.join(QLatin1Char(' ')).toStdString());
+    REQUIRE(movedOk);
+    REQUIRE(movedLayout.mid(0, 2) == QStringList{QStringLiteral("L0"), QStringLiteral("W-1")});
+    CHECK(model().pinnedLaunchers() == QStringList{launcher(kAppIds[0]), launcher(kAppIds[1]), launcher(kAppIds[2])});
+    // Plasma 6.7 replaced launcher 1 in place, 6.8 appended its task; either
+    // way the order the user made must stand.
+    CHECK(reaches(movedLayout));
 }
 
 int main(int argc, char *argv[])

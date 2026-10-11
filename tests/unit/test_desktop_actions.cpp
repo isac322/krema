@@ -69,6 +69,13 @@ const QByteArray browserEntry =
 
 TEST_CASE("Desktop actions follow the declared order and skip hidden ones", "[desktopactions]")
 {
+    // The fixture also has German names: pin the untranslated locale, the
+    // same way the i18n case below selects German, so the English labels
+    // hold whatever locale the developer runs ctest in.
+    qunsetenv("LANGUAGE");
+    qputenv("LC_ALL", "C");
+    qputenv("LANG", "C");
+
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
     // An absolute path outside every XDG applications directory, like a

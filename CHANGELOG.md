@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Added a Floating margin setting (Settings → Layout & Position) that sets the gap between the floating dock and the screen edge, or an adjacent Plasma panel, from 1 to 32 px (default 8) (#90)
-- The right-click menu of a dock item now listed the app's own actions from its .desktop file, such as Firefox's "New Private Window" or Konsole's "New Tab", with their translated names and icons in the order the app declares; choosing one launched it (#92)
+- Added the app's own .desktop file actions, such as Firefox's "New Private Window" or Konsole's "New Tab", to the dock item's right-click menu, with translated names and icons in the order the app declares them (#92)
 
 ## [0.11.0] - 2026-10-10
 

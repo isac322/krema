@@ -50,6 +50,8 @@ find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
     Crash
     XmlGui
     Service
+    KIO
+    JobWidgets
 )
 find_package(KF6Kirigami ${KF6_MIN_VERSION} REQUIRED)
 find_package(KF6KirigamiAddons REQUIRED)

@@ -24,6 +24,8 @@ depends=(
     'kcrash>=6.0'
     'kxmlgui>=6.0'
     'kservice>=6.0'
+    'kio>=6.0'
+    'kjobwidgets>=6.0'
     'kirigami>=6.0'
     'kirigami-addons'
     'layer-shell-qt>=6.0'

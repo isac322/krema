@@ -3,6 +3,7 @@
 
 #include "dockcontextmenu.h"
 
+#include "desktopactions.h"
 #include "dockactions.h"
 #include "dockmodel.h"
 #include "notificationtracker.h"
@@ -52,6 +53,28 @@ void DockContextMenu::showForTask(int index)
     header->setFont(boldFont);
 
     menu->addSeparator();
+
+    // Desktop entry actions (e.g. "New Private Window"), placed like Plasma's
+    // task manager. Group parents report their first window's launcher URL.
+    // Each action is captured by value together with its KService, so it
+    // launches the right application even if task rows change while the menu
+    // is open.
+    const QList<KServiceAction> appActions = desktopActions(idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl());
+    if (!appActions.isEmpty()) {
+        for (const KServiceAction &action : appActions) {
+            if (action.isSeparator()) {
+                menu->addSeparator();
+                continue;
+            }
+            // Desktop files use plain text; '&' is not a mnemonic marker.
+            QString text = action.text();
+            text.replace(QLatin1Char('&'), QLatin1String("&&"));
+            menu->addAction(QIcon::fromTheme(action.icon()), text, this, [action]() {
+                launchDesktopAction(action);
+            });
+        }
+        menu->addSeparator();
+    }
 
     // Pin / Unpin
     if (pinned) {

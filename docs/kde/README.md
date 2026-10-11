@@ -24,6 +24,12 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [drag-and-drop.md](drag-and-drop.md) | TasksModel DnD — MimeType/MimeData roles, move/syncLaunchers, launcher management, URL comparison |
 
+### Context Menu
+
+| Document | Description |
+|----------|-------------|
+| [desktop-actions.md](desktop-actions.md) | KService::actions / KServiceAction, KIO::ApplicationLauncherJob, KNotificationJobUiDelegate — .desktop file actions in the dock item menu |
+
 ### M5: Theming & i18n
 
 | Document | Description |

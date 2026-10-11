@@ -11,6 +11,7 @@ add_executable(krema_unit_tests
     test_settings_autosave.cpp
     test_settings_migration.cpp
     test_taskiconprovider.cpp
+    test_desktop_actions.cpp
 )
 
 target_link_libraries(krema_unit_tests PRIVATE

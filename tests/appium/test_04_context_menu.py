@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""E2E automation of tests/e2e/scenarios/04-context-menu.md (CTX-001..CTX-006).
+"""E2E automation of tests/e2e/scenarios/04-context-menu.md (CTX-001..CTX-006, CTX-008).
 
 The dock item context menu is a native QMenu. Qt keeps ``Qt::Popup`` windows
 out of the AT-SPI tree (README, investigation 3), so:
@@ -21,6 +21,10 @@ asserted outcome::
     3  Settings...                     CTX-006 (Settings window, Icons page)
     4  About Krema                     CTX-001 (Settings window, About Krema page)
     5  Quit                            CTX-001 (krema exits with status 0)
+
+An app whose .desktop file declares actions lists them first, in Actions=
+order, so every position above moves down by their count (CTX-008: the
+launched window's title tells which action ran).
 
 Reordering, inserting or removing an entry in the app (or the disabled app-name
 header becoming focusable) shifts at least one position and makes the
@@ -369,3 +373,99 @@ def test_ctx006_settings_entry_opens_the_settings_window(krema: Krema, apps: Tes
     shot = crop(capture(krema, "settings"), Rect(*win.client_geometry))
     colors = shot.getcolors(maxcolors=1 << 16)
     assert colors is None or len(colors) > 16, "settings window looks blank"
+
+
+# ------------------------------------------------------------------ CTX-008
+#: An app whose .desktop file declares actions, installed in krema's private
+#: XDG_DATA_HOME before krema starts. The Actions= order differs from the
+#: group order, and a hidden (NoDisplay) action plus a separator sit between
+#: the visible ones: showing the hidden action or following the group order
+#: moves "Open Inbox" to another keyboard position, which launches a window
+#: with another title. The fixture app of the other CTX tests declares no
+#: actions, so they cover the unchanged menu.
+ACTIONS_ID = "org.krema.ctxactions"
+ACTIONS_NAME = "Krema Actions Test"
+ACTIONS = ["New Draft", "Open Inbox"]
+
+
+def _install_actions_app(krema: Krema) -> None:
+    apps_dir = krema.home / "data" / "applications"
+    apps_dir.mkdir(parents=True, exist_ok=True)
+    exe = f"{env.TEST_WINDOW_BINARY} --app-id {ACTIONS_ID}"
+    (apps_dir / f"{ACTIONS_ID}.desktop").write_text(
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        f"Name={ACTIONS_NAME}\n"
+        f"Exec={exe}\n"
+        "Icon=utilities-terminal\n"
+        f"StartupWMClass={ACTIONS_ID}\n"
+        "Actions=new-draft;hidden;_SEPARATOR_;open-inbox;\n"
+        "\n"
+        "[Desktop Action open-inbox]\n"
+        "Name=Open Inbox\n"
+        f"Exec={exe} --title Inbox\n"
+        "\n"
+        "[Desktop Action hidden]\n"
+        "Name=Hidden Action\n"
+        f"Exec={exe} --title Hidden\n"
+        "NoDisplay=true\n"
+        "\n"
+        "[Desktop Action new-draft]\n"
+        "Name=New Draft\n"
+        "Icon=document-new\n"
+        f"Exec={exe} --title Draft\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher(ACTIONS_ID)]})
+def test_ctx008_pinned_launcher_launches_the_chosen_desktop_action(krema: Krema, apps: TestWindows) -> None:
+    _install_actions_app(krema)
+    krema.start()
+    krema.wait_for_item(ACTIONS_NAME)
+    assert app_windows(ACTIONS_ID) == []
+
+    spawned: list[int] = []
+    try:
+        krema.open_context_menu(ACTIONS_NAME)
+        krema.choose_context_menu_entry("Open Inbox", context_menu_entries(pinned=True, is_window=False, desktop_actions=ACTIONS))
+        win = wait_until(lambda: next(iter(app_windows(ACTIONS_ID)), None), timeout=15, message="window of the chosen desktop action")
+        spawned.append(win.pid)
+        assert win.title == "Inbox", f"launched {win.title!r} instead of the Open Inbox action"
+        assert [w.title for w in wait_stable(lambda: app_windows(ACTIONS_ID), duration=1.0)] == ["Inbox"]
+
+        # The existing entries follow the actions: Unpin still unpins.
+        krema.wait_for_item("Inbox")
+        krema.open_context_menu("Inbox")
+        krema.choose_context_menu_entry("Unpin from Dock", context_menu_entries(pinned=True, is_window=True, desktop_actions=ACTIONS))
+        wait_until(lambda: pinned_launchers(krema) == [], timeout=5, message="launcher removed from kremarc")
+        assert wait_stable(krema.item_names, duration=1.0) == ["Inbox"]
+    finally:
+        for pid in spawned or [w.pid for w in app_windows(ACTIONS_ID)]:
+            kill_pid(pid)
+
+
+@pytest.mark.no_krema_autostart
+def test_ctx008_grouped_windows_launch_the_chosen_desktop_action(krema: Krema, apps: TestWindows) -> None:
+    _install_actions_app(krema)
+    krema.start()
+    apps.open("One", app_id=ACTIONS_ID)
+    apps.open("Two", app_id=ACTIONS_ID)
+    krema.wait_for_item(ACTIONS_NAME)
+    wait_until(lambda: "2 windows" in description(krema, ACTIONS_NAME), timeout=5, message="grouped item")
+    known = {w.pid for w in app_windows(ACTIONS_ID)}
+
+    spawned: list[int] = []
+    try:
+        krema.open_context_menu(ACTIONS_NAME)
+        krema.choose_context_menu_entry("New Draft", context_menu_entries(pinned=False, is_window=True, desktop_actions=ACTIONS))
+        new = wait_until(
+            lambda: [w for w in app_windows(ACTIONS_ID) if w.pid not in known] or None, timeout=15, message="window of the chosen desktop action"
+        )
+        spawned = [w.pid for w in new]
+        assert [w.title for w in new] == ["Draft"], f"launched {[w.title for w in new]} instead of the New Draft action"
+        wait_until(lambda: "3 windows" in description(krema, ACTIONS_NAME), timeout=5, message="action window joins the group")
+    finally:
+        for pid in spawned or [w.pid for w in app_windows(ACTIONS_ID) if w.pid not in known]:
+            kill_pid(pid)

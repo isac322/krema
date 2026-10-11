@@ -48,6 +48,8 @@ add_library(krema_lib STATIC
     models/dockactions.cpp
     models/dockcontextmenu.h
     models/dockcontextmenu.cpp
+    models/desktopactions.h
+    models/desktopactions.cpp
     models/taskiconprovider.h
     models/taskiconprovider.cpp
     models/notificationtracker.h
@@ -100,6 +102,8 @@ target_link_libraries(krema_lib PUBLIC
     KF6::Crash
     KF6::XmlGui
     KF6::Service
+    KF6::KIOGui
+    KF6::JobWidgets
     LayerShellQt::Interface
     PW::LibTaskManager
     PW::LibNotificationManager

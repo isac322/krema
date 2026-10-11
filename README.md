@@ -65,7 +65,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Icon Size Normalization** — Auto-detects icon padding and scales for uniform appearance
 - **Indicator Dots** — Visual markers for running applications
 - **Pin/Unpin** — Keep favorite apps in the dock
-- **Context Menu** — Right-click for pin, close, new instance (KDE Breeze native)
+- **Context Menu** — Right-click for pin, close, new instance, and the app's own actions like "New Private Window" (KDE Breeze native)
 - **Mouse Wheel Cycling** — Scroll to switch between windows of the same app
 - **Single-Window Click Action** — Activate by default; optionally minimize the active window with a left click, while clicking a minimized or background window still restores or focuses it
 - **Grouped-Window Click Action** — Cycle through windows by default, or independently choose previews of all windows or minimize only the currently active window; with no active group window, the minimize choice restores or focuses the most recently used window
@@ -215,7 +215,7 @@ sudo pacman -S --needed \
     cmake extra-cmake-modules ninja ccache just gcc \
     qt6-base qt6-declarative qt6-wayland qt6-shadertools \
     kwindowsystem kconfig kcoreaddons ki18n \
-    kglobalaccel kcolorscheme kiconthemes kcrash kxmlgui kservice \
+    kglobalaccel kcolorscheme kiconthemes kcrash kxmlgui kservice kio kjobwidgets \
     kirigami layer-shell-qt wayland kpipewire plasma-workspace \
     catch2
 ```

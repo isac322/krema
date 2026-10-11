@@ -50,6 +50,8 @@ BuildRequires:  cmake(KF6IconThemes) >= 6.0.0
 BuildRequires:  cmake(KF6Crash) >= 6.0.0
 BuildRequires:  cmake(KF6XmlGui) >= 6.0.0
 BuildRequires:  cmake(KF6Service) >= 6.0.0
+BuildRequires:  cmake(KF6KIO) >= 6.0.0
+BuildRequires:  cmake(KF6JobWidgets) >= 6.0.0
 BuildRequires:  cmake(KF6Kirigami) >= 6.0.0
 BuildRequires:  cmake(KF6KirigamiAddons)
 

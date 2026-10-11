@@ -37,6 +37,26 @@ bool isPinnedTask(const TaskManager::TasksModel &model, const QModelIndex &index
     return url.isValid() && model.launcherPosition(url) != -1;
 }
 
+bool sameLauncher(const TaskManager::TasksModel &model, const QUrl &a, const QUrl &b)
+{
+    if (!a.isValid() || !b.isValid()) {
+        return false;
+    }
+    const int position = model.launcherPosition(a);
+    return position != -1 && position == model.launcherPosition(b);
+}
+
+QStringList windowIdStrings(const QModelIndex &index)
+{
+    const QVariantList windowIds = index.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+    QStringList ids;
+    ids.reserve(windowIds.size());
+    for (const QVariant &windowId : windowIds) {
+        ids.append(windowId.toString());
+    }
+    return ids;
+}
+
 QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &icon)
 {
     // Window IDs are the stable task identity across row movement. Grouped
@@ -137,6 +157,29 @@ DockModel::DockModel(QObject *parent)
         m_tasksModel->setActivity(m_activityInfo->currentActivity());
     });
 
+    // Launch in place: a task started for a visible pinned launcher replaces
+    // that launcher at its position. libtaskmanager stopped doing this for
+    // manual sorting when it moved launcher hiding into TaskFilterProxyModel
+    // (plasma-workspace 4a513cce1, shipped in Plasma 6.8 as c2c859523), so
+    // the task is appended at the end instead. Remember where each launcher
+    // left and which pinned tasks appeared; the deferred pass below moves
+    // them back into place.
+    // Connected before the scheduling slots so they see the recorded state.
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsAboutToBeRemoved, this, [this](const QModelIndex &parent, int first, int last) {
+        if (!parent.isValid()) {
+            recordVacatedLaunchers(first, last);
+        }
+    });
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex &parent, int first, int last) {
+        if (!parent.isValid()) {
+            recordStartedTasks(first, last);
+        }
+    });
+    connect(m_tasksModel.get(), &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
+        m_vacatedLaunchers.clear();
+        m_startedTaskLaunchers.clear();
+    });
+
     // Defer sorting until the source model has finished its current change.
     // Our own moves emit layout signals synchronously; ignore those while
     // reconciling so they cannot recursively queue another sorting pass.
@@ -213,7 +256,7 @@ int DockModel::pinnedTaskCount() const
 
 void DockModel::scheduleTaskPartition()
 {
-    if (!m_separateLaunchers && m_pinnedTaskCount == 0) {
+    if (!m_separateLaunchers && m_pinnedTaskCount == 0 && m_vacatedLaunchers.isEmpty() && m_startedTaskLaunchers.isEmpty()) {
         return;
     }
     if (m_partitionPending || m_reconcilingPartition) {
@@ -231,34 +274,29 @@ void DockModel::scheduleTaskPartition()
 
 void DockModel::reconcileTaskPartition()
 {
-    if (!m_separateLaunchers) {
-        if (m_pinnedTaskCount != 0) {
-            m_pinnedTaskCount = 0;
-            Q_EMIT pinnedTaskCountChanged();
-        }
-        return;
-    }
-
     m_reconcilingPartition = true;
+    bool moved = placeStartedTasksInLauncherSlots();
+
     int pinnedCount = 0;
-    bool moved = false;
-    bool moveFailed = false;
-    const int count = m_tasksModel->rowCount();
-    // Insertion into the next pinned slot preserves both zones' relative
-    // order. Classify each row once; already partitioned rows need no move.
-    for (int row = 0; row < count; ++row) {
-        if (!isPinnedTask(*m_tasksModel, m_tasksModel->index(row, 0))) {
-            continue;
-        }
-        if (row != pinnedCount && !moveFailed) {
-            if (m_tasksModel->move(row, pinnedCount)) {
-                moved = true;
-            } else {
-                qCWarning(lcModel) << "Could not move pinned task" << row << "to" << pinnedCount;
-                moveFailed = true;
+    if (m_separateLaunchers) {
+        bool moveFailed = false;
+        const int count = m_tasksModel->rowCount();
+        // Insertion into the next pinned slot preserves both zones' relative
+        // order. Classify each row once; already partitioned rows need no move.
+        for (int row = 0; row < count; ++row) {
+            if (!isPinnedTask(*m_tasksModel, m_tasksModel->index(row, 0))) {
+                continue;
             }
+            if (row != pinnedCount && !moveFailed) {
+                if (m_tasksModel->move(row, pinnedCount)) {
+                    moved = true;
+                } else {
+                    qCWarning(lcModel) << "Could not move pinned task" << row << "to" << pinnedCount;
+                    moveFailed = true;
+                }
+            }
+            ++pinnedCount;
         }
-        ++pinnedCount;
     }
     if (moved) {
         m_tasksModel->syncLaunchers();
@@ -268,6 +306,133 @@ void DockModel::reconcileTaskPartition()
         m_pinnedTaskCount = pinnedCount;
         Q_EMIT pinnedTaskCountChanged();
     }
+}
+
+void DockModel::recordVacatedLaunchers(int first, int last)
+{
+    if (m_reconcilingPartition) {
+        return;
+    }
+    for (int row = first; row <= last; ++row) {
+        const QModelIndex index = m_tasksModel->index(row, 0);
+        if (!index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool()) {
+            continue;
+        }
+        VacatedLauncher vacated;
+        vacated.launcherUrl = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        if (!vacated.launcherUrl.isValid()) {
+            continue;
+        }
+        // The preceding row may itself be a vacating launcher; matching by
+        // launcher then resolves to the task that replaces it.
+        if (row > 0) {
+            const QModelIndex previous = m_tasksModel->index(row - 1, 0);
+            vacated.hasAnchor = true;
+            if (isPinnedTask(*m_tasksModel, previous)) {
+                vacated.anchorLauncherUrl = previous.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+            } else {
+                vacated.anchorWindowIds = windowIdStrings(previous);
+                vacated.anchorAppId = previous.data(TaskManager::AbstractTasksModel::AppId).toString();
+            }
+        }
+        m_vacatedLaunchers.append(vacated);
+    }
+}
+
+void DockModel::recordStartedTasks(int first, int last)
+{
+    if (m_reconcilingPartition) {
+        return;
+    }
+    for (int row = first; row <= last; ++row) {
+        const QModelIndex index = m_tasksModel->index(row, 0);
+        if (!index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool() && isPinnedTask(*m_tasksModel, index)) {
+            m_startedTaskLaunchers.append(index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl());
+        }
+    }
+}
+
+bool DockModel::placeStartedTasksInLauncherSlots()
+{
+    QList<VacatedLauncher> vacated;
+    vacated.swap(m_vacatedLaunchers);
+    QList<QUrl> started;
+    started.swap(m_startedTaskLaunchers);
+
+    // A launcher can also leave because it was unpinned or filtered out; only
+    // a launcher whose task has just started is replaced in place.
+    vacated.removeIf([&](const VacatedLauncher &entry) {
+        return std::none_of(started.cbegin(), started.cend(), [&](const QUrl &url) {
+            return sameLauncher(*m_tasksModel, entry.launcherUrl, url);
+        });
+    });
+
+    bool moved = false;
+    // An anchor may be another replaced launcher; repeat until chains settle.
+    for (qsizetype round = 0; round < vacated.size(); ++round) {
+        bool movedThisRound = false;
+        for (const VacatedLauncher &entry : std::as_const(vacated)) {
+            int taskRow = -1;
+            const int count = m_tasksModel->rowCount();
+            for (int row = 0; row < count; ++row) {
+                const QModelIndex index = m_tasksModel->index(row, 0);
+                if (!index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool()
+                    && sameLauncher(*m_tasksModel, entry.launcherUrl, index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl())) {
+                    taskRow = row;
+                    break;
+                }
+            }
+            if (taskRow < 0) {
+                continue;
+            }
+
+            int target = 0;
+            if (entry.hasAnchor) {
+                const int anchorRow = findAnchorRow(entry);
+                if (anchorRow < 0 || anchorRow == taskRow) {
+                    continue;
+                }
+                target = anchorRow < taskRow ? anchorRow + 1 : anchorRow;
+            }
+            if (target == taskRow) {
+                continue;
+            }
+            if (!m_tasksModel->move(taskRow, target)) {
+                qCWarning(lcModel) << "Could not move started task" << taskRow << "into its launcher slot" << target;
+                continue;
+            }
+            moved = true;
+            movedThisRound = true;
+        }
+        if (!movedThisRound) {
+            break;
+        }
+    }
+    return moved;
+}
+
+int DockModel::findAnchorRow(const VacatedLauncher &vacated) const
+{
+    const int count = m_tasksModel->rowCount();
+    for (int row = 0; row < count; ++row) {
+        const QModelIndex index = m_tasksModel->index(row, 0);
+        if (vacated.anchorLauncherUrl.isValid()) {
+            if (sameLauncher(*m_tasksModel, vacated.anchorLauncherUrl, index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl())) {
+                return row;
+            }
+        } else if (!vacated.anchorWindowIds.isEmpty()) {
+            const QStringList windowIds = windowIdStrings(index);
+            if (std::any_of(windowIds.cbegin(), windowIds.cend(), [&](const QString &id) {
+                    return vacated.anchorWindowIds.contains(id);
+                })) {
+                return row;
+            }
+        } else if (!vacated.anchorAppId.isEmpty() && !index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool()
+                   && index.data(TaskManager::AbstractTasksModel::AppId).toString() == vacated.anchorAppId) {
+            return row;
+        }
+    }
+    return -1;
 }
 
 QString DockModel::iconName(int index) const

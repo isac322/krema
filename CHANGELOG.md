@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added a Floating margin setting (Settings → Layout & Position) that sets the gap between the floating dock and the screen edge, or an adjacent Plasma panel, from 1 to 32 px (default 8) (#90)
 - Added the app's own .desktop file actions, such as Firefox's "New Private Window" or Konsole's "New Tab", to the dock item's right-click menu, with translated names and icons in the order the app declares them (#92)
 
+### Fixed
+
+- On Plasma 6.8, an app opened from a pinned dock icon now takes that icon's place again instead of jumping to the end of the dock
+
 ## [0.11.0] - 2026-10-10
 
 Krema v0.11.0 redesigns the settings window of this lightweight KDE Plasma 6 dock for Wayland around a live miniature of your own desktop and a 3D shadow editor, adds zoom animation presets with a smoother macOS-like parabolic zoom by default, and fixes KWin's Slide Back effect and pinned launchers stored as file paths.

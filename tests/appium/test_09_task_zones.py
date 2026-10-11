@@ -99,6 +99,10 @@ def _open_behavior_switch(krema: Krema, *, pinned: bool = True):
         message="a real dock item matching the Settings context-menu membership",
     )
     krema.open_settings(anchor, entries=context_menu_entries(pinned=pinned, is_window=True))
+    # The keyboard-chosen entry leaves the pointer on the anchor, whose hover
+    # preview reopens after the menu closes; on a side dock it can cover the
+    # Settings sidebar. Leave the dock first, as test_06's open_settings does.
+    krema.move_away()
     open_page(krema, "Behavior")
     return scroll_into_view(krema, SEPARATE_SWITCH)
 

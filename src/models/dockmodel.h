@@ -93,32 +93,28 @@ Q_SIGNALS:
     void currentDesktopChanged();
 
 private:
-    /// A launcher row that left the view and the row that preceded it, so a
-    /// newly started task for that launcher can take the launcher's place.
-    /// A pinned anchor is matched by launcher (its launcher or task row); any
-    /// other anchor by a shared window ID, or by AppId when it has no window.
-    struct VacatedLauncher {
+    /// Identity of a row in the last settled dock order. A pinned row is
+    /// matched by launcher (its launcher or task row), any other row by a
+    /// shared window ID, or by AppId when it has no window.
+    struct SettledRow {
         QUrl launcherUrl;
-        bool hasAnchor = false;
-        QUrl anchorLauncherUrl;
-        QStringList anchorWindowIds;
-        QString anchorAppId;
+        bool isLauncher = false;
+        QStringList windowIds;
+        QString appId;
     };
 
     void scheduleTaskPartition();
     void reconcileTaskPartition();
-    void recordVacatedLaunchers(int first, int last);
-    void recordStartedTasks(int first, int last);
     bool placeStartedTasksInLauncherSlots();
-    [[nodiscard]] int findAnchorRow(const VacatedLauncher &vacated) const;
+    [[nodiscard]] int findRow(const SettledRow &settled, int excludedRow) const;
+    void snapshotSettledRows();
 
     bool m_separateLaunchers = false;
     bool m_partitionPending = false;
     bool m_reconcilingPartition = false;
     int m_pinnedTaskCount = 0;
     int m_virtualDesktopMode = 0;
-    QList<VacatedLauncher> m_vacatedLaunchers;
-    QList<QUrl> m_startedTaskLaunchers;
+    QList<SettledRow> m_settledRows;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
     std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
     std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;

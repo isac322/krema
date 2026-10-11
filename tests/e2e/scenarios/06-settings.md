@@ -660,7 +660,9 @@ window's identity and frame geometry.
 3. Press Home and End. Verify the slider stops at 1 and 32 px and the
    reserved strip follows; return to 18.
 4. Repeat steps 2–3 on the top, left, and right edges using the "Screen
-   edge" picker.
+   edge" picker. Before each repetition, press Home and then Right seven
+   times to restore 8 px, and record the new edge's fixture frame as the
+   baseline, so step 2 again measures 8 → 18 px.
 5. Turn "Floating" off. Verify the slider becomes disabled, the dock sits
    flush against the screen edge (gap 0), the reserved strip shrinks by the
    full margin, and `FloatingMargin` stays 18. Turn "Floating" on again and

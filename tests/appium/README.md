@@ -133,10 +133,17 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 ### CI
 
 `run-e2e.sh` is the local development loop; CI does not call it on a
-source-built krema. Three workflows are involved:
+source-built krema. Four workflows are involved:
 
-* `.github/workflows/ci-images.yml` publishes the prebuilt images the other
-  two pull, all in the package `ghcr.io/isac322/krema-ci`, tagged by
+* `.github/workflows/ci.yml` runs on every pull request. Its `Detect
+  changes` job matches the changed files against the path rules of the two
+  suites below and calls each suite (as a reusable workflow) only when it
+  applies. Its `CI gate` check, required by the `master` ruleset, passes when
+  every applicable suite passed; a suite skipped as not applicable counts as
+  passed, a failed or cancelled one fails the gate. Pushes to `master`,
+  schedules and manual dispatch start the suites directly.
+* `.github/workflows/ci-images.yml` publishes the prebuilt images the two
+  suites pull, all in the package `ghcr.io/isac322/krema-ci`, tagged by
   `tests/distro/image-ref.sh` with a hash of the files that define each
   image: the `ctest-image` stage of this directory's Dockerfile, each distro
   target's runtime and builder images (`tests/distro/README.md`), and a
@@ -174,11 +181,11 @@ source-built krema. Three workflows are involved:
   Each run adds a JUnit summary to the step summary. See
   [installed-package reproduction commands](../distro/README.md#selected-monitor-reproduction).
 
-Changes that only touch `tests/qml`, `tests/unit`, `tests/kwin`,
-`tests/integration` or Markdown do not start `distro-e2e.yml`; changes that
-only touch this directory's tests and harness (anything but the
-Dockerfile), `tests/distro` (except its two image scripts) or Markdown do
-not start `Build & tests`.
+On pull requests, changes that only touch `tests/qml`, `tests/unit`,
+`tests/kwin`, `tests/integration` or Markdown skip `distro-e2e.yml`;
+changes that only touch this directory's tests and harness (anything but
+the Dockerfile), `tests/distro` (except its two image scripts) or Markdown
+skip `Build & tests`. `CI gate` still reports for them.
 
 ### Artifacts (`tests/appium/artifacts/`, gitignored, recreated every run)
 

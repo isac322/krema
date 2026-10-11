@@ -50,6 +50,27 @@ Item {
             delegateGeometryRefreshTimer.restart()
     }
 
+    // Rows removed/moved/reset under a resting pointer leave hoveredIndex on
+    // a shifted or missing row with no motion to re-hit-test it. Re-run the
+    // hit test against the unchanged zoom anchor once the layout has settled
+    // (delegateGeometryRefreshTimer); a pending request survives the context
+    // menu hold and runs after the menu closes.
+    property bool _hoverRehitPending: false
+    function scheduleHoverRehit() {
+        if (hoveredIndex < 0) return
+        _hoverRehitPending = true
+        scheduleDelegateGeometryRefresh()
+    }
+    function _runHoverRehit() {
+        if (!_hoverRehitPending || _hoverHeld) return
+        _hoverRehitPending = false
+        if (!_pointerOnDock || keyboardNavigating || hoveredIndex < 0) return
+        updateHoveredItem()
+        // Same index, different row: the hit test only renames on a change.
+        if (hoveredIndex >= 0)
+            hoveredName = dockRepeater.itemAt(hoveredIndex)?.displayName ?? ""
+    }
+
     Timer {
         id: delegateGeometryRefreshTimer
         interval: 50
@@ -59,6 +80,7 @@ Item {
                 if (item)
                     item.publishDelegateGeometry()
             }
+            root._runHoverRehit()
         }
     }
 
@@ -470,6 +492,8 @@ Item {
     // dockPanel.mouseY = secondary axis (depth), so all zoom/hover logic works
     // identically regardless of orientation; -1 = outside the dock zone.
     function trackPointer(x, y) {
+        // The context menu holds the zoom anchor (see _hoverHeld).
+        if (_hoverHeld) return
         let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
 
         if (DockView.isVertical) {
@@ -505,6 +529,8 @@ Item {
     }
 
     function updateHoveredItem() {
+        // Geometry/scale callbacks must not move the held hover.
+        if (_hoverHeld) return
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
             hoveredName = ""
@@ -683,8 +709,11 @@ Item {
             if (DockView.pointerInside) {
                 // Next real motion arrives as enter + move and resumes tracking.
                 root._pointerOnDock = true
-                if (root.hoveredIndex >= 0)
+                if (root.hoveredIndex >= 0 && root.hoveredIndex < dockRepeater.count)
                     tooltipTimer.restart()
+                // Rows changed while held: re-hit-test now that hover resumed.
+                if (root._hoverRehitPending)
+                    root.scheduleDelegateGeometryRefresh()
             } else {
                 root._pointerLeft()
             }
@@ -1496,6 +1525,9 @@ Item {
         interval: DockSettings.previewHoverDelay
         onTriggered: {
             if (root.hoveredIndex < 0 || root._hoverHeld) return
+            // Row removed under the hover before the re-hit-test ran.
+            if (root.hoveredIndex >= dockRepeater.count
+                    || !dockRepeater.itemAt(root.hoveredIndex)) return
             let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
             let isWindow = DockModel.tasksModel.data(
                 idx, TaskManager.AbstractTasksModel.IsWindow)
@@ -1605,10 +1637,19 @@ Item {
             root._tryAutoPreview()
             root.scheduleDelegateGeometryRefresh()
         }
-        function onRowsRemoved() { root.scheduleDelegateGeometryRefresh() }
-        function onRowsMoved() { root.scheduleDelegateGeometryRefresh() }
+        function onRowsRemoved() {
+            root.scheduleDelegateGeometryRefresh()
+            root.scheduleHoverRehit()
+        }
+        function onRowsMoved() {
+            root.scheduleDelegateGeometryRefresh()
+            root.scheduleHoverRehit()
+        }
         function onLayoutChanged() { root.scheduleDelegateGeometryRefresh() }
-        function onModelReset() { root.scheduleDelegateGeometryRefresh() }
+        function onModelReset() {
+            root.scheduleDelegateGeometryRefresh()
+            root.scheduleHoverRehit()
+        }
     }
 
 }

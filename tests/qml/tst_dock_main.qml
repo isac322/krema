@@ -816,6 +816,56 @@ Item {
             verify(!PreviewController.visible)
         }
 
+        // Rows shifting under the held anchor re-run the hit test through
+        // scale/geometry callbacks; none of them may move the held hover.
+        function test_contextMenuHoldIgnoresGeometryHitTests() {
+            let s = holdHoverUnderContextMenu()
+            DockModel.tasksModel.removeTask(0)
+            tryVerify(() => items(s.dock).length === 2, 2000)
+            settleDeferredCallbacks()
+            wait(100)  // delegateGeometryRefreshTimer and scale callbacks
+            s.dock.updateHoveredItem()
+            s.dock.trackPointer(-1, -1)
+
+            compare(s.dock.hoveredIndex, 1)
+            compare(s.dock.hoveredName, "B")
+            verify(s.dock._zoomActive)
+            compare(s.panel.mouseX, s.anchor.x)
+            compare(s.panel.mouseY, s.anchor.y)
+        }
+
+        // "Close" on the last task from the menu: the window goes away after
+        // the menu resumed hover with the pointer resting on the dock.
+        function test_heldItemRemovedAfterResumeRehitsHover() {
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            hoverItem(its[2])
+            tryCompare(its[2], "currentScale", DockSettings.maxZoomFactor)
+            tryCompare(PreviewController, "visible", true)
+            openContextMenu()
+            mouseMove(stage, -1, -1)
+
+            DockView.pointerInside = true
+            DockContextMenu.open = false
+            compare(dock.hoveredIndex, 2)
+            let shows = PreviewController.callsTo("showPreview").length
+            DockModel.tasksModel.removeTask(2)
+            tryVerify(() => items(dock).length === 2, 2000)
+
+            tryVerify(() => dock.hoveredIndex < 2, 2000,
+                      "hover still points at the removed row")
+            verify(dock.hoveredName !== "C")
+            wait(DockSettings.previewHoverDelay + 200)
+            verify(dock.hoveredIndex < 2)
+            let tooltip = dockTooltip(dock)
+            verify(!(tooltip.visible && dock.hoveredName === "C"),
+                   "the removed task's tooltip was shown")
+            let removed = PreviewController.callsTo("showPreview").slice(shows)
+                .filter(c => c.args[0] >= 2)
+            compare(removed.length, 0, "a preview was requested for the removed row")
+        }
+
         function test_fastLauncherTooltipAtZeroDelay() {
             DockSettings.previewHoverDelay = 0
             DockModel.tasksModel.addTask({

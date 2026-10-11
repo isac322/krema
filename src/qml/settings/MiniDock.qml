@@ -45,6 +45,7 @@ Item {
     property bool iconNormalization: DockSettings.iconNormalization
     property real cornerRadius: DockSettings.cornerRadius
     property bool floating: DockSettings.floating
+    property int floatingMargin: DockSettings.floatingMargin
     /// 0 Panel Inherit, 1 Transparent, 2 Tinted, 3 Acrylic.
     property int backgroundStyle: DockSettings.backgroundStyle
     property real backgroundOpacity: DockSettings.backgroundOpacity
@@ -119,11 +120,11 @@ Item {
     readonly property Item floatingMarker: floatingMarkerItem
 
     // Geometry in preview pixels. Padding and floating margin mirror
-    // main.qml (largeSpacing around the icons) and DockView::s_floatingMargin.
+    // main.qml (largeSpacing around the icons) and DockView::floatingPadding.
     readonly property real iconPx: iconSize * unit
     readonly property real gapPx: iconSpacing * unit
     readonly property real padPx: Kirigami.Units.largeSpacing * unit
-    readonly property real floatPx: floating ? 8 * unit : 0
+    readonly property real floatPx: floating ? floatingMargin * unit : 0
     readonly property real pitch: iconPx + gapPx
     readonly property real thickness: iconPx + 2 * padPx
     readonly property real length: restLengthReal * unit

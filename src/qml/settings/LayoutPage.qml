@@ -199,17 +199,20 @@ SettingsPage {
             }
 
             // Measurement overlay: the corner radius is measured on the dock
-            // panel; while the Floating row is hovered and the dock floats,
-            // the gap between panel and screen edge is measured instead.
+            // panel; while the Floating row or the Floating margin slider is
+            // hovered or focused and the dock floats, the gap between panel
+            // and screen edge is measured instead.
+            readonly property bool measureGap: dock.floating
+                && (floatingRow.hovered || floatingRow.visualFocus || marginSlider.active)
             measureTarget: radiusSlider.active ? dock.panelItem
-                : (floatingRow.hovered || floatingRow.visualFocus) && dock.floating ? dock.floatingMarker
+                : measureGap ? dock.floatingMarker
                 : null
             measureOrientation: radiusSlider.active
                 ? (dock.vertical ? Qt.Vertical : Qt.Horizontal)
                 : (dock.vertical ? Qt.Horizontal : Qt.Vertical)
             measureText: radiusSlider.active
                 ? i18nc("@label pixels", "%1 px", DockSettings.cornerRadius)
-                : i18nc("@label pixels", "%1 px", Math.round(dock.floatPx / Math.max(dock.unit, 0.001)))
+                : i18nc("@label pixels", "%1 px", DockSettings.floatingMargin)
         }
     }
 
@@ -225,6 +228,21 @@ SettingsPage {
             description: i18n("Detach the dock from the screen edge")
             checked: DockSettings.floating
             onToggled: DockSettings.floating = checked
+        }
+
+        FormCard.FormDelegateSeparator {}
+
+        SliderDelegate {
+            id: marginSlider
+            text: i18n("Floating margin")
+            description: i18n("Gap between the dock and the screen edge or panel")
+            enabled: DockSettings.floating
+            from: 1
+            to: 32
+            stepSize: 1
+            value: DockSettings.floatingMargin
+            valueText: i18nc("@label pixels", "%1 px", value)
+            onMoved: (value) => DockSettings.floatingMargin = Math.round(value)
         }
 
         FormCard.FormDelegateSeparator {}

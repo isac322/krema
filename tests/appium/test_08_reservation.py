@@ -353,6 +353,96 @@ def test_vis009_live_icon_size_and_floating_update_maximized_consumer(krema: Kre
     assert krema.pid == pid, "size, floating and reservation changes must all apply live"
 
 
+FLOATING_SWITCH = f"{SETTINGS}//check_box[@name='Floating']"
+FLOATING_MARGIN_SLIDER = f"{SETTINGS}//slider[@name='Floating margin']"
+
+
+def _floating_margin_cases():
+    # No FloatingMargin key: the slider must start from the 8 px default.
+    return [
+        pytest.param(
+            edge,
+            marks=pytest.mark.kremarc(
+                {
+                    "PinnedLaunchers": [],
+                    "VisibilityMode": config.ALWAYS_VISIBLE,
+                    "ReserveScreenSpace": True,
+                    "Edge": edge,
+                    "Floating": True,
+                }
+            ),
+            id=name,
+        )
+        for name, edge in EDGES
+    ]
+
+
+def _reserved_depth(observation: dict, edge: int) -> int:
+    """Thickness KWin removed from the consumer work area at the dock edge."""
+    work, screen = Rect(*observation["workarea"]), Rect(*observation["screen"])
+    if edge in (config.EDGE_TOP, config.EDGE_BOTTOM):
+        return screen.height - work.height
+    return screen.width - work.width
+
+
+def _set_floating(krema: Krema, floating: bool) -> None:
+    switch = scroll_into_view(krema, FLOATING_SWITCH)
+    if has_state(switch, "checked") != floating:
+        click_el(krema, switch)
+    wait_until(lambda: has_state(krema.wait_for(FLOATING_SWITCH), "checked") == floating, message=f"floating={floating}")
+    _park()
+
+
+@pytest.mark.parametrize("edge", _floating_margin_cases())
+def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, apps: TestWindows, edge: int) -> None:
+    """The Floating margin slider moves an already-maximized consumer by
+    exactly the margin delta, live, only while Floating is on, and persists."""
+    win = apps.open("Alpha", width=400, height=300)
+    krema.wait_for_item("Alpha")
+    _park()
+    maximize(win)
+    default = _geometry(krema, win, edge, True, "margin-default")
+    pid = krema.pid
+    _behavior(krema, edge=edge)
+    open_page(krema, "Layout & Position")
+    slider = focus_slider(krema, FLOATING_MARGIN_SLIDER, 1, 32)
+    assert slider_value(slider) == 8, "a fresh configuration uses the 8 px default margin"
+    assert has_state(slider, "enabled"), "the margin is adjustable while the dock floats"
+    inp.key("pageup")  # ten 1 px steps, as a user would press it
+    wait_until(lambda: slider_value(krema.wait_for(FLOATING_MARGIN_SLIDER)) == 18, message="floating margin raised to 18 px")
+    wait_until(lambda: config_value(krema, "FloatingMargin") == "18", message="floating margin autosaved")
+    _park()
+    wider = _geometry(krema, win, edge, True, "margin-18")
+    assert _reserved_depth(wider, edge) - _reserved_depth(default, edge) == 10, (default, wider)
+    assert wider["window"] == default["window"]
+
+    # Floating off removes the gap entirely, whatever the saved margin.
+    _set_floating(krema, False)
+    wait_until(
+        lambda: not has_state(krema.wait_for(FLOATING_MARGIN_SLIDER), "enabled"),
+        message="floating margin disabled while the dock is not floating",
+    )
+    flat = _geometry(krema, win, edge, True, "margin-18-floating-off")
+    assert _reserved_depth(default, edge) - _reserved_depth(flat, edge) == 8, (default, flat)
+    assert config_value(krema, "FloatingMargin") == "18", "turning Floating off keeps the saved margin"
+
+    _set_floating(krema, True)
+    restored = _geometry(krema, win, edge, True, "margin-18-floating-on")
+    assert _reserved_depth(restored, edge) == _reserved_depth(wider, edge), (wider, restored)
+    assert restored["window"] == default["window"]
+    assert krema.pid == pid, "floating margin changes must apply live"
+
+    close_settings(krema)
+    _park()
+    krema.restart()
+    assert krema.pid != pid
+    krema.wait_for_item("Alpha")
+    _park()
+    restarted = _geometry(krema, win, edge, True, "margin-18-restarted")
+    assert _reserved_depth(restarted, edge) == _reserved_depth(wider, edge), (wider, restarted)
+    assert restarted["window"] == default["window"], "consumer window must survive dock restart unchanged"
+
+
 @pytest.mark.parametrize(
     "edge,reserved",
     [

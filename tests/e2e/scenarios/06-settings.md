@@ -3,7 +3,7 @@
 ## Features
 - settings-window: Sidebar of 8 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
 - settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a live desktop preview (real wallpaper, miniature dock with real theme icons) and measurement guides
-- settings-layout: Screen edge picker on the live desktop preview, floating, corner radius
+- settings-layout: Screen edge picker on the live desktop preview, floating, floating margin, corner radius
 - settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
@@ -636,3 +636,68 @@ expander description), screenshot (3D scene, "Result" inset, dock shadow),
 dock item opacity/visibility.
 **Automated:** none; monitor mode cards and the selected monitor switches are
 covered by SET-008 and SET-012.
+
+---
+
+## TC SET-020: Floating margin sets the floating gap live and persists
+
+**Precondition:** A fresh configuration (no `FloatingMargin` key), one
+output without another panel, visibility mode `Always visible`, `Reserve
+screen space` on, `Floating` on. A real fixture window maximized by KWin.
+Open Settings → Layout & Position. Record Krema's process and the fixture
+window's identity and frame geometry.
+
+**Steps:**
+1. Find the "Floating margin" slider under the "Floating" switch. Verify it
+   is an AT-SPI slider named "Floating margin", enabled, with value 8 and a
+   "8 px" value text.
+2. Focus it and press Page Up (ten 1 px steps). Verify the value reads 18,
+   `FloatingMargin=18` is saved in `[General]` in `kremarc`, the gap between
+   the dock panel and the screen edge widens, and the already-maximized
+   fixture's frame moves inward by exactly 10 px at the dock edge (the
+   reserved strip is the panel bar plus the margin). Do not
+   restore/remaximize the fixture or restart Krema.
+3. Press Home and End. Verify the slider stops at 1 and 32 px and the
+   reserved strip follows; return to 18.
+4. Repeat steps 2–3 on the top, left, and right edges using the "Screen
+   edge" picker.
+5. Turn "Floating" off. Verify the slider becomes disabled, the dock sits
+   flush against the screen edge (gap 0), the reserved strip shrinks by the
+   full margin, and `FloatingMargin` stays 18. Turn "Floating" on again and
+   verify the 18 px gap and reserved strip return.
+6. Select `Auto hide`, then `Dodge windows`, close Settings, and move the
+   pointer away. Verify the dock hides fully past the screen edge; reveal it
+   from the edge and verify it rests at the 18 px gap. Hovering inside the
+   gap and over the panel hits the dock; the input region matches the
+   visible panel and the margin, not the empty space beside the panel.
+7. Return to `Always visible`, close Settings, and restart Krema. Verify the
+   slider shows 18 px and the maximized fixture keeps the 18 px reserved
+   strip.
+8. With a Plasma panel already reserving the dock's edge, verify the dock
+   rests next to that panel and the margin is the distance from the panel,
+   not from the screen edge.
+
+**Expected:**
+- The gap follows the slider immediately on all four edges, from 1 to 32 px
+  (default 8, the previous fixed gap); no restart is needed.
+- With reservation on, the reserved strip is the panel bar plus the margin,
+  and existing maximized windows reflow live.
+- With "Floating" off the gap is 0 whatever the saved margin; the slider is
+  disabled but keeps its value.
+- Auto Hide and Dodge Windows hide the dock completely and reveal it at the
+  configured gap.
+- The value persists in `kremarc` as `FloatingMargin` and survives restart.
+
+**Verification:** AT-SPI (slider name, value, value text, enabled state),
+KWin (maximized frame and work area against the full output), `kremarc`
+(`FloatingMargin`), process identity, screenshot of the dock gap when DRM
+capture is available.
+**Automated (Tier 2):**
+`tests/appium/test_08_reservation.py::test_vis009_live_floating_margin_update_maximized_consumer`
+covers steps 1, 2, 4, 5, and 7 on all four edges: the fresh 8 px default,
+a keyboard Page Up to 18 px with autosave, the maximized fixture's reserved
+strip growing by exactly 10 px, the disabled slider and full-margin
+shrink with Floating off, the retained value, live application, and the
+restored reserved strip after restart.
+`tests/unit/test_surface_geometry.cpp` covers the panel-bar and surface
+heights for non-default margins. Steps 3, 6, and 8 remain manual checks.

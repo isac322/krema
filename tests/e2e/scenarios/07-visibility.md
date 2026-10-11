@@ -230,15 +230,17 @@ same maximized window alive throughout each toggle.
    maximized state.
 2. With reservation off, verify the frame reaches the output's bottom edge.
    With it on, verify the frame ends before the resting panel bar, including
-   the floating gap when enabled. Verify the dock remains visible in both
+   the floating gap (the configured Floating margin, default 8 px) when
+   enabled. Verify the dock remains visible in both
    states; do not accept a maximize-command echo as the result.
 3. Repeat on the top, left, and right edges using the real `Screen edge`
    picker on the Layout & Position page. For top/left, compare the fixture frame's leading edge with the
    output's leading edge; for bottom/right, compare its trailing edge.
 4. Repeat each edge with floating mode off and on. Change icon size on the
-   Icons page while reservation is enabled and verify the existing maximized
-   frame updates to the current panel-bar thickness. Move the pointer away
-   before sampling; hover zoom/tooltip surface space is not reserved.
+   Icons page and the Floating margin on the Layout & Position page while
+   reservation is enabled and verify the existing maximized frame updates to
+   the current panel-bar thickness plus margin (SET-020). Move the pointer
+   away before sampling; hover zoom/tooltip surface space is not reserved.
 5. Disable reservation, restart Krema, and observe the same maximized
    fixture using the full output. Enable reservation, restart again, and
    verify the saved setting restores reserved geometry. Check the Behavior
@@ -255,9 +257,9 @@ same maximized window alive throughout each toggle.
   in the live session; no window restore/remaximize or Krema restart is
   needed for the toggle itself.
 - All four edges reserve only the current resting panel bar and floating
-  gap, not the full zoom/tooltip surface.
+  gap (the current Floating margin), not the full zoom/tooltip surface.
 - The chosen reservation setting survives restart independently of edge,
-  floating mode, icon size, and visibility mode.
+  floating mode, floating margin, icon size, and visibility mode.
 - Auto Hide and Dodge Windows reserve no space with either saved value.
 
 **Verification:** KWin maximized state, window identity, output/frame bounds,
@@ -286,6 +288,11 @@ frame/workarea/output bounds, and resting icon/surface bounds for reserved
 states. No test requires screenshots. SET-015 maps the native control;
 four-edge restart combinations beyond the bottom-edge node remain manual
 acceptance checks.
+`test_vis009_live_floating_margin_update_maximized_consumer` (pending its
+first recorded run) checks on all four edges that a Floating margin change
+moves the maximized fixture by exactly the margin delta, that Floating off
+removes the whole margin, and that the margin survives restart; SET-020
+maps its control checks.
 
 These checks establish the frame/workarea/input/AT-SPI contract without
 requiring screenshots or live PipeWire thumbnails. Installed-package Tier 3,

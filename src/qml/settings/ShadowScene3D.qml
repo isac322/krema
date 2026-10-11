@@ -104,7 +104,7 @@ Item {
     readonly property real dockRadius: Math.min(DockSettings.cornerRadius, dockD / 2)
     // Bottom edge of the screen. A strip of wallpaper is kept in front of
     // the dock so the shadow that falls towards the edge stays visible.
-    readonly property real edgeZ: dockD + (DockSettings.floating ? 8 : 0)
+    readonly property real edgeZ: dockD + (DockSettings.floating ? DockSettings.floatingMargin : 0)
     readonly property real elevation: DockSettings.shadowElevation
 
     // Drawn height of the lamp handle: monotone compression of 100..2000 px

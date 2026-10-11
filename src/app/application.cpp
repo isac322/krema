@@ -84,6 +84,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::ZoomOutEasingChanged, context, saveSettings);
     connect(settings, &KremaSettings::CornerRadiusChanged, context, saveSettings);
     connect(settings, &KremaSettings::FloatingChanged, context, saveSettings);
+    connect(settings, &KremaSettings::FloatingMarginChanged, context, saveSettings);
     connect(settings, &KremaSettings::BackgroundOpacityChanged, context, saveSettings);
     connect(settings, &KremaSettings::BackgroundStyleChanged, context, saveSettings);
     connect(settings, &KremaSettings::TintColorChanged, context, saveSettings);

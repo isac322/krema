@@ -120,10 +120,13 @@ void DockShell::connectSettingsSignals()
     // Per-screen overrideable: iconSize, maxZoomFactor, floating → use ScreenSettings signals
     connect(ss, &ScreenSettings::iconSizeChanged, m_view.get(), &DockView::updateSize);
     connect(ss, &ScreenSettings::maxZoomFactorChanged, m_view.get(), &DockView::updateSize);
-    connect(ss, &ScreenSettings::floatingChanged, m_view.get(), [this]() {
+    const auto updateFloatingPadding = [this]() {
         m_view->updateSize();
         Q_EMIT m_view->floatingPaddingChanged();
-    });
+    };
+    connect(ss, &ScreenSettings::floatingChanged, m_view.get(), updateFloatingPadding);
+    // Floating margin is global-only; it resizes the gap exactly like toggling floating.
+    connect(s, &KremaSettings::FloatingMarginChanged, m_view.get(), updateFloatingPadding);
 
     // Screen-space reservation is global; reflow both the dock and open preview.
     connect(s, &KremaSettings::ReserveScreenSpaceChanged, this, [this]() {

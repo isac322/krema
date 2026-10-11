@@ -239,8 +239,7 @@ QRectF restSlot(QQuickView *view, QQuickItem *delegate)
     // Keep this calculation independent from the geometry proxy. It mirrors
     // the panel's fixed rest slot from the surface dimensions, edge and
     // floating padding, then uses the real Flow/delegate slot dimensions.
-    constexpr int kFloatingMargin = 8; // DockView::s_floatingMargin
-    const int floatingPadding = app().settings->floating() ? kFloatingMargin : 0;
+    const int floatingPadding = app().settings->floating() ? app().settings->floatingMargin() : 0;
     const int edge = app().settings->edge();
     const qreal panelX =
         (edge == 2 || edge == 3) ? (edge == 2 ? floatingPadding : root->width() - panel->width() - floatingPadding) : (root->width() - panel->width()) / 2.0;

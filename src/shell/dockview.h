@@ -78,7 +78,7 @@ public:
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;
 
-    /// Recalculate surface size (called when iconSize/maxZoomFactor/floating change).
+    /// Recalculate surface size (called when iconSize/maxZoomFactor/floating/floating margin change).
     void updateSize();
 
     /// Set per-screen settings overlay for size calculations.
@@ -147,7 +147,6 @@ private:
     QMetaObject::Connection m_screenGeometryConnection;
 
     static constexpr int s_padding = 8;
-    static constexpr int s_floatingMargin = 8;
     /// Minimum tooltip reserve; covers the tooltip height above/below a horizontal panel.
     static constexpr int s_tooltipReserve = 36;
 };

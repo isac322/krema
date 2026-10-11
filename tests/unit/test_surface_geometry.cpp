@@ -55,4 +55,14 @@ TEST_CASE("Surface geometry calculations", "[geometry]")
         REQUIRE(krema::panelBarHeight(48, 8, 0) == 64); // non-floating
         REQUIRE(krema::panelBarHeight(64, 8, 0) == 80); // larger icon
     }
+
+    SECTION("Non-default floating margin is kept apart from padding")
+    {
+        // padding and the default margin are both 8; a custom margin must
+        // only change the floating term.
+        REQUIRE(krema::panelBarHeight(48, 8, 20) == 84); // 48+16+20
+        REQUIRE(krema::surfaceHeight(48, 8, 1.6, 36, 20) == 120); // 64+36+20
+        REQUIRE(krema::panelBarHeight(48, 8, 1) == 65); // minimum margin
+        REQUIRE(krema::panelBarHeight(48, 8, 32) == 96); // maximum margin
+    }
 }

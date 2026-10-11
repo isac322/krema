@@ -209,7 +209,7 @@ duplicating their full procedures.
 | Contract | Scenario | Required observation |
 |---|---|---|
 | Reservation control/default/persistence | SET-015 | Real Behavior switch, saved value, same maximized KWin window reflows live and after Krema restart |
-| Reservation geometry | VIS-001, VIS-009 | Maximized frame/output bounds on all four edges, floating off/on, current icon size, reservation off/on, and no reservation in Auto Hide/Dodge Windows |
+| Reservation geometry | VIS-001, VIS-009, SET-020 | Maximized frame/output bounds on all four edges, floating off/on, floating margin, current icon size, reservation off/on, and no reservation in Auto Hide/Dodge Windows |
 | Section control/default/persistence | SET-016 | Real Behavior switch, ordered dock app names, pinned membership, accessible separator, and restart |
 | Pin/unpin and app lifecycle | CTX-007 | Running pinned apps retain one pinned slot; unpinned apps follow; live launch/close/group and empty-section transitions |
 | Zone drag policy | DND-006 | Real drags reorder within the source section, clamp cross-section moves without pinning, and allow free ordering when separation is off |

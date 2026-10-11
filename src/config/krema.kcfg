@@ -114,6 +114,13 @@
       <default>true</default>
     </entry>
 
+    <entry name="FloatingMargin" type="Int">
+      <label>Gap between the floating dock and the screen edge or an adjacent panel (px)</label>
+      <default>8</default>
+      <min>1</min>
+      <max>32</max>
+    </entry>
+
     <entry name="VisibilityMode" type="Int">
       <label>Dock visibility mode (0=Always, 1=AutoHide, 2=Dodge)</label>
       <default>0</default>

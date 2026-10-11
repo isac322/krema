@@ -139,7 +139,7 @@ int DockView::backgroundStyleType() const
 
 int DockView::floatingPadding() const
 {
-    return m_settings->floating() ? s_floatingMargin : 0;
+    return m_settings->floating() ? m_settings->floatingMargin() : 0;
 }
 
 int DockView::iconCacheVersion() const

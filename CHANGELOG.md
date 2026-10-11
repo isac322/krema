@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added a Floating margin setting (Settings → Layout & Position) that sets the gap between the floating dock and the screen edge, or an adjacent Plasma panel, from 1 to 32 px (default 8) (#90)
+
 ## [0.11.0] - 2026-10-10
 
 Krema v0.11.0 redesigns the settings window of this lightweight KDE Plasma 6 dock for Wayland around a live miniature of your own desktop and a 3D shadow editor, adds zoom animation presets with a smoother macOS-like parabolic zoom by default, and fixes KWin's Slide Back effect and pinned launchers stored as file paths.

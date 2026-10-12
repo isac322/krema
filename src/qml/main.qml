@@ -51,11 +51,21 @@ Item {
     }
 
     // Rows removed/moved/reset under a resting pointer leave hoveredIndex on
-    // a shifted or missing row with no motion to re-hit-test it. Re-run the
-    // hit test against the unchanged zoom anchor once the layout has settled
-    // (delegateGeometryRefreshTimer); a pending request survives the context
-    // menu hold and runs after the menu closes.
+    // a shifted or missing row with no motion to re-hit-test it. Once the
+    // layout has settled (delegateGeometryRefreshTimer), re-run the hit test
+    // from the last real pointer sample in root coordinates: the dock
+    // re-centres, so the panel-local zoom anchor no longer marks the spot
+    // under the pointer. A pending request survives the context menu hold and
+    // runs after the menu closes.
     property bool _hoverRehitPending: false
+    // Hover resumed after the context menu: restart the hover pipeline for
+    // the reconciled item. Cleared by any hoveredIndex change, whose handler
+    // already restarts it.
+    property bool _hoverResumePending: false
+    // Last real pointer position in root (dock window) coordinates, the
+    // space trackPointer() takes. Not updated while hover is held.
+    property real _pointerRootX: -1
+    property real _pointerRootY: -1
     function scheduleHoverRehit() {
         if (hoveredIndex < 0) return
         _hoverRehitPending = true
@@ -64,11 +74,24 @@ Item {
     function _runHoverRehit() {
         if (!_hoverRehitPending || _hoverHeld) return
         _hoverRehitPending = false
-        if (!_pointerOnDock || keyboardNavigating || hoveredIndex < 0) return
-        updateHoveredItem()
+        if (!_pointerOnDock || keyboardNavigating
+                || (hoveredIndex < 0 && !_hoverResumePending)) {
+            _hoverResumePending = false
+            return
+        }
+        trackPointer(_pointerRootX, _pointerRootY)
         // Same index, different row: the hit test only renames on a change.
         if (hoveredIndex >= 0)
             hoveredName = dockRepeater.itemAt(hoveredIndex)?.displayName ?? ""
+        if (_hoverResumePending && hoveredIndex >= 0 && hoveredIndex < dockRepeater.count)
+            tooltipTimer.restart()
+        _hoverResumePending = false
+    }
+    // Deferred from the menu close so the hold has ended; waits for a
+    // pending layout refresh, which runs the reconcile itself.
+    function _reconcileAfterHold() {
+        if (_hoverHeld || delegateGeometryRefreshTimer.running) return
+        _runHoverRehit()
     }
 
     Timer {
@@ -708,12 +731,13 @@ Item {
                 return
             if (DockView.pointerInside) {
                 // Next real motion arrives as enter + move and resumes tracking.
+                // Until then, re-hit-test the last real pointer sample (rows
+                // may have shifted under it while held) before restarting the
+                // hover pipeline, so no preview targets a stale row.
                 root._pointerOnDock = true
-                if (root.hoveredIndex >= 0 && root.hoveredIndex < dockRepeater.count)
-                    tooltipTimer.restart()
-                // Rows changed while held: re-hit-test now that hover resumed.
-                if (root._hoverRehitPending)
-                    root.scheduleDelegateGeometryRefresh()
+                root._hoverRehitPending = true
+                root._hoverResumePending = true
+                Qt.callLater(root._reconcileAfterHold)
             } else {
                 root._pointerLeft()
             }
@@ -760,6 +784,11 @@ Item {
             // Preserve drag suppression while any other button remains held.
             if (mouse.buttons === mouse.button)
                 root._dragWasActive = false
+            // MouseArea fills root: mouse.x/y are root coordinates.
+            if (!root._hoverHeld) {
+                root._pointerRootX = mouse.x
+                root._pointerRootY = mouse.y
+            }
             if (!root.keyboardNavigating)
                 root.trackPointer(mouse.x, mouse.y)
             if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
@@ -840,6 +869,8 @@ Item {
         onPositionChanged: function(mouse) {
             if (root._hoverHeld) return
             root._pointerOnDock = true
+            root._pointerRootX = mouse.x
+            root._pointerRootY = mouse.y
 
             // Mouse movement cancels keyboard navigation mode
             if (root.keyboardNavigating) {
@@ -1614,6 +1645,8 @@ Item {
                 tooltipItem.show = false
                 tooltipTimer.stop()
                 if (root._hoverHeld) return
+                // This handler restarts the hover pipeline for a pending resume.
+                root._hoverResumePending = false
                 if (root.hoveredIndex < 0) {
                     // Mouse left dock: start delayed preview hide
                     PreviewController.hidePreviewDelayed()

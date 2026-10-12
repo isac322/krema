@@ -954,6 +954,75 @@ Item {
             compare(stray.length, 0, "a preview was requested for the stale row before reconciliation")
         }
 
+        // The menu closes before the layout settles, then a row is inserted
+        // and a geometry hit test runs while reconciliation is pending: hover
+        // stays held until the reconcile, so neither the row insert's auto
+        // preview nor the hit test acts on the held index, which the insert
+        // turns into a valid but unrelated row (H).
+        function test_reconcileWindowHoldsHoverThroughInsertAndHitTest() {
+            DockSettings.previewHoverDelay = 0
+            addTasks(["A", "B", "C", "D", "E", "F", "G"])
+            let dock = makeDock(7)
+            let its = items(dock)
+            let panel = its[4].parent.parent
+            let pointer = hoverItem(its[4])
+            tryCompare(its[4], "currentScale", DockSettings.maxZoomFactor)
+            tryCompare(PreviewController, "visible", true)
+            openContextMenu()
+            mouseMove(stage, -1, -1)
+
+            for (let row of [2, 1, 0])
+                DockModel.tasksModel.removeTask(row)
+            let shows = PreviewController.callsTo("showPreview").length
+            DockView.pointerInside = true
+            DockContextMenu.open = false
+            verify(dock._hoverHeld, "hover released before the post-menu reconcile")
+            addTasks(["H"])
+            dock.updateHoveredItem()
+            compare(dock.hoveredIndex, 4, "the reconcile window moved the held hover")
+            compare(PreviewController.callsTo("showPreview").length, shows,
+                    "a preview was requested during the reconcile window")
+
+            tryVerify(() => !dock._hoverHeld, 2000, "reconciliation never ran")
+            tryCompare(dock, "hoveredIndex", 3, 2000)
+            let target = itemUnderPoint(dock, panel, pointer)
+            compare(target, 3, "fixture: G must sit under the resting pointer")
+            compare(dock.hoveredName, "G")
+            tryVerify(() => PreviewController.callsTo("showPreview").slice(shows)
+                      .some(c => c.args[0] === target), 2000,
+                      "no preview for the item under the pointer")
+            wait(200)
+            let stray = PreviewController.callsTo("showPreview").slice(shows)
+                .filter(c => c.args[0] !== target)
+            compare(stray.length, 0, "a preview was requested for a row not under the pointer")
+        }
+
+        // Real motion over the dock while the reconcile is pending ends it and
+        // is tracked normally.
+        function test_motionDuringReconcileWindowTracksPointer() {
+            let s = holdHoverUnderContextMenu()
+            // The held move already reached its[0]; Qt drops a move to the same spot.
+            let other = centerOf(s.its[0])
+            other.x += 1
+            // Keep the layout refresh pending so the reconcile cannot run first.
+            s.dock.scheduleDelegateGeometryRefresh()
+            DockView.pointerInside = true
+            DockContextMenu.open = false
+            verify(s.dock._hoverReconciling)
+            let shows = PreviewController.callsTo("showPreview").length
+
+            mouseMove(stage, other.x, other.y)
+            verify(!s.dock._hoverReconciling, "real motion did not end the reconcile window")
+            verify(!s.dock._hoverHeld)
+            tryCompare(s.dock, "hoveredIndex", 0, 2000)
+            tryVerify(() => PreviewController.callsTo("showPreview").slice(shows)
+                      .some(c => c.args[0] === 0), 2000,
+                      "the tracked item's preview did not open")
+            let stale = PreviewController.callsTo("showPreview").slice(shows)
+                .filter(c => c.args[0] !== 0)
+            compare(stale.length, 0, "a preview was requested for the held item after motion")
+        }
+
         function test_fastLauncherTooltipAtZeroDelay() {
             DockSettings.previewHoverDelay = 0
             DockModel.tasksModel.addTask({

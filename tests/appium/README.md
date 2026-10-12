@@ -321,7 +321,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | CTX-005 | `test_04_context_menu.py::test_ctx005_close_closes_every_window_of_an_unpinned_app`, `test_ctx005_close_keeps_a_pinned_app_without_indicator` | KWin, AT-SPI | pass |
 | CTX-006 | `test_04_context_menu.py::test_ctx006_settings_entry_opens_the_settings_window` | KWin, AT-SPI | pass |
 | CTX-008 | `test_04_context_menu.py::test_ctx008_pinned_launcher_launches_the_chosen_desktop_action`, `test_ctx008_grouped_windows_launch_the_chosen_desktop_action` | KWin (launched window title), kremarc | pending: not yet run |
-| CTX-009 | `test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open`, `test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock` (skip without ScreenShot2 capture) | KWin, AT-SPI, screenshot, real input | pass |
+| CTX-009 | `test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open`, `test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock` (skip without ScreenShot2 capture), `test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse` (Krema started without pointer capability: `input.drop_pointer_capability()`) | KWin, AT-SPI, screenshot, real input | pass |
 | DND-001 | `test_05_drag.py::test_dnd_001_drag_reorders_dock_items` (also: focus returns to the previously active window) | AT-SPI, screenshot, KWin | pass |
 | DND-002 | `test_05_drag.py::test_dnd_002_reorder_persists_after_restart` | AT-SPI, kremarc | pass |
 | DND-003 | `test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator` | screenshot | pass |
@@ -695,10 +695,11 @@ works too, e.g. `org.kde.kwrite` to pose as KWrite (kwrite and kfind
 | `press(button, x=None, y=None)`, `release(button)` | Low-level; prefer `drag`. |
 | `drag(start, end, steps=10, step_ms=50, hold_ms=300, button="left")` | Press, hold, move, release in one chain. |
 | `scroll(x, y, dy=0, dx=0)` | Wheel; positive `dy` scrolls down, 15 = one notch. |
-| `key(*names, hold_ms=0)` | Combo to the focused surface or KWin's shortcut handling: `key("Escape")`, `key("Meta", "Alt", "d")`, `key("ctrl", "a")`. Names: single characters, `meta`/`super`, `ctrl`, `alt`, `shift`, `return`/`enter`, `escape`, `tab`, `space`, `backspace`, `delete`, arrows, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`. |
+| `key(*names, hold_ms=0)` | Combo to the focused surface or KWin's shortcut handling: `key("Escape")`, `key("Meta", "Alt", "d")`, `key("ctrl", "a")`. Names: single characters, `meta`/`super`, `ctrl`, `alt`, `shift`, `return`/`enter`, `escape`, `tab`, `space`, `backspace`, `delete`, arrows, `home`, `end`, `pageup`, `pagedown`, `f1`-`f12`, `menu`. |
 | `type_text(text)` | Character by character. |
 | `pointer_position()`, `run_actions(action_sets)`, `key_value(name)` | Last position set by this module, raw W3C action chains, and the name-to-W3C key map. |
 | `background_actions(action_sets)` | Context manager: runs a raw chain in the background while the body runs; leaving the body ends the chain's pause marked `"interruptible": True`, then waits for the chain to finish. |
+| `drop_pointer_capability()`, `hold_pointer_capability(park)` | Remove every fake-input device so KWin drops the seat's pointer capability (as when the last mouse is unplugged); bring it back with a keep-alive that then stays for the session. |
 
 The image patches upstream inputsynth (`tools/inputsynth-fixes.patch`) so that
 every `pointerMove` is absolute, which multi-move chains and drags need, so

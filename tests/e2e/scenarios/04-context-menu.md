@@ -250,7 +250,11 @@ window, so it is a task with a window preview.
   its preview reopens after the normal hover delay.
 - After the menu closes with the pointer off the dock, every item returns to
   its rest size and the preview stays closed, like a normal pointer exit.
+- Variant: Krema starts while no mouse is connected (the seat has no pointer)
+  and the mouse is connected afterwards. Already the first menu closed with
+  Escape over a hovered item keeps its zoom, like the second one.
 
 **Verification:** KWin (menu window), AT-SPI (preview `showing`, painted item
-widths through `painted_rect`), screenshot (menu entry highlight)
-**Automated:** tests/appium/test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open, tests/appium/test_04_context_menu.py::test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock (skip without ScreenShot2 capture; the tooltip is not asserted)
+widths through `painted_rect`), screenshot (menu entry highlight), krema's
+`WAYLAND_DEBUG` log (`wl_seat.capabilities` without pointer at start)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open, tests/appium/test_04_context_menu.py::test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock (skip without ScreenShot2 capture; the tooltip is not asserted), tests/appium/test_04_context_menu.py::test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse (variant)

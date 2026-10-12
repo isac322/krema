@@ -306,7 +306,25 @@ def hold_pointer_capability(park: tuple[int, int]) -> subprocess.Popen:
         proc.kill()
         raise
     _pointer = (int(park[0]), int(park[1]))
+    _capability_holds.append(proc)
     return proc
+
+
+#: Keep-alive processes started by hold_pointer_capability().
+_capability_holds: list[subprocess.Popen] = []
+
+
+def drop_pointer_capability() -> None:
+    """Remove every fake-input device (the session's inputsynth and every
+    keep-alive), so KWin drops ``wl_seat`` pointer capability, as when the
+    last mouse is unplugged. Restore it with :func:`hold_pointer_capability`
+    and keep that process for the rest of the session: the session fixture's
+    own keep-alive is gone."""
+    _close_inputsynth()
+    while _capability_holds:
+        proc = _capability_holds.pop()
+        proc.terminate()
+        proc.wait(5)
 
 
 def move(x: int, y: int, duration_ms: int = 0) -> None:

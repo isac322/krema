@@ -34,6 +34,7 @@ corresponding test observe the wrong effect.
 from __future__ import annotations
 
 import os
+import re
 import signal
 import time
 from xml.etree import ElementTree
@@ -643,4 +644,47 @@ def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, 
         close_settings(krema)
     finally:
         # Never leave the pointer resting on the dock, even after a failure.
+        krema.move_away(close_preview=False)
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({**ZOOM_KREMARC, "PreviewEnabled": False})
+def test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse(
+    krema: Krema, apps: TestWindows, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Krema starts while the seat has no pointer (the mouse is plugged in
+    later). The very first menu closed with the pointer resting on the item
+    must keep the zoom like every later one: the compositor focus Krema reads
+    on close must already be tracked when the pointer capability appears."""
+    target = env.TEST_APP2_NAME
+    # Logs wl_seat.capabilities, the oracle for "started without a pointer".
+    monkeypatch.setenv("WAYLAND_DEBUG", "client")
+    inp.drop_pointer_capability()
+    krema.start()
+    log = open(krema.log_path, errors="replace").read()
+    capabilities = [int(c) for c in re.findall(r"wl_seat#\d+\.capabilities\((\d+)\)", log)]
+    assert capabilities and not any(c & 1 for c in capabilities), f"krema started with a pointer: capabilities {capabilities}"
+    centre = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
+    # Kept for the rest of the session: it replaces the session's keep-alive.
+    inp.hold_pointer_capability(centre)
+    try:
+        krema.wait_for_item(target, timeout=15)
+        krema.move_away(close_preview=False)
+        rest = wait_stable(lambda: {e.get_attribute("name"): Rect.of(e) for e in krema.items()})
+        for attempt in ("first", "second"):
+            krema.hover_item(target)
+            zoomed = wait_stable(lambda: painted_rect(Rect.of(krema.wait_for_item(target)), rest[target]).width)
+            assert zoomed >= rest[target].width * 1.4, f"{attempt} hover zoomed to {zoomed}px, base {rest[target].width}px"
+            menu = right_click_in_place(krema)
+            inp.key("Escape")
+            wait_menu_closed(menu)
+            widths = []
+            deadline = time.monotonic() + 1.5
+            while time.monotonic() < deadline:
+                widths.append(painted_rect(Rect.of(krema.wait_for_item(target)), rest[target]).width)
+                time.sleep(0.05)
+            assert all(abs(w - zoomed) <= 2 for w in widths), f"{attempt} menu closed over the item released the zoom: {zoomed}px -> {widths}"
+            krema.move_away(close_preview=False)
+            wait_stable(lambda: painted_rect(Rect.of(krema.wait_for_item(target)), rest[target]).width)
+    finally:
         krema.move_away(close_preview=False)

@@ -71,6 +71,11 @@
     <color type="primary" scheme_preference="dark">#231A14</color>
   </branding>
   <releases>
+    <release version="0.12.0" date="2026-10-12">
+      <description>
+        <p>A Floating margin setting sets the gap between the floating dock and the screen edge, and the right-click menu now offers each app's own actions such as Firefox's "New Private Window". A magnified icon stays magnified while its context menu is open, and on Plasma 6.8 apps opened from a pinned icon take that icon's place again.</p>
+      </description>
+    </release>
     <release version="0.11.0" date="2026-10-10">
       <description>
         <p>The settings window was redesigned into focused pages around a live miniature of your own desktop, with a 3D editor for the dock shadow and full keyboard and screen reader support. Hover zoom gained presets with a smoother macOS-like default, icons gained per-state opacity settings, and KWin's Slide Back effect works again while Krema is running.</p>

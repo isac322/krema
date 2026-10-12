@@ -1,3 +1,15 @@
+krema (0.12.0-1) unstable; urgency=medium
+
+  * New upstream release v0.12.0
+  * Floating margin setting (1 to 32 px, default 8) for the gap between a
+    floating dock and the screen edge or an adjacent Plasma panel
+  * The app's own .desktop actions in the dock item's right-click menu
+  * A magnified icon stays magnified while its context menu is open
+  * Build dependency on KF6 KIO and KF6 JobWidgets
+  * Fixed apps opened from a pinned icon jumping to the end on Plasma 6.8
+
+ -- Byeonghoon Yoo <bhyoo@bhyoo.com>  Mon, 12 Oct 2026 00:00:00 +0900
+
 krema (0.11.0-1) unstable; urgency=medium
 
   * New upstream release v0.11.0

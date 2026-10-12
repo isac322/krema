@@ -19,7 +19,7 @@ Rules that apply to every agent working on this repository, regardless of harnes
 
 ## Pull Request Completion
 
-- A PR is ready for review or merge only when every CI check on its head is green, the change has been QA'd in a running Krema session, and review feedback is resolved. Merge authorization still follows the global merge rules.
+- A PR is ready for review or merge only when every CI check on its head is green, the change has been QA'd in a running Krema session, and review feedback is resolved.
 - QA means exercising the changed behavior in a real KWin Wayland session (for example, maximize a window to check space reservation) and observing the result. Use `kwin-mcp` when the check needs automation. Passing unit tests or reading the code is not QA; never report a feature as working without having observed it.
 - Fix E2E and CI failures the PR causes or exposes in that same PR. Do not merge with known E2E breakage or defer it to a follow-up.
 - Reproduce and iterate on E2E failures locally with `tests/appium/run-e2e.sh` (Docker) until they pass; do not use repeated CI pushes as the debug loop.
@@ -37,9 +37,7 @@ Rules that apply to every agent working on this repository, regardless of harnes
 
 ## Branding and Media Assets
 
-- `branding/README.md` is the brand kit. Read it before creating or editing logos, social cards, screenshots, clips, or any promotional or website media.
-- Keep every promotional asset under `branding/`; prefer SVG masters and regenerate exports with the kit's generators instead of editing outputs.
-- Use the palette tokens in `branding/palette/` (shared with `website/css/site.css`) and the kit's capture wallpaper (`branding/wallpaper/`) for screenshots and clips so they match the site; never reuse the old brand palette. Before recording a full set of clips with a new background, show the user the background and get approval.
+- `branding/README.md` is the brand kit and the single home of promotional assets. Read it before creating or editing logos, social cards, screenshots, clips, or any promotional or website media, and follow its palette, wallpaper, and regeneration rules. Never reuse the old brand palette.
 
 ## Roadmap
 

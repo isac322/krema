@@ -139,7 +139,7 @@ In Selected monitors mode, Toggle Dock and app-number shortcuts target the selec
 | openSUSE Tumbleweed | Rolling | x86_64, aarch64 |
 | openSUSE Slowroll | Rolling | x86_64 |
 | openSUSE Leap | 16.0 | x86_64, aarch64 |
-| Ubuntu | 25.04, 25.10, 26.04 | x86_64, aarch64 |
+| Ubuntu | 25.04, 25.10, 26.04, 26.10 | x86_64, aarch64 |
 | Debian | 13 (Trixie) | x86_64, aarch64 |
 
 <details>
@@ -191,7 +191,7 @@ sudo apt update
 sudo apt install krema
 ```
 
-Alternatively, use the [OBS repository](https://download.opensuse.org/repositories/home:/isac322/) for Ubuntu 25.04/26.04.
+Alternatively, use the [OBS repository](https://download.opensuse.org/repositories/home:/isac322/) for Ubuntu 25.04, 25.10, 26.04, or 26.10.
 </details>
 
 <details>

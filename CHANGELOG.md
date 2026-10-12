@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
+
 ## [0.12.0] - 2026-10-12
 
 Krema v0.12.0 lets you set the gap between the floating dock and the screen edge in this lightweight KDE Plasma 6 dock for Wayland, adds each app's own .desktop actions such as Firefox's "New Private Window" to the right-click menu, and keeps a magnified icon magnified while its context menu is open.

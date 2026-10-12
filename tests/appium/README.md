@@ -166,7 +166,7 @@ source-built krema. Four workflows are involved:
   desktop-entry tests) except the `e2e` label, in parallel with
   `-j$(nproc)`.
 * `.github/workflows/distro-e2e.yml`: runs this suite against the packaged
-  krema on each of the 12 distro targets (`tests/distro/README.md`), on
+  krema on each of the 13 distro targets (`tests/distro/README.md`), on
   `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`;
   GitHub's Azure kernel ships no vgem, so the module for the runner kernel
   comes from ghcr.io, or is built in the job on a kernel ci-images.yml has

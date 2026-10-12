@@ -8,4 +8,5 @@ description: "Apply when adding or editing GitHub Actions workflows under .githu
 - When bumping a major version, read its release notes for breaking changes and adapt the workflow inputs or scripts.
 - When touching any workflow, bump outdated actions in all workflows in the same change.
 - Least privilege: top-level `permissions: {}`, grant per job only what it needs, and use `persist-credentials: false` on checkout unless the job pushes.
+- Check out with `lfs: false` unless the job ships Git LFS assets (`branding/`, `website/` binaries); today only `pages.yml` sets `lfs: true`. New binary marketing or website assets go through LFS per `.gitattributes`; build inputs such as `src/icons/*.png` stay out of LFS.
 - Pass `${{ }}` expressions into shell steps through `env:`, not inline in `run:` scripts.

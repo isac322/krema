@@ -12,7 +12,8 @@
 struct wl_pointer;
 struct wl_surface;
 
-namespace krema {
+namespace krema
+{
 
 /**
  * Authoritative Wayland pointer focus for one window.
@@ -30,42 +31,41 @@ namespace krema {
  * they change whether the pointer is on the window. Without a Wayland seat or
  * pointer it reports the pointer as outside and never emits.
  */
-class PointerFocusTracker : public QObject {
-  Q_OBJECT
+class PointerFocusTracker : public QObject
+{
+    Q_OBJECT
 
 public:
-  explicit PointerFocusTracker(QWindow *window, QObject *parent = nullptr);
-  ~PointerFocusTracker() override;
+    explicit PointerFocusTracker(QWindow *window, QObject *parent = nullptr);
+    ~PointerFocusTracker() override;
 
-  PointerFocusTracker(const PointerFocusTracker &) = delete;
-  PointerFocusTracker &operator=(const PointerFocusTracker &) = delete;
+    PointerFocusTracker(const PointerFocusTracker &) = delete;
+    PointerFocusTracker &operator=(const PointerFocusTracker &) = delete;
 
-  /// True when the compositor's pointer focus is the window's current surface.
-  [[nodiscard]] bool isPointerInside();
+    /// True when the compositor's pointer focus is the window's current surface.
+    [[nodiscard]] bool isPointerInside();
 
 Q_SIGNALS:
-  /// Emitted when a compositor enter/leave changes isPointerInside().
-  void pointerInsideChanged();
+    /// Emitted when a compositor enter/leave changes isPointerInside().
+    void pointerInsideChanged();
 
 private:
-  /// Create the wl_pointer once Qt's seat has the pointer capability.
-  void ensurePointer();
+    /// Create the wl_pointer once Qt's seat has the pointer capability.
+    void ensurePointer();
 
-  /// Store the new focus and emit pointerInsideChanged() if the result of
-  /// isPointerInside() changed.
-  void setFocusedSurface(wl_surface *surface);
+    /// Store the new focus and emit pointerInsideChanged() if the result of
+    /// isPointerInside() changed.
+    void setFocusedSurface(wl_surface *surface);
 
-  static void handleEnter(void *data, wl_pointer *pointer, uint32_t serial,
-                          wl_surface *surface, int32_t x, int32_t y);
-  static void handleLeave(void *data, wl_pointer *pointer, uint32_t serial,
-                          wl_surface *surface);
+    static void handleEnter(void *data, wl_pointer *pointer, uint32_t serial, wl_surface *surface, int32_t x, int32_t y);
+    static void handleLeave(void *data, wl_pointer *pointer, uint32_t serial, wl_surface *surface);
 
-  QPointer<QWindow> m_window;
-  wl_pointer *m_pointer = nullptr;
-  // Compared by address only; never dereferenced (it may be stale after
-  // the window's surface is recreated).
-  wl_surface *m_focusedSurface = nullptr;
-  bool m_lastInside = false;
+    QPointer<QWindow> m_window;
+    wl_pointer *m_pointer = nullptr;
+    // Compared by address only; never dereferenced (it may be stale after
+    // the window's surface is recreated).
+    wl_surface *m_focusedSurface = nullptr;
+    bool m_lastInside = false;
 };
 
 } // namespace krema

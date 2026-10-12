@@ -110,10 +110,10 @@ POINTER_PARK = (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2)
 def _pointer_capability() -> Iterator[None]:
     """Keep KWin's seat pointer capability for the whole session (see
     krema_e2e.input.hold_pointer_capability)."""
-    proc = inp.hold_pointer_capability(POINTER_PARK)
+    inp.hold_pointer_capability(POINTER_PARK)
     yield
-    proc.terminate()
-    proc.wait(5)
+    # Also ends a keep-alive a test started after drop_pointer_capability().
+    inp.release_pointer_capability()
 
 
 @pytest.fixture

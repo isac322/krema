@@ -699,7 +699,7 @@ works too, e.g. `org.kde.kwrite` to pose as KWrite (kwrite and kfind
 | `type_text(text)` | Character by character. |
 | `pointer_position()`, `run_actions(action_sets)`, `key_value(name)` | Last position set by this module, raw W3C action chains, and the name-to-W3C key map. |
 | `background_actions(action_sets)` | Context manager: runs a raw chain in the background while the body runs; leaving the body ends the chain's pause marked `"interruptible": True`, then waits for the chain to finish. |
-| `drop_pointer_capability()`, `hold_pointer_capability(park)` | Remove every fake-input device so KWin drops the seat's pointer capability (as when the last mouse is unplugged); bring it back with a keep-alive that then stays for the session. |
+| `drop_pointer_capability()`, `hold_pointer_capability(park)`, `release_pointer_capability()` | Remove every fake-input device so KWin drops the seat's pointer capability (as when the last mouse is unplugged); bring it back with a keep-alive, which the session fixture ends with `release_pointer_capability()` at session end. |
 
 The image patches upstream inputsynth (`tools/inputsynth-fixes.patch`) so that
 every `pointerMove` is absolute, which multi-move chains and drags need, so

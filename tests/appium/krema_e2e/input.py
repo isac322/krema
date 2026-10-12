@@ -317,9 +317,11 @@ _capability_holds: list[subprocess.Popen] = []
 def release_pointer_capability() -> None:
     """Terminate every keep-alive started by :func:`hold_pointer_capability`."""
     while _capability_holds:
-        proc = _capability_holds.pop()
+        # Unregister only once reaped, so an interrupted release can be retried.
+        proc = _capability_holds[-1]
         proc.terminate()
         proc.wait(5)
+        _capability_holds.pop()
 
 
 def drop_pointer_capability() -> None:

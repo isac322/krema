@@ -683,6 +683,7 @@ def test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse(
             while time.monotonic() < deadline:
                 widths.append(painted_rect(Rect.of(krema.wait_for_item(target)), rest[target]).width)
                 time.sleep(0.05)
+            assert len(widths) >= 3, f"too few samples after the {attempt} menu closed: {widths}"
             assert all(abs(w - zoomed) <= 2 for w in widths), f"{attempt} menu closed over the item released the zoom: {zoomed}px -> {widths}"
             krema.move_away(close_preview=False)
             wait_stable(lambda: painted_rect(Rect.of(krema.wait_for_item(target)), rest[target]).width)

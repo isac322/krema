@@ -12,7 +12,7 @@ import signal
 import subprocess
 import urllib.request
 from pathlib import Path
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Mapping, NamedTuple, Sequence
 
 from appium import webdriver
 from appium.options.common.base import AppiumOptions
@@ -480,11 +480,12 @@ class DescriptionChanges:
         self._registry.deregisterEventListener(self._on_event, self.EVENT)
 
 
-def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool = False) -> list[str]:
+def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool = False, desktop_actions: Sequence[str] = ()) -> list[str]:
     """Enabled entries of a dock item's context menu in order (the disabled
     app-name header and separators are skipped by keyboard navigation);
-    mirrors src/models/dockcontextmenu.cpp."""
-    entries = ["Unpin from Dock" if pinned else "Pin to Dock", "New Instance"]
+    mirrors src/models/dockcontextmenu.cpp. ``desktop_actions`` are the
+    visible desktop-file actions of the app, in their Actions= order."""
+    entries = [*desktop_actions, "Unpin from Dock" if pinned else "Pin to Dock", "New Instance"]
     if has_notifications:
         entries.append("Clear Notifications")
     if is_window:

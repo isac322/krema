@@ -19,6 +19,8 @@
 #include <QScreen>
 #include <QSet>
 
+#include <utility>
+
 Q_LOGGING_CATEGORY(lcModel, "krema.model")
 
 namespace krema
@@ -35,6 +37,17 @@ bool isPinnedTask(const TaskManager::TasksModel &model, const QModelIndex &index
     }
     const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
     return url.isValid() && model.launcherPosition(url) != -1;
+}
+
+QStringList windowIdStrings(const QModelIndex &index)
+{
+    const QVariantList windowIds = index.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+    QStringList ids;
+    ids.reserve(windowIds.size());
+    for (const QVariant &windowId : windowIds) {
+        ids.append(windowId.toString());
+    }
+    return ids;
 }
 
 QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &icon)
@@ -137,6 +150,17 @@ DockModel::DockModel(QObject *parent)
         m_tasksModel->setActivity(m_activityInfo->currentActivity());
     });
 
+    // Launch in place: a task started for a visible pinned launcher replaces
+    // that launcher at its position. libtaskmanager stopped doing this for
+    // manual sorting when it moved launcher hiding into TaskFilterProxyModel
+    // (plasma-workspace 4a513cce1, shipped in Plasma 6.8 as c2c859523), so
+    // the task is appended at the end instead. The deferred pass below
+    // compares the model with the order it last settled and moves such a
+    // task back into its launcher's slot.
+    connect(m_tasksModel.get(), &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
+        m_settledRows.clear();
+    });
+
     // Defer sorting until the source model has finished its current change.
     // Our own moves emit layout signals synchronously; ignore those while
     // reconciling so they cannot recursively queue another sorting pass.
@@ -211,11 +235,20 @@ int DockModel::pinnedTaskCount() const
     return m_pinnedTaskCount;
 }
 
+bool DockModel::moveTask(int fromIndex, int toIndex)
+{
+    if (!m_tasksModel->move(fromIndex, toIndex)) {
+        return false;
+    }
+    m_tasksModel->syncLaunchers();
+    // The user's order is the new settled order: a launcher-slot repair still
+    // pending from before the move must not undo it.
+    snapshotSettledRows();
+    return true;
+}
+
 void DockModel::scheduleTaskPartition()
 {
-    if (!m_separateLaunchers && m_pinnedTaskCount == 0) {
-        return;
-    }
     if (m_partitionPending || m_reconcilingPartition) {
         return;
     }
@@ -231,42 +264,171 @@ void DockModel::scheduleTaskPartition()
 
 void DockModel::reconcileTaskPartition()
 {
-    if (!m_separateLaunchers) {
-        if (m_pinnedTaskCount != 0) {
-            m_pinnedTaskCount = 0;
-            Q_EMIT pinnedTaskCountChanged();
-        }
-        return;
-    }
-
     m_reconcilingPartition = true;
+    bool moved = placeStartedTasksInLauncherSlots();
+
     int pinnedCount = 0;
-    bool moved = false;
-    bool moveFailed = false;
-    const int count = m_tasksModel->rowCount();
-    // Insertion into the next pinned slot preserves both zones' relative
-    // order. Classify each row once; already partitioned rows need no move.
-    for (int row = 0; row < count; ++row) {
-        if (!isPinnedTask(*m_tasksModel, m_tasksModel->index(row, 0))) {
-            continue;
-        }
-        if (row != pinnedCount && !moveFailed) {
-            if (m_tasksModel->move(row, pinnedCount)) {
-                moved = true;
-            } else {
-                qCWarning(lcModel) << "Could not move pinned task" << row << "to" << pinnedCount;
-                moveFailed = true;
+    if (m_separateLaunchers) {
+        bool moveFailed = false;
+        const int count = m_tasksModel->rowCount();
+        // Insertion into the next pinned slot preserves both zones' relative
+        // order. Classify each row once; already partitioned rows need no move.
+        for (int row = 0; row < count; ++row) {
+            if (!isPinnedTask(*m_tasksModel, m_tasksModel->index(row, 0))) {
+                continue;
             }
+            if (row != pinnedCount && !moveFailed) {
+                if (m_tasksModel->move(row, pinnedCount)) {
+                    moved = true;
+                } else {
+                    qCWarning(lcModel) << "Could not move pinned task" << row << "to" << pinnedCount;
+                    moveFailed = true;
+                }
+            }
+            ++pinnedCount;
         }
-        ++pinnedCount;
     }
     if (moved) {
         m_tasksModel->syncLaunchers();
     }
+    snapshotSettledRows();
     m_reconcilingPartition = false;
     if (m_pinnedTaskCount != pinnedCount) {
         m_pinnedTaskCount = pinnedCount;
         Q_EMIT pinnedTaskCountChanged();
+    }
+}
+
+bool DockModel::placeStartedTasksInLauncherSlots()
+{
+    // Resolve every launcher URL against the launcher list once per pass.
+    QList<int> settledPositions;
+    settledPositions.reserve(m_settledRows.size());
+    for (const SettledRow &settled : std::as_const(m_settledRows)) {
+        settledPositions.append(settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1);
+    }
+
+    // Settled launchers without a task of their own may since have given way
+    // to one. In settled order, a replaced predecessor is already back in its
+    // slot when a later launcher's task is placed after it.
+    QList<qsizetype> vacated;
+    for (qsizetype settledIndex = 0; settledIndex < m_settledRows.size(); ++settledIndex) {
+        const int position = settledPositions.at(settledIndex);
+        if (!m_settledRows.at(settledIndex).isLauncher || position == -1) {
+            continue;
+        }
+        bool hadTask = false;
+        for (qsizetype other = 0; other < m_settledRows.size() && !hadTask; ++other) {
+            hadTask = !m_settledRows.at(other).isLauncher && settledPositions.at(other) == position;
+        }
+        if (!hadTask) {
+            vacated.append(settledIndex);
+        }
+    }
+    if (vacated.isEmpty()) {
+        return false;
+    }
+
+    const int count = m_tasksModel->rowCount();
+    QList<CurrentRow> rows;
+    rows.reserve(count);
+    for (int row = 0; row < count; ++row) {
+        const QModelIndex index = m_tasksModel->index(row, 0);
+        const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        CurrentRow current;
+        current.launcherPosition = url.isValid() ? m_tasksModel->launcherPosition(url) : -1;
+        current.isLauncher = index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
+        current.windowIds = windowIdStrings(index);
+        current.appId = index.data(TaskManager::AbstractTasksModel::AppId).toString();
+        rows.append(current);
+    }
+
+    bool moved = false;
+    for (const qsizetype settledIndex : std::as_const(vacated)) {
+        const int position = settledPositions.at(settledIndex);
+        int taskRow = -1;
+        bool launcherVisible = false;
+        for (int row = 0; row < count; ++row) {
+            if (rows.at(row).launcherPosition != position) {
+                continue;
+            }
+            if (rows.at(row).isLauncher) {
+                launcherVisible = true;
+            } else if (taskRow < 0) {
+                taskRow = row;
+            }
+        }
+        if (taskRow < 0 || launcherVisible) {
+            continue;
+        }
+
+        // Right after the nearest settled predecessor still in the dock.
+        int target = 0;
+        for (qsizetype previous = settledIndex - 1; previous >= 0; --previous) {
+            const int anchorRow = findRow(rows, m_settledRows.at(previous), settledPositions.at(previous), taskRow);
+            if (anchorRow >= 0) {
+                target = anchorRow < taskRow ? anchorRow + 1 : anchorRow;
+                break;
+            }
+        }
+        if (target == taskRow) {
+            continue;
+        }
+        if (!m_tasksModel->move(taskRow, target)) {
+            qCWarning(lcModel) << "Could not move started task" << taskRow << "into its launcher slot" << target;
+            continue;
+        }
+        // Keep the cached rows in model order.
+        if (target < taskRow) {
+            std::rotate(rows.begin() + target, rows.begin() + taskRow, rows.begin() + taskRow + 1);
+        } else {
+            std::rotate(rows.begin() + taskRow, rows.begin() + taskRow + 1, rows.begin() + target + 1);
+        }
+        moved = true;
+    }
+    return moved;
+}
+
+int DockModel::findRow(const QList<CurrentRow> &rows, const SettledRow &settled, int settledLauncherPosition, int excludedRow)
+{
+    for (int row = 0; row < rows.size(); ++row) {
+        if (row == excludedRow) {
+            continue;
+        }
+        const CurrentRow &current = rows.at(row);
+        if (settled.launcherUrl.isValid()) {
+            if (settledLauncherPosition != -1 && current.launcherPosition == settledLauncherPosition) {
+                return row;
+            }
+        } else if (!settled.windowIds.isEmpty()) {
+            if (std::any_of(current.windowIds.cbegin(), current.windowIds.cend(), [&](const QString &id) {
+                    return settled.windowIds.contains(id);
+                })) {
+                return row;
+            }
+        } else if (!settled.appId.isEmpty() && !current.isLauncher && current.appId == settled.appId) {
+            return row;
+        }
+    }
+    return -1;
+}
+
+void DockModel::snapshotSettledRows()
+{
+    const int count = m_tasksModel->rowCount();
+    m_settledRows.clear();
+    m_settledRows.reserve(count);
+    for (int row = 0; row < count; ++row) {
+        const QModelIndex index = m_tasksModel->index(row, 0);
+        SettledRow settled;
+        settled.isLauncher = index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
+        if (isPinnedTask(*m_tasksModel, index)) {
+            settled.launcherUrl = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        } else {
+            settled.windowIds = windowIdStrings(index);
+            settled.appId = index.data(TaskManager::AbstractTasksModel::AppId).toString();
+        }
+        m_settledRows.append(settled);
     }
 }
 

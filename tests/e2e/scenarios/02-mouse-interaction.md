@@ -183,10 +183,11 @@ shifted item's zoomed bounding box as a target.
 - Running apps show indicator dot(s) below icon
 - Pinned-only apps have no indicator dots
 - State updates within 1s of app launch/close
+- The launched app's item stays at the pinned icon's position instead of moving to the end of the dock
 
 **Verification:** screenshot comparison (dots appear/disappear)
 
-**Automated:** tests/appium/test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state
+**Automated:** tests/appium/test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state; `tests/kwin/test_launch_in_place.cpp` (ctest `krema_launch_in_place_tests`) covers the in-place position for first, middle and last pinned launchers with separation off and on
 
 ---
 

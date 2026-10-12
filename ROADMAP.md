@@ -33,6 +33,7 @@ Right-click menu for basic operations, and settings saved to file for persistenc
   - [x] Close (all windows)
   - [x] Launch new instance
   - [x] App name + separator display
+  - [x] App's .desktop file actions (e.g. "New Private Window")
 - [x] KWin Wayland protocol access (.desktop file + X-KDE-Wayland-Interfaces)
 - [x] Mouse wheel: cycle between windows of the same app on hover (single window = focus)
 - [x] KConfig-based settings management
@@ -202,7 +203,7 @@ Extensible widget architecture.
 | UI Framework | Qt 6.8+ / Qt Quick |
 | KDE Frameworks | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, DBusAddons, GlobalAccel, IconThemes) |
 | KDE Plasma Libraries | LibTaskManager, LibNotificationManager, LayerShellQt, KPipeWire |
-| Additional KDE Libraries | Kirigami, Kirigami Addons, KColorScheme, KService, KCrash, KXmlGui |
+| Additional KDE Libraries | Kirigami, Kirigami Addons, KColorScheme, KService, KIO, KJobWidgets, KCrash, KXmlGui |
 | Rendering | QRhi (automatic Vulkan/OpenGL selection) |
 | Build System | CMake + ECM + Ninja |
 | Packaging | PKGBUILD (AUR), OBS (RPM/DEB) |

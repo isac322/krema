@@ -1,0 +1,198 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+#
+# Pull request CI with one always-present result, `CI gate`, which the
+# master ruleset requires. Path filters on a pull_request trigger skip the
+# whole workflow, so a check behind one never reports on unrelated pull
+# requests and cannot be required. This workflow starts on every pull
+# request instead, decides from the changed files which suites apply, and
+# calls only those (e2e.yml, distro-e2e.yml) as reusable workflows.
+# `CI gate` succeeds when every applicable suite succeeded; a suite skipped
+# as not applicable counts as passed, a failed or cancelled one fails it.
+#
+# Pushes to master, schedules and manual dispatch still start e2e.yml and
+# distro-e2e.yml directly, unchanged.
+#
+# Path rules use the semantics of `on.<event>.paths`: patterns are applied
+# in order and the last one matching a file decides (a `!` pattern excludes
+# it); `*` stays within one path segment, `**` crosses segments. The
+# reasoning behind each list is in the header of the workflow it starts.
+# BUILD_PATHS must stay identical to `on.push.paths` in e2e.yml, plus this
+# file (a change here re-runs every suite).
+#
+# Security: plain pull_request (no pull_request_target), so fork pull
+# requests get a read-only token and no secrets. The changed-file list comes
+# from the REST API; nothing from the pull request is checked out or run
+# before the called workflows, which already handle untrusted code.
+
+name: CI
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.match.outputs.build }}
+      distro: ${{ steps.match.outputs.distro }}
+    steps:
+      - name: Match changed files
+        id: match
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          CHANGED_COUNT: ${{ github.event.pull_request.changed_files }}
+          # Build & tests (e2e.yml): its on.push.paths, plus this file.
+          BUILD_PATHS: |
+            src/**
+            CMakeLists.txt
+            tests/**
+            !tests/appium/**
+            tests/appium/Dockerfile
+            !tests/distro/**
+            tests/distro/image-ref.sh
+            tests/distro/build-ci-image.sh
+            !tests/e2e/**
+            !**/*.md
+            .github/workflows/e2e.yml
+            .github/scripts/junit-summary.py
+            .github/workflows/ci.yml
+          # Distro E2E (distro-e2e.yml).
+          DISTRO_PATHS: |
+            src/**
+            packaging/**
+            CMakeLists.txt
+            LICENSES/**
+            tests/appium/**
+            !tests/appium/Dockerfile
+            !tests/appium/CMakeLists.txt
+            tests/distro/**
+            !**/*.md
+            .github/workflows/distro-e2e.yml
+            .github/scripts/junit-summary.py
+            .github/workflows/ci.yml
+        run: |
+          set -euo pipefail
+          # The files endpoint lists at most 3000 files; beyond that, run all.
+          if (( CHANGED_COUNT >= 3000 )); then
+            echo "[ci] $CHANGED_COUNT changed files: running every suite"
+            printf 'build=true\ndistro=true\n' | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Renames count with both their old and new path, as for `paths`.
+          # One JSON string per line: a filename may hold any character,
+          # including whitespace and newlines.
+          gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
+            --jq '.[] | (.filename, (.previous_filename // empty)) | @json' >"$RUNNER_TEMP/changed.jsonl"
+          python3 - "$RUNNER_TEMP/changed.jsonl" <<'PY' | tee -a "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+          import sys
+
+          def compile_glob(pattern):
+              out, i = [], 0
+              while i < len(pattern):
+                  if pattern.startswith("**/", i):
+                      out.append("(?:.*/)?")
+                      i += 3
+                  elif pattern.startswith("**", i):
+                      out.append(".*")
+                      i += 2
+                  elif pattern[i] == "*":
+                      out.append("[^/]*")
+                      i += 1
+                  elif pattern[i] == "?":
+                      out.append("[^/]")
+                      i += 1
+                  else:
+                      out.append(re.escape(pattern[i]))
+                      i += 1
+              # DOTALL: `**` must also cross a newline inside a filename.
+              return re.compile("".join(out), re.DOTALL)
+
+          def rules(name):
+              result = []
+              for line in os.environ[name].splitlines():
+                  line = line.strip()
+                  if line:
+                      negated = line.startswith("!")
+                      result.append((negated, compile_glob(line.lstrip("!"))))
+              return result
+
+          def matches(path, compiled):
+              selected = False
+              for negated, regex in compiled:
+                  if regex.fullmatch(path):
+                      selected = not negated
+              return selected
+
+          # A row that is not a JSON string fails the step, and so the gate.
+          with open(sys.argv[1]) as handle:
+              files = [json.loads(line) for line in handle.read().split("\n") if line]
+          if not all(isinstance(f, str) for f in files):
+              raise SystemExit("[ci] changed-file list holds a non-string row")
+          print(f"[ci] {len(files)} changed paths", file=sys.stderr)
+          for output, env in (("build", "BUILD_PATHS"), ("distro", "DISTRO_PATHS")):
+              compiled = rules(env)
+              hits = [f for f in files if matches(f, compiled)]
+              print(f"[ci] {output}: {len(hits)} matching, e.g. {hits[:5]}", file=sys.stderr)
+              print(f"{output}={'true' if hits else 'false'}")
+          PY
+
+  build-and-test:
+    name: Build & tests
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/e2e.yml
+
+  distro-e2e:
+    name: Distro E2E
+    needs: changes
+    if: needs.changes.outputs.distro == 'true'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/distro-e2e.yml
+
+  gate:
+    name: CI gate
+    needs: [changes, build-and-test, distro-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check suite results
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build-and-test.result }}
+          DISTRO: ${{ needs.distro-e2e.result }}
+        run: |
+          set -euo pipefail
+          echo "Detect changes: $CHANGES; Build & tests: $BUILD; Distro E2E: $DISTRO"
+          # Change detection itself must pass: its failure skips every suite.
+          [[ $CHANGES == success ]] || { echo "::error::Detect changes: $CHANGES"; exit 1; }
+          rc=0
+          for result in "Build & tests=$BUILD" "Distro E2E=$DISTRO"; do
+            case "${result#*=}" in
+              success | skipped) ;;
+              *) echo "::error::${result%%=*}: ${result#*=}"; rc=1 ;;
+            esac
+          done
+          exit $rc

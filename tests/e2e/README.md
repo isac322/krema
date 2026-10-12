@@ -175,6 +175,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
 | `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
 | `src/models/dockcontextmenu.*` | 04 |
+| `src/models/desktopactions.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04 |
 | `src/models/launcherentrytracker.*` | 01 |
 | `src/qml/settings/SettingsPage.qml`, `DesktopStage.qml`, `MiniDock.qml`, `ChoiceCard.qml`, `SliderDelegate.qml`, `ColorSwatchButton.qml` | 06, 07 |

@@ -48,6 +48,10 @@ public:
     void setSeparateLaunchers(bool separate);
     [[nodiscard]] int pinnedTaskCount() const;
 
+    /// Move the task at @p fromIndex to @p toIndex as an explicit user
+    /// reorder and save the new launcher order. Returns true on success.
+    bool moveTask(int fromIndex, int toIndex);
+
     /// Virtual desktop display mode: 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     [[nodiscard]] int virtualDesktopMode() const;
     void setVirtualDesktopMode(int mode);
@@ -93,14 +97,36 @@ Q_SIGNALS:
     void currentDesktopChanged();
 
 private:
+    /// Identity of a row in the last settled dock order. A pinned row is
+    /// matched by launcher (its launcher or task row), any other row by a
+    /// shared window ID, or by AppId when it has no window.
+    struct SettledRow {
+        QUrl launcherUrl;
+        bool isLauncher = false;
+        QStringList windowIds;
+        QString appId;
+    };
+
+    /// A current row, resolved once per launcher-slot pass.
+    struct CurrentRow {
+        int launcherPosition = -1;
+        bool isLauncher = false;
+        QStringList windowIds;
+        QString appId;
+    };
+
     void scheduleTaskPartition();
     void reconcileTaskPartition();
+    bool placeStartedTasksInLauncherSlots();
+    [[nodiscard]] static int findRow(const QList<CurrentRow> &rows, const SettledRow &settled, int settledLauncherPosition, int excludedRow);
+    void snapshotSettledRows();
 
     bool m_separateLaunchers = false;
     bool m_partitionPending = false;
     bool m_reconcilingPartition = false;
     int m_pinnedTaskCount = 0;
     int m_virtualDesktopMode = 0;
+    QList<SettledRow> m_settledRows;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
     std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
     std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;

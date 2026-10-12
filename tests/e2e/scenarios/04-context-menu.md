@@ -8,6 +8,7 @@
 - ctx-quit: Quit Krema from menu
 - ctx-app-name: App name shown as header in menu
 - ctx-task-zones: Pin and unpin live tasks between zones without duplicate dock items
+- ctx-desktop-actions: The app's .desktop file actions (e.g. "New Private Window") launch from the menu
 - ctx-hover-hold: Hovered item keeps its zoom and its window preview stays closed while the menu is open
 
 ## Affected Files
@@ -15,6 +16,8 @@
 - src/models/dockcontextmenu.cpp
 - src/models/dockactions.h
 - src/models/dockactions.cpp
+- src/models/desktopactions.h
+- src/models/desktopactions.cpp
 - src/qml/main.qml
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
@@ -48,8 +51,9 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 **Expected:**
 - Native KDE context menu appears (QMenu / Breeze styled)
 - Menu header shows app name
-- Menu items (top to bottom): AppName, Pin/Unpin, New Instance, Close,
-  separator, Settings..., About Krema, Quit
+- Menu items (top to bottom): AppName, [the app's .desktop actions, then a
+  separator — only when the app declares visible actions, see CTX-008],
+  Pin/Unpin, New Instance, Close, separator, Settings..., About Krema, Quit
 
 **Menu item positions** (approximate y-offsets from menu top):
 - AppName: +0px
@@ -188,7 +192,42 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 
 ---
 
-## TC CTX-008: Menu Holds the Hovered Item's Zoom and Preview
+## TC CTX-008: Desktop File Actions
+
+**Precondition:** An app whose .desktop file declares actions
+(`Actions=new-draft;hidden;_SEPARATOR_;open-inbox;`, where `hidden` has
+`NoDisplay=true`, `new-draft` has an icon and `open-inbox` has none, and the
+`[Desktop Action …]` groups are written in another order), installed in
+`~/.local/share/applications` before Krema starts. Each action launches the
+app with a distinct window title.
+**Steps:**
+1. Pin the app (kremarc `PinnedLaunchers`) with no window running
+2. Right-click its dock item — screenshot the menu
+3. Choose "Open Inbox"
+4. Check the window list — one new window of the app, titled by that action
+5. Right-click the now-running item and choose "Unpin from Dock"
+6. Unpinned, open two windows of the app (one grouped item), right-click the
+   item and choose "New Draft"
+7. Check the window list — one more window, titled by that action; the item
+   reports 3 windows
+
+**Expected:**
+- Below the app-name header: "New Draft" (with its icon), a separator,
+  "Open Inbox", then a separator before Pin/Unpin; the existing entries keep
+  their order below
+- Labels are the localized `Name` of each action; hidden (`NoDisplay`)
+  actions are not shown; the order is the `Actions=` key's
+- Choosing an action launches exactly that action's command (window title),
+  for a pinned launcher, a running window and a grouped app alike
+- Pin/Unpin and the other existing entries keep working after the actions
+- An app without actions (the CTX-001..006 fixture) shows the unchanged menu
+- A failed launch is reported as a KDE notification; Krema keeps running
+
+**Verification:** window list (new window's app id and title), kremarc
+(pinned membership), AT-SPI (item name and window count), screenshot (labels and icons)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx008_pinned_launcher_launches_the_chosen_desktop_action, tests/appium/test_04_context_menu.py::test_ctx008_grouped_windows_launch_the_chosen_desktop_action (order and NoDisplay are verified by effect: a wrong position launches a window with another title; labels, icons and the launch-error notification are screenshot/manual only). Resolution (Actions= order, NoDisplay, separators, localized names, applications:/local/absolute-path desktop files) is unit-tested in tests/unit/test_desktop_actions.cpp.
+
+## TC CTX-009: Menu Holds the Hovered Item's Zoom and Preview
 
 **Precondition:** `MaxZoomFactor=1.6`, window preview enabled with
 `PreviewHoverDelay=300`, seven pinned launchers; the middle one has an open
@@ -214,4 +253,4 @@ window, so it is a task with a window preview.
 
 **Verification:** KWin (menu window), AT-SPI (preview `showing`, painted item
 widths through `painted_rect`), screenshot (menu entry highlight)
-**Automated:** tests/appium/test_04_context_menu.py::test_ctx008_zoom_and_hover_hold_while_menu_is_open, tests/appium/test_04_context_menu.py::test_ctx008_zoom_releases_when_menu_closes_away_from_the_dock (skip without ScreenShot2 capture; the tooltip is not asserted)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open, tests/appium/test_04_context_menu.py::test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock (skip without ScreenShot2 capture; the tooltip is not asserted)

@@ -26,17 +26,23 @@
 # cache) run this job on the default branch to seed
 # the cache every pull request restores from.
 #
-# Path filter: the build is src/ and CMakeLists.txt, BUILD_TESTING=ON adds
+# Path filter (pushes here; pull requests through ci.yml's BUILD_PATHS,
+# which must match it): the build is src/ and CMakeLists.txt, BUILD_TESTING=ON adds
 # tests/ (tests/CMakeLists.txt), which adds tests/appium only with
 # KREMA_E2E_TESTS=ON (off here). Of tests/appium only the Dockerfile (the
 # image) is used; tests/distro contributes the two image scripts; tests/e2e
 # holds scenario docs. packaging/ is not built here.
+#
+# Pull requests run this workflow through ci.yml (workflow_call), whose
+# required `CI gate` check reports even when this suite does not apply.
 
 name: Build & tests
 
 on:
-  pull_request:
-    paths: &paths
+  workflow_call:
+  push:
+    branches: [master]
+    paths:
       - "src/**"
       - "CMakeLists.txt"
       - "tests/**"
@@ -49,9 +55,6 @@ on:
       - "!**/*.md"
       - ".github/workflows/e2e.yml"
       - ".github/scripts/junit-summary.py"
-  push:
-    branches: [master]
-    paths: *paths
   schedule:
     - cron: "37 5 * * *"
   workflow_dispatch:

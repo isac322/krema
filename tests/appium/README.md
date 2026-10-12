@@ -344,7 +344,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | VIS-003 | `test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach` | AT-SPI, KWin | pass |
 | VIS-004 | `test_07_visibility.py::test_vis004_dodge_windows_hides_while_a_window_overlaps_the_dock`, `test_vis004_dodge_windows_hides_for_an_inactive_overlapping_window` | AT-SPI, KWin | pass |
 | VIS-005 | `test_07_visibility.py::test_vis005_smart_hide_hides_only_for_the_active_overlapping_window` | AT-SPI, KWin | pass |
-| VIS-006 | `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible` | AT-SPI, KWin | pass |
+| VIS-006 | `test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible`, `test_07_visibility.py::test_vis006_keyboard_menu_over_preview_lets_the_dock_hide_again` (AutoHide and DodgeWindows; Menu key from the preview-hovered state) | AT-SPI, KWin | pass |
 | VIS-007 | `tests/kwin` ctest `krema_showdesktop_tests` (added on master) | KWin | pass (C++ KWin test, not this suite) |
 | MOUSE-010 | `test_02_mouse.py::test_mouse010_click_policies_observe_single_and_group_window_state` (six policy cases) | KWin, AT-SPI | pending |
 | MOUSE-011 | `test_02_mouse.py::test_mouse011_membership_change_reselects_single_and_group_actions` | KWin, AT-SPI | pending |
@@ -702,7 +702,8 @@ works too, e.g. `org.kde.kwrite` to pose as KWrite (kwrite and kfind
 
 The image patches upstream inputsynth (`tools/inputsynth-fixes.patch`) so that
 every `pointerMove` is absolute, which multi-move chains and drags need, so
-that W3C `Meta` sends Super, which KDE calls Meta, so that a pause marked
+that W3C `Meta` sends Super, which KDE calls Meta, so that U+E05E (unassigned
+in W3C) sends the Menu key (`key("Menu")`), so that a pause marked
 `"interruptible": true` can be ended early (the one in progress, or the
 next), and so that it has a persistent `--stdin` mode.
 

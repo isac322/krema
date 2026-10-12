@@ -787,6 +787,48 @@ Item {
             compare(DockVisibility.hovered, false)
         }
 
+        // The pointer rests on item 1's preview (the preview keeps the dock
+        // hovered), the Focus Dock shortcut starts keyboard navigation and
+        // the Menu key opens the menu, whose hold hides that preview.
+        function holdPreviewHoverUnderKeyboardMenu() {
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            hoverItem(its[1])
+            tryCompare(PreviewController, "visible", true)
+            mouseMove(stage, -1, -1) // onto the preview surface
+            compare(DockVisibility.hovered, true, "the preview no longer keeps the dock hovered")
+            DockVisibility.setKeyboardActive(true)
+            dock.startKeyboardNavigation()
+            keyClick(Qt.Key_Right)
+            let selected = dock.hoveredIndex
+            verify(selected >= 0, "keyboard navigation selected no item")
+            tryCompare(its[selected], "currentScale", DockSettings.maxZoomFactor)
+            openContextMenu()
+            return { dock: dock, its: its, selected: selected }
+        }
+
+        function test_keyboardMenuCloseWithPointerOffDockReleasesPreviewHover() {
+            let s = holdPreviewHoverUnderKeyboardMenu()
+
+            DockView.pointerInside = false
+            DockContextMenu.open = false
+            compare(DockVisibility.hovered, false, "stale preview hover would keep the dock from hiding")
+            verify(s.dock.keyboardNavigating)
+            compare(s.dock.hoveredIndex, s.selected)
+            compare(s.its[s.selected].currentScale, DockSettings.maxZoomFactor)
+        }
+
+        function test_keyboardMenuCloseWithPointerOnDockKeepsHover() {
+            let s = holdPreviewHoverUnderKeyboardMenu()
+
+            DockView.pointerInside = true
+            DockContextMenu.open = false
+            compare(DockVisibility.hovered, true)
+            verify(s.dock.keyboardNavigating)
+            compare(s.dock.hoveredIndex, s.selected)
+        }
+
         // QtWayland sends no enter when the popup closes, so after a resume
         // Qt still thinks the pointer is outside the dock. A real compositor
         // leave then reaches no onExited and must end hover via pointerInside.

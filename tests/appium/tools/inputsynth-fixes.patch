@@ -1,4 +1,4 @@
-inputsynth: absolute pointer moves, W3C Meta = Super, interruptible pauses,
+inputsynth: absolute pointer moves, W3C Meta = Super, a Menu key, interruptible pauses,
 a persistent --stdin mode, and flushed zero-duration mouse moves
 
 1. Upstream adds every mouse move to the previous *target* and stores the raw
@@ -10,7 +10,9 @@ a persistent --stdin mode, and flushed zero-duration mouse moves
    Meta_L keysym, which in the evdev keymap lives on <META> (keycode 205) at
    shift level, so "Meta+F5" is sent as Shift+<META>+F5 and never matches a
    Meta+F5 KGlobalAccel shortcut. Map it to Super_L (<LWIN>, KEY_LEFTMETA),
-   which is what KDE calls Meta.
+   which is what KDE calls Meta. W3C defines no Menu (context menu) key, so
+   the unassigned U+E05E sends XKB Menu (<MENU>, KEY_COMPOSE): Krema opens a
+   keyboard-selected item's context menu with it.
 3. A pause action with "interruptible": true ends early on request: the
    request ends the interruptible pause in progress, or the next one (other
    pauses ignore it). A mid-drag check holds the button in a pause of the
@@ -146,7 +148,7 @@ index 5e7dd9d..dec9f82 100644
          {QChar(u'\ue039'), XKB_KEY_F9},        {QChar(u'\ue002'), XKB_KEY_Help},
          {QChar(u'\ue011'), XKB_KEY_Home},      {QChar(u'\ue016'), XKB_KEY_Insert},
 -        {QChar(u'\ue008'), XKB_KEY_Shift_L},   {QChar(u'\ue03d'), XKB_KEY_Meta_L},
-+        {QChar(u'\ue008'), XKB_KEY_Shift_L},   {QChar(u'\ue03d'), XKB_KEY_Super_L},
++        {QChar(u'\ue008'), XKB_KEY_Shift_L},   {QChar(u'\ue03d'), XKB_KEY_Super_L},   {QChar(u'\ue05e'), XKB_KEY_Menu},
          {QChar(u'\ue024'), XKB_KEY_multiply},  {QChar(u'\ue000'), XKB_KEY_NoSymbol},
          {QChar(u'\ue01a'), XKB_KEY_KP_0},      {QChar(u'\ue01b'), XKB_KEY_KP_1},
          {QChar(u'\ue01c'), XKB_KEY_KP_2},      {QChar(u'\ue01d'), XKB_KEY_KP_3},

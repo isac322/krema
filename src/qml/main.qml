@@ -743,8 +743,18 @@ Item {
                 tooltipItem.show = false
                 return
             }
-            if (root.keyboardNavigating)
+            if (root.keyboardNavigating) {
+                // Keep the keyboard selection and its zoom. Only release the
+                // pointer hover a mouse-opened preview was keeping: the menu
+                // hid that preview while hover was held, so nothing else
+                // releases it and the dock could never auto-hide again.
+                if (!DockView.pointerInside) {
+                    root._pointerOnDock = false
+                    if (!PreviewController.visible)
+                        DockVisibility.setHovered(false)
+                }
                 return
+            }
             if (DockView.pointerInside) {
                 // Next real motion arrives as enter + move and resumes tracking.
                 // Until then, keep hover held and re-hit-test the last real

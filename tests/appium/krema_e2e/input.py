@@ -11,7 +11,8 @@ All coordinates are **global screen pixels** (use ``Krema.to_screen()`` /
 ``Krema.item_center()`` to convert AT-SPI rects).
 The inputsynth in the image is patched (tools/inputsynth-fixes.patch): every
 ``pointerMove`` is absolute, so several moves can share one chain (needed
-for drags), and the W3C Meta key is Super (KDE's Meta).
+for drags), the W3C Meta key is Super (KDE's Meta), and U+E05E, which W3C
+leaves unassigned, is the Menu (context menu) key: ``key("Menu")``.
 
 All chains go to one long-lived ``inputsynth --stdin`` per session (see
 :class:`_Inputsynth`), so they share one fake-input device, and a chain costs
@@ -72,6 +73,8 @@ _KEY_ALIASES = {
     "pageup": Keys.PAGE_UP,
     "pagedown": Keys.PAGE_DOWN,
     **{f"f{i}": getattr(Keys, f"F{i}") for i in range(1, 13)},
+    # Not a W3C key: tools/inputsynth-fixes.patch maps U+E05E to XKB Menu.
+    "menu": "\ue05e",
 }
 
 

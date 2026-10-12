@@ -160,10 +160,11 @@ geometry in all states; screenshot when capture is available.
 **Expected:**
 - Dock forced visible during keyboard navigation regardless of visibility mode
 - After keyboard nav ends, normal auto-hide behavior resumes
+- Variant (AutoHide and DodgeWindows with a maximized window): hover a running task until its preview opens, rest the pointer on the preview, press Meta+Alt+D, open the item's context menu with the Menu key (the menu closes the preview), press Escape twice. The dock hides again with the pointer resting off the dock.
 
 **Verification:** screenshot (visible during keyboard, hidden after escape + timeout)
 
-**Automated:** tests/appium/test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible
+**Automated:** tests/appium/test_07_visibility.py::test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible, tests/appium/test_07_visibility.py::test_vis006_keyboard_menu_over_preview_lets_the_dock_hide_again (variant)
 
 ---
 

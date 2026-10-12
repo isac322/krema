@@ -447,6 +447,70 @@ def test_vis006_keyboard_navigation_keeps_auto_hide_dock_visible(krema: Krema, a
     wait_hidden(krema, "Keys", why=" after keyboard navigation ended")
 
 
+@pytest.mark.parametrize(
+    "mode",
+    [
+        pytest.param(
+            "autohide",
+            marks=pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": config.AUTO_HIDE, "PreviewEnabled": True}),
+        ),
+        pytest.param(
+            "dodge",
+            marks=pytest.mark.kremarc(
+                {"PinnedLaunchers": [], "VisibilityMode": config.DODGE_WINDOWS, "DodgeActiveOnly": False, "PreviewEnabled": True}
+            ),
+        ),
+    ],
+)
+def test_vis006_keyboard_menu_over_preview_lets_the_dock_hide_again(krema: Krema, apps: TestWindows, mode: str) -> None:
+    """The pointer rests on a hover preview, which keeps the dock hovered.
+    Focus Dock and the Menu key open the item's context menu, which hides that
+    preview. Once the menu and keyboard navigation end, the dock must hide
+    again: the preview's hover hold must not outlive the preview."""
+    win = apps.open("Keys", width=400, height=300)
+    krema.wait_for_item("Keys")
+    if mode == "dodge":
+        maximize(win)
+    wait_until(
+        lambda: shortcuts.shortcut_keys("focus-dock") == [shortcuts.META_ALT_D],
+        message=lambda: f"krema focus-dock bound to Meta+Alt+D (keys: {shortcuts.shortcut_keys('focus-dock')})",
+    )
+    inp.move(*CENTRE)
+    wait_hidden(krema, "Keys", why=" at start with the pointer away")
+
+    inp.move(*EDGE)
+    wait_shown(krema, "Keys", why=" on edge approach")
+    _hover_revealed_item(krema, "Keys")
+    wait_until(krema.preview_visible, timeout=8, message="hover preview of the running task")
+    _surface, popup = wait_stable(lambda: pv._popup_geometry(krema, krema.preview_popup()), duration=0.5)
+    resting = (popup.center[0], popup.y + max(4, popup.height // 3))
+    pv.glide_into(krema, resting)
+    assert_stays(lambda: krema.preview_visible() and dock_shown(krema, "Keys"), 1.0, "preview and dock shown with the pointer on the preview")
+
+    inp.key("Meta", "Alt", "d")
+    wait_until(lambda: krema.focused_item() == "Keys", message=lambda: f"Meta+Alt+D to focus the dock item (focused: {krema.focused_item()})")
+    krema.wait_keyboard_focus()
+
+    before = {w.internal_id for w in krema.windows()}
+    inp.key("Menu")
+    menu = wait_until(
+        lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
+        timeout=5,
+        message="context menu window after the Menu key",
+    )
+    wait_until(lambda: not krema.preview_visible(), message="the open menu hides the preview")
+    inp.key("Escape")
+    wait_until(lambda: all(w.internal_id != menu.internal_id for w in kwin.windows()), timeout=5, message="Escape closes the menu")
+    assert krema.focused_item() == "Keys", "closing the menu keeps keyboard navigation on the item"
+    krema.wait_keyboard_focus()
+
+    inp.key("Escape")
+    wait_until(lambda: krema.focused_item() is None, message="Escape to end keyboard navigation")
+    pointer = Rect(*kwin.cursor_pos(), 1, 1)
+    assert not rects_intersect(pointer, krema.surface_rect("dock")), "the pointer stayed off the dock, where the preview was"
+    wait_hidden(krema, "Keys", why=" after the menu and keyboard navigation ended with the pointer off the dock")
+
+
 # --------------------------------------------------------------------------- QA-CLK-012
 
 

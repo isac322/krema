@@ -8,7 +8,6 @@
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QPainter>
-#include <QQuickWindow>
 #include <QRasterWindow>
 #include <qpa/qplatformnativeinterface.h>
 
@@ -57,11 +56,12 @@ private:
 };
 
 /// Commit @p window's pending layer-surface state (exclusive zone) now,
-/// without waiting for its next frame.
-void commitSurface(QWindow *window)
+/// without waiting for its next frame. Only for a mapped surface: before its
+/// first configure the shell integration owns the commits.
+void commitMappedSurface(QWindow *window)
 {
     auto *nativeInterface = QGuiApplication::platformNativeInterface();
-    if (!window || !nativeInterface) {
+    if (!window || !window->isExposed() || !nativeInterface) {
         return;
     }
     if (auto *surface = static_cast<wl_surface *>(nativeInterface->nativeResourceForWindow(QByteArrayLiteral("surface"), window))) {
@@ -177,28 +177,16 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
     m_panelRelative = enabled;
 
     if (!enabled) {
-        // Hand the reservation back to the dock surface first and drop the
-        // probe only once the dock has committed it, so the reservation never
-        // vanishes in between: KWin can leave maximized windows at the larger
-        // size when it disappears and returns in quick succession.
+        // Hand the reservation back to the dock surface: its commit and the
+        // probe's destruction go out together, so KWin re-arranges once.
+        // Two quick re-arranges (the reservation vanishing and returning, or
+        // briefly held twice) can leave maximized windows at the
+        // intermediate size.
         m_probeMapped = false;
         applyExclusiveZone();
+        commitMappedSurface(m_window);
         m_probeLayerWindow = nullptr;
-        QWindow *retired = m_probe.release();
-        auto *quickWindow = qobject_cast<QQuickWindow *>(m_window);
-        if (retired && quickWindow && m_window->isVisible()) {
-            QObject::connect(
-                quickWindow,
-                &QQuickWindow::frameSwapped,
-                retired,
-                [retired]() {
-                    retired->deleteLater();
-                },
-                static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::SingleShotConnection));
-            m_window->requestUpdate();
-        } else {
-            delete retired;
-        }
+        m_probe.reset();
         return;
     }
 
@@ -319,16 +307,12 @@ void WaylandDockPlatform::applyExclusiveZone()
     if (m_panelRelative && m_probeMapped && m_probeLayerWindow) {
         // The dock stays at the screen edge and draws its offset from the
         // panels itself; the probe sits right past their reserved space and
-        // carries the dock's reservation from there. The probe commits first
-        // and the dock with its next frame, so the reservation never vanishes
-        // in between (see setPanelRelative).
+        // carries the dock's reservation from there. Both surfaces commit
+        // together so KWin re-arranges once (see setPanelRelative).
         m_probeLayerWindow->setExclusiveZone(reserve ? std::max(m_exclusiveZone, 0) : 0);
-        static_cast<QPaintDeviceWindow *>(m_probe.get())->update();
-        commitSurface(m_probe.get());
         m_layerWindow->setExclusiveZone(-1);
-        if (m_window) {
-            m_window->requestUpdate();
-        }
+        commitMappedSurface(m_probe.get());
+        commitMappedSurface(m_window);
         return;
     }
 

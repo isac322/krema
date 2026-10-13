@@ -339,22 +339,31 @@ TEST_CASE("Show Desktop keeps the dock visible", "[show-desktop]")
     CHECK(dockKept);
 
     // Slide Back: no Krema surface may be a usable window (normal or dialog).
-    // Krema surfaces share the dock's window class; the preview is the one
-    // that is not dock-sized. Requiring it to be present keeps the check from
-    // passing vacuously.
+    // Krema surfaces share the dock's window class; besides the dock there is
+    // the preview and, while the gap is measured from panels (the default),
+    // the 1x1 probe surface. Requiring the preview to be present keeps the
+    // check from passing vacuously.
     REQUIRE_FALSE(kremaClass.isEmpty());
     int previews = 0;
+    int probes = 0;
+    bool probeKept = true;
     bool kremaUnusable = true;
     for (const auto &w : windows) {
         if (isControl(w) || w.windowClass != kremaClass) {
             continue;
         }
-        if (!isDock(w)) {
+        if (w.size == QSize(1, 1)) {
+            // It carries the dock's reservation: Show Desktop must keep it.
+            ++probes;
+            probeKept = probeKept && w.dock && !w.hiddenByShowDesktop;
+        } else if (!isDock(w)) {
             ++previews;
         }
         kremaUnusable = kremaUnusable && !w.normal && !w.dialog;
     }
     REQUIRE(previews == 1);
+    REQUIRE(probes == 1);
+    CHECK(probeKept);
     CHECK(kremaUnusable);
 }
 

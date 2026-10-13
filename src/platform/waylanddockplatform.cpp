@@ -6,6 +6,8 @@
 #include <LayerShellQt/Window>
 
 #include <QLoggingCategory>
+#include <QPainter>
+#include <QRasterWindow>
 
 #include <algorithm>
 
@@ -13,6 +15,37 @@ Q_LOGGING_CATEGORY(lcWayland, "krema.platform.wayland")
 
 namespace krema
 {
+
+namespace
+{
+/// Transparent 1 px surface: it only has to be mapped for the compositor to
+/// place it (and apply its exclusive zone).
+class ProbeWindow : public QRasterWindow
+{
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(QRect(QPoint(0, 0), size()), Qt::transparent);
+    }
+};
+
+LayerShellQt::Window::Anchors edgeAnchor(DockPlatform::Edge edge)
+{
+    switch (edge) {
+    case DockPlatform::Edge::Top:
+        return LayerShellQt::Window::AnchorTop;
+    case DockPlatform::Edge::Left:
+        return LayerShellQt::Window::AnchorLeft;
+    case DockPlatform::Edge::Right:
+        return LayerShellQt::Window::AnchorRight;
+    case DockPlatform::Edge::Bottom:
+        break;
+    }
+    return LayerShellQt::Window::AnchorBottom;
+}
+} // namespace
 
 WaylandDockPlatform::WaylandDockPlatform() = default;
 
@@ -39,6 +72,7 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
 
 void WaylandDockPlatform::setScreen(QScreen *screen)
 {
+    m_screen = screen;
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
     // LayerShellQt < 6.6 has no Window::setScreen. With ScreenFromQWindow its
     // get_layer_surface() binds the wl_output of QWindow::screen() when the
@@ -97,6 +131,87 @@ void WaylandDockPlatform::setExclusiveZone(int zone)
     applyExclusiveZone();
 }
 
+void WaylandDockPlatform::setPanelRelative(bool enabled)
+{
+    if (m_panelRelative == enabled) {
+        return;
+    }
+    m_panelRelative = enabled;
+
+    if (!enabled) {
+        m_probeLayerWindow = nullptr;
+        m_probe.reset();
+    } else if (m_window) {
+        auto probe = std::make_unique<ProbeWindow>();
+        QSurfaceFormat format = probe->format();
+        format.setAlphaBufferSize(8);
+        probe->setFormat(format);
+        // No input at all: QtWayland sends an empty input region for this flag
+        // (an empty mask would accept everything).
+        probe->setFlags(Qt::FramelessWindowHint | Qt::WindowTransparentForInput | Qt::WindowDoesNotAcceptFocus);
+        probe->resize(1, 1);
+        m_probeLayerWindow = LayerShellQt::Window::get(probe.get());
+        if (m_probeLayerWindow) {
+            // The Bottom layer is what makes KWin place the probe after every
+            // Top-layer panel, i.e. right inside the space they reserve,
+            // whichever started first. Anchored to the edge only, it is never
+            // stretched along it, so no perpendicular panel moves it.
+            m_probeLayerWindow->setLayer(LayerShellQt::Window::LayerBottom);
+            // "dock" keeps it a Dock window for KWin: Show Desktop leaves it
+            // alone, and the panel watcher only looks at dock windows.
+            m_probeLayerWindow->setScope(QStringLiteral("dock"));
+            m_probeLayerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+            m_probeLayerWindow->setCloseOnDismissed(false);
+            m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
+#ifndef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+            m_probeLayerWindow->setDesiredSize(QSize(1, 1));
+#endif
+        }
+        m_probe = std::move(probe);
+        // Follow the dock surface: it is re-created (hide + show) on screen
+        // changes and after the output went away, and so is the probe.
+        QObject::connect(m_window, &QWindow::visibleChanged, m_probe.get(), [this](bool visible) {
+            if (visible) {
+                showProbe();
+            } else if (m_probe) {
+                m_probe->hide();
+            }
+        });
+        if (m_window->isVisible()) {
+            showProbe();
+        }
+    }
+    applyExclusiveZone();
+}
+
+void WaylandDockPlatform::showProbe()
+{
+    if (!m_probe || !m_window) {
+        return;
+    }
+    // The screen the dock surface is pinned to; QWindow::screen() can still
+    // report another one right after creation (see DockView::initialize).
+    QScreen *screen = m_screen ? m_screen.data() : m_window->screen();
+    // The layer surface binds its output when it is (re)created on show().
+    // QtWayland derives the Qt-side screen from the window position until the
+    // compositor reports the output, so also place the window on the target
+    // screen. (The platform window itself must survive: LayerShellQt set its
+    // shell integration when it was created.)
+    m_probe->hide();
+    m_probe->setScreen(screen);
+    if (screen) {
+        m_probe->setPosition(screen->geometry().topLeft());
+    }
+    if (m_probeLayerWindow) {
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
+        m_probeLayerWindow->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
+#else
+        m_probeLayerWindow->setScreen(screen);
+#endif
+    }
+    m_probe->show();
+}
+
 void WaylandDockPlatform::setMargin(int margin)
 {
     m_margin = margin;
@@ -132,18 +247,29 @@ void WaylandDockPlatform::applyExclusiveZone()
         return;
     }
 
-    switch (m_visibilityMode) {
-    case VisibilityMode::AlwaysVisible:
+    const bool reserve = m_visibilityMode == VisibilityMode::AlwaysVisible;
+    if (m_panelRelative) {
+        // The dock stays at the screen edge and draws its offset from the
+        // panels itself; the probe sits right past their reserved space and
+        // carries the dock's reservation from there.
+        m_layerWindow->setExclusiveZone(-1);
+        if (m_probeLayerWindow) {
+            m_probeLayerWindow->setExclusiveZone(reserve ? std::max(m_exclusiveZone, 0) : 0);
+            // Layer-surface state is double-buffered: commit it.
+            static_cast<QPaintDeviceWindow *>(m_probe.get())->update();
+        }
+        return;
+    }
+
+    if (reserve) {
         // Reserve the panel thickness at the anchored edge (the surface is
         // anchored to that edge and both perpendicular ones, so the compositor
         // applies the zone there) so maximized windows end above the dock.
         m_layerWindow->setExclusiveZone(std::max(m_exclusiveZone, 0));
-        break;
-    case VisibilityMode::AutoHide:
-    case VisibilityMode::DodgeWindows:
-        // Ignore other surfaces' exclusive zones — stay at the real screen edge
+    } else {
+        // AutoHide / DodgeWindows: ignore other surfaces' exclusive zones and
+        // stay at the real screen edge.
         m_layerWindow->setExclusiveZone(-1);
-        break;
     }
 }
 
@@ -220,6 +346,11 @@ void WaylandDockPlatform::applyAnchors()
 
     // Reapply margin after anchor change
     setMargin(m_margin);
+
+    if (m_probeLayerWindow) {
+        m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
+        static_cast<QPaintDeviceWindow *>(m_probe.get())->update();
+    }
 }
 
 } // namespace krema

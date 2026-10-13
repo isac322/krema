@@ -115,10 +115,17 @@
     </entry>
 
     <entry name="FloatingMargin" type="Int">
-      <label>Gap between the floating dock and the screen edge or an adjacent panel (px)</label>
+      <label>Gap between the floating dock and the edge it is measured from (px)</label>
       <default>8</default>
       <min>1</min>
-      <max>32</max>
+      <max>128</max>
+    </entry>
+
+    <entry name="FloatingMarginReference" type="Int">
+      <label>Where the dock gap is measured from (0=Screen edge, 1=Inner edge of always-visible panels on the dock's edge)</label>
+      <default>1</default>
+      <min>0</min>
+      <max>1</max>
     </entry>
 
     <entry name="VisibilityMode" type="Int">

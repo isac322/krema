@@ -8,6 +8,12 @@ Krema uses this to learn about global pointer motion: Wayland delivers
 pointer events only to the surface under the pointer, so a client cannot see
 the pointer moving over other windows (`src/platform/kwinpointermotionwatcher.cpp`).
 
+It also uses it to find the panels on the dock's edge
+(`src/platform/kwinpanelwatcher.cpp`). On Wayland no client API returns other
+surfaces' geometry or the work area: `QScreen::availableGeometry()` equals
+`geometry()`, `KX11Extras::workArea()` is X11-only, and
+`org_kde_plasma_window_management` skips layer-shell surfaces.
+
 ## D-Bus API (service `org.kde.KWin`)
 
 | Object / interface | Method | Notes |
@@ -34,3 +40,37 @@ The file is read by KWin's process with `QFile`: it must be a real file
 - `callDBus(service, path, interface, method, args..., callback?)` — async;
   target the client's unique name (`QDBusConnection::baseService()`).
 - Signals support `.connect(fn)` / `.disconnect(fn)`.
+
+Panel watcher (verified in the KWin 6.0, 6.3, 6.4 and 6.7 sources, and
+against a real plasmashell 6.7.5 panel on `kwin_wayland --virtual`):
+
+- `workspace.windowList()`, signals `windowAdded(w)`, `windowRemoved(w)`,
+  `screensChanged()`, `virtualScreenGeometryChanged()`.
+- `workspace.screens`: outputs with `name` and `geometry` (`QRect`).
+- Window properties `dock` (layer-shell scope `"dock"`; any other scope is a
+  normal window), `pid`, `deleted`, `output` (signal `outputChanged`),
+  `frameGeometry` (`QRectF`, signal `frameGeometryChanged`). Layer-shell
+  panels are in `windowList()`; a floating Plasma panel's frame includes its
+  floating gap (44 px panel: 60 px surface, 44 px reserved).
+- `new QTimer()` (`singleShot`, `interval`, `timeout`, `start()`) works in JS
+  scripts; used to debounce reports.
+- There is no per-window exclusive-zone property and no signal when only the
+  reserved space changes (e.g. a panel switching to auto-hide), and
+  `clientArea(KWin.MaximizeArea, …)` can still be stale inside
+  `frameGeometryChanged`. Krema's probe surface (below) turns reservation
+  changes into a `frameGeometryChanged` of the probe.
+
+### Probe surface for reserved space
+
+A 1 px layer surface on the **Bottom** layer, anchored to one edge only, is
+placed by KWin directly inside the space every always-visible panel reserves
+on that edge, regardless of start order, and KWin moves it when that space
+changes (auto-hide on/off, panel height, plasmashell restart). On the Top
+layer the same surface, started first, takes the screen edge and pushes the
+panel inward instead. Panels that auto-hide, dodge windows or let windows go
+below reserve nothing, so the probe stays at the screen edge.
+
+A layer surface anchored to an edge and both perpendicular edges (like the
+dock) is placed before a custom-length panel on that edge whatever the start
+order, so a reserving dock pushes such a panel inward; with exclusive zone
+`-1` it stays at the screen edge and leaves the panel alone.

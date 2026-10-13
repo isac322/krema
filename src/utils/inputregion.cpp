@@ -31,6 +31,10 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         return triggerStrip;
     }
 
+    // Surface-local extent the visible dock's region may reach on the edge axis:
+    // the band of other panels (edgeInset) next to the screen edge stays out.
+    const int edgeInset = std::max(0, p.edgeInset);
+
     if (p.edge <= 1) {
         // Horizontal (Top/Bottom)
         if (p.panelWidth <= 0) {
@@ -44,17 +48,19 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         int regionH;
         if (p.edge == 0) {
             // Top: panel at top, zoom extends downward
-            regionY = 0;
+            regionY = std::min(edgeInset, p.surfaceHeight);
             int bottom = p.hovered ? (p.panelY + p.panelHeight + p.zoomOverflowHeight + p.margin) : (p.panelY + p.panelHeight + p.margin);
-            regionH = std::min(bottom, p.surfaceHeight);
+            regionH = std::max(0, std::min(bottom, p.surfaceHeight) - regionY);
         } else {
             // Bottom: panel at bottom, zoom extends upward
             regionY = p.hovered ? std::max(0, p.panelY - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelY - p.margin);
-            regionH = p.surfaceHeight - regionY;
+            regionH = std::max(0, p.surfaceHeight - edgeInset - regionY);
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
-        return region.united(triggerStrip);
+        // Over other panels the edge strip would take their input: only the
+        // hidden dock needs it there.
+        return edgeInset > 0 ? region : region.united(triggerStrip);
     } else {
         // Vertical (Left/Right)
         if (p.panelHeight <= 0) {
@@ -68,17 +74,17 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         int regionW;
         if (p.edge == 2) {
             // Left: panel at left, zoom extends rightward
-            regionX = 0;
+            regionX = std::min(edgeInset, p.surfaceWidth);
             int right = p.hovered ? (p.panelX + p.panelWidth + p.zoomOverflowHeight + p.margin) : (p.panelX + p.panelWidth + p.margin);
-            regionW = std::min(right, p.surfaceWidth);
+            regionW = std::max(0, std::min(right, p.surfaceWidth) - regionX);
         } else {
             // Right: panel at right, zoom extends leftward
             regionX = p.hovered ? std::max(0, p.panelX - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelX - p.margin);
-            regionW = p.surfaceWidth - regionX;
+            regionW = std::max(0, p.surfaceWidth - edgeInset - regionX);
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
-        return region.united(triggerStrip);
+        return edgeInset > 0 ? region : region.united(triggerStrip);
     }
 }
 

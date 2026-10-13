@@ -199,11 +199,14 @@ SettingsPage {
             }
 
             // Measurement overlay: the corner radius is measured on the dock
-            // panel; while the Floating row or the Floating margin slider is
-            // hovered or focused and the dock floats, the gap between panel
-            // and screen edge is measured instead.
+            // panel; while the Floating row, the gap reference row or the
+            // Floating margin slider is hovered or focused and the dock
+            // floats, the gap between panel and screen edge is measured
+            // instead.
             readonly property bool measureGap: dock.floating
-                && (floatingRow.hovered || floatingRow.visualFocus || marginSlider.active)
+                && (floatingRow.hovered || floatingRow.visualFocus
+                    || referenceRow.hovered || referenceRow.visualFocus
+                    || marginSlider.active)
             measureTarget: radiusSlider.active ? dock.panelItem
                 : measureGap ? dock.floatingMarker
                 : null
@@ -232,13 +235,34 @@ SettingsPage {
 
         FormCard.FormDelegateSeparator {}
 
+        // Indices follow the kcfg FloatingMarginReference: 0 Screen edge,
+        // 1 Panels. Applies with Floating off too: the dock is then flush
+        // with the chosen reference.
+        FormCard.FormComboBoxDelegate {
+            id: referenceRow
+            text: i18n("Measure gap from")
+            description: i18n("Panels: start from the inner edge of always-visible panels on this edge")
+            Accessible.name: text
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Screen edge"),
+                i18n("Panels")
+            ]
+            currentIndex: DockSettings.floatingMarginReference
+            onActivated: function(index) {
+                DockSettings.floatingMarginReference = index
+            }
+        }
+
+        FormCard.FormDelegateSeparator {}
+
         SliderDelegate {
             id: marginSlider
             text: i18n("Floating margin")
             description: i18n("Gap between the dock and the screen edge or panel")
             enabled: DockSettings.floating
             from: 1
-            to: 32
+            to: 128
             stepSize: 1
             value: DockSettings.floatingMargin
             valueText: i18nc("@label pixels", "%1 px", value)

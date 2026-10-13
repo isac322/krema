@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
+
+### Changed
+
+- The Floating margin setting went up to 128 px instead of 32 px (#90)
+
 ## [0.12.0] - 2026-10-12
 
 Krema v0.12.0 lets you set the gap between the floating dock and the screen edge in this lightweight KDE Plasma 6 dock for Wayland, adds each app's own .desktop actions such as Firefox's "New Private Window" to the right-click menu, and keeps a magnified icon magnified while its context menu is open.

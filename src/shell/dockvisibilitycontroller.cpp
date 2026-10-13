@@ -290,6 +290,15 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     applyInputRegion();
 }
 
+void DockVisibilityController::setEdgeInset(int inset)
+{
+    if (m_edgeInset == inset) {
+        return;
+    }
+    m_edgeInset = inset;
+    applyInputRegion();
+}
+
 void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
 {
     if (m_keyboardActive == active) {
@@ -474,6 +483,7 @@ void DockVisibilityController::applyInputRegion()
     params.visible = m_visible;
     params.hovered = m_hovered;
     params.edge = static_cast<int>(m_platform->edge());
+    params.edgeInset = m_edgeInset;
 
     m_platform->setInputRegion(computeDockInputRegion(params));
 }

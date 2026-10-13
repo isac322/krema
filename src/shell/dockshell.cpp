@@ -121,14 +121,11 @@ void DockShell::connectSettingsSignals()
     connect(ss, &ScreenSettings::iconSizeChanged, m_view.get(), &DockView::updateSize);
     connect(ss, &ScreenSettings::maxZoomFactorChanged, m_view.get(), &DockView::updateSize);
     // The preview popup is anchored past panelBarHeight(), which includes the gap.
-    const auto updateFloatingPadding = [this]() {
-        m_view->updateSize();
-        Q_EMIT m_view->floatingPaddingChanged();
-        m_previewController->updateEdge();
-    };
-    connect(ss, &ScreenSettings::floatingChanged, m_view.get(), updateFloatingPadding);
+    connect(m_view.get(), &DockView::floatingPaddingChanged, m_previewController.get(), &PreviewController::updateEdge);
+    connect(ss, &ScreenSettings::floatingChanged, m_view.get(), &DockView::refreshFloatingPadding);
     // Floating margin is global-only; it resizes the gap exactly like toggling floating.
-    connect(s, &KremaSettings::FloatingMarginChanged, m_view.get(), updateFloatingPadding);
+    connect(s, &KremaSettings::FloatingMarginChanged, m_view.get(), &DockView::refreshFloatingPadding);
+    connect(s, &KremaSettings::FloatingMarginReferenceChanged, m_view.get(), &DockView::applyMarginReference);
 
     // Screen-space reservation is global; reflow both the dock and open preview.
     connect(s, &KremaSettings::ReserveScreenSpaceChanged, this, [this]() {

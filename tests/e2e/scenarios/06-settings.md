@@ -764,6 +764,12 @@ fixture window's identity and frame geometry.
   the panel's inner edge; panels that do not reserve space are ignored.
 - The choice applies live without restarting Krema, also while "Floating"
   is off, and persists in `kremarc` as `FloatingMarginReference`.
+- With "Panels" beside a panel, nothing of Krema takes input over the panel:
+  in Auto hide and Dodge the reveal strip runs along the panel's inner edge
+  instead of the screen edge.
+- "Screen edge" is the v0.12.0 placement: with reservation on, KWin's
+  layer-shell order still decides, so next to a full-width panel that
+  started first the dock rests on that panel's reserved space.
 - Without KWin scripting the dock uses the screen edge.
 
 **Verification:** AT-SPI (row name, current choice, enabled state),

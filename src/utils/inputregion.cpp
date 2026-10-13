@@ -10,30 +10,33 @@ namespace krema
 
 QRegion computeDockInputRegion(const InputRegionParams &p)
 {
-    // Trigger strip: thin strip along the screen edge to detect mouse entry
+    // Depth of the band other panels occupy along the screen edge (the dock is
+    // drawn past it). Nothing here may take their input, so the dock's region
+    // and its trigger strip both start past the band.
+    const int edgeInset = std::max(0, p.edgeInset);
+
+    // Trigger strip: thin strip along the screen edge (or the panels' inner
+    // edge) to detect mouse entry. It also keeps the region non-empty while
+    // the dock slides back in from off-surface (an empty mask accepts ALL input).
     QRegion triggerStrip;
     switch (p.edge) {
     case 0: // Top
-        triggerStrip = QRegion(0, 0, p.surfaceWidth, p.triggerStripHeight);
+        triggerStrip = QRegion(0, edgeInset, p.surfaceWidth, p.triggerStripHeight);
         break;
     case 1: // Bottom
-        triggerStrip = QRegion(0, p.surfaceHeight - p.triggerStripHeight, p.surfaceWidth, p.triggerStripHeight);
+        triggerStrip = QRegion(0, p.surfaceHeight - edgeInset - p.triggerStripHeight, p.surfaceWidth, p.triggerStripHeight);
         break;
     case 2: // Left
-        triggerStrip = QRegion(0, 0, p.triggerStripHeight, p.surfaceHeight);
+        triggerStrip = QRegion(edgeInset, 0, p.triggerStripHeight, p.surfaceHeight);
         break;
     case 3: // Right
-        triggerStrip = QRegion(p.surfaceWidth - p.triggerStripHeight, 0, p.triggerStripHeight, p.surfaceHeight);
+        triggerStrip = QRegion(p.surfaceWidth - edgeInset - p.triggerStripHeight, 0, p.triggerStripHeight, p.surfaceHeight);
         break;
     }
 
     if (!p.visible) {
         return triggerStrip;
     }
-
-    // Surface-local extent the visible dock's region may reach on the edge axis:
-    // the band of other panels (edgeInset) next to the screen edge stays out.
-    const int edgeInset = std::max(0, p.edgeInset);
 
     if (p.edge <= 1) {
         // Horizontal (Top/Bottom)
@@ -58,9 +61,7 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
-        // Over other panels the edge strip would take their input: only the
-        // hidden dock needs it there.
-        return edgeInset > 0 ? region : region.united(triggerStrip);
+        return region.united(triggerStrip);
     } else {
         // Vertical (Left/Right)
         if (p.panelHeight <= 0) {
@@ -84,7 +85,7 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
-        return edgeInset > 0 ? region : region.united(triggerStrip);
+        return region.united(triggerStrip);
     }
 }
 

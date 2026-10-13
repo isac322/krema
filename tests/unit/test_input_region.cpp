@@ -229,24 +229,36 @@ TEST_CASE("Dock input region leaves other panels' band click-through", "[input-r
     p.hovered = true;
     p.edgeInset = 60;
 
-    SECTION("Bottom: dock and its gap stay, the band and the edge strip go")
+    SECTION("Bottom: dock, gap and trigger strip stay past the band")
     {
         p.edge = 1;
         const QRegion region = krema::computeDockInputRegion(p);
         REQUIRE(region.contains(QPoint(960, 100))); // dock
         REQUIRE(region.contains(QPoint(960, 119))); // gap above the band
-        REQUIRE_FALSE(region.contains(QPoint(960, 120))); // first row of the band
-        REQUIRE_FALSE(region.contains(QPoint(960, 179))); // screen-edge row
-        REQUIRE_FALSE(region.contains(QPoint(10, 179))); // no edge strip over the panel
+        REQUIRE(region.contains(QPoint(10, 117))); // trigger strip at the band's inner edge
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60))); // nothing over the panel band
     }
 
-    SECTION("Hidden: the edge strip still reveals the dock")
+    SECTION("Hidden: the trigger strip reveals the dock from the band's inner edge")
     {
         p.edge = 1;
         p.visible = false;
         const QRegion region = krema::computeDockInputRegion(p);
-        REQUIRE(region.contains(QPoint(10, 179)));
+        REQUIRE(region.contains(QPoint(10, 117)));
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
         REQUIRE_FALSE(region.contains(QPoint(960, 100)));
+    }
+
+    SECTION("Revealing: panel still off the surface, region never empty")
+    {
+        // setVisible(true) applies the region before the slide-in moves the
+        // panel back; an empty mask would accept input on the whole surface.
+        p.edge = 1;
+        p.panelY = 300;
+        p.hovered = false;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE_FALSE(region.isEmpty());
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
     }
 
     SECTION("Top: band at the top of the surface")

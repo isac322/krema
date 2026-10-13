@@ -83,6 +83,13 @@ LayerShellQt::Window::Anchors edgeAnchor(DockPlatform::Edge edge)
     }
     return LayerShellQt::Window::AnchorBottom;
 }
+
+/// The probe lies along its edge (2x1 on a horizontal edge, 1x2 on a
+/// vertical one), so a report shows which edge it was placed for.
+QSize probeSize(DockPlatform::Edge edge)
+{
+    return edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right ? QSize(1, 2) : QSize(2, 1);
+}
 } // namespace
 
 WaylandDockPlatform::WaylandDockPlatform() = default;
@@ -200,7 +207,7 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
     // No input at all: QtWayland sends an empty input region for this flag
     // (an empty mask would accept everything).
     probe->setFlags(Qt::FramelessWindowHint | Qt::WindowTransparentForInput | Qt::WindowDoesNotAcceptFocus);
-    probe->resize(1, 1);
+    probe->resize(probeSize(m_edge));
     // The dock surface keeps the reservation until the probe is mapped and
     // placed; then both change in one flush (see applyExclusiveZone).
     probe->mappedChanged = [this](bool mapped) {
@@ -221,7 +228,7 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
         m_probeLayerWindow->setCloseOnDismissed(false);
         m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
 #ifndef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
-        m_probeLayerWindow->setDesiredSize(QSize(1, 1));
+        m_probeLayerWindow->setDesiredSize(probeSize(m_edge));
 #endif
     }
     m_probe = std::move(probe);
@@ -416,7 +423,12 @@ void WaylandDockPlatform::applyAnchors()
     setMargin(m_margin);
 
     if (m_probeLayerWindow) {
+        // Its orientation tells the panel watcher which edge it measures.
         m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
+        m_probe->resize(probeSize(m_edge));
+#ifndef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+        m_probeLayerWindow->setDesiredSize(probeSize(m_edge));
+#endif
         static_cast<QPaintDeviceWindow *>(m_probe.get())->update();
     }
 }

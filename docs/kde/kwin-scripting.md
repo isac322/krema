@@ -74,3 +74,15 @@ A layer surface anchored to an edge and both perpendicular edges (like the
 dock) is placed before a custom-length panel on that edge whatever the start
 order, so a reserving dock pushes such a panel inward; with exclusive zone
 `-1` it stays at the screen edge and leaves the panel alone.
+
+Along the edge, KWin centres the probe in the area left by panels on the
+perpendicular edges, so its position along the edge says nothing; Krema makes
+it 2x1 on a horizontal edge and 1x2 on a vertical one so a report shows which
+edge it was placed for (a report from before an edge change is ignored).
+
+Moving a reservation between two surfaces must happen in one KWin
+re-arrange: commit both mapped surfaces in the same flush (or commit the new
+holder and destroy the old one together). Two quick re-arranges (the
+reservation briefly gone, or briefly doubled) can leave an already-maximized
+window at the intermediate size even after MaximizeArea is correct again
+(seen on KWin 6.3-6.7 in Distro E2E).

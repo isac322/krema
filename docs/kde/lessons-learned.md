@@ -403,3 +403,30 @@ fresh opens, 500 ms hold, 2 motion points, 5 ms step.
   fixed 5 ms server/Qt dwell.
 - Batching to the chain barrier preserves request ordering without paying
   a blocking roundtrip per point.
+
+## 21. Move a reservation between layer surfaces in one re-arrange (2026-10, issue #90)
+
+**Symptom:** With the gap measured from panels, switching "Measure gap
+from" or restarting Krema left an already-maximized window at the wrong
+size while KWin's MaximizeArea was already correct again: full output
+height under the dock ([0,0,1024,768] against a 696 px work area), or
+shrunk by a doubled reservation (604 against 686). Distro E2E, KWin
+6.3-6.7, several distros per run.
+
+**Cause:** The Always visible reservation moves between the dock surface
+and the probe surface (see [the probe](kwin-scripting.md#probe-surface-for-reserved-space)).
+Done in two steps (the dock's next frame after the probe's commit, or the
+probe destroyed before the dock committed), KWin re-arranged twice in
+quick succession, and the maximized window kept the intermediate size.
+
+**Fix:** Change both surfaces in one flush: set both zones and commit the
+two mapped surfaces back to back, or commit the dock surface and destroy
+the probe together. A dock surface that is not mapped yet never gets a
+reservation while the probe carries it, so startup has only one step.
+
+**Key lessons:**
+- A maximized window converging after one work-area change does not mean
+  it converges after two quick ones.
+- A probe report can be stale across an edge change; give the probe a
+  shape that says which edge it measures instead of trusting its position
+  along the edge (KWin centres it in the space left by perpendicular panels).

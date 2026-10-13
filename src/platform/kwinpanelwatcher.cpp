@@ -33,7 +33,8 @@ const QString kWatcherInterface = QStringLiteral("com.bhyoo.krema.PanelWatcher")
 const QString kObjectPath = QStringLiteral("/com/bhyoo/krema/PanelWatcher");
 
 // Reports dock-type surfaces per output. Krema's own probe surface is the
-// 1x1 dock surface of this process; the dock's other surfaces are skipped.
+// tiny (2x1 or 1x2) dock surface of this process; the dock's other surfaces
+// are skipped.
 // The report is debounced so a burst of geometry changes (a panel resizing,
 // KWin re-placing every layer surface) is sent once, and only when it differs.
 const char kScript[] = R"JS(
@@ -65,7 +66,7 @@ function report() {
         }
         var frame = rectOf(w.frameGeometry);
         if (w.pid === kremaPid) {
-            if (frame[2] <= 1 && frame[3] <= 1) {
+            if (frame[2] <= 3 && frame[3] <= 3) {
                 entry.anchor = frame;
             }
         } else {

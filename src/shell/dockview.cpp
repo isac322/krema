@@ -128,11 +128,12 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
                                           this,
                                           SLOT(handleScreenLockChanged(bool)));
 
-    show();
-
-    // Measure the gap from panels when configured (after show(): the probe
-    // surface follows the dock surface's screen).
+    // Measure the gap from panels when configured. Before show(): measured
+    // from panels, the dock surface must never map with a reservation of its
+    // own (the probe carries it; it follows the dock surface onto the screen).
     applyMarginReference();
+
+    show();
 }
 
 QColor DockView::backgroundColor() const

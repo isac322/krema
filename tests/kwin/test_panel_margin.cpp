@@ -11,6 +11,11 @@
 // also holds the panel's own floating gap). A second stand-in reserves
 // nothing, like an auto-hide, dodge or windows-go-below panel.
 //
+// Moving the gap reference moves the Always visible reservation between the
+// dock surface and its probe. An ordinary window from another helper process,
+// maximized by KWin, must end at exactly one reservation after every switch
+// and after Krema restarts, not at a full-output or doubly reserved size.
+//
 // Geometry comes from KWin itself: a one-shot KWin script (loaded through
 // org.kde.kwin.Scripting) reports every dock-type window's frame and each
 // output's MaximizeArea back to this process over D-Bus. The dock bar's
@@ -28,6 +33,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "utils/surfacegeometry.h"
 
 #include <KAboutData>
 #include <LayerShellQt/Window>
@@ -71,6 +77,11 @@ namespace panelmargin
 constexpr int kTimeoutMs = 15000;
 constexpr int kQueryTimeoutMs = 5000;
 constexpr auto kPanelArg = "--stand-in-panel";
+constexpr auto kMaximizedArg = "--maximized-window";
+constexpr auto kMaximizedTitle = "krema-panel-margin-maximized";
+
+// DockView::s_padding (src/shell/dockview.h), private there.
+constexpr int kDockPadding = 8;
 
 // The stand-in panel: a floating Plasma panel's surface and reservation.
 constexpr int kPanelLength = 500;
@@ -155,9 +166,20 @@ struct DockWindow {
     QRect frame;
 };
 
+/// An ordinary (xdg toplevel) window as KWin reports it.
+struct NormalWindow {
+    qint64 pid = 0;
+    QString caption;
+    QString output;
+    QRect frame;
+    /// clientArea(KWin.MaximizeArea, window).
+    QRect maximizeArea;
+};
+
 struct Snapshot {
     QHash<QString, OutputState> outputs;
     QList<DockWindow> docks;
+    QList<NormalWindow> normals;
 };
 
 QRect rectFrom(const QJsonValue &value)
@@ -169,12 +191,16 @@ QRect rectFrom(const QJsonValue &value)
     return QRect(std::lround(a.at(0).toDouble()), std::lround(a.at(1).toDouble()), std::lround(a.at(2).toDouble()), std::lround(a.at(3).toDouble()));
 }
 
-// One-shot report of every dock-type window and each output's work area.
+// One-shot report of every dock-type and normal window and each output's work
+// area, after running an optional action (%5, a JS statement block).
 // %1 service, %2 object path, %3 interface, %4 token.
 const char kQueryScript[] = R"JS(
 function rectOf(g) {
     return [Math.round(g.x), Math.round(g.y), Math.round(g.width), Math.round(g.height)];
 }
+(function () {
+%5
+})();
 var outputs = {};
 var screens = workspace.screens;
 for (var i = 0; i < screens.length; ++i) {
@@ -184,15 +210,21 @@ for (var i = 0; i < screens.length; ++i) {
     };
 }
 var docks = [];
+var normals = [];
 var windows = workspace.windowList();
 for (var j = 0; j < windows.length; ++j) {
     var w = windows[j];
-    if (!w.dock || w.deleted) {
+    if (w.deleted) {
         continue;
     }
-    docks.push({ pid: w.pid, output: w.output ? w.output.name : "", frame: rectOf(w.frameGeometry) });
+    if (w.dock) {
+        docks.push({ pid: w.pid, output: w.output ? w.output.name : "", frame: rectOf(w.frameGeometry) });
+    } else if (w.normalWindow) {
+        normals.push({ pid: w.pid, caption: w.caption, output: w.output ? w.output.name : "",
+                       frame: rectOf(w.frameGeometry), maximizeArea: rectOf(workspace.clientArea(KWin.MaximizeArea, w)) });
+    }
 }
-callDBus("%1", "%2", "%3", "report", "%4", JSON.stringify({ outputs: outputs, docks: docks }));
+callDBus("%1", "%2", "%3", "report", "%4", JSON.stringify({ outputs: outputs, docks: docks, normals: normals }));
 )JS";
 
 /// Runs kQueryScript in KWin and receives its report over D-Bus.
@@ -208,8 +240,9 @@ public:
         return *query;
     }
 
-    /// KWin's current state; nullopt when KWin did not answer in time.
-    std::optional<Snapshot> snapshot()
+    /// KWin's current state after running @p action (JS statements) in KWin;
+    /// nullopt when KWin did not answer in time.
+    std::optional<Snapshot> snapshot(const QString &action = {})
     {
         auto bus = QDBusConnection::sessionBus();
         if (!m_registered) {
@@ -225,8 +258,9 @@ public:
         if (!file.open()) {
             return std::nullopt;
         }
-        file.write(
-            QString::fromLatin1(kQueryScript).arg(bus.baseService(), QLatin1String(kPath), QStringLiteral("com.bhyoo.krema.test.PanelMargin"), token).toUtf8());
+        file.write(QString::fromLatin1(kQueryScript)
+                       .arg(bus.baseService(), QLatin1String(kPath), QStringLiteral("com.bhyoo.krema.test.PanelMargin"), token, action)
+                       .toUtf8());
         file.flush();
 
         const QString plugin = QStringLiteral("krema-panel-margin-test-%1-%2").arg(QCoreApplication::applicationPid()).arg(token);
@@ -297,6 +331,15 @@ private:
                                              entry.value(QStringLiteral("output")).toString(),
                                              rectFrom(entry.value(QStringLiteral("frame")))});
         }
+        const QJsonArray normals = doc.object().value(QStringLiteral("normals")).toArray();
+        for (const QJsonValue &value : normals) {
+            const QJsonObject entry = value.toObject();
+            snapshot.normals.append(NormalWindow{entry.value(QStringLiteral("pid")).toInteger(),
+                                                 entry.value(QStringLiteral("caption")).toString(),
+                                                 entry.value(QStringLiteral("output")).toString(),
+                                                 rectFrom(entry.value(QStringLiteral("frame"))),
+                                                 rectFrom(entry.value(QStringLiteral("maximizeArea")))});
+        }
         return snapshot;
     }
 
@@ -306,25 +349,26 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Stand-in panel (child process)
+// Helper processes (this binary in helper mode)
 // ---------------------------------------------------------------------------
 
-/// This binary in helper mode: a panel-like layer surface on one output.
-class StandInPanel
+/// This binary started in a helper mode; killed on destruction.
+class HelperProcess
 {
 public:
-    StandInPanel(int zone, const QString &outputName)
+    HelperProcess(const QStringList &args, const QProcessEnvironment &env)
     {
         // Keep the helper's warnings in the test log.
         m_process.setProcessChannelMode(QProcess::ForwardedChannels);
-        m_process.start(QCoreApplication::applicationFilePath(), {QLatin1String(kPanelArg), QString::number(zone), QString::number(kEdgeBottom), outputName});
+        m_process.setProcessEnvironment(env);
+        m_process.start(QCoreApplication::applicationFilePath(), args);
     }
-    ~StandInPanel()
+    ~HelperProcess()
     {
         stop();
     }
-    StandInPanel(const StandInPanel &) = delete;
-    StandInPanel &operator=(const StandInPanel &) = delete;
+    HelperProcess(const HelperProcess &) = delete;
+    HelperProcess &operator=(const HelperProcess &) = delete;
 
     bool waitForStarted()
     {
@@ -345,6 +389,55 @@ public:
 private:
     QProcess m_process;
 };
+
+/// A panel-like layer surface on one output.
+class StandInPanel : public HelperProcess
+{
+public:
+    StandInPanel(int zone, const QString &outputName)
+        : HelperProcess({QLatin1String(kPanelArg), QString::number(zone), QString::number(kEdgeBottom), outputName}, QProcessEnvironment::systemEnvironment())
+    {
+    }
+};
+
+/// An ordinary application window (xdg toplevel).
+class OrdinaryWindow : public HelperProcess
+{
+public:
+    OrdinaryWindow()
+        : HelperProcess({QLatin1String(kMaximizedArg)}, environment())
+    {
+    }
+
+private:
+    static QProcessEnvironment environment()
+    {
+        // main() forces the layer-shell integration for Krema; an inherited
+        // override would make this window a layer surface, not a toplevel.
+        auto env = QProcessEnvironment::systemEnvironment();
+        env.remove(QStringLiteral("QT_WAYLAND_SHELL_INTEGRATION"));
+        return env;
+    }
+};
+
+int runOrdinaryWindow(int argc, char *argv[])
+{
+    qunsetenv("QT_WAYLAND_SHELL_INTEGRATION");
+    QGuiApplication application(argc, argv);
+    QGuiApplication::setDesktopFileName(QLatin1String(kMaximizedTitle));
+    class Window : public QRasterWindow
+    {
+    protected:
+        void paintEvent(QPaintEvent *) override
+        {
+            QPainter(this).fillRect(QRect(QPoint(), size()), Qt::darkCyan);
+        }
+    } window;
+    window.setTitle(QLatin1String(kMaximizedTitle));
+    window.resize(320, 240);
+    window.show();
+    return application.exec();
+}
 
 int runStandInPanel(int argc, char *argv[])
 {
@@ -432,6 +525,8 @@ struct Placement {
     QRect dockBar;
     /// Frames of the stand-in panels on the dock's output.
     QList<QRect> standIns;
+    /// Ordinary windows on the dock's output.
+    QList<NormalWindow> normals;
 
     [[nodiscard]] int outputBottom() const
     {
@@ -455,15 +550,21 @@ std::string describe(const std::optional<Placement> &p)
     for (const QRect &r : p->standIns) {
         panels += rect(r) + QLatin1Char(' ');
     }
-    return QStringLiteral("output %1 %2, maximizeArea %3, dock frame %4, dock bar %5 (bottom %6, output bottom %7), stand-ins %8")
+    QString normals;
+    for (const NormalWindow &w : p->normals) {
+        normals += QStringLiteral("%1 (pid %2) frame %3 maximizeArea %4; ").arg(w.caption).arg(w.pid).arg(rect(w.frame), rect(w.maximizeArea));
+    }
+    return QStringLiteral("output %1 %2, maximizeArea %3, dock frame %4, dock bar %5 (bottom %6, output bottom %7), stand-ins %8, windows %9")
         .arg(p->outputName, rect(p->output), rect(p->maximizeArea), rect(p->dockFrame), rect(p->dockBar))
         .arg(p->dockBottom())
         .arg(p->outputBottom())
         .arg(panels.isEmpty() ? QStringLiteral("none") : panels)
+        .arg(normals.isEmpty() ? QStringLiteral("none") : normals)
         .toStdString();
 }
 
-std::optional<Placement> measure(krema::MultiDockManager &manager, const QSet<qint64> &standInPids)
+/// The dock's placement as KWin reports it, after KWin runs @p action.
+std::optional<Placement> measure(krema::MultiDockManager &manager, const QSet<qint64> &standInPids, const QString &action = {})
 {
     auto *shell = manager.primaryShell();
     if (!shell || !shell->view()->screen() || !shell->view()->isExposed()) {
@@ -474,7 +575,7 @@ std::optional<Placement> measure(krema::MultiDockManager &manager, const QSet<qi
     if (panelRect.width() <= 0 || panelRect.height() <= 0) {
         return std::nullopt;
     }
-    const auto snapshot = KWinQuery::instance().snapshot();
+    const auto snapshot = KWinQuery::instance().snapshot(action);
     if (!snapshot) {
         return std::nullopt;
     }
@@ -498,6 +599,11 @@ std::optional<Placement> measure(krema::MultiDockManager &manager, const QSet<qi
     }
     if (p.dockFrame.isNull()) {
         return std::nullopt;
+    }
+    for (const NormalWindow &w : snapshot->normals) {
+        if (w.output == p.outputName) {
+            p.normals.append(w);
+        }
     }
     p.dockBar = panelRect.translated(p.dockFrame.topLeft());
     return p;
@@ -535,6 +641,61 @@ std::unique_ptr<krema::MultiDockManager> startDock()
     auto manager = std::make_unique<krema::MultiDockManager>(app().settings.get(), app().model.get(), app().tracker.get());
     manager->initialize();
     return manager;
+}
+
+/// KWin script statements: move the window of @p pid to @p outputName (when
+/// elsewhere) and maximize it, as the user would.
+QString maximizeAction(qint64 pid, const QString &outputName)
+{
+    return QStringLiteral(R"JS(
+    var ws = workspace.windowList();
+    var target = null;
+    for (var k = 0; k < ws.length; ++k) {
+        if (ws[k].pid === PID && ws[k].normalWindow && !ws[k].deleted) {
+            target = ws[k];
+        }
+    }
+    var out = null;
+    for (var s = 0; s < workspace.screens.length; ++s) {
+        if (workspace.screens[s].name === "OUTPUT") {
+            out = workspace.screens[s];
+        }
+    }
+    if (!target || !out) {
+        return;
+    }
+    if (!target.output || target.output.name !== out.name) {
+        var g = out.geometry;
+        target.frameGeometry = { x: g.x + 40, y: g.y + 40, width: 320, height: 240 };
+    }
+    target.setMaximize(true, true);
+)JS")
+        .replace(QLatin1String("PID"), QString::number(pid))
+        .replace(QLatin1String("OUTPUT"), outputName);
+}
+
+/// The window of @p pid on the dock's output, if KWin reported it there.
+std::optional<NormalWindow> windowOf(const Placement &p, qint64 pid)
+{
+    for (const NormalWindow &w : p.normals) {
+        if (w.pid == pid) {
+            return w;
+        }
+    }
+    return std::nullopt;
+}
+
+/// The maximized window fills its work area, and the work area holds exactly
+/// one dock reservation: the resting panel bar plus @p margin (no other
+/// panel reserves space here).
+bool maximizedFitsOneReservation(const Placement &p, qint64 pid, int margin)
+{
+    const auto w = windowOf(p, pid);
+    if (!w || w->maximizeArea.isEmpty()) {
+        return false;
+    }
+    const int reserved = krema::panelBarHeight(app().settings->iconSize(), kDockPadding, margin);
+    return w->frame == w->maximizeArea && w->maximizeArea.y() + w->maximizeArea.height() == p.outputBottom() - reserved && reservationCoversDock(p);
 }
 
 } // namespace panelmargin
@@ -651,10 +812,111 @@ TEST_CASE("Panels mode measures the gap from a panel started before Krema", "[pa
     });
 }
 
+TEST_CASE("Maximized windows follow the reservation as it moves between the dock and its probe", "[panel-margin][maximized]")
+{
+    // Panels with no panel on the edge: the reservation sits on the probe in
+    // Panels mode and on the dock surface in Screen edge mode, so every
+    // switch moves it between two surfaces; the reserved depth is the same.
+    constexpr int kMargin = 8;
+    configure(1, kMargin);
+    const auto restore = qScopeGuard([] {
+        configure(1, kMargin);
+    });
+
+    OrdinaryWindow window;
+    REQUIRE(window.waitForStarted());
+    const qint64 pid = window.pid();
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    const QString outputName = manager->primaryShell()->view()->screen()->name();
+
+    // Maximize the window on the dock's output (the window maps
+    // asynchronously in its own process, so retry until KWin has it).
+    {
+        std::optional<Placement> last;
+        const bool maximized = QTest::qWaitFor(
+            [&] {
+                last = measure(*manager, {}, maximizeAction(pid, outputName));
+                const auto w = last ? windowOf(*last, pid) : std::nullopt;
+                return w && !w->maximizeArea.isEmpty() && w->frame == w->maximizeArea;
+            },
+            kTimeoutMs);
+        INFO("maximizing " << kMaximizedTitle << " (pid " << pid << "): " << describe(last));
+        REQUIRE(maximized);
+    }
+    const auto converges = [&](const char *what) {
+        requireSettles(*manager, {}, what, [&](const Placement &p) {
+            return maximizedFitsOneReservation(p, pid, kMargin);
+        });
+    };
+    converges("maximized, Panels");
+
+    // Settled switches and quick flip-flops, with varied gaps so the
+    // reservation moves while KWin may still be reflowing the window.
+    const int delays[] = {50, 120, 200, 80, 160};
+    for (int round = 0; round < 5; ++round) {
+        const int d = delays[round];
+        const int dBack = delays[4 - round];
+        INFO("round " << round << ", delays " << d << "/" << dBack << " ms");
+
+        app().settings->setFloatingMarginReference(0);
+        converges("switched to Screen edge");
+
+        app().settings->setFloatingMarginReference(1);
+        QTest::qWait(d);
+        app().settings->setFloatingMarginReference(0);
+        QTest::qWait(dBack);
+        app().settings->setFloatingMarginReference(1);
+        converges("flip-flopped back to Panels");
+    }
+
+    // Krema starting with the maximized window already present.
+    const auto restart = [&](int reference, bool waitForFullOutput, const char *what) {
+        INFO(what);
+        manager.reset();
+        if (waitForFullOutput) {
+            // No dock, no reservation: the window grows to the whole output,
+            // so the next start begins from a known state.
+            std::optional<Snapshot> snapshot;
+            const bool grown = QTest::qWaitFor(
+                [&] {
+                    snapshot = KWinQuery::instance().snapshot();
+                    if (!snapshot || !snapshot->outputs.contains(outputName)) {
+                        return false;
+                    }
+                    const QRect output = snapshot->outputs.value(outputName).geometry;
+                    for (const NormalWindow &w : snapshot->normals) {
+                        if (w.pid == pid) {
+                            return w.maximizeArea == output && w.frame == output;
+                        }
+                    }
+                    return false;
+                },
+                kTimeoutMs);
+            REQUIRE(grown);
+        }
+        app().settings->setFloatingMarginReference(reference);
+        manager = startDock();
+        converges(what);
+    };
+    restart(1, true, "restarted in Panels mode from a full-output window");
+    restart(0, true, "restarted in Screen edge mode from a full-output window");
+    restart(1, false, "restarted in Panels mode right after the previous dock went away");
+}
+
 int main(int argc, char *argv[])
 {
     if (argc > 1 && qstrcmp(argv[1], kPanelArg) == 0) {
         return runStandInPanel(argc, argv);
+    }
+    if (argc > 1 && qstrcmp(argv[1], kMaximizedArg) == 0) {
+        return runOrdinaryWindow(argc, argv);
     }
 
     // Opt into the layer-shell platform plugin. Equivalent to the deprecated

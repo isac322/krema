@@ -220,12 +220,12 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
         m_probeLayerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
         m_probeLayerWindow->setCloseOnDismissed(false);
         m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
-        m_probeLayerWindow->setExclusiveZone(0);
 #ifndef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
         m_probeLayerWindow->setDesiredSize(QSize(1, 1));
 #endif
     }
     m_probe = std::move(probe);
+    applyExclusiveZone();
     // Follow the dock surface: it is re-created (hide + show) on screen
     // changes and after the output went away, and so is the probe.
     QObject::connect(m_window, &QWindow::visibleChanged, m_probe.get(), [this](bool visible) {
@@ -304,16 +304,29 @@ void WaylandDockPlatform::applyExclusiveZone()
     }
 
     const bool reserve = m_visibilityMode == VisibilityMode::AlwaysVisible;
+    const int probeZone = reserve ? std::max(m_exclusiveZone, 0) : 0;
     if (m_panelRelative && m_probeMapped && m_probeLayerWindow) {
         // The dock stays at the screen edge and draws its offset from the
         // panels itself; the probe sits right past their reserved space and
         // carries the dock's reservation from there. Both surfaces commit
         // together so KWin re-arranges once (see setPanelRelative).
-        m_probeLayerWindow->setExclusiveZone(reserve ? std::max(m_exclusiveZone, 0) : 0);
+        m_probeLayerWindow->setExclusiveZone(probeZone);
         m_layerWindow->setExclusiveZone(-1);
         commitMappedSurface(m_probe.get());
         commitMappedSurface(m_window);
         return;
+    }
+
+    if (m_panelRelative && m_probeLayerWindow) {
+        // The probe maps with its reservation. A dock surface that is not
+        // mapped yet (startup, re-creation) never reserves; a mapped one (the
+        // setting was just switched) keeps its reservation until the probe
+        // maps and takes it over in the same flush.
+        m_probeLayerWindow->setExclusiveZone(probeZone);
+        if (!m_window || !m_window->isExposed()) {
+            m_layerWindow->setExclusiveZone(-1);
+            return;
+        }
     }
 
     if (reserve) {
@@ -325,11 +338,6 @@ void WaylandDockPlatform::applyExclusiveZone()
         // AutoHide / DodgeWindows: ignore other surfaces' exclusive zones and
         // stay at the real screen edge.
         m_layerWindow->setExclusiveZone(-1);
-    }
-    if (m_probeLayerWindow) {
-        // Probe not mapped (yet): the dock surface keeps the reservation; the
-        // probe maps without one and takes it over then.
-        m_probeLayerWindow->setExclusiveZone(0);
     }
 }
 

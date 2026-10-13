@@ -7,6 +7,7 @@
 #include <QRect>
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace krema
 {
@@ -71,10 +72,20 @@ inline PanelInset computePanelInset(const QRect &output, const QRect &anchor, co
         return {};
     }
     const bool horizontalEdge = edge == 0 || edge == 1;
-    // Never push the dock past the middle of the screen, whatever is reported.
     const int limit = (horizontalEdge ? output.height() : output.width()) / 2;
 
-    const int reserved = std::clamp(detail::edgeSpan(output, anchor, edge).outer, 0, limit);
+    // Anchored to one edge only, the probe is centred along it and sits in
+    // that edge's half of the output. A report from before an edge change
+    // still has the probe of the old edge: not a measurement for this one.
+    // (2 px of slack for rounding under fractional scaling.)
+    const QPoint offset = anchor.center() - output.center();
+    const int offCentre = horizontalEdge ? std::abs(offset.x()) : std::abs(offset.y());
+    const int outer = detail::edgeSpan(output, anchor, edge).outer;
+    if (offCentre > 2 || outer >= limit) {
+        return {};
+    }
+
+    const int reserved = std::max(outer, 0);
     if (reserved == 0) {
         return {};
     }

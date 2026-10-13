@@ -50,8 +50,8 @@ TEST_CASE("Panel inset from the probe surface", "[panel-inset]")
     SECTION("Top, left and right edges")
     {
         REQUIRE(krema::computePanelInset(output, QRect(512, 44, 1, 1), {QRect(0, 0, 1024, 60)}, 0) == krema::PanelInset{44, 60});
-        REQUIRE(krema::computePanelInset(output, QRect(44, 379, 1, 1), {QRect(0, 184, 60, 400)}, 2) == krema::PanelInset{44, 60});
-        REQUIRE(krema::computePanelInset(output, QRect(979, 379, 1, 1), {QRect(964, 184, 60, 400)}, 3) == krema::PanelInset{44, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(44, 383, 1, 1), {QRect(0, 184, 60, 400)}, 2) == krema::PanelInset{44, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(979, 383, 1, 1), {QRect(964, 184, 60, 400)}, 3) == krema::PanelInset{44, 60});
     }
 
     SECTION("Output not at the origin")
@@ -60,8 +60,16 @@ TEST_CASE("Panel inset from the probe surface", "[panel-inset]")
         REQUIRE(krema::computePanelInset(second, QRect(1536, 723, 1, 1), {QRect(1024, 708, 1024, 60)}, 1) == krema::PanelInset{44, 60});
     }
 
-    SECTION("Never past the middle of the screen")
+    SECTION("A probe from another edge is no measurement")
     {
-        REQUIRE(krema::computePanelInset(output, QRect(512, 100, 1, 1), {}, 1) == krema::PanelInset{384, 384});
+        // Right after the dock moves, the last report still has the probe
+        // where the old edge put it.
+        const QRect bottomProbe(511, 767, 1, 1);
+        REQUIRE(krema::computePanelInset(output, bottomProbe, {}, 0) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, bottomProbe, {}, 2) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, bottomProbe, {}, 3) == krema::PanelInset{});
+        const QRect leftProbe(44, 383, 1, 1);
+        REQUIRE(krema::computePanelInset(output, leftProbe, {}, 1) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, leftProbe, {}, 3) == krema::PanelInset{});
     }
 }

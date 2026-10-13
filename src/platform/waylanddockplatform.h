@@ -58,6 +58,8 @@ private:
     int m_margin = 0;
     int m_exclusiveZone = 0;
     bool m_panelRelative = false;
+    /// The probe is mapped, so it can take over the reservation.
+    bool m_probeMapped = false;
 };
 
 } // namespace krema

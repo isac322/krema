@@ -61,6 +61,9 @@ add_executable(krema_launch_in_place_tests
     test_launch_in_place.cpp
 )
 
+# Catch2 throws on REQUIRE failures; unwind fixture objects before the next case.
+kde_target_enable_exceptions(krema_launch_in_place_tests PRIVATE)
+
 target_link_libraries(krema_launch_in_place_tests PRIVATE
     Catch2::Catch2
     Qt6::Test

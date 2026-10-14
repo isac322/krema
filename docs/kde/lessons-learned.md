@@ -403,3 +403,40 @@ fresh opens, 500 ms hold, 2 motion points, 5 ms step.
   fixed 5 ms server/Qt dwell.
 - Batching to the chain barrier preserves request ordering without paying
   a blocking roundtrip per point.
+
+## 21. Preserve logical launcher slots through startup task replacement (2026-10, related to issue #105)
+
+**Symptom:** Opening a pinned app changed the visible order from `[A, B]`
+to `[B, A]` when its first window replaced a startup notification.
+No change to the launcher configuration on disk was observed; the
+incorrect order persisted in the in-memory history.
+
+**Cause:** A real startup task occupied A's correct slot with `IsStartup=true`,
+`IsLauncher=false`, and an empty `WinIdList`. Plasma 6.8's
+[`WaylandStartupTasksModel`](https://invent.kde.org/plasma/plasma-workspace/-/blob/Plasma/6.8/libtaskmanager/waylandstartuptasksmodel.cpp)
+sets `IsStartup` and delegates the other roles to
+[`AbstractTasksModel`](https://invent.kde.org/plasma/plasma-workspace/-/blob/Plasma/6.8/libtaskmanager/abstracttasksmodel.cpp),
+whose defaults are `IsLauncher=false` and an empty window-ID list.
+Startup removal, the cold launcher's return, window insertion, and the
+cold launcher's hiding coalesced into one queued reconciliation pass.
+The settled snapshot still had A's valid launcher URL and slot, but the
+repair accepted only cold launcher rows (`IsLauncher=true`). It excluded
+the startup row, saved `[B, A]` as settled history, and used that history
+to restore the wrong order in the next pass.
+
+**Fix:** Restore each pinned URL's settled slot regardless of whether its
+previous row was a cold launcher, startup task, window, or group. Use the
+earliest representative when rows share a launcher slot. Preserve settled
+history when a setter receives the same normalized launcher list. When
+the list changes, seed its new pinned order without moving unpinned
+anchors. Keep manual ordering instead of sorting every row by configuration
+order.
+
+**Key lesson:** A task's row type changes during launch; its pinned URL
+retains its logical slot. Regression QA must observe an actual startup
+task in slot 0 with no window, then hold parent GUI event dispatch while
+startup completion and window creation arrive. After one coalesced repair,
+the required order is `[W0, L1, L2]`; launching B must produce
+`[W0, W1, L2]` with the launcher list unchanged. Failure to observe the
+startup task is a fixture failure, not a passing test. Ordinary window
+insertion alone does not exercise this transition.

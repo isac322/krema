@@ -985,25 +985,37 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         REQUIRE(awaitLayout({QStringLiteral("L0"), QStringLiteral("L1")}));
         TransitionTrace trace;
         Children children;
-        REQUIRE(children.start(unpinnedU));
-        REQUIRE(awaitLayout({QStringLiteral("L0"), QStringLiteral("L1"), QStringLiteral("W-1")}));
-        REQUIRE(model().moveTask(2, 1));
-        REQUIRE(children.start(unpinnedV));
-
         const auto mixedLayout = [&] {
             QStringList rows = layout();
             auto *tasks = model().tasksModel();
             for (int row = 0; row < tasks->rowCount(); ++row) {
-                QString appId = tasks->index(row, 0).data(AbstractTasksModel::AppId).toString();
+                const QModelIndex index = tasks->index(row, 0);
+                QString appId = index.data(AbstractTasksModel::AppId).toString();
                 appId.remove(QStringLiteral(".desktop"));
-                if (appId == unpinnedU) {
+                if (index.data(AbstractTasksModel::IsWindow).toBool() && !index.data(AbstractTasksModel::WinIdList).toList().isEmpty() && appId == unpinnedU) {
                     rows[row] = QStringLiteral("U");
-                } else if (appId == unpinnedV) {
+                } else if (index.data(AbstractTasksModel::IsWindow).toBool() && !index.data(AbstractTasksModel::WinIdList).toList().isEmpty()
+                           && appId == unpinnedV) {
                     rows[row] = QStringLiteral("V");
                 }
             }
             return rows;
         };
+        REQUIRE(children.start(unpinnedU));
+        const QStringList uOnly{QStringLiteral("L0"), QStringLiteral("L1"), QStringLiteral("U")};
+        const bool uMapped = QTest::qWaitFor(
+            [&] {
+                return mixedLayout() == uOnly;
+            },
+            kTimeoutMs);
+        INFO("mapped U prerequisite: expected " << uOnly.join(QLatin1Char(' ')).toStdString() << ", actual "
+                                                << mixedLayout().join(QLatin1Char(' ')).toStdString());
+        REQUIRE(uMapped);
+        REQUIRE(settleEvents());
+        REQUIRE(mixedLayout() == uOnly);
+        REQUIRE(model().moveTask(2, 1));
+        REQUIRE(children.start(unpinnedV));
+
         const QStringList before{QStringLiteral("L0"), QStringLiteral("U"), QStringLiteral("L1"), QStringLiteral("V")};
         const bool mixedPrepared = QTest::qWaitFor(
             [&] {

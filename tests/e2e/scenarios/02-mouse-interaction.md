@@ -187,7 +187,7 @@ shifted item's zoomed bounding box as a target.
 
 **Verification:** screenshot comparison (dots appear/disappear)
 
-**Automated:** tests/appium/test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state; `tests/kwin/test_launch_in_place.cpp` (ctest `krema_launch_in_place_tests`) covers the in-place position for first, middle and last pinned launchers with separation off and on
+**Automated:** tests/appium/test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state; `tests/kwin/test_launch_in_place.cpp` (ctest `krema_launch_in_place_tests`) covers six in-place slot cases: real startup notifications handing their slot to a window or group, pinned-list setter calls that keep pending repair while a changed list records new intent, and mixed-mode unpinned anchors staying in place
 
 ---
 

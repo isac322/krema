@@ -302,7 +302,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | MOUSE-004 | `test_02_mouse.py::test_mouse004_tooltip_shows_app_name_on_hover` | screenshot | pass |
 | MOUSE-005 | `test_02_mouse.py::test_mouse005_scroll_wheel_cycles_grouped_windows` (six click-policy cases) | KWin | baseline pass; Issue 54 cases pending |
 | MOUSE-006 | `test_02_mouse.py::test_mouse006_middle_click_launches_new_instance`, `test_mouse006_launch_bounce_lasts_until_the_new_window_maps` (six click-policy cases for the launch test) | KWin, AT-SPI events | baseline pass; Issue 54 cases pending |
-| MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state` | screenshot | pass |
+| MOUSE-007 | `test_02_mouse.py::test_mouse007_indicator_dots_reflect_running_state`; `tests/kwin/test_launch_in_place.cpp` (ctest `krema_launch_in_place_tests`) | screenshot, KWin | pass |
 | MOUSE-008 | `tests/kwin/test_grouped_activation.cpp` (ctest `krema_grouped_activation_tests`; existing cycle/no-launch cases plus Issue 54 click-minimize cases) | KWin | baseline pass; Issue 54 cases pending |
 | MOUSE-009 | `test_02_mouse.py::test_mouse009_in_place_zoom_scales_icons_without_moving_them` | AT-SPI, screenshot | pass |
 | PREV-001 | `test_03_preview.py::test_prev001_hover_opens_preview_above_dock_with_live_thumbnails`; `test_08_reservation.py::test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item` (four edges × reservation off/on, floating on; geometry/title only, no DRM) | AT-SPI, screenshot for original thumbnail case; KWin popup/surface/item geometry and real hover for reservation regression | baseline pass; reservation geometry regression 8/8 native Tier 2 pass; current thumbnail pixels/DRM and installed Tier 3 unverified |

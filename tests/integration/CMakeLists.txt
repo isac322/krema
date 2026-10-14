@@ -11,6 +11,9 @@ add_executable(krema_integration_tests
     test_settings_lifecycle.cpp
 )
 
+# Catch2's fatal assertions must unwind scoped fixtures.
+kde_target_enable_exceptions(krema_integration_tests PRIVATE)
+
 target_link_libraries(krema_integration_tests PRIVATE
     Catch2::Catch2
     Qt6::Test
@@ -20,6 +23,8 @@ target_link_libraries(krema_integration_tests PRIVATE
 add_executable(krema_launcher_entry_tests
     test_launcher_entry.cpp
 )
+
+kde_target_enable_exceptions(krema_launcher_entry_tests PRIVATE)
 
 target_link_libraries(krema_launcher_entry_tests PRIVATE
     Catch2::Catch2

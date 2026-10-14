@@ -213,3 +213,129 @@ TEST_CASE("Preview input region matches the visible popup", "[input-region][prev
         REQUIRE(region == QRegion(0, 0, 1, 1));
     }
 }
+
+TEST_CASE("Dock input region leaves other panels' band click-through", "[input-region]")
+{
+    // Bottom dock drawn 60 px above the screen edge, past a 60 px panel band.
+    krema::InputRegionParams p{};
+    p.surfaceWidth = 1920;
+    p.surfaceHeight = 180;
+    p.panelX = 800;
+    p.panelY = 80;
+    p.panelWidth = 320;
+    p.panelHeight = 40;
+    p.zoomOverflowHeight = 29;
+    p.visible = true;
+    p.hovered = true;
+    p.edgeInset = 60;
+
+    SECTION("Bottom: dock, gap and trigger strip stay past the band")
+    {
+        p.edge = 1;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(960, 100))); // dock
+        REQUIRE(region.contains(QPoint(960, 119))); // gap above the band
+        REQUIRE(region.contains(QPoint(10, 117))); // trigger strip at the band's inner edge
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60))); // nothing over the panel band
+    }
+
+    SECTION("Hidden: the trigger strip reveals the dock from the band's inner edge")
+    {
+        p.edge = 1;
+        p.visible = false;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(10, 117)));
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
+        REQUIRE_FALSE(region.contains(QPoint(960, 100)));
+    }
+
+    SECTION("Revealing: panel still off the surface, region never empty")
+    {
+        // setVisible(true) applies the region before the slide-in moves the
+        // panel back; an empty mask would accept input on the whole surface.
+        p.edge = 1;
+        p.panelY = 300;
+        p.hovered = false;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE_FALSE(region.isEmpty());
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
+    }
+
+    SECTION("External edge trigger, hidden: 1x1 placeholder, no inner-edge strip")
+    {
+        // KWin watches the outer screen edge; an empty mask would accept
+        // input on the whole surface, so a 1x1 corner stands in.
+        p.edge = 1;
+        p.visible = false;
+        p.externalEdgeTrigger = true;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region == QRegion(0, 0, 1, 1));
+        REQUIRE_FALSE(region.isEmpty());
+        REQUIRE_FALSE(region.contains(QPoint(10, 117)));
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
+    }
+
+    SECTION("External edge trigger, visible: dock only, no inner-edge strip")
+    {
+        p.edge = 1;
+        p.externalEdgeTrigger = true;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(960, 100))); // dock
+        REQUIRE_FALSE(region.contains(QPoint(10, 117))); // strip outside the dock width
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
+    }
+
+    SECTION("External edge trigger, revealing: panel off the surface, 1x1 placeholder")
+    {
+        p.edge = 1;
+        p.externalEdgeTrigger = true;
+        p.panelY = 300;
+        p.hovered = false;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region == QRegion(0, 0, 1, 1));
+        REQUIRE_FALSE(region.isEmpty());
+    }
+
+    SECTION("Top: band at the top of the surface")
+    {
+        p.edge = 0;
+        p.panelY = 60;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(960, 60)));
+        REQUIRE_FALSE(region.contains(QPoint(960, 59)));
+        REQUIRE_FALSE(region.contains(QPoint(960, 0)));
+
+        p.visible = false;
+        p.externalEdgeTrigger = true;
+        const QRegion hidden = krema::computeDockInputRegion(p);
+        REQUIRE_FALSE(hidden.isEmpty());
+        REQUIRE_FALSE(hidden.intersects(QRect(0, 0, 1920, 60)));
+    }
+    SECTION("Left and right: band beside the surface edge")
+    {
+        p.surfaceWidth = 180;
+        p.surfaceHeight = 1080;
+        p.panelY = 400;
+        p.panelWidth = 40;
+        p.panelHeight = 320;
+
+        p.edge = 2;
+        p.panelX = 60;
+        QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(60, 500)));
+        REQUIRE_FALSE(region.contains(QPoint(59, 500)));
+
+        p.edge = 3;
+        p.panelX = 80;
+        region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(119, 500)));
+        REQUIRE_FALSE(region.contains(QPoint(120, 500)));
+
+        p.edge = 2;
+        p.visible = false;
+        p.externalEdgeTrigger = true;
+        const QRegion hiddenLeft = krema::computeDockInputRegion(p);
+        REQUIRE_FALSE(hiddenLeft.isEmpty());
+        REQUIRE_FALSE(hiddenLeft.intersects(QRect(0, 0, 60, 1080)));
+    }
+}

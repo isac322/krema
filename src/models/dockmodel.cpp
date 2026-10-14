@@ -212,7 +212,36 @@ QStringList DockModel::pinnedLaunchers() const
 
 void DockModel::setPinnedLaunchers(const QStringList &launchers)
 {
+    const QStringList previous = m_tasksModel->launcherList();
     m_tasksModel->setLauncherList(launchers);
+    if (m_tasksModel->launcherList() != previous) {
+        // A new list replaces pinned-order intent, not unpinned task anchors.
+        snapshotSettledRows();
+        QList<int> positions;
+        positions.reserve(m_settledRows.size());
+        for (const SettledRow &settled : std::as_const(m_settledRows)) {
+            positions.append(settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1);
+        }
+        // Stable insertion across pinned slots leaves all other rows in place.
+        for (qsizetype row = 1; row < m_settledRows.size(); ++row) {
+            if (positions.at(row) == -1) {
+                continue;
+            }
+            qsizetype current = row;
+            for (qsizetype earlier = row - 1; earlier >= 0; --earlier) {
+                if (positions.at(earlier) == -1) {
+                    continue;
+                }
+                if (positions.at(earlier) <= positions.at(current)) {
+                    break;
+                }
+                std::swap(m_settledRows[current], m_settledRows[earlier]);
+                std::swap(positions[current], positions[earlier]);
+                current = earlier;
+            }
+        }
+        scheduleTaskPartition();
+    }
     Q_EMIT pinnedLaunchersChanged();
 }
 
@@ -305,23 +334,16 @@ bool DockModel::placeStartedTasksInLauncherSlots()
     QList<int> settledPositions;
     settledPositions.reserve(m_settledRows.size());
     for (const SettledRow &settled : std::as_const(m_settledRows)) {
-        settledPositions.append(settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1);
+        const int position = settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1;
+        settledPositions.append(position != -1 && settledPositions.contains(position) ? -1 : position);
     }
 
-    // Settled launchers without a task of their own may since have given way
-    // to one. In settled order, a replaced predecessor is already back in its
-    // slot when a later launcher's task is placed after it.
+    // Each pinned URL keeps its logical slot through startup, window, and
+    // group replacement. Restore the earliest representative first so later
+    // slots can anchor to it.
     QList<qsizetype> vacated;
     for (qsizetype settledIndex = 0; settledIndex < m_settledRows.size(); ++settledIndex) {
-        const int position = settledPositions.at(settledIndex);
-        if (!m_settledRows.at(settledIndex).isLauncher || position == -1) {
-            continue;
-        }
-        bool hadTask = false;
-        for (qsizetype other = 0; other < m_settledRows.size() && !hadTask; ++other) {
-            hadTask = !m_settledRows.at(other).isLauncher && settledPositions.at(other) == position;
-        }
-        if (!hadTask) {
+        if (settledPositions.at(settledIndex) != -1) {
             vacated.append(settledIndex);
         }
     }
@@ -421,7 +443,6 @@ void DockModel::snapshotSettledRows()
     for (int row = 0; row < count; ++row) {
         const QModelIndex index = m_tasksModel->index(row, 0);
         SettledRow settled;
-        settled.isLauncher = index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
         if (isPinnedTask(*m_tasksModel, index)) {
             settled.launcherUrl = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
         } else {

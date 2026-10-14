@@ -5,14 +5,92 @@
 
 #include <LayerShellQt/Window>
 
+#include <QGuiApplication>
 #include <QLoggingCategory>
+#include <QPainter>
+#include <QRasterWindow>
+#include <qpa/qplatformnativeinterface.h>
+
+#include <wayland-client.h>
 
 #include <algorithm>
+#include <functional>
 
 Q_LOGGING_CATEGORY(lcWayland, "krema.platform.wayland")
 
 namespace krema
 {
+
+namespace
+{
+/// Transparent 1 px surface: it only has to be mapped for the compositor to
+/// place it (and apply its exclusive zone).
+class ProbeWindow : public QRasterWindow
+{
+public:
+    /// Called when the surface is mapped (first buffer committed) or unmapped.
+    std::function<void(bool)> mappedChanged;
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(QRect(QPoint(0, 0), size()), Qt::transparent);
+    }
+
+    void exposeEvent(QExposeEvent *event) override
+    {
+        // QRasterWindow paints and commits its buffer here, synchronously.
+        QRasterWindow::exposeEvent(event);
+        if (isExposed() != m_mapped) {
+            m_mapped = isExposed();
+            if (mappedChanged) {
+                mappedChanged(m_mapped);
+            }
+        }
+    }
+
+private:
+    bool m_mapped = false;
+};
+
+/// Commit @p window's pending layer-surface state (exclusive zone) now,
+/// without waiting for its next frame. Only for a mapped surface: before its
+/// first configure the shell integration owns the commits.
+void commitMappedSurface(QWindow *window)
+{
+    auto *nativeInterface = QGuiApplication::platformNativeInterface();
+    if (!window || !window->isExposed() || !nativeInterface) {
+        return;
+    }
+    if (auto *surface = static_cast<wl_surface *>(nativeInterface->nativeResourceForWindow(QByteArrayLiteral("surface"), window))) {
+        wl_surface_commit(surface);
+    }
+}
+
+LayerShellQt::Window::Anchors edgeAnchor(DockPlatform::Edge edge)
+{
+    switch (edge) {
+    case DockPlatform::Edge::Top:
+        return LayerShellQt::Window::AnchorTop;
+    case DockPlatform::Edge::Left:
+        return LayerShellQt::Window::AnchorLeft;
+    case DockPlatform::Edge::Right:
+        return LayerShellQt::Window::AnchorRight;
+    case DockPlatform::Edge::Bottom:
+        break;
+    }
+    return LayerShellQt::Window::AnchorBottom;
+}
+
+/// The probe lies along its edge (2x1 on a horizontal edge, 1x2 on a
+/// vertical one), so a report shows which edge it was placed for.
+QSize probeSize(DockPlatform::Edge edge)
+{
+    return edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right ? QSize(1, 2) : QSize(2, 1);
+}
+} // namespace
 
 WaylandDockPlatform::WaylandDockPlatform() = default;
 
@@ -39,6 +117,7 @@ void WaylandDockPlatform::setupWindow(QWindow *window)
 
 void WaylandDockPlatform::setScreen(QScreen *screen)
 {
+    m_screen = screen;
 #ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
     // LayerShellQt < 6.6 has no Window::setScreen. With ScreenFromQWindow its
     // get_layer_surface() binds the wl_output of QWindow::screen() when the
@@ -97,6 +176,106 @@ void WaylandDockPlatform::setExclusiveZone(int zone)
     applyExclusiveZone();
 }
 
+void WaylandDockPlatform::setPanelRelative(bool enabled)
+{
+    if (m_panelRelative == enabled) {
+        return;
+    }
+    m_panelRelative = enabled;
+
+    if (!enabled) {
+        // Hand the reservation back to the dock surface: clear the probe's
+        // reservation and commit both surfaces together before destroying the
+        // probe, so KWin re-arranges once and never drops the reservation.
+        m_probeMapped = false;
+        if (m_probeLayerWindow) {
+            m_probeLayerWindow->setExclusiveZone(0);
+            commitMappedSurface(m_probe.get());
+        }
+        applyExclusiveZone();
+        m_probeLayerWindow = nullptr;
+        m_probe.reset();
+        return;
+    }
+
+    if (!m_window) {
+        return;
+    }
+    auto probe = std::make_unique<ProbeWindow>();
+    QSurfaceFormat format = probe->format();
+    format.setAlphaBufferSize(8);
+    probe->setFormat(format);
+    // No input at all: QtWayland sends an empty input region for this flag
+    // (an empty mask would accept everything).
+    probe->setFlags(Qt::FramelessWindowHint | Qt::WindowTransparentForInput | Qt::WindowDoesNotAcceptFocus);
+    probe->resize(probeSize(m_edge));
+    // The dock surface keeps the reservation until the probe is mapped and
+    // placed; then both change in one flush (see applyExclusiveZone).
+    probe->mappedChanged = [this](bool mapped) {
+        m_probeMapped = mapped;
+        applyExclusiveZone();
+    };
+    m_probeLayerWindow = LayerShellQt::Window::get(probe.get());
+    if (m_probeLayerWindow) {
+        // The Bottom layer is what makes KWin place the probe after every
+        // Top-layer panel, i.e. right inside the space they reserve,
+        // whichever started first. Anchored to the edge only, it is never
+        // stretched along it, so no perpendicular panel moves it.
+        m_probeLayerWindow->setLayer(LayerShellQt::Window::LayerBottom);
+        // "dock" keeps it a Dock window for KWin: Show Desktop leaves it
+        // alone, and the panel watcher only looks at dock windows.
+        m_probeLayerWindow->setScope(QStringLiteral("dock"));
+        m_probeLayerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+        m_probeLayerWindow->setCloseOnDismissed(false);
+        m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
+#ifndef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+        m_probeLayerWindow->setDesiredSize(probeSize(m_edge));
+#endif
+    }
+    m_probe = std::move(probe);
+    applyExclusiveZone();
+    // Follow the dock surface: it is re-created (hide + show) on screen
+    // changes and after the output went away, and so is the probe.
+    QObject::connect(m_window, &QWindow::visibleChanged, m_probe.get(), [this](bool visible) {
+        if (visible) {
+            showProbe();
+        } else if (m_probe) {
+            m_probe->hide();
+        }
+    });
+    if (m_window->isVisible()) {
+        showProbe();
+    }
+}
+
+void WaylandDockPlatform::showProbe()
+{
+    if (!m_probe || !m_window) {
+        return;
+    }
+    // The screen the dock surface is pinned to; QWindow::screen() can still
+    // report another one right after creation (see DockView::initialize).
+    QScreen *screen = m_screen ? m_screen.data() : m_window->screen();
+    // The layer surface binds its output when it is (re)created on show().
+    // QtWayland derives the Qt-side screen from the window position until the
+    // compositor reports the output, so also place the window on the target
+    // screen. (The platform window itself must survive: LayerShellQt set its
+    // shell integration when it was created.)
+    m_probe->hide();
+    m_probe->setScreen(screen);
+    if (screen) {
+        m_probe->setPosition(screen->geometry().topLeft());
+    }
+    if (m_probeLayerWindow) {
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
+        m_probeLayerWindow->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
+#else
+        m_probeLayerWindow->setScreen(screen);
+#endif
+    }
+    m_probe->show();
+}
+
 void WaylandDockPlatform::setMargin(int margin)
 {
     m_margin = margin;
@@ -132,19 +311,43 @@ void WaylandDockPlatform::applyExclusiveZone()
         return;
     }
 
-    switch (m_visibilityMode) {
-    case VisibilityMode::AlwaysVisible:
+    const bool reserve = m_visibilityMode == VisibilityMode::AlwaysVisible;
+    const int probeZone = reserve ? std::max(m_exclusiveZone, 0) : 0;
+    if (m_panelRelative && m_probeMapped && m_probeLayerWindow) {
+        // The dock stays at the screen edge and draws its offset from the
+        // panels itself; the probe sits right past their reserved space and
+        // carries the dock's reservation from there. Both surfaces commit
+        // together so KWin re-arranges once (see setPanelRelative).
+        m_probeLayerWindow->setExclusiveZone(probeZone);
+        m_layerWindow->setExclusiveZone(-1);
+        commitMappedSurface(m_probe.get());
+        commitMappedSurface(m_window);
+        return;
+    }
+
+    if (m_panelRelative && m_probeLayerWindow) {
+        // The probe maps with its reservation. A dock surface that is not
+        // mapped yet (startup, re-creation) never reserves; a mapped one (the
+        // setting was just switched) keeps its reservation until the probe
+        // maps and takes it over in the same flush.
+        m_probeLayerWindow->setExclusiveZone(probeZone);
+        if (!m_window || !m_window->isExposed()) {
+            m_layerWindow->setExclusiveZone(-1);
+            return;
+        }
+    }
+
+    if (reserve) {
         // Reserve the panel thickness at the anchored edge (the surface is
         // anchored to that edge and both perpendicular ones, so the compositor
         // applies the zone there) so maximized windows end above the dock.
         m_layerWindow->setExclusiveZone(std::max(m_exclusiveZone, 0));
-        break;
-    case VisibilityMode::AutoHide:
-    case VisibilityMode::DodgeWindows:
-        // Ignore other surfaces' exclusive zones — stay at the real screen edge
+    } else {
+        // AutoHide / DodgeWindows: ignore other surfaces' exclusive zones and
+        // stay at the real screen edge.
         m_layerWindow->setExclusiveZone(-1);
-        break;
     }
+    commitMappedSurface(m_window);
 }
 
 void WaylandDockPlatform::setSize(const QSize &size)
@@ -167,8 +370,9 @@ void WaylandDockPlatform::setSize(const QSize &size)
 
 void WaylandDockPlatform::setInputRegion(const QRegion &region)
 {
-    if (m_window) {
+    if (m_window && m_window->mask() != region) {
         m_window->setMask(region);
+        commitMappedSurface(m_window);
     }
 }
 
@@ -220,6 +424,16 @@ void WaylandDockPlatform::applyAnchors()
 
     // Reapply margin after anchor change
     setMargin(m_margin);
+
+    if (m_probeLayerWindow) {
+        // Its orientation tells the panel watcher which edge it measures.
+        m_probeLayerWindow->setAnchors(edgeAnchor(m_edge));
+        m_probe->resize(probeSize(m_edge));
+#ifndef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+        m_probeLayerWindow->setDesiredSize(probeSize(m_edge));
+#endif
+        static_cast<QPaintDeviceWindow *>(m_probe.get())->update();
+    }
 }
 
 } // namespace krema

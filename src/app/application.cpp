@@ -85,6 +85,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::CornerRadiusChanged, context, saveSettings);
     connect(settings, &KremaSettings::FloatingChanged, context, saveSettings);
     connect(settings, &KremaSettings::FloatingMarginChanged, context, saveSettings);
+    connect(settings, &KremaSettings::FloatingMarginReferenceChanged, context, saveSettings);
     connect(settings, &KremaSettings::BackgroundOpacityChanged, context, saveSettings);
     connect(settings, &KremaSettings::BackgroundStyleChanged, context, saveSettings);
     connect(settings, &KremaSettings::TintColorChanged, context, saveSettings);
@@ -92,6 +93,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::EdgeChanged, context, saveSettings);
     connect(settings, &KremaSettings::ShowDelayChanged, context, saveSettings);
     connect(settings, &KremaSettings::HideDelayChanged, context, saveSettings);
+    connect(settings, &KremaSettings::RevealTriggerLocationChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewEnabledChanged, context, saveSettings);
     connect(settings, &KremaSettings::SingleWindowClickActionChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewThumbnailSizeChanged, context, saveSettings);
@@ -117,6 +119,9 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::IconScaleChanged, context, saveSettings);
     connect(settings, &KremaSettings::AttentionAnimationDurationChanged, context, saveSettings);
     connect(settings, &KremaSettings::BadgeDisplayModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgePositionChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgeUseAccentColorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgeCustomColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::UseSystemColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::UseAccentColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::DodgeActiveOnlyChanged, context, saveSettings);

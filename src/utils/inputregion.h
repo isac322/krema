@@ -26,6 +26,13 @@ struct InputRegionParams {
     int triggerStripHeight = kEdgeTriggerThickness;
     int margin = 4;
     int edge = 1; // 0=Top, 1=Bottom, 2=Left, 3=Right
+    /// Depth of the band along the screen edge that other panels occupy
+    /// (the dock is drawn past it). The dock's region and its trigger strip
+    /// start past it so those panels keep their input.
+    int edgeInset = 0;
+    /// An external watcher (KWin script) reveals the dock from the outer
+    /// screen edge, so the surface places no trigger strip of its own.
+    bool externalEdgeTrigger = false;
 };
 
 /// Compute the input region mask for the dock surface.

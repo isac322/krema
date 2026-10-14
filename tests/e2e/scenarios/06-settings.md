@@ -3,11 +3,11 @@
 ## Features
 - settings-window: Sidebar of 8 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
 - settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a live desktop preview (real wallpaper, miniature dock with real theme icons) and measurement guides
-- settings-layout: Screen edge picker on the live desktop preview, floating, floating margin, corner radius
+- settings-layout: Screen edge picker on the live desktop preview, floating, floating margin, gap reference (screen edge or panels), corner radius
 - settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
-- settings-behavior: Visibility mode cards, reservation, dodge and delay controls
+- settings-behavior: Visibility mode cards, reservation, dodge and delay controls, reveal trigger (screen edge or dock position)
 - settings-monitors: Monitor mode cards, selected monitor switches and temporary fallback, follow trigger, screen transition, virtual desktop display mode (Monitors & Desktops page)
 - settings-reserve-screen-space: Independent Always Visible reservation switch applies to maximized windows live and persists
 - settings-separate-launchers: Optional pinned/running sections apply live and persist without duplicating running pinned apps
@@ -48,6 +48,10 @@
 - src/shell/dockshell.cpp
 - src/shell/dockview.h
 - src/shell/dockview.cpp
+- src/platform/kwinpanelwatcher.h
+- src/platform/kwinpanelwatcher.cpp
+- src/platform/waylanddockplatform.cpp
+- src/utils/panelinset.h
 - src/shell/multidockmanager.h
 - src/shell/multidockmanager.cpp
 - src/shell/outputordermonitor.h
@@ -657,7 +661,7 @@ window's identity and frame geometry.
    fixture's frame moves inward by exactly 10 px at the dock edge (the
    reserved strip is the panel bar plus the margin). Do not
    restore/remaximize the fixture or restart Krema.
-3. Press Home and End. Verify the slider stops at 1 and 32 px and the
+3. Press Home and End. Verify the slider stops at 1 and 128 px and the
    reserved strip follows; return to 18.
 4. Repeat steps 2–3 on the top, left, and right edges using the "Screen
    edge" picker. Before each repetition, press Home and then Right seven
@@ -677,15 +681,16 @@ window's identity and frame geometry.
    strip.
 8. With a Plasma panel already reserving the dock's edge, verify the dock
    rests next to that panel and the margin is the distance from the panel,
-   not from the screen edge.
+   not from the screen edge (the default "Measure gap from: Panels";
+   SET-021 covers the reference choice).
 
 **Expected:**
-- The gap follows the slider immediately on all four edges, from 1 to 32 px
+- The gap follows the slider immediately on all four edges, from 1 to 128 px
   (default 8, the previous fixed gap); no restart is needed.
 - With reservation on, the reserved strip is the panel bar plus the margin,
   and existing maximized windows reflow live.
-- With "Floating" off the gap is 0 whatever the saved margin; the slider is
-  disabled but keeps its value.
+- With "Floating" off the gap is 0 whatever the saved margin (the dock is
+  flush with its reference); the slider is disabled but keeps its value.
 - Auto Hide and Dodge Windows hide the dock completely and reveal it at the
   configured gap.
 - The value persists in `kremarc` as `FloatingMargin` and survives restart.
@@ -702,4 +707,208 @@ strip growing by exactly 10 px, the disabled slider and full-margin
 shrink with Floating off, the retained value, live application, and the
 restored reserved strip after restart.
 `tests/unit/test_surface_geometry.cpp` covers the panel-bar and surface
-heights for non-default margins. Steps 3, 6, and 8 remain manual checks.
+heights for non-default margins.
+`tests/appium/test_08_reservation.py::test_set021_floating_margin_reference_choice_autosaves_live_and_persists`
+covers the End key reaching the 128 px maximum and its reserved strip on the
+bottom edge. Step 3's Home key and steps 6 and 8 remain manual checks.
+
+---
+
+## TC SET-021: Floating gap reference measures from panels or the screen edge
+
+**Precondition:** A fresh configuration (no `FloatingMarginReference` or
+`FloatingMargin` key), one output, visibility mode `Always visible`,
+`Reserve screen space` on, `Floating` on. A real fixture window maximized by
+KWin. Open Settings → Layout & Position. Record Krema's process and the
+fixture window's identity and frame geometry.
+
+**Steps:**
+1. Find the "Measure gap from" row next to the "Floating" switch and the
+   "Floating margin" slider. Verify it is an AT-SPI combo row (list item)
+   named "Measure gap from", enabled, showing "Panels", with the choices
+   "Screen edge" and "Panels".
+2. With no Plasma panel on the output, select "Screen edge". Verify
+   `FloatingMarginReference=0` is saved in `[General]` in `kremarc`
+   immediately, Krema keeps its process, and the dock and the maximized
+   fixture's reserved strip do not move: with no panel, Panels is the same
+   as the screen edge.
+3. Turn "Floating" off. Verify the "Measure gap from" row stays enabled
+   while the "Floating margin" slider is disabled. Select "Panels" and
+   verify `FloatingMarginReference` returns to the default (`1` or no key).
+   Turn "Floating" on again.
+4. Press End on the "Floating margin" slider. Verify it reads 128 px,
+   `FloatingMargin=128` is saved, and the reserved strip grows by exactly
+   120 px from the 8 px default.
+5. Select "Screen edge" again, close Settings, and restart Krema. Reopen
+   Settings → Layout & Position and verify the row shows "Screen edge" and
+   the reserved strip is unchanged from before the restart.
+6. Add an always-visible Plasma panel (visibility "Always visible", so it
+   reserves space) on the dock's edge. With "Panels", verify the dock rests
+   the margin in px beyond the panel's inner edge (the side facing the
+   screen centre) and the change applies live when the panel is added,
+   resized, or removed. Select "Screen edge" and verify the dock moves back
+   to the margin from the screen edge, overlapping the panel area. With
+   "Floating" off and "Panels", verify the dock sits flush against the
+   panel's inner edge.
+7. Set that panel to "Auto hide", "Dodge windows", or "Windows go below".
+   Verify that with "Panels" the dock ignores it and measures from the
+   screen edge.
+8. Run Krema where KWin scripting is unavailable (for example, the KWin
+   Scripting D-Bus interface is missing). Verify that with "Panels" the dock
+   falls back to the screen edge and Settings still works.
+
+**Expected:**
+- "Panels" is the default; with no space-reserving panel on the dock's
+  edge, it places the dock exactly as "Screen edge" does.
+- With an always-visible panel on the same edge, the gap is measured from
+  the panel's inner edge; panels that do not reserve space are ignored.
+- The choice applies live without restarting Krema, also while "Floating"
+  is off, and persists in `kremarc` as `FloatingMarginReference`.
+- With "Panels" beside a panel, nothing of Krema takes input over the panel.
+  In Auto hide and Dodge the hidden dock is revealed from the outer screen
+  edge by default, or from the panel's inner edge with Reveal trigger set
+  to "Dock position" (SET-023).
+- "Screen edge" is the v0.12.0 placement: with reservation on, KWin's
+  layer-shell order still decides, so next to a full-width panel that
+  started first the dock rests on that panel's reserved space.
+- Without KWin scripting the dock uses the screen edge.
+
+**Verification:** AT-SPI (row name, current choice, enabled state),
+`kremarc` (`FloatingMarginReference`, `FloatingMargin`), KWin (maximized
+frame and work area against the full output), process identity, screenshot
+of the dock beside the Plasma panel when DRM capture is available.
+**Automated (Tier 2):**
+`tests/appium/test_08_reservation.py::test_set021_floating_margin_reference_choice_autosaves_live_and_persists`
+covers steps 1–5 on the bottom edge.
+`tests/kwin/test_panel_margin.cpp` (ctest `krema_panel_margin_tests`)
+covers steps 6 and 7 on the bottom edge with a stand-in panel process (a
+500x60 `dock` layer surface reserving 44 px, like a floating Plasma panel)
+started both before and after Krema: with "Panels" the dock bar rests the
+margin beyond the panel surface, live margin changes follow, the panel is
+not pushed, KWin's MaximizeArea ends above the dock bar, and the dock's
+input region leaves the panel band below it click-through; "Screen edge"
+returns to the margin from the screen edge; a panel reserving nothing is
+ignored. Resizing a real Plasma panel, "Floating" off beside a panel, and
+step 8 (no KWin scripting) remain manual checks.
+
+---
+
+## TC SET-022: Badge Position, Color, and Accent Settings
+
+**Preconditions:** Krema runs with a fresh configuration and a running app
+whose dock context menu opens Settings. The badge defaults are Number
+(`BadgeDisplayMode=0`), Top-Right (`BadgePosition=0`), system accent color
+(`BadgeUseAccentColor=true`), and custom color `#e93a40`.
+
+**Steps:**
+1. Open Settings (default Icons page), search for "Badge position", "Badge
+   color", and "Use accent color", and verify "Animations & Badges" remains
+   listed in the sidebar for each query. Clear the search and open Animations &
+   Badges. Verify "Number" is selected, "Badge position" shows "Top-Right",
+   "Use accent color" is checked, and the "Badge color" swatch is hidden.
+2. Select "Off" in "Badge display". Verify "Badge position", "Use accent
+   color", and the color swatch are hidden.
+3. Select "Dot". Verify the position and accent controls return with
+   "Top-Right" selected and "Use accent color" checked. The swatch stays
+   hidden.
+4. Choose "Top-Left" in "Badge position". Verify the row shows "Top-Left"
+   and `BadgePosition=1` is saved in `[General]` in `kremarc`.
+5. Choose "Auto (edge-aware)". Verify the row shows that choice and
+   `BadgePosition=2` is saved.
+6. Turn "Use accent color" off. Verify the switch is unchecked,
+   `BadgeUseAccentColor=false` is saved, and the swatch appears with the
+   accessible name "Badge color: #e93a40".
+7. Click the swatch. In "Choose badge color", enter `#1080ff` in the Hex
+   field and click OK. Verify the swatch reads "Badge color: #1080ff" and
+   `BadgeCustomColor=#1080ff` is saved.
+8. Close Settings and restart Krema. Reopen Animations & Badges and verify
+   "Dot", "Auto (edge-aware)", the unchecked accent switch, and the
+   "Badge color: #1080ff" swatch are restored.
+
+**Expected Result:**
+- Position and color controls appear in Number and Dot modes and disappear
+  in Off mode. The color swatch appears only when accent color is off.
+- Top-Right and Top-Left select a fixed badge corner. Auto uses Top-Left
+  on a left-edge dock and Top-Right on top-, bottom-, and right-edge docks.
+- Accent mode uses the system highlight and highlighted text colors.
+- Custom mode uses the selected background with black or white text chosen
+  automatically for contrast.
+- Changes save without closing Settings and survive a process restart.
+
+**Verification:** AT-SPI (card selection, combo choice, checkbox state,
+control visibility, swatch name, and native color dialog), `kremarc`
+(`BadgeDisplayMode`, `BadgePosition`, `BadgeUseAccentColor`, and
+`BadgeCustomColor`), and a changed process identity after restart.
+Badge geometry and text contrast are checked separately by QML tests.
+
+**Automated:**
+`tests/appium/test_06_settings.py::test_set022_badge_settings_visibility_and_controls`
+covers steps 1–8 through real pointer and keyboard input, AT-SPI assertions,
+autosave checks, and a process restart.
+`tests/qml/tst_dockitem_indicators.qml` covers badge corners on all four
+edges, Number/Dot/Off rendering, accent colors, custom colors, and text
+contrast.
+`tests/unit/test_settings_autosave.cpp` covers badge defaults, position
+bounds, and saved settings.
+
+---
+
+## TC SET-023: Reveal trigger chooses where a hidden dock beside a panel is revealed
+
+**Precondition:** A fresh configuration (no `RevealTriggerLocation` key), one
+output, visibility mode `Always visible`, "Measure gap from" set to "Panels".
+Open Settings → Behavior. Record Krema's process.
+
+**Steps:**
+1. In "Always visible", verify there is no "Reveal trigger" row.
+2. Select "Dodge windows", then "Auto hide". In both, verify an AT-SPI
+   combo row (list item) named "Reveal trigger" appears below "Hide delay
+   (ms)", enabled, showing "Screen edge".
+3. Open the row. Verify the choices are exactly "Screen edge" and "Dock
+   position", in that order. Select "Dock position" and verify
+   `RevealTriggerLocation=1` is saved in `[General]` in `kremarc`
+   immediately and Krema keeps its process.
+4. Select "Always visible". Verify the row disappears and
+   `RevealTriggerLocation=1` stays saved.
+5. Close Settings and restart Krema. Reopen Settings → Behavior, select
+   "Auto hide" and verify the row shows "Dock position".
+6. Add an always-visible Plasma panel (it reserves space) on the dock's edge
+   and set "Reveal trigger" back to "Screen edge", "Auto hide". With the
+   dock hidden, move the pointer onto the panel away from the screen edge:
+   the dock stays hidden and the panel takes clicks. Push the pointer
+   against the outer screen edge over the panel: the dock is revealed while
+   a click there still reaches the panel. Move up across the panel onto the
+   dock: the dock stays shown, also with "Hide delay" at 0 ms.
+7. Select "Dock position". With the dock hidden, push the pointer against
+   the outer screen edge: the dock stays hidden. Move the pointer to the
+   panel's inner edge (the side facing the screen centre): the dock is
+   revealed.
+8. Run without KWin scripting (for example, the KWin Scripting D-Bus
+   interface is missing). Verify panel-relative placement is unavailable and
+   both reveal choices use the dock surface's screen-edge strip.
+
+**Expected:**
+- The row is shown only in "Auto hide" and "Dodge windows"; "Screen edge"
+  is the default.
+- The choice applies live without restarting Krema and persists in
+  `kremarc` as `RevealTriggerLocation`.
+- With "Screen edge", the outer screen edge reveals the dock even where an
+  always-visible panel occupies it, and Krema never takes the panel's
+  input. With "Dock position", only the strip past the panel reveals it.
+- Without a panel on the dock's edge both choices behave the same: the
+  reveal strip is at the screen edge.
+
+**Verification:** AT-SPI (row presence, name, choices, current choice),
+`kremarc` (`RevealTriggerLocation`), process identity, KWin (pointer
+position), panel click delivery, dock visibility.
+**Automated (Tier 2):**
+`tests/appium/test_06_settings.py::test_set023_reveal_trigger_choice_is_conditional_autosaves_live_and_persists`
+covers steps 1–5. `tests/kwin/test_panel_margin.cpp` (ctest
+`krema_panel_margin_tests`) covers steps 6 and 7 on the bottom edge with a
+stand-in panel process that logs the clicks it receives and real pointer
+motion and clicks through KWin's fake-input protocol: with "Screen edge" the
+hidden dock's input region shrinks to a 1x1 placeholder, the panel band does
+not reveal it, the outer screen edge does, both panel clicks reach the
+panel, and the dock stays shown after the move onto it; with "Dock
+position" the screen edge does not reveal it and the inner-edge strip does.
+The 0 ms "Hide delay" crossing and step 8 remain manual checks.

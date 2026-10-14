@@ -7,6 +7,7 @@
 #include "dockvisibilitycontroller.h"
 #include "krema.h"
 #include "models/taskiconprovider.h"
+#include "platform/kwinpanelwatcher.h"
 #include "platform/pointerfocustracker.h"
 #include "utils/surfacegeometry.h"
 #include "utils/zoomlayoutvariant.h"
@@ -37,7 +38,14 @@ DockView::DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settin
     setResizeMode(QQuickView::SizeRootObjectToView);
 }
 
-DockView::~DockView() = default;
+DockView::~DockView()
+{
+    // QQuickView::~QQuickView hides the window (emitting visibleChanged(false))
+    // before QObject::~QObject destroys its children, after DockView's own
+    // members (m_platform) are already destroyed. Hide first while both the
+    // platform and the visibility controller are still alive.
+    hide();
+}
 
 void DockView::initialize(TaskManager::TasksModel *tasksModel,
                           TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
@@ -127,6 +135,11 @@ void DockView::initialize(TaskManager::TasksModel *tasksModel,
                                           this,
                                           SLOT(handleScreenLockChanged(bool)));
 
+    // Measure the gap from panels when configured. Before show(): measured
+    // from panels, the dock surface must never map with a reservation of its
+    // own (the probe carries it; it follows the dock surface onto the screen).
+    applyMarginReference();
+
     show();
 }
 
@@ -150,7 +163,63 @@ int DockView::backgroundStyleType() const
 
 int DockView::floatingPadding() const
 {
-    return m_settings->floating() ? m_settings->floatingMargin() : 0;
+    return m_panelInset.total + (m_settings->floating() ? m_settings->floatingMargin() : 0);
+}
+
+int DockView::reservedPanelInset() const
+{
+    return m_panelInset.reserved;
+}
+
+bool DockView::isPanelRelative() const
+{
+    return m_panelWatcher && m_panelWatcher->isAvailable();
+}
+
+void DockView::applyMarginReference()
+{
+    const bool wanted = m_settings->floatingMarginReference() == 1;
+    if (wanted && !m_panelWatcher) {
+        m_panelWatcher = KWinPanelWatcher::acquire();
+        connect(m_panelWatcher.get(), &KWinPanelWatcher::panelsChanged, this, &DockView::refreshPanelInset);
+        connect(m_panelWatcher.get(), &KWinPanelWatcher::availableChanged, this, &DockView::applyMarginReference);
+    } else if (!wanted && m_panelWatcher) {
+        disconnect(m_panelWatcher.get(), nullptr, this, nullptr);
+        m_panelWatcher.reset();
+    }
+
+    m_platform->setPanelRelative(isPanelRelative());
+    m_panelInset = PanelInset{};
+    refreshPanelInset();
+    // The reservation moved between the dock surface and the probe even
+    // when the inset did not change.
+    refreshFloatingPadding();
+}
+
+void DockView::refreshPanelInset()
+{
+    PanelInset inset;
+    if (isPanelRelative() && screen()) {
+        const auto panels = m_panelWatcher->output(screen()->name());
+        inset = computePanelInset(panels.geometry, panels.anchor, panels.panels, static_cast<int>(m_edge));
+    }
+    if (inset == m_panelInset) {
+        return;
+    }
+    m_panelInset = inset;
+    refreshFloatingPadding();
+}
+
+void DockView::refreshFloatingPadding()
+{
+    updateSize();
+    if (m_visibilityController) {
+        // Keep the panels' band click-through (the dock surface covers it).
+        m_visibilityController->setEdgeInset(m_panelInset.total);
+    }
+    // Exclusive-zone state is double-buffered; publish it with a frame.
+    update();
+    Q_EMIT floatingPaddingChanged();
 }
 
 int DockView::iconCacheVersion() const
@@ -192,6 +261,8 @@ void DockView::setEdge(DockPlatform::Edge edge)
     }
     m_edge = edge;
     updateSize();
+    // The inset is per edge; this may resize again and emit floatingPaddingChanged.
+    refreshPanelInset();
     Q_EMIT edgeChanged();
 }
 
@@ -283,7 +354,8 @@ void DockView::updateSize()
     }
 
     // Reserve the panel bar only when screen-space reservation is enabled.
-    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? panelBarHeight() : 0);
+    // While measuring from panels the reservation starts past theirs.
+    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? panelBarHeight() - m_panelInset.reserved : 0);
 
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
@@ -330,9 +402,11 @@ void DockView::handleScreenChanged(QScreen *newScreen)
     // when the associated output is removed. hide()+show() creates a fresh surface.
     hide();
     updateSize();
+    refreshPanelInset();
     applyBackgroundStyle();
     show();
     if (m_visibilityController) {
+        m_visibilityController->updateEdgeTriggerStrip();
         m_visibilityController->requestEvaluate();
     }
 }
@@ -351,8 +425,10 @@ void DockView::handleScreenGeometryChanged()
     }
 
     updateSize();
+    refreshPanelInset();
     applyBackgroundStyle();
     if (m_visibilityController) {
+        m_visibilityController->updateEdgeTriggerStrip();
         m_visibilityController->requestEvaluate();
     }
 }

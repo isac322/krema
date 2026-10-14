@@ -1278,12 +1278,24 @@ Item {
                     easing.type: Easing.InOutQuad
                 }
             }
-            x: DockView.isVertical
-                ? (parent.width - animatedContentWidth) / 2
-                : (parent.width - animatedContentWidth) / 2
-            y: DockView.isVertical
-                ? (parent.height - animatedContentHeight) / 2
-                : (parent.height - animatedContentHeight) / 2
+            x: {
+                if (!DockView.isVertical) {
+                    return (parent.width - animatedContentWidth) / 2
+                }
+                let indicatorSpace = 4 + Kirigami.Units.smallSpacing
+                return (DockView.edge === 2)
+                    ? Kirigami.Units.largeSpacing - indicatorSpace
+                    : Kirigami.Units.largeSpacing
+            }
+            y: {
+                if (DockView.isVertical) {
+                    return (parent.height - animatedContentHeight) / 2
+                }
+                let indicatorSpace = 4 + Kirigami.Units.smallSpacing
+                return (DockView.edge === 0)
+                    ? Kirigami.Units.largeSpacing - indicatorSpace
+                    : Kirigami.Units.largeSpacing
+            }
 
             // Animate existing items displaced by add/remove within the Flow.
             // Disabled during hover zoom (mouseInside) to avoid lagging sibling
@@ -1397,7 +1409,14 @@ Item {
                 if (!pinnedItem || !runningItem) return 0
                 let pinnedSpan = root._secondarySpan(pinnedItem, pinnedItem.currentScale)
                 let runningSpan = root._secondarySpan(runningItem, runningItem.currentScale)
-                return (pinnedSpan.near + pinnedSpan.far + runningSpan.near + runningSpan.far) / 4
+                let farPinned = DockView.edge === 1 || DockView.edge === 3
+                let pinnedIconCenter = farPinned
+                    ? (pinnedSpan.far - (pinnedItem._indicatorSpace + DockSettings.iconSize / 2) * pinnedItem.currentScale)
+                    : (pinnedSpan.near + (pinnedItem._indicatorSpace + DockSettings.iconSize / 2) * pinnedItem.currentScale)
+                let runningIconCenter = farPinned
+                    ? (runningSpan.far - (runningItem._indicatorSpace + DockSettings.iconSize / 2) * runningItem.currentScale)
+                    : (runningSpan.near + (runningItem._indicatorSpace + DockSettings.iconSize / 2) * runningItem.currentScale)
+                return (pinnedIconCenter + runningIconCenter) / 2
             }
             readonly property real thickness: root.taskZoneSeparatorThickness
             readonly property real length: Math.min(DockSettings.iconSize, Kirigami.Units.gridUnit * 2)
@@ -1504,7 +1523,7 @@ Item {
 
         x: {
             if (!visible || root._dragTargetIndex < 0) return 0
-            if (DockView.isVertical) return dockPanel.x + dockRow.x
+            if (DockView.isVertical) return dockPanel.x + (dockPanel.width - width) / 2
             let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
             if (!targetItem) return 0
             let itemX = dockPanel.x + root._primaryRestSlotStart(targetItem)
@@ -1516,7 +1535,7 @@ Item {
         }
         y: {
             if (!visible || root._dragTargetIndex < 0) return 0
-            if (!DockView.isVertical) return dockPanel.y + dockRow.y
+            if (!DockView.isVertical) return dockPanel.y + (dockPanel.height - height) / 2
             let targetItem = dockRepeater.itemAt(root._dragTargetIndex)
             if (!targetItem) return 0
             let itemY = dockPanel.y + root._primaryRestSlotStart(targetItem)

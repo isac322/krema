@@ -102,7 +102,6 @@ private:
     /// shared window ID, or by AppId when it has no window.
     struct SettledRow {
         QUrl launcherUrl;
-        bool isLauncher = false;
         QStringList windowIds;
         QString appId;
     };

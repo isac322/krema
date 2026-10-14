@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
+- Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
+- Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges could use the system accent color or a custom color with automatic text contrast (#103)
+- Added a "Reveal trigger" setting (Settings → Behavior, Auto hide and Dodge windows) for a hidden dock that rests past an always-visible Plasma panel on the same edge. With Screen edge, the default, pushing the pointer against the screen edge revealed the dock even over the panel, and the panel still got every click there. With Dock position, the dock was revealed only from the panel's inner edge. Without KWin scripting, panel-relative placement is unavailable and both reveal choices used the dock surface's screen-edge strip (#90)
+
+### Changed
+
+- The Floating margin setting went up to 128 px instead of 32 px (#90)
+
+### Fixed
+
+- Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
+- Preserved pinned app order when startup notifications gave way to windows
 
 ## [0.12.0] - 2026-10-12
 

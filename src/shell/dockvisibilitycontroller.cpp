@@ -15,6 +15,8 @@
 #include <QScreen>
 #include <QWindow>
 
+#include <algorithm>
+
 Q_LOGGING_CATEGORY(lcVisibility, "krema.shell.visibility")
 
 namespace krema
@@ -60,8 +62,11 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
 
     // Hide timer: fires when mouse has been outside dock area long enough
     m_hideTimer.setSingleShot(true);
-    m_hideTimer.setInterval(400);
+    m_hideTimer.setInterval(m_hideDelay);
     connect(&m_hideTimer, &QTimer::timeout, this, [this]() {
+        // Drop the longer interval used while crossing the panels' band.
+        m_crossingBand = false;
+        m_hideTimer.setInterval(m_hideDelay);
         evaluateVisibility();
     });
 
@@ -91,6 +96,16 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
             Q_EMIT pointerMovedDuringKeyboardNavigation();
         }
     });
+
+    if (m_dockWindow) {
+        connect(m_dockWindow, &QWindow::visibleChanged, this, [this](bool visible) {
+            if (!visible) {
+                updateEdgeTriggerWatcher();
+                return;
+            }
+            updateEdgeTriggerWatcher();
+        });
+    }
 
     connectModelSignals();
 }
@@ -130,8 +145,10 @@ void DockVisibilityController::setMode(DockPlatform::VisibilityMode mode)
     m_showTimer.stop();
     m_hideTimer.stop();
     m_evaluateTimer.stop();
-
+    m_crossingBand = false;
     qCDebug(lcVisibility) << "Visibility mode changed to:" << static_cast<int>(mode);
+
+    updateEdgeTriggerWatcher();
 
     // Immediately evaluate with new mode
     evaluateVisibility();
@@ -147,17 +164,22 @@ void DockVisibilityController::toggleVisibility()
     // Cancel any pending show/hide
     m_showTimer.stop();
     m_hideTimer.stop();
-
+    m_crossingBand = false;
     setVisible(!m_visible);
 }
 
 void DockVisibilityController::setHovered(bool hovered)
 {
-    if (m_hovered == hovered) {
+    if (m_surfaceHovered == hovered) {
         return;
     }
 
-    m_hovered = hovered;
+    m_surfaceHovered = hovered;
+    if (hovered) {
+        // Reached the dock: drop the longer interval used while crossing the panels' band.
+        m_crossingBand = false;
+        m_hideTimer.setInterval(m_hideDelay);
+    }
 
     // Update input region: hovered → include zoom overflow, unhovered → panel only.
     // When interacting (e.g. preview open) and mouse leaves dock, skip input region
@@ -166,13 +188,23 @@ void DockVisibilityController::setHovered(bool hovered)
         applyInputRegion();
     }
 
+    updateHoveredState(false);
+}
+
+void DockVisibilityController::updateHoveredState(bool transitFromEdge)
+{
+    const bool hovered = m_surfaceHovered || m_edgeHovered;
+    if (m_hovered == hovered) {
+        return;
+    }
+
+    m_hovered = hovered;
+
     if (hovered) {
         // Mouse entered dock/trigger area
+        m_crossingBand = false;
         m_hideTimer.stop(); // Cancel any pending hide
-
-        if (m_visible) {
-            // Already visible — nothing to do
-        } else {
+        if (!m_visible) {
             // Dock is hidden — start show timer (dwell-based)
             m_showTimer.start();
         }
@@ -189,6 +221,12 @@ void DockVisibilityController::setHovered(bool hovered)
         if (m_mode == DockPlatform::VisibilityMode::AlwaysVisible) {
             return;
         }
+
+        // Revealed from the screen edge: the pointer is crossing the panels'
+        // band toward the dock, so give it time even with a zero hide delay.
+        const bool crossingBand = transitFromEdge && m_visible && !m_surfaceHovered;
+        m_crossingBand = crossingBand;
+        m_hideTimer.setInterval(crossingBand ? std::max(m_hideDelay, 250) : m_hideDelay);
 
         // Start hide timer
         m_hideTimer.start();
@@ -214,6 +252,12 @@ void DockVisibilityController::evaluateVisibility()
     // If hovered, always show
     if (m_hovered) {
         setVisible(true);
+        return;
+    }
+
+    // While the pointer crosses the panels' band from the screen edge toward
+    // the dock, wait for the hide timer's crossing floor before hiding.
+    if (m_crossingBand && m_hideTimer.isActive()) {
         return;
     }
 
@@ -277,6 +321,7 @@ void DockVisibilityController::setShowDelay(int ms)
 
 void DockVisibilityController::setHideDelay(int ms)
 {
+    m_hideDelay = ms;
     m_hideTimer.setInterval(ms);
     qCDebug(lcVisibility) << "Hide delay set to:" << ms << "ms";
 }
@@ -288,6 +333,107 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     }
     m_zoomOverflowHeight = height;
     applyInputRegion();
+}
+
+void DockVisibilityController::setEdgeInset(int inset)
+{
+    if (m_edgeInset == inset) {
+        return;
+    }
+    const int delta = inset - m_edgeInset;
+    m_edgeInset = inset;
+    // While hidden, QML reports the slid-out position, so m_panelRefY keeps
+    // the last rest position. On the top edge that position is measured from
+    // the screen edge and moves with the inset; on the bottom edge it is
+    // relative to the surface, which grows with the inset.
+    if (!m_visible && m_platform->edge() == DockPlatform::Edge::Top) {
+        m_panelRefY += delta;
+    }
+    // Arms or disarms the screen-edge watcher and reapplies the input region.
+    updateEdgeTriggerWatcher();
+    applyInputRegion();
+    // Panels can appear or change while the dock is hidden: re-check Dodge
+    // against the dock's new resting place.
+    requestEvaluate();
+}
+
+void DockVisibilityController::setRevealTriggerLocation(int location)
+{
+    if (m_revealTriggerLocation == location) {
+        return;
+    }
+    m_revealTriggerLocation = location;
+    qCDebug(lcVisibility) << "Reveal trigger location set to:" << location;
+    updateEdgeTriggerWatcher();
+}
+
+void DockVisibilityController::updateEdgeTriggerStrip()
+{
+    QRect strip;
+    if (m_dockWindow && m_dockWindow->screen()) {
+        const QRect geo = m_dockWindow->screen()->geometry();
+        switch (m_platform->edge()) {
+        case DockPlatform::Edge::Top:
+            strip = QRect(geo.x(), geo.y(), geo.width(), kEdgeTriggerThickness);
+            break;
+        case DockPlatform::Edge::Bottom:
+            strip = QRect(geo.x(), geo.y() + geo.height() - kEdgeTriggerThickness, geo.width(), kEdgeTriggerThickness);
+            break;
+        case DockPlatform::Edge::Left:
+            strip = QRect(geo.x(), geo.y(), kEdgeTriggerThickness, geo.height());
+            break;
+        case DockPlatform::Edge::Right:
+            strip = QRect(geo.x() + geo.width() - kEdgeTriggerThickness, geo.y(), kEdgeTriggerThickness, geo.height());
+            break;
+        }
+    }
+    m_edgeStripRect = strip;
+    if (m_watchingEdge && m_edgeWatcher && m_edgeWatcher->cursorPos()) {
+        checkCursorAtEdge(*m_edgeWatcher->cursorPos());
+    }
+    updateEdgeTriggerWatcher();
+}
+
+bool DockVisibilityController::isExternalEdgeTriggerActive() const
+{
+    return m_watchingEdge && m_edgeWatcher && m_edgeWatcher->isAvailable();
+}
+
+void DockVisibilityController::checkCursorAtEdge(const QPoint &pos)
+{
+    const bool hovered = m_watchingEdge && !m_edgeStripRect.isEmpty() && m_edgeStripRect.contains(pos);
+    if (m_edgeHovered == hovered) {
+        return;
+    }
+    m_edgeHovered = hovered;
+    updateHoveredState(!hovered);
+}
+
+void DockVisibilityController::updateEdgeTriggerWatcher()
+{
+    if (!m_edgeWatcher && m_edgeInset > 0) {
+        m_edgeWatcher = KWinPanelWatcher::acquire();
+        connect(m_edgeWatcher.get(), &KWinPanelWatcher::cursorMoved, this, &DockVisibilityController::checkCursorAtEdge);
+        connect(m_edgeWatcher.get(), &KWinPanelWatcher::availableChanged, this, &DockVisibilityController::updateEdgeTriggerWatcher);
+    }
+    const bool want = m_mode != DockPlatform::VisibilityMode::AlwaysVisible && m_edgeInset > 0 && m_revealTriggerLocation == 0 && m_edgeWatcher
+        && m_edgeWatcher->isAvailable() && m_dockWindow && m_dockWindow->isVisible();
+    const bool wasActive = isExternalEdgeTriggerActive();
+    if (want && !m_watchingEdge) {
+        m_watchingEdge = true;
+        if (m_edgeWatcher->cursorPos()) {
+            checkCursorAtEdge(*m_edgeWatcher->cursorPos());
+        }
+    } else if (!want && m_watchingEdge) {
+        m_watchingEdge = false;
+        if (m_edgeHovered) {
+            m_edgeHovered = false;
+            updateHoveredState(false);
+        }
+    }
+    if (isExternalEdgeTriggerActive() != wasActive) {
+        applyInputRegion();
+    }
 }
 
 void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
@@ -472,8 +618,11 @@ void DockVisibilityController::applyInputRegion()
     params.panelHeight = m_panelHeight;
     params.zoomOverflowHeight = m_zoomOverflowHeight;
     params.visible = m_visible;
-    params.hovered = m_hovered;
+    // Zoom overflow is only needed while the pointer is on the dock surface.
+    params.hovered = m_surfaceHovered;
     params.edge = static_cast<int>(m_platform->edge());
+    params.edgeInset = m_edgeInset;
+    params.externalEdgeTrigger = isExternalEdgeTriggerActive();
 
     m_platform->setInputRegion(computeDockInputRegion(params));
 }

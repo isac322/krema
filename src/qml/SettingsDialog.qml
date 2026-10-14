@@ -54,7 +54,7 @@ Kirigami.AbstractApplicationWindow {
             iconName: "preferences-desktop-display",
             group: "",
             keywords: [i18n("Screen edge"), i18n("Floating"), i18n("Floating margin"), i18n("Margin"), i18n("Gap"),
-                i18n("Corner radius")]
+                i18n("Measure gap from"), i18n("Panels"), i18n("Taskbar"), i18n("Corner radius")]
         },
         {
             moduleId: "panelstyle",
@@ -76,7 +76,8 @@ Kirigami.AbstractApplicationWindow {
             text: i18n("Animations & Badges"),
             iconName: "preferences-desktop-notification",
             group: "",
-            keywords: [i18n("Attention animation"), i18n("Badge display")]
+            keywords: [i18n("Attention animation"), i18n("Badge display"), i18n("Badge position"),
+                i18n("Use accent color"), i18n("Badge color")]
         },
         {
             moduleId: "behavior",
@@ -85,7 +86,8 @@ Kirigami.AbstractApplicationWindow {
             group: "",
             keywords: [i18n("Visibility mode"), i18n("Reserve screen space"), i18n("Only dodge active window"),
                 i18n("Show delay (ms)"), i18n("Hide delay (ms)"), i18n("Separate pinned and running apps"),
-                i18n("Single window click action"), i18n("Grouped window click action")]
+                i18n("Single window click action"), i18n("Grouped window click action"), i18n("Reveal trigger"),
+                i18n("Dock position")]
         },
         {
             moduleId: "monitors",

@@ -678,7 +678,15 @@ Item {
             let base = panel.restX + row.x + dockItem.x + tx + ox
             let minX = ox - base / s
             let maxX = ox + (surface.width - base) / s - width
-            return Math.max(minX, Math.min(maxX, nom))
+            if (nom >= minX && nom <= maxX) {
+                return nom
+            }
+            if (nom < minX) {
+                let limit = iconImage.x + iconImage.width - width
+                return minX <= limit ? Math.max(nom, minX) : nom
+            }
+            let limit = iconImage.x
+            return maxX >= limit ? Math.min(nom, maxX) : nom
         }
         y: {
             let nom = iconImage.y - height * 0.2
@@ -694,7 +702,15 @@ Item {
             let base = panel.restY + row.y + dockItem.y + ty + oy
             let minY = oy - base / s
             let maxY = oy + (surface.height - base) / s - height
-            return Math.max(minY, Math.min(maxY, nom))
+            if (nom >= minY && nom <= maxY) {
+                return nom
+            }
+            if (nom < minY) {
+                let limit = iconImage.y + iconImage.height - height
+                return minY <= limit ? Math.max(nom, minY) : nom
+            }
+            let limit = iconImage.y
+            return maxY >= limit ? Math.min(nom, maxY) : nom
         }
         width: DockSettings.badgeDisplayMode === 1
                ? Math.round(iconSize * 0.18)

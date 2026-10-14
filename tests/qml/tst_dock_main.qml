@@ -475,6 +475,35 @@ Item {
             verify(b.y + b.height <= dock.height + 0.01, "badge bottom edge " + (b.y + b.height) + " > " + dock.height)
         }
 
+        function test_offscreenIconBadgeDoesNotIntrudeIntoVisibleNeighbor() {
+            root.width = 1280
+            root.height = 316
+            DockView.edge = 1
+            DockSettings.iconSize = 96
+            DockSettings.iconSpacing = 2
+            DockSettings.maxZoomFactor = 2.0
+            DockSettings.badgePosition = 0
+            DockSettings.badgeDisplayMode = 0
+            DockSettings.attentionAnimation = 0
+            DockSettings.previewEnabled = false
+            let names = []
+            for (let i = 0; i < 16; ++i)
+                names.push("App" + i)
+            addTasks(names)
+            NotificationTracker.setUnread("app15", 5)
+            let dock = makeDock(16)
+            let its = items(dock)
+            let offscreenItem = its[15]
+            let neighborItem = its[14]
+            let offscreenBadge = T.badge(offscreenItem)
+            verify(offscreenBadge && offscreenBadge.visible)
+            let badgeBounds = drawnBounds(offscreenBadge, dock)
+            let neighborIconBounds = drawnBounds(T.iconImage(neighborItem), dock)
+            verify(badgeBounds.x >= dock.width, "offscreen badge intruded into visible surface at x=" + badgeBounds.x)
+            verify(badgeBounds.x >= neighborIconBounds.x + neighborIconBounds.width,
+                   "offscreen badge overlapped neighbor icon")
+        }
+
         function test_separatedLayoutToggleKeepsSpacingAndSecondaryCenter_data() {
             return dockEdges()
         }

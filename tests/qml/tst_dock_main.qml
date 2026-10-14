@@ -35,6 +35,8 @@ Item {
 
         function cleanup() {
             // Park the pointer outside the stage so the next test starts un-hovered.
+            root.width = 800
+            root.height = 240
             mouseMove(stage, -1, -1)
         }
 
@@ -430,6 +432,47 @@ Item {
                 tryCompare(dock, "hoveredIndex", i)
                 compare(dock.hoveredName, ["A", "B", "C"][i])
             }
+        }
+
+        function test_crowdedDockZoomKeepsBadgeInsideSurface_data() {
+            return [
+                { tag: "19-icons-top-left-dot", edge: 0, count: 19, size: 96, spacing: 2, pos: 1, mode: 1 },
+                { tag: "19-icons-top-left-number", edge: 0, count: 19, size: 96, spacing: 2, pos: 1, mode: 0 },
+                { tag: "18-icons-bottom-left-number", edge: 1, count: 18, size: 96, spacing: 3, pos: 1, mode: 0 },
+                { tag: "19-icons-bottom-right-number", edge: 1, count: 19, size: 96, spacing: 2, pos: 0, mode: 0 },
+            ]
+        }
+
+        function test_crowdedDockZoomKeepsBadgeInsideSurface(data) {
+            root.width = 1920
+            root.height = 316
+            DockView.edge = data.edge
+            DockSettings.iconSize = data.size
+            DockSettings.iconSpacing = data.spacing
+            DockSettings.maxZoomFactor = 2.0
+            DockSettings.badgePosition = data.pos
+            DockSettings.badgeDisplayMode = data.mode
+            DockSettings.attentionAnimation = 0
+            DockSettings.previewEnabled = false
+            let names = []
+            for (let i = 0; i < data.count; ++i)
+                names.push("App" + i)
+            addTasks(names, { AppId: "org.kde.dolphin" })
+            NotificationTracker.setUnread("org.kde.dolphin", 12)
+            let dock = makeDock(data.count)
+            let its = items(dock)
+            let targetIndex = data.pos === 1 ? 0 : data.count - 1
+            let target = its[targetIndex]
+            hoverItem(target)
+            tryCompare(dock, "hoveredIndex", targetIndex)
+            tryVerify(() => Math.abs(target.currentScale - 2.0) < 0.05, 2000)
+            let badge = T.badge(target)
+            verify(badge && badge.visible)
+            let b = drawnBounds(badge, dock)
+            verify(b.x >= -0.01, "badge left edge " + b.x + " < 0")
+            verify(b.x + b.width <= dock.width + 0.01, "badge right edge " + (b.x + b.width) + " > " + dock.width)
+            verify(b.y >= -0.01, "badge top edge " + b.y + " < 0")
+            verify(b.y + b.height <= dock.height + 0.01, "badge bottom edge " + (b.y + b.height) + " > " + dock.height)
         }
 
         function test_separatedLayoutToggleKeepsSpacingAndSecondaryCenter_data() {

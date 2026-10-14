@@ -1801,8 +1801,12 @@ def test_set022_badge_settings_visibility_and_controls(krema: Krema, apps: TestW
         inp.key("ctrl", "a")
         inp.type_text(query)
         wait_until(
-            lambda: "Animations & Badges" in [e.get_attribute("name") for e in krema.find_all(SIDEBAR)],
-            message=f"Animations & Badges found by search query {query!r}",
+            lambda: (
+                names := [e.get_attribute("name") for e in krema.find_all(SIDEBAR)]
+            )
+            and "Animations & Badges" in names
+            and "Shadow" not in names,
+            message=f"Animations & Badges filtered by search query {query!r}",
         )
     inp.key("ctrl", "a")
     inp.key("BackSpace")

@@ -662,10 +662,40 @@ Item {
         objectName: "badge"
         z: 2
         visible: dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
-        x: dockItem._badgeOnLeft
-            ? iconImage.x - width * 0.2
-            : iconImage.x + iconImage.width - width * 0.8
-        y: iconImage.y - height * 0.2
+        x: {
+            let nom = dockItem._badgeOnLeft
+                ? iconImage.x - width * 0.2
+                : iconImage.x + iconImage.width - width * 0.8
+            let row = dockItem.parent
+            let panel = row ? row.parent : null
+            let surface = (panel && panel.restEdgePos !== undefined) ? panel.parent : null
+            if (!surface || surface.width <= 0 || dockItem.currentScale <= 0) {
+                return nom
+            }
+            let s = dockItem.currentScale
+            let ox = (DockView.edge === 2) ? 0 : ((DockView.edge === 3) ? dockItem.width : dockItem.width / 2)
+            let tx = DockView.isVertical ? 0 : dockItem.primaryTranslate
+            let base = panel.restX + row.x + dockItem.x + tx + ox
+            let minX = ox - base / s
+            let maxX = ox + (surface.width - base) / s - width
+            return Math.max(minX, Math.min(maxX, nom))
+        }
+        y: {
+            let nom = iconImage.y - height * 0.2
+            let row = dockItem.parent
+            let panel = row ? row.parent : null
+            let surface = (panel && panel.restEdgePos !== undefined) ? panel.parent : null
+            if (!surface || surface.height <= 0 || dockItem.currentScale <= 0) {
+                return nom
+            }
+            let s = dockItem.currentScale
+            let oy = (DockView.edge === 0) ? 0 : ((DockView.edge === 1) ? dockItem.height : dockItem.height / 2)
+            let ty = DockView.isVertical ? dockItem.primaryTranslate : 0
+            let base = panel.restY + row.y + dockItem.y + ty + oy
+            let minY = oy - base / s
+            let maxY = oy + (surface.height - base) / s - height
+            return Math.max(minY, Math.min(maxY, nom))
+        }
         width: DockSettings.badgeDisplayMode === 1
                ? Math.round(iconSize * 0.18)
                : Math.round(iconSize * 0.38)

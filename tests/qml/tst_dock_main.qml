@@ -35,6 +35,8 @@ Item {
 
         function cleanup() {
             // Park the pointer outside the stage so the next test starts un-hovered.
+            root.width = 800
+            root.height = 240
             mouseMove(stage, -1, -1)
         }
 
@@ -253,6 +255,255 @@ Item {
             tryCompare(its[1], "y", its[0].y + 48 + 4)
             verify(DockVisibility.panelRect.x < stage.width / 2, "left dock panel must sit on the left")
         }
+
+        function test_iconSymmetricalPaddingAllEdges_data() {
+            let rows = []
+            for (let edge of dockEdges()) {
+                for (let size of [24, 32, 48, 64, 96])
+                    rows.push({ tag: edge.tag + "-" + size, edge: edge.edge, size: size })
+            }
+            return rows
+        }
+
+        function test_iconSymmetricalPaddingAllEdges(data) {
+            DockView.edge = data.edge
+            DockSettings.iconSize = data.size
+            DockSettings.maxZoomFactor = 1
+            addTasks(["A", "B", "C"])
+            let its = items(makeDock(3))
+            let panel = its[0].parent.parent
+            verify(panel.restEdgePos !== undefined, "dock panel not found")
+            for (let item of its) {
+                let icon = T.iconImage(item)
+                verify(icon)
+                let bounds = drawnBounds(icon, panel)
+                let near = DockView.isVertical ? bounds.x : bounds.y
+                let extent = DockView.isVertical ? bounds.width : bounds.height
+                let far = (DockView.isVertical ? panel.width : panel.height) - near - extent
+                fuzzyCompare(near, Kirigami.Units.largeSpacing, 1e-6)
+                fuzzyCompare(far, Kirigami.Units.largeSpacing, 1e-6)
+                fuzzyCompare(extent, data.size, 1e-6)
+            }
+        }
+
+        function verifySeparatorIconCenter(separator, pinnedIcon, runningIcon, panel) {
+            let expected = (secondaryCenter(drawnBounds(pinnedIcon, panel))
+                + secondaryCenter(drawnBounds(runningIcon, panel))) / 2
+            fuzzyCompare(separator.secondaryCenter, expected, 1e-4)
+            // The painted stroke rounds its position to device-independent pixels.
+            fuzzyCompare(secondaryCenter(drawnBounds(separator, panel)), expected, 0.51)
+        }
+
+        Component {
+            id: separatorCenterProbeComponent
+            Item {
+                id: centerProbe
+                property var panel
+                property var separator
+                property var pinnedIcon
+                property var runningIcon
+                property var samples: []
+                Connections {
+                    target: centerProbe.panel
+                    function onZoomAmountChanged() {
+                        // Capture after the same frame's scale bindings update.
+                        Qt.callLater(function() {
+                            if (centerProbe.panel.zoomAmount <= 0
+                                    || centerProbe.panel.zoomAmount >= 1)
+                                return
+                            let expected = (tc.secondaryCenter(tc.drawnBounds(centerProbe.pinnedIcon, centerProbe.panel))
+                                + tc.secondaryCenter(tc.drawnBounds(centerProbe.runningIcon, centerProbe.panel))) / 2
+                            centerProbe.samples.push({
+                                expected: expected,
+                                actual: centerProbe.separator.secondaryCenter,
+                                painted: tc.secondaryCenter(tc.drawnBounds(centerProbe.separator, centerProbe.panel)),
+                            })
+                        })
+                    }
+                }
+            }
+        }
+
+        function test_separatorSecondaryCenterAlignsWithIconImage_data() {
+            return dockEdges()
+        }
+
+        function test_separatorSecondaryCenterAlignsWithIconImage(data) {
+            DockView.edge = data.edge
+            DockSettings.iconSize = 32
+            DockSettings.iconSpacing = 7
+            DockSettings.separateLaunchers = true
+            DockSettings.previewEnabled = false
+            DockSettings.zoomAnimationPreset = 4
+            DockSettings.zoomInDuration = 180
+            DockSettings.zoomInEasing = 0
+            addSeparatedTasks()
+            let dock = makeDock(4)
+            let its = items(dock)
+            let panel = its[0].parent.parent
+            let separator = separatorOf(dock)
+            verify(separator)
+            verify(separator.visible)
+            let pinnedIcon = T.iconImage(its[1])
+            let runningIcon = T.iconImage(its[2])
+            verify(pinnedIcon)
+            verify(runningIcon)
+            verifySeparatorIconCenter(separator, pinnedIcon, runningIcon, panel)
+            let probe = createTemporaryObject(separatorCenterProbeComponent, stage, {
+                panel: panel, separator: separator, pinnedIcon: pinnedIcon, runningIcon: runningIcon,
+            })
+            verify(probe)
+            let point = centerOf(runningIcon)
+            mouseMove(stage, point.x, point.y)
+            tryCompare(dock, "hoveredIndex", 2)
+            tryCompare(panel, "zoomAmount", 1)
+            tryVerify(() => its[2].currentScale > 1)
+            settleDeferredCallbacks()
+            if (Kirigami.Units.shortDuration > 0) {
+                verify(probe.samples.length > 0, "no intermediate hover-zoom frames observed")
+                for (let sample of probe.samples) {
+                    verify(Number.isFinite(sample.actual) && Number.isFinite(sample.expected))
+                    fuzzyCompare(sample.actual, sample.expected, 1e-4)
+                    fuzzyCompare(sample.painted, sample.expected, 0.51)
+                }
+            }
+            verifySeparatorIconCenter(separator, pinnedIcon, runningIcon, panel)
+            mouseMove(stage, -1, -1)
+            tryCompare(panel, "zoomAmount", 0)
+            for (let item of its)
+                tryCompare(item, "currentScale", 1)
+            verifySeparatorIconCenter(separator, pinnedIcon, runningIcon, panel)
+        }
+
+        function test_dropIndicatorSecondaryCenter_data() {
+            return dockEdges()
+        }
+
+        function test_dropIndicatorSecondaryCenter(data) {
+            DockView.edge = data.edge
+            DockSettings.maxZoomFactor = 1
+            DockSettings.previewEnabled = false
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            let panel = its[0].parent.parent
+            // Isolate insertion-marker geometry from the hold-to-drag gesture.
+            dock._dragSourceIndex = 0
+            dock._dragTargetIndex = 2
+            dock._dragActive = true
+            let indicator = T.findFirst(dock, o => o.z === 150 && o.radius === 1
+                && o.color !== undefined && primaryExtent(o) === 2)
+            verify(indicator, "drop indicator not found")
+            tryCompare(indicator, "visible", true)
+            let icon = T.iconImage(its[2])
+            verify(icon)
+            let marker = drawnBounds(indicator, panel)
+            let bounds = drawnBounds(icon, panel)
+            let markerNear = DockView.isVertical ? marker.x : marker.y
+            let markerExtent = DockView.isVertical ? marker.width : marker.height
+            let iconNear = DockView.isVertical ? bounds.x : bounds.y
+            let iconExtent = DockView.isVertical ? bounds.width : bounds.height
+            fuzzyCompare(markerNear, Kirigami.Units.largeSpacing, 1e-6)
+            fuzzyCompare(markerNear, iconNear, 1e-6)
+            fuzzyCompare(markerExtent, DockSettings.iconSize, 1e-6)
+            fuzzyCompare(markerExtent, iconExtent, 1e-6)
+            fuzzyCompare(secondaryCenter(marker),
+                         (DockView.isVertical ? panel.width : panel.height) / 2, 1e-6)
+            dock.cancelDrag()
+            tryCompare(indicator, "visible", false)
+        }
+
+        function test_hoveredIndexHitTestWithSymmetricPadding_data() {
+            return dockEdges()
+        }
+
+        function test_hoveredIndexHitTestWithSymmetricPadding(data) {
+            DockView.edge = data.edge
+            DockSettings.maxZoomFactor = 1
+            DockSettings.previewEnabled = false
+            addTasks(["A", "B", "C"])
+            let dock = makeDock(3)
+            let its = items(dock)
+            for (let i = 0; i < its.length; ++i) {
+                let icon = T.iconImage(its[i])
+                verify(icon)
+                let point = centerOf(icon)
+                mouseMove(stage, point.x, point.y)
+                tryCompare(dock, "hoveredIndex", i)
+                compare(dock.hoveredName, ["A", "B", "C"][i])
+            }
+        }
+
+        function test_crowdedDockZoomKeepsBadgeInsideSurface_data() {
+            return [
+                { tag: "19-icons-top-left-dot", edge: 0, count: 19, size: 96, spacing: 2, pos: 1, mode: 1 },
+                { tag: "19-icons-top-left-number", edge: 0, count: 19, size: 96, spacing: 2, pos: 1, mode: 0 },
+                { tag: "18-icons-bottom-left-number", edge: 1, count: 18, size: 96, spacing: 3, pos: 1, mode: 0 },
+                { tag: "19-icons-bottom-right-number", edge: 1, count: 19, size: 96, spacing: 2, pos: 0, mode: 0 },
+            ]
+        }
+
+        function test_crowdedDockZoomKeepsBadgeInsideSurface(data) {
+            root.width = 1920
+            root.height = 316
+            DockView.edge = data.edge
+            DockSettings.iconSize = data.size
+            DockSettings.iconSpacing = data.spacing
+            DockSettings.maxZoomFactor = 2.0
+            DockSettings.badgePosition = data.pos
+            DockSettings.badgeDisplayMode = data.mode
+            DockSettings.attentionAnimation = 0
+            DockSettings.previewEnabled = false
+            let names = []
+            for (let i = 0; i < data.count; ++i)
+                names.push("App" + i)
+            addTasks(names, { AppId: "org.kde.dolphin" })
+            NotificationTracker.setUnread("org.kde.dolphin", 12)
+            let dock = makeDock(data.count)
+            let its = items(dock)
+            let targetIndex = data.pos === 1 ? 0 : data.count - 1
+            let target = its[targetIndex]
+            hoverItem(target)
+            tryCompare(dock, "hoveredIndex", targetIndex)
+            tryVerify(() => Math.abs(target.currentScale - 2.0) < 0.05, 2000)
+            let badge = T.badge(target)
+            verify(badge && badge.visible)
+            let b = drawnBounds(badge, dock)
+            verify(b.x >= -0.01, "badge left edge " + b.x + " < 0")
+            verify(b.x + b.width <= dock.width + 0.01, "badge right edge " + (b.x + b.width) + " > " + dock.width)
+            verify(b.y >= -0.01, "badge top edge " + b.y + " < 0")
+            verify(b.y + b.height <= dock.height + 0.01, "badge bottom edge " + (b.y + b.height) + " > " + dock.height)
+        }
+
+        function test_offscreenIconBadgeDoesNotIntrudeIntoVisibleNeighbor() {
+            root.width = 1280
+            root.height = 316
+            DockView.edge = 1
+            DockSettings.iconSize = 96
+            DockSettings.iconSpacing = 2
+            DockSettings.maxZoomFactor = 2.0
+            DockSettings.badgePosition = 0
+            DockSettings.badgeDisplayMode = 0
+            DockSettings.attentionAnimation = 0
+            DockSettings.previewEnabled = false
+            let names = []
+            for (let i = 0; i < 16; ++i)
+                names.push("App" + i)
+            addTasks(names)
+            NotificationTracker.setUnread("app15", 5)
+            let dock = makeDock(16)
+            let its = items(dock)
+            let offscreenItem = its[15]
+            let neighborItem = its[14]
+            let offscreenBadge = T.badge(offscreenItem)
+            verify(offscreenBadge && offscreenBadge.visible)
+            let badgeBounds = drawnBounds(offscreenBadge, dock)
+            let neighborIconBounds = drawnBounds(T.iconImage(neighborItem), dock)
+            verify(badgeBounds.x >= dock.width, "offscreen badge intruded into visible surface at x=" + badgeBounds.x)
+            verify(badgeBounds.x >= neighborIconBounds.x + neighborIconBounds.width,
+                   "offscreen badge overlapped neighbor icon")
+        }
+
         function test_separatedLayoutToggleKeepsSpacingAndSecondaryCenter_data() {
             return dockEdges()
         }

@@ -80,6 +80,10 @@ public:
     /// non-interactive space above the zoom area (e.g. tooltip reserve).
     void setZoomOverflowHeight(int height);
 
+    /// Depth of the band of other panels along the screen edge that the dock
+    /// is drawn past (see InputRegionParams::edgeInset).
+    void setEdgeInset(int inset);
+
     /// Increment/decrement interaction lock (context menu, settings window open).
     /// While interacting, the dock will never hide.
     Q_INVOKABLE void setInteracting(bool interacting);
@@ -169,6 +173,9 @@ private:
     // Zoom overflow height (pixels above the panel that zoomed icons occupy).
     // Used to restrict hovered input region to only the interactive area.
     int m_zoomOverflowHeight = 0;
+
+    // Band of other panels next to the screen edge (kept click-through).
+    int m_edgeInset = 0;
 
     // Interaction lock: dock stays visible while context menu / settings window is open
     int m_interactingCount = 0;

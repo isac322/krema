@@ -187,6 +187,8 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
 | `src/platform/waylanddockplatform.*` | 01, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
+| `src/platform/kwinpanelwatcher.*` | 06, 07 |
+| `src/utils/panelinset.h` | 06, 07 |
 | `src/platform/pointerfocustracker.*` | 02, 03, 04 |
 | `src/app/application.*` | 01, 06, 07 |
 | `src/qml/SettingsDialog.qml` | 04, 06 |
@@ -211,7 +213,7 @@ duplicating their full procedures.
 | Contract | Scenario | Required observation |
 |---|---|---|
 | Reservation control/default/persistence | SET-015 | Real Behavior switch, saved value, same maximized KWin window reflows live and after Krema restart |
-| Reservation geometry | VIS-001, VIS-009, SET-020 | Maximized frame/output bounds on all four edges, floating off/on, floating margin, current icon size, reservation off/on, and no reservation in Auto Hide/Dodge Windows |
+| Reservation geometry | VIS-001, VIS-009, SET-020, SET-021 | Maximized frame/output bounds on all four edges, floating off/on, floating margin, gap reference (screen edge or panels), current icon size, reservation off/on, and no reservation in Auto Hide/Dodge Windows |
 | Section control/default/persistence | SET-016 | Real Behavior switch, ordered dock app names, pinned membership, accessible separator, and restart |
 | Pin/unpin and app lifecycle | CTX-007 | Running pinned apps retain one pinned slot; unpinned apps follow; live launch/close/group and empty-section transitions |
 | Zone drag policy | DND-006 | Real drags reorder within the source section, clamp cross-section moves without pinning, and allow free ordering when separation is off |

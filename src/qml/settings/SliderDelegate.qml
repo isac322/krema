@@ -95,7 +95,14 @@ FormCard.AbstractFormDelegate {
                 root.moved(snapped(root.value + steps * step))
             }
 
-            onMoved: root.moved(snapped(value))
+            onMoved: {
+                root.moved(snapped(value))
+                // A press or drag writes the raw pointer value and breaks the
+                // binding; when the snapped setting does not change (e.g.
+                // 7.999 -> 8), nothing would move the handle back. Rebind so
+                // the handle and the accessible value always show the setting.
+                value = Qt.binding(() => root.value)
+            }
             Keys.onLeftPressed: event => { stepBy(mirrored ? 1 : -1); event.accepted = true }
             Keys.onRightPressed: event => { stepBy(mirrored ? -1 : 1); event.accepted = true }
             Keys.onDownPressed: event => { stepBy(-1); event.accepted = true }

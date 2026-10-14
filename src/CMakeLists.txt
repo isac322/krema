@@ -12,6 +12,8 @@ add_library(krema_lib STATIC
     platform/dockplatform.h
     platform/dockplatformfactory.h
     platform/dockplatformfactory.cpp
+    platform/kwinpanelwatcher.h
+    platform/kwinpanelwatcher.cpp
     platform/kwinpointermotionwatcher.h
     platform/kwinpointermotionwatcher.cpp
     platform/pointerfocustracker.h
@@ -62,6 +64,7 @@ add_library(krema_lib STATIC
     utils/zoomcalculator.h
     utils/zoomlayoutvariant.h
     utils/surfacegeometry.h
+    utils/panelinset.h
     utils/inputregion.h
     utils/inputregion.cpp
 

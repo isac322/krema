@@ -23,9 +23,11 @@ from test_06_settings import (
     ICON_SIZE_SLIDER,
     RESERVE_SWITCH,
     SETTINGS,
+    choose,
     click_el,
     close_settings,
     config_value,
+    current_choice,
     focus_slider,
     open_page,
     open_settings,
@@ -355,6 +357,13 @@ def test_vis009_live_icon_size_and_floating_update_maximized_consumer(krema: Kre
 
 FLOATING_SWITCH = f"{SETTINGS}//check_box[@name='Floating']"
 FLOATING_MARGIN_SLIDER = f"{SETTINGS}//slider[@name='Floating margin']"
+FLOATING_MARGIN_MAX = 128
+#: FormComboBoxDelegate row choosing what the floating gap is measured from
+#: (kcfg FloatingMarginReference: 0 Screen edge, 1 Panels).
+REFERENCE_ROW = "Measure gap from"
+REFERENCE_ROW_XPATH = f"{SETTINGS}//list_item[@name='{REFERENCE_ROW}']"
+SCREEN_EDGE_REFERENCE = "Screen edge"
+PANELS_REFERENCE = "Panels"
 
 
 def _floating_margin_cases():
@@ -405,7 +414,7 @@ def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, app
     pid = krema.pid
     _behavior(krema, edge=edge)
     open_page(krema, "Layout & Position")
-    slider = focus_slider(krema, FLOATING_MARGIN_SLIDER, 1, 32)
+    slider = focus_slider(krema, FLOATING_MARGIN_SLIDER, 1, FLOATING_MARGIN_MAX)
     assert slider_value(slider) == 8, "a fresh configuration uses the 8 px default margin"
     assert has_state(slider, "enabled"), "the margin is adjustable while the dock floats"
     inp.key("pageup")  # ten 1 px steps, as a user would press it
@@ -441,6 +450,89 @@ def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, app
     restarted = _geometry(krema, win, edge, True, "margin-18-restarted")
     assert _reserved_depth(restarted, edge) == _reserved_depth(wider, edge), (wider, restarted)
     assert restarted["window"] == default["window"], "consumer window must survive dock restart unchanged"
+
+
+@pytest.mark.kremarc(
+    {
+        "PinnedLaunchers": [],
+        "VisibilityMode": config.ALWAYS_VISIBLE,
+        "ReserveScreenSpace": True,
+        "Edge": config.EDGE_BOTTOM,
+        "Floating": True,
+    }
+)
+def test_set021_floating_margin_reference_choice_autosaves_live_and_persists(krema: Krema, apps: TestWindows) -> None:
+    """The "Measure gap from" row is an accessible combo row that defaults to
+    Panels, autosaves live without a restart, stays usable with Floating off,
+    and persists; the Floating margin reaches its 128 px maximum. The session
+    has no Plasma panel, so Panels must place the dock exactly like Screen edge."""
+    edge = config.EDGE_BOTTOM
+    win = apps.open("Alpha", width=400, height=300)
+    krema.wait_for_item("Alpha")
+    _park()
+    maximize(win)
+    panels = _geometry(krema, win, edge, True, "reference-panels")
+    pid = krema.pid
+    _behavior(krema, edge=edge)
+    open_page(krema, "Layout & Position")
+
+    row = scroll_into_view(krema, REFERENCE_ROW_XPATH)
+    assert has_state(row, "enabled"), "the gap reference is adjustable"
+    assert current_choice(krema, REFERENCE_ROW) == PANELS_REFERENCE, "a fresh configuration measures from panels"
+    assert config_value(krema, "FloatingMarginReference") is None
+
+    choose(krema, REFERENCE_ROW, SCREEN_EDGE_REFERENCE)
+    wait_until(lambda: config_value(krema, "FloatingMarginReference") == "0", message="gap reference autosaved as Screen edge")
+    _park()
+    screen_edge = _geometry(krema, win, edge, True, "reference-screen-edge")
+    assert _reserved_depth(screen_edge, edge) == _reserved_depth(panels, edge), "with no panel, Panels equals Screen edge"
+    assert screen_edge["window"] == panels["window"]
+
+    # Floating off: the dock is flush with the reference, so the reference
+    # stays adjustable while the margin slider is disabled.
+    _set_floating(krema, False)
+    wait_until(
+        lambda: not has_state(krema.wait_for(FLOATING_MARGIN_SLIDER), "enabled"),
+        message="floating margin disabled while the dock is not floating",
+    )
+    assert has_state(scroll_into_view(krema, REFERENCE_ROW_XPATH), "enabled"), "the gap reference stays enabled with Floating off"
+    choose(krema, REFERENCE_ROW, PANELS_REFERENCE)
+    wait_until(
+        lambda: config_value(krema, "FloatingMarginReference") in ("1", None),
+        message="gap reference autosaved back to the Panels default",
+    )
+    _set_floating(krema, True)
+
+    focus_slider(krema, FLOATING_MARGIN_SLIDER, 1, FLOATING_MARGIN_MAX)
+    inp.key("end")
+    wait_until(
+        lambda: slider_value(krema.wait_for(FLOATING_MARGIN_SLIDER)) == FLOATING_MARGIN_MAX,
+        message="floating margin raised to its maximum",
+    )
+    wait_until(lambda: config_value(krema, "FloatingMargin") == str(FLOATING_MARGIN_MAX), message="maximum margin autosaved")
+    _park()
+    widest = _geometry(krema, win, edge, True, "margin-max")
+    assert _reserved_depth(widest, edge) - _reserved_depth(panels, edge) == FLOATING_MARGIN_MAX - 8, (panels, widest)
+    assert widest["window"] == panels["window"]
+
+    choose(krema, REFERENCE_ROW, SCREEN_EDGE_REFERENCE)
+    wait_until(lambda: config_value(krema, "FloatingMarginReference") == "0", message="gap reference autosaved as Screen edge")
+    assert krema.pid == pid, "gap reference and margin changes must apply live"
+
+    close_settings(krema)
+    _park()
+    krema.restart()
+    assert krema.pid != pid
+    krema.wait_for_item("Alpha")
+    _park()
+    restarted = _geometry(krema, win, edge, True, "reference-screen-edge-restarted")
+    assert _reserved_depth(restarted, edge) == _reserved_depth(widest, edge), (widest, restarted)
+    assert restarted["window"] == panels["window"], "consumer window must survive dock restart unchanged"
+    _behavior(krema, edge=edge)
+    open_page(krema, "Layout & Position")
+    scroll_into_view(krema, REFERENCE_ROW_XPATH)
+    assert current_choice(krema, REFERENCE_ROW) == SCREEN_EDGE_REFERENCE, "the gap reference survives restart"
+    close_settings(krema)
 
 
 @pytest.mark.parametrize(

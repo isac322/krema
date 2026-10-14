@@ -5,6 +5,7 @@
 
 #include "platform/dockplatform.h"
 #include "style/backgroundstyle.h"
+#include "utils/panelinset.h"
 
 #include <QQuickView>
 #include <QVariant>
@@ -24,6 +25,7 @@ namespace krema
 {
 
 class DockVisibilityController;
+class KWinPanelWatcher;
 class PointerFocusTracker;
 class ScreenSettings;
 class TaskIconProvider;
@@ -79,12 +81,27 @@ public:
     /// Update the dock edge and recalculate surface size.
     void setEdge(DockPlatform::Edge edge);
 
-    /// Height of the visible panel bar + floating padding (excludes zoom overflow).
+    /// Height of the visible panel bar + floating padding (excludes zoom overflow),
+    /// measured from the screen edge, so it includes the panel inset.
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;
 
-    /// Recalculate surface size (called when iconSize/maxZoomFactor/floating/floating margin change).
+    /// Depth of the space other always-visible panels reserve on the dock's
+    /// edge while the gap is measured from panels; 0 otherwise.
+    [[nodiscard]] int reservedPanelInset() const;
+
+    /// Recalculate surface size (called when iconSize/maxZoomFactor change).
     void updateSize();
+
+    /// Re-apply a changed floating gap (Floating, margin, or panel inset):
+    /// resize the surface, reflow the input region and reservation, and emit
+    /// floatingPaddingChanged().
+    void refreshFloatingPadding();
+
+    /// Apply the FloatingMarginReference setting: measure the gap from the
+    /// screen edge, or from the always-visible panels on the dock's edge
+    /// (watched through KWin scripting; the screen edge when unavailable).
+    void applyMarginReference();
 
     /// Set per-screen settings overlay for size calculations.
     void setScreenSettings(ScreenSettings *screenSettings);
@@ -140,6 +157,10 @@ private:
 
     void handleScreenChanged(QScreen *newScreen);
     void handleScreenGeometryChanged();
+    /// Whether the gap is currently measured from panels (setting on and KWin scripting available).
+    [[nodiscard]] bool isPanelRelative() const;
+    /// Recompute the panel inset for this dock's output and edge.
+    void refreshPanelInset();
 
 private Q_SLOTS:
     void handleScreenLockChanged(bool active);
@@ -155,6 +176,8 @@ private:
     int m_sideTooltipReserve = 0;
     DockPlatform::Edge m_edge = DockPlatform::Edge::Bottom;
     QMetaObject::Connection m_screenGeometryConnection;
+    std::shared_ptr<KWinPanelWatcher> m_panelWatcher;
+    PanelInset m_panelInset;
 
     static constexpr int s_padding = 8;
     /// Minimum tooltip reserve; covers the tooltip height above/below a horizontal panel.

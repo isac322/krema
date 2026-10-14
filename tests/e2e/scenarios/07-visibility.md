@@ -16,6 +16,11 @@
 - src/shell/dockvisibilitycontroller.cpp
 - src/platform/waylanddockplatform.h
 - src/platform/waylanddockplatform.cpp
+- src/platform/kwinpanelwatcher.h
+- src/platform/kwinpanelwatcher.cpp
+- src/utils/panelinset.h
+- src/utils/inputregion.h
+- src/utils/inputregion.cpp
 - src/shell/dockview.h
 - src/shell/dockview.cpp
 - src/app/application.cpp
@@ -56,6 +61,7 @@ geometry in all states; screenshot when capture is available.
 
 **Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_dock_stays_shown_over_a_maximized_window
 **Automated:** tests/appium/test_07_visibility.py::test_vis001_always_visible_reserves_the_dock_area_for_maximized_windows
+**Automated:** tests/kwin/test_panel_margin.cpp (ctest `krema_panel_margin_tests`) checks that with an always-visible panel reserving the dock's edge, the dock bar rests past the panel and KWin's MaximizeArea still ends above it (SET-021)
 
 ---
 

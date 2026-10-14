@@ -10,20 +10,27 @@ namespace krema
 
 QRegion computeDockInputRegion(const InputRegionParams &p)
 {
-    // Trigger strip: thin strip along the screen edge to detect mouse entry
+    // Depth of the band other panels occupy along the screen edge (the dock is
+    // drawn past it). Nothing here may take their input, so the dock's region
+    // and its trigger strip both start past the band.
+    const int edgeInset = std::max(0, p.edgeInset);
+
+    // Trigger strip: thin strip along the screen edge (or the panels' inner
+    // edge) to detect mouse entry. It also keeps the region non-empty while
+    // the dock slides back in from off-surface (an empty mask accepts ALL input).
     QRegion triggerStrip;
     switch (p.edge) {
     case 0: // Top
-        triggerStrip = QRegion(0, 0, p.surfaceWidth, p.triggerStripHeight);
+        triggerStrip = QRegion(0, edgeInset, p.surfaceWidth, p.triggerStripHeight);
         break;
     case 1: // Bottom
-        triggerStrip = QRegion(0, p.surfaceHeight - p.triggerStripHeight, p.surfaceWidth, p.triggerStripHeight);
+        triggerStrip = QRegion(0, p.surfaceHeight - edgeInset - p.triggerStripHeight, p.surfaceWidth, p.triggerStripHeight);
         break;
     case 2: // Left
-        triggerStrip = QRegion(0, 0, p.triggerStripHeight, p.surfaceHeight);
+        triggerStrip = QRegion(edgeInset, 0, p.triggerStripHeight, p.surfaceHeight);
         break;
     case 3: // Right
-        triggerStrip = QRegion(p.surfaceWidth - p.triggerStripHeight, 0, p.triggerStripHeight, p.surfaceHeight);
+        triggerStrip = QRegion(p.surfaceWidth - edgeInset - p.triggerStripHeight, 0, p.triggerStripHeight, p.surfaceHeight);
         break;
     }
 
@@ -44,13 +51,13 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         int regionH;
         if (p.edge == 0) {
             // Top: panel at top, zoom extends downward
-            regionY = 0;
+            regionY = std::min(edgeInset, p.surfaceHeight);
             int bottom = p.hovered ? (p.panelY + p.panelHeight + p.zoomOverflowHeight + p.margin) : (p.panelY + p.panelHeight + p.margin);
-            regionH = std::min(bottom, p.surfaceHeight);
+            regionH = std::max(0, std::min(bottom, p.surfaceHeight) - regionY);
         } else {
             // Bottom: panel at bottom, zoom extends upward
             regionY = p.hovered ? std::max(0, p.panelY - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelY - p.margin);
-            regionH = p.surfaceHeight - regionY;
+            regionH = std::max(0, p.surfaceHeight - edgeInset - regionY);
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
@@ -68,13 +75,13 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         int regionW;
         if (p.edge == 2) {
             // Left: panel at left, zoom extends rightward
-            regionX = 0;
+            regionX = std::min(edgeInset, p.surfaceWidth);
             int right = p.hovered ? (p.panelX + p.panelWidth + p.zoomOverflowHeight + p.margin) : (p.panelX + p.panelWidth + p.margin);
-            regionW = std::min(right, p.surfaceWidth);
+            regionW = std::max(0, std::min(right, p.surfaceWidth) - regionX);
         } else {
             // Right: panel at right, zoom extends leftward
             regionX = p.hovered ? std::max(0, p.panelX - p.zoomOverflowHeight - p.margin) : std::max(0, p.panelX - p.margin);
-            regionW = p.surfaceWidth - regionX;
+            regionW = std::max(0, p.surfaceWidth - edgeInset - regionX);
         }
 
         QRegion region(regionX, regionY, regionW, regionH);

@@ -290,6 +290,26 @@ void DockVisibilityController::setZoomOverflowHeight(int height)
     applyInputRegion();
 }
 
+void DockVisibilityController::setEdgeInset(int inset)
+{
+    if (m_edgeInset == inset) {
+        return;
+    }
+    const int delta = inset - m_edgeInset;
+    m_edgeInset = inset;
+    // While hidden, QML reports the slid-out position, so m_panelRefY keeps
+    // the last rest position. On the top edge that position is measured from
+    // the screen edge and moves with the inset; on the bottom edge it is
+    // relative to the surface, which grows with the inset.
+    if (!m_visible && m_platform->edge() == DockPlatform::Edge::Top) {
+        m_panelRefY += delta;
+    }
+    applyInputRegion();
+    // Panels can appear or change while the dock is hidden: re-check Dodge
+    // against the dock's new resting place.
+    requestEvaluate();
+}
+
 void DockVisibilityController::setKeyboardActive(bool active, bool restoreFocus)
 {
     if (m_keyboardActive == active) {
@@ -474,6 +494,7 @@ void DockVisibilityController::applyInputRegion()
     params.visible = m_visible;
     params.hovered = m_hovered;
     params.edge = static_cast<int>(m_platform->edge());
+    params.edgeInset = m_edgeInset;
 
     m_platform->setInputRegion(computeDockInputRegion(params));
 }

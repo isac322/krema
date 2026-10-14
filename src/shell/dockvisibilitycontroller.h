@@ -209,6 +209,8 @@ private:
     // Configured hide delay; the hide timer may run longer while the pointer
     // crosses the panels' band from the screen edge.
     int m_hideDelay = 400;
+    // Hold while the pointer crosses the panels' band from the screen edge
+    bool m_crossingBand = false;
 
     // Shared KWin script when watching the outer screen edge past panels
     std::shared_ptr<KWinPanelWatcher> m_edgeWatcher;

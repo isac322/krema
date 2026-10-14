@@ -40,7 +40,7 @@ const QString kObjectPath = QStringLiteral("/com/bhyoo/krema/PanelWatcher");
 const char kScript[] = R"JS(
 var kremaPid = %1;
 var lastReport = "";
-var lastX = -1, lastY = -1;
+var lastX = null, lastY = null;
 var debounce = new QTimer();
 debounce.singleShot = true;
 debounce.interval = 50;
@@ -156,6 +156,7 @@ KWinPanelWatcher::KWinPanelWatcher()
     m_kwinWatcher = std::make_unique<QDBusServiceWatcher>(kKWinService, QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForRegistration);
     connect(m_kwinWatcher.get(), &QDBusServiceWatcher::serviceRegistered, this, [this]() {
         m_pluginName.clear();
+        m_cursorPos.reset();
         load();
     });
 }
@@ -178,7 +179,7 @@ KWinPanelWatcher::OutputPanels KWinPanelWatcher::output(const QString &outputNam
     return m_outputs.value(outputName);
 }
 
-QPoint KWinPanelWatcher::cursorPos() const
+std::optional<QPoint> KWinPanelWatcher::cursorPos() const
 {
     return m_cursorPos;
 }

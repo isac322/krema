@@ -10,6 +10,7 @@
 #include <QString>
 
 #include <memory>
+#include <optional>
 
 class QDBusServiceWatcher;
 class QTemporaryFile;
@@ -57,8 +58,8 @@ public:
     /// Last report for @p outputName; empty when it has not been reported.
     [[nodiscard]] OutputPanels output(const QString &outputName) const;
 
-    /// Last reported cursor position in global screen coordinates.
-    [[nodiscard]] QPoint cursorPos() const;
+    /// Last reported cursor position in global screen coordinates; nullopt before the first report.
+    [[nodiscard]] std::optional<QPoint> cursorPos() const;
 public Q_SLOTS:
     /// Called by the KWin script over D-Bus with a JSON object keyed by output
     /// name: {"geometry": [x,y,w,h], "anchor": [x,y,w,h] | null, "panels": [[x,y,w,h], ...]}.
@@ -86,7 +87,7 @@ private:
     QString m_pluginName; // non-empty while loaded
     quint64 m_generation = 0;
     bool m_available = true;
-    QPoint m_cursorPos{-1, -1};
+    std::optional<QPoint> m_cursorPos;
     QHash<QString, OutputPanels> m_outputs;
 };
 

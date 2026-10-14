@@ -304,8 +304,13 @@ TEST_CASE("Dock input region leaves other panels' band click-through", "[input-r
         REQUIRE(region.contains(QPoint(960, 60)));
         REQUIRE_FALSE(region.contains(QPoint(960, 59)));
         REQUIRE_FALSE(region.contains(QPoint(960, 0)));
-    }
 
+        p.visible = false;
+        p.externalEdgeTrigger = true;
+        const QRegion hidden = krema::computeDockInputRegion(p);
+        REQUIRE_FALSE(hidden.isEmpty());
+        REQUIRE_FALSE(hidden.intersects(QRect(0, 0, 1920, 60)));
+    }
     SECTION("Left and right: band beside the surface edge")
     {
         p.surfaceWidth = 180;
@@ -325,5 +330,12 @@ TEST_CASE("Dock input region leaves other panels' band click-through", "[input-r
         region = krema::computeDockInputRegion(p);
         REQUIRE(region.contains(QPoint(119, 500)));
         REQUIRE_FALSE(region.contains(QPoint(120, 500)));
+
+        p.edge = 2;
+        p.visible = false;
+        p.externalEdgeTrigger = true;
+        const QRegion hiddenLeft = krema::computeDockInputRegion(p);
+        REQUIRE_FALSE(hiddenLeft.isEmpty());
+        REQUIRE_FALSE(hiddenLeft.intersects(QRect(0, 0, 60, 1080)));
     }
 }

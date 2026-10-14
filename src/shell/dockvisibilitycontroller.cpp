@@ -65,6 +65,7 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
     m_hideTimer.setInterval(m_hideDelay);
     connect(&m_hideTimer, &QTimer::timeout, this, [this]() {
         // Drop the longer interval used while crossing the panels' band.
+        m_crossingBand = false;
         m_hideTimer.setInterval(m_hideDelay);
         evaluateVisibility();
     });
@@ -144,7 +145,7 @@ void DockVisibilityController::setMode(DockPlatform::VisibilityMode mode)
     m_showTimer.stop();
     m_hideTimer.stop();
     m_evaluateTimer.stop();
-
+    m_crossingBand = false;
     qCDebug(lcVisibility) << "Visibility mode changed to:" << static_cast<int>(mode);
 
     updateEdgeTriggerWatcher();
@@ -163,7 +164,7 @@ void DockVisibilityController::toggleVisibility()
     // Cancel any pending show/hide
     m_showTimer.stop();
     m_hideTimer.stop();
-
+    m_crossingBand = false;
     setVisible(!m_visible);
 }
 
@@ -176,6 +177,7 @@ void DockVisibilityController::setHovered(bool hovered)
     m_surfaceHovered = hovered;
     if (hovered) {
         // Reached the dock: drop the longer interval used while crossing the panels' band.
+        m_crossingBand = false;
         m_hideTimer.setInterval(m_hideDelay);
     }
 
@@ -200,8 +202,8 @@ void DockVisibilityController::updateHoveredState(bool transitFromEdge)
 
     if (hovered) {
         // Mouse entered dock/trigger area
+        m_crossingBand = false;
         m_hideTimer.stop(); // Cancel any pending hide
-
         if (!m_visible) {
             // Dock is hidden — start show timer (dwell-based)
             m_showTimer.start();
@@ -223,6 +225,7 @@ void DockVisibilityController::updateHoveredState(bool transitFromEdge)
         // Revealed from the screen edge: the pointer is crossing the panels'
         // band toward the dock, so give it time even with a zero hide delay.
         const bool crossingBand = transitFromEdge && m_visible && !m_surfaceHovered;
+        m_crossingBand = crossingBand;
         m_hideTimer.setInterval(crossingBand ? std::max(m_hideDelay, 250) : m_hideDelay);
 
         // Start hide timer
@@ -249,6 +252,12 @@ void DockVisibilityController::evaluateVisibility()
     // If hovered, always show
     if (m_hovered) {
         setVisible(true);
+        return;
+    }
+
+    // While the pointer crosses the panels' band from the screen edge toward
+    // the dock, wait for the hide timer's crossing floor before hiding.
+    if (m_crossingBand && m_hideTimer.isActive()) {
         return;
     }
 
@@ -342,6 +351,7 @@ void DockVisibilityController::setEdgeInset(int inset)
     }
     // Arms or disarms the screen-edge watcher and reapplies the input region.
     updateEdgeTriggerWatcher();
+    applyInputRegion();
     // Panels can appear or change while the dock is hidden: re-check Dodge
     // against the dock's new resting place.
     requestEvaluate();
@@ -378,8 +388,8 @@ void DockVisibilityController::updateEdgeTriggerStrip()
         }
     }
     m_edgeStripRect = strip;
-    if (m_watchingEdge && m_edgeWatcher) {
-        checkCursorAtEdge(m_edgeWatcher->cursorPos());
+    if (m_watchingEdge && m_edgeWatcher && m_edgeWatcher->cursorPos()) {
+        checkCursorAtEdge(*m_edgeWatcher->cursorPos());
     }
     updateEdgeTriggerWatcher();
 }
@@ -391,7 +401,7 @@ bool DockVisibilityController::isExternalEdgeTriggerActive() const
 
 void DockVisibilityController::checkCursorAtEdge(const QPoint &pos)
 {
-    const bool hovered = m_watchingEdge && !m_edgeStripRect.isEmpty() && pos.x() >= 0 && m_edgeStripRect.contains(pos);
+    const bool hovered = m_watchingEdge && !m_edgeStripRect.isEmpty() && m_edgeStripRect.contains(pos);
     if (m_edgeHovered == hovered) {
         return;
     }
@@ -411,7 +421,9 @@ void DockVisibilityController::updateEdgeTriggerWatcher()
     const bool wasActive = isExternalEdgeTriggerActive();
     if (want && !m_watchingEdge) {
         m_watchingEdge = true;
-        checkCursorAtEdge(m_edgeWatcher->cursorPos());
+        if (m_edgeWatcher->cursorPos()) {
+            checkCursorAtEdge(*m_edgeWatcher->cursorPos());
+        }
     } else if (!want && m_watchingEdge) {
         m_watchingEdge = false;
         if (m_edgeHovered) {

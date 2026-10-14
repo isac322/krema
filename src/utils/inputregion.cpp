@@ -19,15 +19,21 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
     // edge) to detect mouse entry. It also keeps the region non-empty while
     // the dock slides back in from off-surface (an empty mask accepts ALL input).
     QRegion triggerStrip;
+    // 1x1 placeholder at the inner corner (away from the screen edge and its
+    // panel band) when KWin watches the screen edge: an empty QRegion clears
+    // the Wayland input mask and accepts input on the whole surface.
+    QRegion placeholder(0, 0, 1, 1);
     switch (p.edge) {
     case 0: // Top
         triggerStrip = QRegion(0, edgeInset, p.surfaceWidth, p.triggerStripHeight);
+        placeholder = QRegion(0, std::max(0, p.surfaceHeight - 1), 1, 1);
         break;
     case 1: // Bottom
         triggerStrip = QRegion(0, p.surfaceHeight - edgeInset - p.triggerStripHeight, p.surfaceWidth, p.triggerStripHeight);
         break;
     case 2: // Left
         triggerStrip = QRegion(edgeInset, 0, p.triggerStripHeight, p.surfaceHeight);
+        placeholder = QRegion(std::max(0, p.surfaceWidth - 1), 0, 1, 1);
         break;
     case 3: // Right
         triggerStrip = QRegion(p.surfaceWidth - edgeInset - p.triggerStripHeight, 0, p.triggerStripHeight, p.surfaceHeight);
@@ -35,8 +41,7 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
     }
 
     if (!p.visible) {
-        // Never an empty region: an empty mask accepts ALL input.
-        return p.externalEdgeTrigger ? QRegion(0, 0, 1, 1) : triggerStrip;
+        return p.externalEdgeTrigger ? placeholder : triggerStrip;
     }
 
     if (p.edge <= 1) {
@@ -63,7 +68,7 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
 
         QRegion region(regionX, regionY, regionW, regionH);
         if (p.externalEdgeTrigger) {
-            return region.isEmpty() ? QRegion(0, 0, 1, 1) : region;
+            return region.isEmpty() ? placeholder : region;
         }
         return region.united(triggerStrip);
     } else {
@@ -90,7 +95,7 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
 
         QRegion region(regionX, regionY, regionW, regionH);
         if (p.externalEdgeTrigger) {
-            return region.isEmpty() ? QRegion(0, 0, 1, 1) : region;
+            return region.isEmpty() ? placeholder : region;
         }
         return region.united(triggerStrip);
     }

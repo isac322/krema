@@ -624,14 +624,7 @@ void DockVisibilityController::applyInputRegion()
     params.edgeInset = m_edgeInset;
     params.externalEdgeTrigger = isExternalEdgeTriggerActive();
 
-    const QRegion region = computeDockInputRegion(params);
-    const bool changed = m_dockWindow->mask() != region;
-    m_platform->setInputRegion(region);
-    if (changed && m_dockWindow->isExposed()) {
-        // setMask() is double-buffered on Wayland; publish it with a frame
-        // even when the dock is already still (e.g. hidden).
-        m_dockWindow->requestUpdate();
-    }
+    m_platform->setInputRegion(computeDockInputRegion(params));
 }
 
 QRect DockVisibilityController::dockScreenRect() const

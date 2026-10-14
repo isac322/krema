@@ -884,8 +884,8 @@ Open Settings → Behavior. Record Krema's process.
    panel's inner edge (the side facing the screen centre): the dock is
    revealed.
 8. Run without KWin scripting (for example, the KWin Scripting D-Bus
-   interface is missing). Verify "Screen edge" falls back to the reveal
-   strip along the panel's inner edge.
+   interface is missing). Verify panel-relative placement is unavailable and
+   both reveal choices use the dock surface's screen-edge strip.
 
 **Expected:**
 - The row is shown only in "Auto hide" and "Dodge windows"; "Screen edge"

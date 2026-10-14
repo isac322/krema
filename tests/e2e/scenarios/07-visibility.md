@@ -339,8 +339,8 @@ hidden past the panel.
   the strip at the panel's inner edge reveals it.
 - Step 5: leaving the screen edge toward the dock grants at least 250 ms to
   cross the panel, so a 0 ms hide delay does not hide the dock mid-way.
-- Without KWin scripting, "Screen edge" falls back to the strip at the
-  panel's inner edge.
+- Without KWin scripting, panel-relative placement is unavailable; both reveal
+  choices use the dock surface's screen-edge strip.
 
 **Verification:** dock visibility (`DockVisibilityController::isDockVisible`,
 AT-SPI `showing`), the dock surface's input mask, clicks received by the

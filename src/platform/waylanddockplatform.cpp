@@ -184,14 +184,15 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
     m_panelRelative = enabled;
 
     if (!enabled) {
-        // Hand the reservation back to the dock surface: its commit and the
-        // probe's destruction go out together, so KWin re-arranges once.
-        // Two quick re-arranges (the reservation vanishing and returning, or
-        // briefly held twice) can leave maximized windows at the
-        // intermediate size.
+        // Hand the reservation back to the dock surface: clear the probe's
+        // reservation and commit both surfaces together before destroying the
+        // probe, so KWin re-arranges once and never drops the reservation.
         m_probeMapped = false;
+        if (m_probeLayerWindow) {
+            m_probeLayerWindow->setExclusiveZone(0);
+            commitMappedSurface(m_probe.get());
+        }
         applyExclusiveZone();
-        commitMappedSurface(m_window);
         m_probeLayerWindow = nullptr;
         m_probe.reset();
         return;
@@ -346,6 +347,7 @@ void WaylandDockPlatform::applyExclusiveZone()
         // stay at the real screen edge.
         m_layerWindow->setExclusiveZone(-1);
     }
+    commitMappedSurface(m_window);
 }
 
 void WaylandDockPlatform::setSize(const QSize &size)
@@ -368,8 +370,9 @@ void WaylandDockPlatform::setSize(const QSize &size)
 
 void WaylandDockPlatform::setInputRegion(const QRegion &region)
 {
-    if (m_window) {
+    if (m_window && m_window->mask() != region) {
         m_window->setMask(region);
+        commitMappedSurface(m_window);
     }
 }
 

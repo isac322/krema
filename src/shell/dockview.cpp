@@ -38,7 +38,14 @@ DockView::DockView(std::unique_ptr<DockPlatform> platform, KremaSettings *settin
     setResizeMode(QQuickView::SizeRootObjectToView);
 }
 
-DockView::~DockView() = default;
+DockView::~DockView()
+{
+    // QQuickView::~QQuickView hides the window (emitting visibleChanged(false))
+    // before QObject::~QObject destroys its children, after DockView's own
+    // members (m_platform) are already destroyed. Hide first while both the
+    // platform and the visibility controller are still alive.
+    hide();
+}
 
 void DockView::initialize(TaskManager::TasksModel *tasksModel,
                           TaskManager::VirtualDesktopInfo *virtualDesktopInfo,

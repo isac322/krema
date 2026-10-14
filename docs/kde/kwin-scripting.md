@@ -24,8 +24,8 @@ compares the reported position against the 4 px strip along the outer edge of
 the dock's output. The script never takes input, so clicks there still reach
 the panel. Meanwhile the hidden dock surface keeps a 1x1 input region instead
 of a strip (an empty region would accept input on the whole surface). Without
-KWin scripting, the strip falls back to the panels' inner edge on the dock
-surface, as with Reveal trigger "Dock position".
+KWin scripting, panel-relative placement is unavailable; both reveal choices
+use the dock surface's screen-edge strip.
 
 ## D-Bus API (service `org.kde.KWin`)
 

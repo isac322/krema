@@ -39,6 +39,7 @@
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
+#include "shell/outputordermonitor.h"
 #include "utils/surfacegeometry.h"
 
 #include <KAboutData>
@@ -669,6 +670,15 @@ bool reservationCoversDock(const Placement &p)
 
 std::unique_ptr<krema::MultiDockManager> startDock()
 {
+    // Wait until the Plasma output order is known before creating shells, as
+    // Application::run() does; otherwise primaryOutputChanged() fires mid-test
+    // and processTopologyUpdate() destroys and recreates the shells under
+    // local view/visibility pointers.
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            return krema::OutputOrderMonitor::instance()->orderReady();
+        },
+        kTimeoutMs));
     auto manager = std::make_unique<krema::MultiDockManager>(app().settings.get(), app().model.get(), app().tracker.get());
     manager->initialize();
     return manager;
@@ -1069,8 +1079,9 @@ TEST_CASE("Maximized windows follow the reservation as it moves between the dock
 
 TEST_CASE("Auto-hide dock beside a panel reveals from the screen edge without stealing panel clicks, or from the dock position", "[panel-margin][reveal]")
 {
-    // Needs KWin's fake-input protocol to move the pointer and click.
-    FakePointer pointer;
+    // Needs KWin's fake-input protocol to move the pointer and click. Keep one
+    // device for the life of the process so the seat's pointer capability stays up.
+    static FakePointer pointer;
     REQUIRE(pointer.isValid());
 
     auto *s = app().settings.get();
@@ -1243,6 +1254,24 @@ TEST_CASE("Auto-hide dock beside a panel reveals from the screen edge without st
 
     pointer.moveTo(away);
     REQUIRE(QTest::qWaitFor(isHidden, kTimeoutMs));
+
+    // Rebuilding the dock shell while external screen-edge reveal is active
+    // (e.g. changing Monitor mode) must tear down cleanly without calling into
+    // a destroyed platform from QWindow::visibleChanged(false).
+    s->setRevealTriggerLocation(0);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return isHidden() && view->mask() == QRegion(0, 0, 1, 1);
+        },
+        kTimeoutMs));
+    manager->setMonitorMode(krema::MultiDockManager::AllScreens);
+    manager->setMonitorMode(krema::MultiDockManager::PrimaryOnly);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->mask() == QRegion(0, 0, 1, 1);
+        },
+        kTimeoutMs));
 }
 
 int main(int argc, char *argv[])

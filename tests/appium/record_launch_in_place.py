@@ -21,7 +21,7 @@ frames.jsonl (monotonic capture bounds/PTS), phases.jsonl (native windows and
 physical dock order), metadata.json, capture.ffconcat (measured VFR durations).
 Encode the manifest with ffmpeg -f concat -safe 0 -i capture.ffconcat
 -fps_mode vfr; crop only the recorded default dock area from metadata.json.
-Inspect decoded frame PTS and the separate 4.00 s pointer calibration before
+Inspect decoded frame PTS and the separate 8.00 s pointer calibration before
 using the launch segment. No promised frame rate, time warping, theme changes,
 or synthetic product frames. Original mode records observed order, including
 an honest non-reproduction; it does not waive counts, identity or capture errors.
@@ -56,7 +56,7 @@ from krema_e2e.windows import TestWindows
 
 
 CAPTURE_INTERVAL = 0.075  # Scheduling interval, not a claimed achieved frame rate.
-CALIBRATION_SECONDS = 4.00
+CALIBRATION_SECONDS = 8.00
 HOLD_SECONDS = 1.0
 APP_IDS = (env.TEST_APP_ID, env.TEST_APP2_ID, "org.krema.icon009.drag-raw")
 pytestmark = pytest.mark.no_krema_autostart

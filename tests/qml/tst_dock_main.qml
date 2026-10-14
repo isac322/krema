@@ -1532,9 +1532,11 @@ Item {
                 mouseMove(stage, from.x, from.y)
                 tryCompare(dock, "hoveredIndex", direction.from)
                 mousePress(stage, from.x, from.y, Qt.LeftButton)
-                // Model a real hold: the production gesture arms at 300 ms,
-                // then movement beyond its 10 px threshold starts the drag.
-                wait(350)
+                // Wait until the real press-hold gesture is armed before
+                // moving beyond its 10 px threshold; a fixed delay is not
+                // guaranteed to include the timer completion.
+                tryCompare(dock, "_dragPending", true, 2000,
+                           "hold gesture did not arm before pointer move")
                 mouseMove(stage, from.x + (DockView.isVertical ? 0 : 12),
                           from.y + (DockView.isVertical ? 12 : 0), -1, Qt.LeftButton)
                 tryCompare(source, "isDragSource", true)

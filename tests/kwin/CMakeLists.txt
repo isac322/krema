@@ -11,9 +11,14 @@ add_executable(krema_kwin_tests
     test_primary_output.cpp
 )
 
+# Catch2's fatal assertions must unwind scoped fixtures.
+kde_target_enable_exceptions(krema_kwin_tests PRIVATE)
+
 add_executable(krema_selected_output_tests
     test_selected_outputs.cpp
 )
+
+kde_target_enable_exceptions(krema_selected_output_tests PRIVATE)
 
 target_link_libraries(krema_selected_output_tests PRIVATE
     Catch2::Catch2
@@ -42,6 +47,8 @@ add_executable(krema_grouped_activation_tests
     test_grouped_activation.cpp
 )
 
+kde_target_enable_exceptions(krema_grouped_activation_tests PRIVATE)
+
 target_link_libraries(krema_grouped_activation_tests PRIVATE
     Catch2::Catch2
     Qt6::Test
@@ -50,6 +57,8 @@ target_link_libraries(krema_grouped_activation_tests PRIVATE
 add_executable(krema_task_icons_tests
     test_task_icons.cpp
 )
+
+kde_target_enable_exceptions(krema_task_icons_tests PRIVATE)
 
 target_link_libraries(krema_task_icons_tests PRIVATE
     Catch2::Catch2
@@ -75,6 +84,8 @@ add_executable(krema_showdesktop_tests
     test_show_desktop.cpp
 )
 
+kde_target_enable_exceptions(krema_showdesktop_tests PRIVATE)
+
 target_link_libraries(krema_showdesktop_tests PRIVATE
     Catch2::Catch2
     Qt6::Test
@@ -84,6 +95,8 @@ target_link_libraries(krema_showdesktop_tests PRIVATE
 add_executable(krema_tooltip_tests
     test_tooltip_geometry.cpp
 )
+
+kde_target_enable_exceptions(krema_tooltip_tests PRIVATE)
 
 target_link_libraries(krema_tooltip_tests PRIVATE
     Catch2::Catch2
@@ -95,6 +108,8 @@ add_executable(krema_hittest_tests
     test_dock_hit_test.cpp
 )
 
+kde_target_enable_exceptions(krema_hittest_tests PRIVATE)
+
 target_link_libraries(krema_hittest_tests PRIVATE
     Catch2::Catch2
     Qt6::Test
@@ -105,6 +120,8 @@ add_executable(krema_preview_tests
     test_preview_setting.cpp
 )
 
+kde_target_enable_exceptions(krema_preview_tests PRIVATE)
+
 target_link_libraries(krema_preview_tests PRIVATE
     Catch2::Catch2
     Qt6::Test
@@ -114,6 +131,8 @@ target_link_libraries(krema_preview_tests PRIVATE
 add_executable(krema_delegate_geometry_tests
     test_delegate_geometry.cpp
 )
+
+kde_target_enable_exceptions(krema_delegate_geometry_tests PRIVATE)
 
 target_link_libraries(krema_delegate_geometry_tests PRIVATE
     Catch2::Catch2
@@ -126,6 +145,8 @@ target_link_libraries(krema_delegate_geometry_tests PRIVATE
 add_executable(krema_panel_margin_tests
     test_panel_margin.cpp
 )
+
+kde_target_enable_exceptions(krema_panel_margin_tests PRIVATE)
 
 target_link_libraries(krema_panel_margin_tests PRIVATE
     Catch2::Catch2

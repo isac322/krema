@@ -631,6 +631,29 @@ SettingsPage {
             valueText: i18nc("@label milliseconds", "%1 ms", value)
             onMoved: (value) => DockSettings.hideDelay = value
         }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.visibilityMode !== 0
+        }
+
+        // Indices follow the kcfg RevealTriggerLocation: 0 Screen edge,
+        // 1 Dock position.
+        FormCard.FormComboBoxDelegate {
+            id: revealTriggerRow
+            visible: DockSettings.visibilityMode !== 0
+            text: i18n("Reveal trigger")
+            description: i18n("Where the pointer reveals the hidden dock when panels are on the same edge")
+            Accessible.name: text
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: [
+                i18n("Screen edge"),
+                i18n("Dock position")
+            ]
+            currentIndex: DockSettings.revealTriggerLocation
+            onActivated: function(index) {
+                DockSettings.revealTriggerLocation = index
+            }
+        }
     }
 
     // --- Tasks ---

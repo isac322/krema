@@ -40,6 +40,7 @@ const QString kObjectPath = QStringLiteral("/com/bhyoo/krema/PanelWatcher");
 const char kScript[] = R"JS(
 var kremaPid = %1;
 var lastReport = "";
+var lastX = null, lastY = null;
 var debounce = new QTimer();
 debounce.singleShot = true;
 debounce.interval = 50;
@@ -81,6 +82,17 @@ function report() {
     callDBus("%2", "%3", "%4", "updatePanels", json);
 }
 
+function reportCursor() {
+    var p = workspace.cursorPos;
+    var x = Math.round(p.x), y = Math.round(p.y);
+    if (x === lastX && y === lastY) {
+        return;
+    }
+    lastX = x;
+    lastY = y;
+    callDBus("%2", "%3", "%4", "notifyCursorMoved", x, y);
+}
+
 function schedule() {
     debounce.start();
 }
@@ -105,6 +117,8 @@ for (var k = 0; k < existing.length; ++k) {
     track(existing[k]);
 }
 report();
+workspace.cursorPosChanged.connect(reportCursor);
+reportCursor();
 )JS";
 
 QDBusMessage scriptingCall(const QString &method)
@@ -142,6 +156,7 @@ KWinPanelWatcher::KWinPanelWatcher()
     m_kwinWatcher = std::make_unique<QDBusServiceWatcher>(kKWinService, QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForRegistration);
     connect(m_kwinWatcher.get(), &QDBusServiceWatcher::serviceRegistered, this, [this]() {
         m_pluginName.clear();
+        m_cursorPos.reset();
         load();
     });
 }
@@ -162,6 +177,11 @@ bool KWinPanelWatcher::isAvailable() const
 KWinPanelWatcher::OutputPanels KWinPanelWatcher::output(const QString &outputName) const
 {
     return m_outputs.value(outputName);
+}
+
+std::optional<QPoint> KWinPanelWatcher::cursorPos() const
+{
+    return m_cursorPos;
 }
 
 bool KWinPanelWatcher::ensureScriptFile()
@@ -281,6 +301,19 @@ void KWinPanelWatcher::updatePanels(const QString &json)
     m_outputs = std::move(outputs);
     qCDebug(lcPanelWatcher) << "Panel report:" << json;
     Q_EMIT panelsChanged();
+}
+
+void KWinPanelWatcher::notifyCursorMoved(int x, int y)
+{
+    if (m_pluginName.isEmpty()) {
+        return;
+    }
+    const QPoint pos(x, y);
+    if (m_cursorPos == pos) {
+        return;
+    }
+    m_cursorPos = pos;
+    Q_EMIT cursorMoved(pos);
 }
 
 } // namespace krema

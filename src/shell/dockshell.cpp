@@ -66,6 +66,8 @@ void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode
     m_view->visibilityController()->setShowDelay(m_settings->showDelay());
     m_view->visibilityController()->setHideDelay(m_settings->hideDelay());
     m_view->visibilityController()->setDodgeActiveOnly(m_settings->dodgeActiveOnly());
+    m_view->visibilityController()->setRevealTriggerLocation(m_settings->revealTriggerLocation());
+    m_view->visibilityController()->updateEdgeTriggerStrip();
 
     // Connect all signals
     connectSettingsSignals();
@@ -156,6 +158,7 @@ void DockShell::connectSettingsSignals()
         m_view->platform()->setEdge(edge);
         m_view->setEdge(edge);
         m_previewController->updateEdge();
+        m_view->visibilityController()->updateEdgeTriggerStrip();
     });
     connect(ss, &ScreenSettings::visibilityModeChanged, this, [this]() {
         m_view->visibilityController()->setMode(static_cast<DockPlatform::VisibilityMode>(m_screenSettings->visibilityMode()));
@@ -186,6 +189,9 @@ void DockShell::connectSettingsSignals()
     });
     connect(s, &KremaSettings::HideDelayChanged, this, [this]() {
         m_view->visibilityController()->setHideDelay(m_settings->hideDelay());
+    });
+    connect(s, &KremaSettings::RevealTriggerLocationChanged, this, [this]() {
+        m_view->visibilityController()->setRevealTriggerLocation(m_settings->revealTriggerLocation());
     });
     connect(s, &KremaSettings::PreviewHideDelayChanged, this, [this]() {
         m_previewController->setHideDelay(m_settings->previewHideDelay());

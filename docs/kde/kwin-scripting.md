@@ -14,6 +14,19 @@ surfaces' geometry or the work area: `QScreen::availableGeometry()` equals
 `geometry()`, `KX11Extras::workArea()` is X11-only, and
 `org_kde_plasma_window_management` skips layer-shell surfaces.
 
+And the same script (`src/platform/kwinpanelwatcher.cpp`, Reveal trigger
+"Screen edge") reports pointer motion (`workspace.cursorPosChanged` ->
+`notifyCursorMoved(x, y)` on `com.bhyoo.krema.PanelWatcher`) so a hidden dock
+that rests past such panels can still be revealed from the outer screen edge.
+The dock surface cannot put its own reveal strip on the screen edge there:
+that strip would sit over the panels and take their clicks. `DockVisibilityController`
+compares the reported position against the 4 px strip along the outer edge of
+the dock's output. The script never takes input, so clicks there still reach
+the panel. Meanwhile the hidden dock surface keeps a 1x1 input region instead
+of a strip (an empty region would accept input on the whole surface). Without
+KWin scripting, panel-relative placement is unavailable; both reveal choices
+use the dock surface's screen-edge strip.
+
 ## D-Bus API (service `org.kde.KWin`)
 
 | Object / interface | Method | Notes |

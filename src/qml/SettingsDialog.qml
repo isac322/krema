@@ -86,7 +86,8 @@ Kirigami.AbstractApplicationWindow {
             group: "",
             keywords: [i18n("Visibility mode"), i18n("Reserve screen space"), i18n("Only dodge active window"),
                 i18n("Show delay (ms)"), i18n("Hide delay (ms)"), i18n("Separate pinned and running apps"),
-                i18n("Single window click action"), i18n("Grouped window click action")]
+                i18n("Single window click action"), i18n("Grouped window click action"), i18n("Reveal trigger"),
+                i18n("Dock position")]
         },
         {
             moduleId: "monitors",

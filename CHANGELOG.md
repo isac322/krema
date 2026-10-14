@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
 - Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges could use the system accent color or a custom color with automatic text contrast (#103)
+- Added a "Reveal trigger" setting (Settings → Behavior, Auto hide and Dodge windows) for a hidden dock that rests past an always-visible Plasma panel on the same edge. With Screen edge, the default, pushing the pointer against the screen edge revealed the dock even over the panel, and the panel still got every click there. With Dock position, the dock was revealed only from the panel's inner edge. Without KWin scripting, Screen edge fell back to the panel's inner edge (#90)
 
 ### Changed
 

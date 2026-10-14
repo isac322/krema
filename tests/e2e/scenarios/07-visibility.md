@@ -8,7 +8,7 @@
 - vis-dodge-windows: Dock hides when windows overlap its area
 - vis-smart-hide: Dodge windows with "Only dodge active window": dock hides when the active window overlaps its area
 - vis-keyboard-lock: Keyboard navigation prevents auto-hide
-- vis-screen-edge-trigger: Mouse at screen edge triggers dock show
+- vis-screen-edge-trigger: Mouse at screen edge triggers dock show, also past an always-visible panel on the same edge (Reveal trigger: Screen edge or Dock position)
 - vis-show-desktop: Show Desktop (Meta+D) hides app windows but not the dock
 
 ## Affected Files
@@ -103,6 +103,8 @@ geometry in all states; screenshot when capture is available.
 **Verification:** screenshot / AT-SPI `showing` (dock visible after edge approach)
 
 **Automated:** tests/appium/test_07_visibility.py::test_vis003_auto_hide_shows_on_screen_edge_approach (real fake-input pointer to the bottom-edge trigger strip)
+
+**Variant (panel on the dock's edge, VIS-010):** with an always-visible panel on the same edge and "Measure gap from" set to "Panels", the dock rests past the panel; see VIS-010 for where the hidden dock is revealed.
 
 ---
 
@@ -305,3 +307,51 @@ These checks establish the frame/workarea/input/AT-SPI contract without
 requiring screenshots or live PipeWire thumbnails. Installed-package Tier 3,
 other-edge restart combinations beyond the bottom-edge node, and the user's
 original desktop root cause remain unverified.
+
+---
+
+## TC VIS-010: Reveal trigger beside an always-visible panel
+
+**Precondition:** One output with an always-visible panel (it reserves
+space) on the dock's edge. Visibility mode `Auto hide` (repeat with `Dodge
+windows` and a window over the dock's resting place), "Measure gap from" set
+to "Panels", "Reveal trigger" set to "Screen edge" (the default). The dock is
+hidden past the panel.
+**Steps:**
+1. Move the pointer onto the panel, away from the outer screen edge, and
+   click it.
+2. Push the pointer against the outer screen edge over the panel and click.
+3. Move the pointer up across the panel onto the dock, then away.
+4. Set "Reveal trigger" to "Dock position". Repeat step 2, then move the
+   pointer to the panel's inner edge (the side facing the screen centre).
+5. Repeat step 3 with "Hide delay (ms)" at 0.
+
+**Expected:**
+- Step 1: the dock stays hidden and the panel gets the click.
+- Step 2: the dock is revealed after the show delay, and the click still
+  reaches the panel: Krema's surface takes no input over the panel band.
+  KWin watches the 4 px outer screen-edge strip, and the hidden dock
+  surface keeps only a 1x1 input placeholder (never an empty input region,
+  which would accept input on the whole surface).
+- Step 3: the dock stays shown while the pointer crosses the panel and rests
+  on it, then hides after the hide delay once the pointer leaves.
+- Step 4: with "Dock position" the outer screen edge leaves the dock hidden;
+  the strip at the panel's inner edge reveals it.
+- Step 5: leaving the screen edge toward the dock grants at least 250 ms to
+  cross the panel, so a 0 ms hide delay does not hide the dock mid-way.
+- Without KWin scripting, "Screen edge" falls back to the strip at the
+  panel's inner edge.
+
+**Verification:** dock visibility (`DockVisibilityController::isDockVisible`,
+AT-SPI `showing`), the dock surface's input mask, clicks received by the
+panel, KWin pointer position.
+
+**Automated (Tier 2):** `tests/kwin/test_panel_margin.cpp` (ctest
+`krema_panel_margin_tests`, test case "Auto-hide dock beside a panel reveals
+from the screen edge without stealing panel clicks, or from the dock
+position") covers steps 1–4 in Auto hide on the bottom edge with a stand-in
+panel process that logs its clicks and real pointer input through KWin's
+fake-input protocol. `tests/unit/test_input_region.cpp` checks the input
+regions with and without the external edge trigger. Dodge windows, step 5,
+and the fallback without KWin scripting remain manual checks; SET-023 maps
+the settings control.

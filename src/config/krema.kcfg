@@ -157,6 +157,12 @@
       <label>Delay before hiding dock (ms)</label>
       <default>400</default>
     </entry>
+    <entry name="RevealTriggerLocation" type="Int">
+      <label>Where the hidden dock is revealed from when panels are present (0=Screen edge, 1=Dock position)</label>
+      <default>0</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
 
     <entry name="BackgroundOpacity" type="Double">
       <label>Background opacity</label>

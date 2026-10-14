@@ -399,6 +399,7 @@ void DockView::handleScreenChanged(QScreen *newScreen)
     applyBackgroundStyle();
     show();
     if (m_visibilityController) {
+        m_visibilityController->updateEdgeTriggerStrip();
         m_visibilityController->requestEvaluate();
     }
 }
@@ -420,6 +421,7 @@ void DockView::handleScreenGeometryChanged()
     refreshPanelInset();
     applyBackgroundStyle();
     if (m_visibilityController) {
+        m_visibilityController->updateEdgeTriggerStrip();
         m_visibilityController->requestEvaluate();
     }
 }

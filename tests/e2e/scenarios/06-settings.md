@@ -7,7 +7,7 @@
 - settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
-- settings-behavior: Visibility mode cards, reservation, dodge and delay controls
+- settings-behavior: Visibility mode cards, reservation, dodge and delay controls, reveal trigger (screen edge or dock position)
 - settings-monitors: Monitor mode cards, selected monitor switches and temporary fallback, follow trigger, screen transition, virtual desktop display mode (Monitors & Desktops page)
 - settings-reserve-screen-space: Independent Always Visible reservation switch applies to maximized windows live and persists
 - settings-separate-launchers: Optional pinned/running sections apply live and persist without duplicating running pinned apps
@@ -764,9 +764,10 @@ fixture window's identity and frame geometry.
   the panel's inner edge; panels that do not reserve space are ignored.
 - The choice applies live without restarting Krema, also while "Floating"
   is off, and persists in `kremarc` as `FloatingMarginReference`.
-- With "Panels" beside a panel, nothing of Krema takes input over the panel:
-  in Auto hide and Dodge the reveal strip runs along the panel's inner edge
-  instead of the screen edge.
+- With "Panels" beside a panel, nothing of Krema takes input over the panel.
+  In Auto hide and Dodge the hidden dock is revealed from the outer screen
+  edge by default, or from the panel's inner edge with Reveal trigger set
+  to "Dock position" (SET-023).
 - "Screen edge" is the v0.12.0 placement: with reservation on, KWin's
   layer-shell order still decides, so next to a full-width panel that
   started first the dock rests on that panel's reserved space.
@@ -830,7 +831,7 @@ whose dock context menu opens Settings. The badge defaults are Number
 - Top-Right and Top-Left select a fixed badge corner. Auto uses Top-Left
   on a left-edge dock and Top-Right on top-, bottom-, and right-edge docks.
 - Accent mode uses the system highlight and highlighted text colors.
-  Custom mode uses the selected background with black or white text chosen
+- Custom mode uses the selected background with black or white text chosen
   automatically for contrast.
 - Changes save without closing Settings and survive a process restart.
 
@@ -849,3 +850,65 @@ edges, Number/Dot/Off rendering, accent colors, custom colors, and text
 contrast.
 `tests/unit/test_settings_autosave.cpp` covers badge defaults, position
 bounds, and saved settings.
+
+---
+
+## TC SET-023: Reveal trigger chooses where a hidden dock beside a panel is revealed
+
+**Precondition:** A fresh configuration (no `RevealTriggerLocation` key), one
+output, visibility mode `Always visible`, "Measure gap from" set to "Panels".
+Open Settings → Behavior. Record Krema's process.
+
+**Steps:**
+1. In "Always visible", verify there is no "Reveal trigger" row.
+2. Select "Dodge windows", then "Auto hide". In both, verify an AT-SPI
+   combo row (list item) named "Reveal trigger" appears below "Hide delay
+   (ms)", enabled, showing "Screen edge".
+3. Open the row. Verify the choices are exactly "Screen edge" and "Dock
+   position", in that order. Select "Dock position" and verify
+   `RevealTriggerLocation=1` is saved in `[General]` in `kremarc`
+   immediately and Krema keeps its process.
+4. Select "Always visible". Verify the row disappears and
+   `RevealTriggerLocation=1` stays saved.
+5. Close Settings and restart Krema. Reopen Settings → Behavior, select
+   "Auto hide" and verify the row shows "Dock position".
+6. Add an always-visible Plasma panel (it reserves space) on the dock's edge
+   and set "Reveal trigger" back to "Screen edge", "Auto hide". With the
+   dock hidden, move the pointer onto the panel away from the screen edge:
+   the dock stays hidden and the panel takes clicks. Push the pointer
+   against the outer screen edge over the panel: the dock is revealed while
+   a click there still reaches the panel. Move up across the panel onto the
+   dock: the dock stays shown, also with "Hide delay" at 0 ms.
+7. Select "Dock position". With the dock hidden, push the pointer against
+   the outer screen edge: the dock stays hidden. Move the pointer to the
+   panel's inner edge (the side facing the screen centre): the dock is
+   revealed.
+8. Run without KWin scripting (for example, the KWin Scripting D-Bus
+   interface is missing). Verify "Screen edge" falls back to the reveal
+   strip along the panel's inner edge.
+
+**Expected:**
+- The row is shown only in "Auto hide" and "Dodge windows"; "Screen edge"
+  is the default.
+- The choice applies live without restarting Krema and persists in
+  `kremarc` as `RevealTriggerLocation`.
+- With "Screen edge", the outer screen edge reveals the dock even where an
+  always-visible panel occupies it, and Krema never takes the panel's
+  input. With "Dock position", only the strip past the panel reveals it.
+- Without a panel on the dock's edge both choices behave the same: the
+  reveal strip is at the screen edge.
+
+**Verification:** AT-SPI (row presence, name, choices, current choice),
+`kremarc` (`RevealTriggerLocation`), process identity, KWin (pointer
+position), panel click delivery, dock visibility.
+**Automated (Tier 2):**
+`tests/appium/test_06_settings.py::test_set023_reveal_trigger_choice_is_conditional_autosaves_live_and_persists`
+covers steps 1–5. `tests/kwin/test_panel_margin.cpp` (ctest
+`krema_panel_margin_tests`) covers steps 6 and 7 on the bottom edge with a
+stand-in panel process that logs the clicks it receives and real pointer
+motion and clicks through KWin's fake-input protocol: with "Screen edge" the
+hidden dock's input region shrinks to a 1x1 placeholder, the panel band does
+not reveal it, the outer screen edge does, both panel clicks reach the
+panel, and the dock stays shown after the move onto it; with "Dock
+position" the screen edge does not reveal it and the inner-edge strip does.
+The 0 ms "Hide delay" crossing and step 8 remain manual checks.

@@ -261,6 +261,41 @@ TEST_CASE("Dock input region leaves other panels' band click-through", "[input-r
         REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
     }
 
+    SECTION("External edge trigger, hidden: 1x1 placeholder, no inner-edge strip")
+    {
+        // KWin watches the outer screen edge; an empty mask would accept
+        // input on the whole surface, so a 1x1 corner stands in.
+        p.edge = 1;
+        p.visible = false;
+        p.externalEdgeTrigger = true;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region == QRegion(0, 0, 1, 1));
+        REQUIRE_FALSE(region.isEmpty());
+        REQUIRE_FALSE(region.contains(QPoint(10, 117)));
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
+    }
+
+    SECTION("External edge trigger, visible: dock only, no inner-edge strip")
+    {
+        p.edge = 1;
+        p.externalEdgeTrigger = true;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region.contains(QPoint(960, 100))); // dock
+        REQUIRE_FALSE(region.contains(QPoint(10, 117))); // strip outside the dock width
+        REQUIRE_FALSE(region.intersects(QRect(0, 120, 1920, 60)));
+    }
+
+    SECTION("External edge trigger, revealing: panel off the surface, 1x1 placeholder")
+    {
+        p.edge = 1;
+        p.externalEdgeTrigger = true;
+        p.panelY = 300;
+        p.hovered = false;
+        const QRegion region = krema::computeDockInputRegion(p);
+        REQUIRE(region == QRegion(0, 0, 1, 1));
+        REQUIRE_FALSE(region.isEmpty());
+    }
+
     SECTION("Top: band at the top of the surface")
     {
         p.edge = 0;

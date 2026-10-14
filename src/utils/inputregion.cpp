@@ -35,7 +35,8 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
     }
 
     if (!p.visible) {
-        return triggerStrip;
+        // Never an empty region: an empty mask accepts ALL input.
+        return p.externalEdgeTrigger ? QRegion(0, 0, 1, 1) : triggerStrip;
     }
 
     if (p.edge <= 1) {
@@ -61,6 +62,9 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
+        if (p.externalEdgeTrigger) {
+            return region.isEmpty() ? QRegion(0, 0, 1, 1) : region;
+        }
         return region.united(triggerStrip);
     } else {
         // Vertical (Left/Right)
@@ -85,6 +89,9 @@ QRegion computeDockInputRegion(const InputRegionParams &p)
         }
 
         QRegion region(regionX, regionY, regionW, regionH);
+        if (p.externalEdgeTrigger) {
+            return region.isEmpty() ? QRegion(0, 0, 1, 1) : region;
+        }
         return region.united(triggerStrip);
     }
 }

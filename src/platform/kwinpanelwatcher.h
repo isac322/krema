@@ -57,14 +57,20 @@ public:
     /// Last report for @p outputName; empty when it has not been reported.
     [[nodiscard]] OutputPanels output(const QString &outputName) const;
 
+    /// Last reported cursor position in global screen coordinates.
+    [[nodiscard]] QPoint cursorPos() const;
 public Q_SLOTS:
     /// Called by the KWin script over D-Bus with a JSON object keyed by output
     /// name: {"geometry": [x,y,w,h], "anchor": [x,y,w,h] | null, "panels": [[x,y,w,h], ...]}.
     Q_SCRIPTABLE void updatePanels(const QString &json);
+    /// Called by the KWin script on pointer motion while at least one dock
+    /// watches the outer screen edge.
+    Q_SCRIPTABLE void notifyCursorMoved(int x, int y);
 
 Q_SIGNALS:
     void panelsChanged();
     void availableChanged();
+    void cursorMoved(const QPoint &pos);
 
 private:
     KWinPanelWatcher();
@@ -80,6 +86,7 @@ private:
     QString m_pluginName; // non-empty while loaded
     quint64 m_generation = 0;
     bool m_available = true;
+    QPoint m_cursorPos{-1, -1};
     QHash<QString, OutputPanels> m_outputs;
 };
 

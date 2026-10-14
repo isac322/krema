@@ -93,6 +93,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::EdgeChanged, context, saveSettings);
     connect(settings, &KremaSettings::ShowDelayChanged, context, saveSettings);
     connect(settings, &KremaSettings::HideDelayChanged, context, saveSettings);
+    connect(settings, &KremaSettings::RevealTriggerLocationChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewEnabledChanged, context, saveSettings);
     connect(settings, &KremaSettings::SingleWindowClickActionChanged, context, saveSettings);
     connect(settings, &KremaSettings::PreviewThumbnailSizeChanged, context, saveSettings);

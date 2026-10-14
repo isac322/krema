@@ -1896,4 +1896,68 @@ def test_set022_badge_settings_visibility_and_controls(krema: Krema, apps: TestW
     assert current_choice(krema, "Badge position") == "Auto (edge-aware)"
     assert not has_state(scroll_into_view(krema, accent), "checked")
     assert has_state(scroll_into_view(krema, custom_swatch), "showing")
+
+
+# ------------------------------------------------------------------- SET-023
+REVEAL_TRIGGER_ROW = "Reveal trigger"
+REVEAL_TRIGGER_ROW_XPATH = f"{SETTINGS}//list_item[@name='{REVEAL_TRIGGER_ROW}']"
+#: Indices follow the kcfg RevealTriggerLocation (0 Screen edge, 1 Dock position).
+REVEAL_TRIGGER_CHOICES = ("Screen edge", "Dock position")
+COMBO_OPTIONS_XPATH = f"{SETTINGS}/dialog//*[self::list_item or self::menu_item]"
+
+
+@pytest.mark.kremarc({"PinnedLaunchers": [], "VisibilityMode": kcfg.ALWAYS_VISIBLE})
+def test_set023_reveal_trigger_choice_is_conditional_autosaves_live_and_persists(krema: Krema, apps: TestWindows) -> None:
+    """The "Reveal trigger" combo row exists only in hide-capable modes,
+    offers Screen edge (the default) and Dock position, autosaves the choice
+    live, keeps it while Always visible hides the row, and restores it after
+    a restart."""
+    apps.open("Alpha")
+    krema.wait_for_item("Alpha")
+    open_settings(krema)
+    open_page(krema, "Behavior")
+    assert not any(has_state(row, "showing") for row in krema.find_all(REVEAL_TRIGGER_ROW_XPATH)), (
+        "the reveal trigger must not be available in Always visible"
+    )
+    assert config_value(krema, "RevealTriggerLocation") is None
+    pid = krema.pid
+
+    for mode in ("Dodge windows", "Auto hide"):
+        pick(krema, "Visibility mode", mode)
+        row = scroll_into_view(krema, REVEAL_TRIGGER_ROW_XPATH)
+        assert has_state(row, "enabled"), f"the reveal trigger is adjustable in {mode}"
+        assert current_choice(krema, REVEAL_TRIGGER_ROW) == "Screen edge", f"a fresh configuration reveals from the screen edge ({mode})"
+
+    # The choices, in kcfg order, from the row's own dialog.
+    click_el(krema, scroll_into_view(krema, REVEAL_TRIGGER_ROW_XPATH))
+    names: list[str] = []
+
+    def options_shown() -> bool:
+        names[:] = [o.get_attribute("name") for o in krema.find_all(COMBO_OPTIONS_XPATH) if has_state(o, "showing")]
+        return names == list(REVEAL_TRIGGER_CHOICES)
+
+    wait_until(options_shown, message=lambda: f"reveal trigger choices {list(REVEAL_TRIGGER_CHOICES)}, got {names}")
+    dock_position = krema.wait_for(f"{COMBO_OPTIONS_XPATH}[@name='Dock position']")
+    wait_until(lambda: Rect.of(dock_position).width > 0, message="Dock position option laid out")
+    click_el(krema, dock_position)
+    wait_until(lambda: current_choice(krema, REVEAL_TRIGGER_ROW) == "Dock position", message="reveal trigger to show Dock position")
+    wait_until(lambda: config_value(krema, "RevealTriggerLocation") == "1", message="reveal trigger autosaved as Dock position")
+
+    pick(krema, "Visibility mode", "Always visible")
+    assert not any(has_state(row, "showing") for row in krema.find_all(REVEAL_TRIGGER_ROW_XPATH)), (
+        "the reveal trigger hides again in Always visible"
+    )
+    assert config_value(krema, "RevealTriggerLocation") == "1", "Always visible keeps the saved reveal trigger"
+    assert krema.pid == pid, "the reveal trigger must apply without restarting Krema"
+    close_settings(krema)
+
+    krema.restart()
+    assert krema.pid != pid
+    krema.wait_for_item("Alpha")
+    open_settings(krema)
+    open_page(krema, "Behavior")
+    pick(krema, "Visibility mode", "Auto hide")
+    scroll_into_view(krema, REVEAL_TRIGGER_ROW_XPATH)
+    assert current_choice(krema, REVEAL_TRIGGER_ROW) == "Dock position", "the reveal trigger survives restart"
+    assert config_value(krema, "RevealTriggerLocation") == "1"
     close_settings(krema)

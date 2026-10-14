@@ -4,7 +4,10 @@
 #pragma once
 
 #include "platform/dockplatform.h"
+#include "platform/kwinpanelwatcher.h"
 #include "platform/kwinpointermotionwatcher.h"
+#include <QRect>
+#include <memory>
 
 #include <QObject>
 #include <QModelIndex>
@@ -84,6 +87,15 @@ public:
     /// is drawn past (see InputRegionParams::edgeInset).
     void setEdgeInset(int inset);
 
+    /// Where a hidden dock is revealed from when other panels occupy the
+    /// screen edge: 0 = the outer screen edge (watched through KWin),
+    /// 1 = the dock's resting edge, past the panels' band.
+    void setRevealTriggerLocation(int location);
+
+    /// Recompute the outer screen-edge strip watched for revealing the dock
+    /// (after a screen, screen geometry or edge change).
+    void updateEdgeTriggerStrip();
+
     /// Increment/decrement interaction lock (context menu, settings window open).
     /// While interacting, the dock will never hide.
     Q_INVOKABLE void setInteracting(bool interacting);
@@ -108,6 +120,9 @@ public:
 
     /// Set whether DodgeWindows mode only dodges the active window.
     void setDodgeActiveOnly(bool activeOnly);
+
+    /// Whether the KWin screen-edge trigger is active for this dock.
+    [[nodiscard]] bool isExternalEdgeTriggerActive() const;
 
 Q_SIGNALS:
     void dockVisibleChanged();
@@ -148,6 +163,15 @@ private:
     TaskManager::ActivityInfo *m_activityInfo = nullptr;
     QWindow *m_dockWindow;
 
+    /// Combine surface and screen-edge hover into m_hovered and drive the
+    /// show/hide timers. @p transitFromEdge: the pointer just left the screen
+    /// edge and may be crossing the panels' band toward the dock.
+    void updateHoveredState(bool transitFromEdge);
+
+    /// Arm the screen-edge watcher when the reveal trigger must sit on the
+    /// outer screen edge, and refresh the input region accordingly.
+    void updateEdgeTriggerWatcher();
+    void checkCursorAtEdge(const QPoint &pos);
     void applyInputRegion();
     void updateRegionGeometry();
 
@@ -158,7 +182,9 @@ private:
 
     DockPlatform::VisibilityMode m_mode = DockPlatform::VisibilityMode::AlwaysVisible;
     bool m_visible = true;
-    bool m_hovered = false;
+    bool m_hovered = false; // m_surfaceHovered || m_edgeHovered
+    bool m_surfaceHovered = false; // pointer on the dock surface (from QML)
+    bool m_edgeHovered = false; // pointer on the outer screen edge (from KWin)
 
     // Panel geometry (reported from QML) for input region calculation
     int m_panelX = 0;
@@ -176,6 +202,18 @@ private:
 
     // Band of other panels next to the screen edge (kept click-through).
     int m_edgeInset = 0;
+
+    // Reveal trigger location (0 = screen edge, 1 = dock position)
+    int m_revealTriggerLocation = 0;
+
+    // Configured hide delay; the hide timer may run longer while the pointer
+    // crosses the panels' band from the screen edge.
+    int m_hideDelay = 400;
+
+    // Shared KWin script when watching the outer screen edge past panels
+    std::shared_ptr<KWinPanelWatcher> m_edgeWatcher;
+    QRect m_edgeStripRect;
+    bool m_watchingEdge = false;
 
     // Interaction lock: dock stays visible while context menu / settings window is open
     int m_interactingCount = 0;

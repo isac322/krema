@@ -5,6 +5,7 @@
 // from the task tree, incremental updates, activation/close, geometry.
 // PipeWire/ScreencastingRequest are inert mocks (no live frames).
 import QtQuick
+import QtQuick.Window
 import QtTest
 import com.bhyoo.krema 1.0
 import "../../src/qml" as Krema
@@ -72,6 +73,8 @@ Item {
                     if (ts[i].x <= ts[i - 1].x) return false
                 return true
             }, 2000, "expected " + n + " laid-out thumbnails, have " + thumbs(popup).length)
+            // A single delegate has no sibling x-order check to wait for layout.
+            verify(waitForPolish(stage.Window.window))
             return thumbs(popup)
         }
 

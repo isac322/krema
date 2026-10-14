@@ -1195,7 +1195,22 @@ Item {
                 DockModel.tasksModel.removeTask(row)
             tryVerify(() => items(dock).length === names.length - rows.length, 2000)
             settleDeferredCallbacks()
-            wait(100)  // delegateGeometryRefreshTimer settles while held
+            // The menu's hold keeps delegates at their compacted rest slots
+            // immediately, but the panel width still animates to its rest
+            // extent. The reconcile triggered by the close re-hit-tests the
+            // resting pointer against panel-local slots, so the panel must
+            // have finished re-centring first: mid-flight geometry can latch
+            // the pointer onto the shifted row this scenario exists to avoid.
+            let restWidth = Math.max(
+                (names.length - rows.length) * DockSettings.iconSize
+                    + (names.length - rows.length - 1) * DockSettings.iconSpacing
+                    + dock.taskZoneGap + Kirigami.Units.largeSpacing * 2,
+                Kirigami.Units.gridUnit * 6)
+            tryVerify(() => {
+                let target = itemUnderPoint(dock, panel, pointer)
+                return target >= 0 && target !== hover
+                    && Math.abs(primaryExtent(panel) - restWidth) < 1e-6
+            }, 2000, "the held dock did not settle into its re-centred rest layout")
             compare(dock.hoveredIndex, hover, "the hold moved the hover")
 
             let shows = PreviewController.callsTo("showPreview").length

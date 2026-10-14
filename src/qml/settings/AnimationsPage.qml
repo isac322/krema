@@ -33,6 +33,32 @@ SettingsPage {
         i18n("Off")
     ]
 
+    // Option order matches the BadgePosition kcfg enum (0..2).
+    readonly property var badgePositionOptions: [
+        i18n("Top-Right"),
+        i18n("Top-Left"),
+        i18n("Auto (edge-aware)")
+    ]
+
+    readonly property color _sampleBadgeBgColor: {
+        if (DockSettings.badgeUseAccentColor) {
+            return Kirigami.Theme.highlightColor
+        }
+        let str = DockSettings.badgeCustomColor ? DockSettings.badgeCustomColor.trim() : ""
+        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
+            return Qt.color(str)
+        }
+        return Kirigami.Theme.highlightColor
+    }
+    readonly property color _sampleBadgeTextColor: {
+        if (DockSettings.badgeUseAccentColor) {
+            return Kirigami.Theme.highlightedTextColor
+        }
+        return Kirigami.ColorUtils.brightnessForColor(_sampleBadgeBgColor) === Kirigami.ColorUtils.Light
+            ? "#000000"
+            : "#ffffff"
+    }
+
     readonly property int pickerColumnWidth: Kirigami.Units.gridUnit * 7
 
     // Icon used by every sample on this page; mail naturally carries badges.
@@ -534,7 +560,7 @@ SettingsPage {
                             // Miniature desktop with a dock strip; the icon
                             // wears this badge style, sized and offset like
                             // DockItem's badge (38% pill, 18% dot, 20% bleed
-                            // past the icon's top-right corner).
+                            // past the selected top corner of the icon).
                             DesktopStage {
                                 id: badgeTile
                                 anchors.fill: parent
@@ -596,17 +622,20 @@ SettingsPage {
                                 }
 
                                 Rectangle {
+                                    objectName: "choiceCardBadge"
                                     visible: badgeCard.index !== 2
-                                    anchors.right: badgeIcon.right
-                                    anchors.top: badgeIcon.top
-                                    anchors.rightMargin: -width * 0.2
-                                    anchors.topMargin: -height * 0.2
+                                    readonly property bool onLeft: DockSettings.badgePosition === 1
+                                        || (DockSettings.badgePosition === 2 && badgeTile.edge === 2)
+                                    x: onLeft
+                                        ? badgeIcon.x - width * 0.2
+                                        : badgeIcon.x + badgeIcon.width - width * 0.8
+                                    y: badgeIcon.y - height * 0.2
                                     width: badgeCard.index === 1
                                         ? Math.round(badgeIcon.width * 0.18)
                                         : Math.round(badgeIcon.width * 0.38)
                                     height: width
                                     radius: width / 2
-                                    color: Kirigami.Theme.highlightColor
+                                    color: page._sampleBadgeBgColor
 
                                     layer.enabled: badgeCard.index === 0
                                     layer.effect: MultiEffect {
@@ -617,12 +646,13 @@ SettingsPage {
                                     }
 
                                     QQC2.Label {
+                                        objectName: "choiceCardBadgeLabel"
                                         visible: badgeCard.index === 0
                                         anchors.centerIn: parent
                                         width: parent.width - 2
                                         height: parent.height - 2
                                         text: i18nc("@label sample badge count", "8")
-                                        color: Kirigami.Theme.highlightedTextColor
+                                        color: page._sampleBadgeTextColor
                                         font.pixelSize: Math.max(1, parent.height * 0.55)
                                         font.bold: true
                                         fontSizeMode: Text.Fit
@@ -635,6 +665,71 @@ SettingsPage {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.badgeDisplayMode !== 2
+        }
+
+        FormCard.FormComboBoxDelegate {
+            id: badgePositionDelegate
+            visible: DockSettings.badgeDisplayMode !== 2
+            text: i18n("Badge position")
+            description: i18n("Corner of the icon where notification badges appear")
+            Accessible.name: text
+            displayMode: FormCard.FormComboBoxDelegate.Dialog
+            model: page.badgePositionOptions
+            currentIndex: DockSettings.badgePosition
+            onActivated: function(index) {
+                DockSettings.badgePosition = index
+            }
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.badgeDisplayMode !== 2
+        }
+
+        FormCard.FormSwitchDelegate {
+            id: badgeUseAccentColorDelegate
+            visible: DockSettings.badgeDisplayMode !== 2
+            text: i18n("Use accent color")
+            description: i18n("Use the system accent color for notification badges")
+            checked: DockSettings.badgeUseAccentColor
+            onToggled: DockSettings.badgeUseAccentColor = checked
+        }
+
+        FormCard.FormDelegateSeparator {
+            visible: DockSettings.badgeDisplayMode !== 2 && !DockSettings.badgeUseAccentColor
+        }
+
+        FormCard.AbstractFormDelegate {
+            id: badgeColorDelegate
+            visible: DockSettings.badgeDisplayMode !== 2 && !DockSettings.badgeUseAccentColor
+            background: null
+            focusPolicy: Qt.NoFocus
+            Accessible.ignored: true
+            onClicked: badgeColorSwatch.clicked()
+
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Badge color")
+                    elide: Text.ElideRight
+                    color: badgeColorDelegate.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    Accessible.ignored: true
+                }
+
+                ColorSwatchButton {
+                    id: badgeColorSwatch
+                    accessibleName: i18n("Badge color")
+                    dialogTitle: i18n("Choose badge color")
+                    showAlphaChannel: false
+                    color: DockSettings.badgeCustomColor
+                    onPicked: (color) => DockSettings.badgeCustomColor = color.toString()
                 }
             }
         }

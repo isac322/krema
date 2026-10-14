@@ -789,3 +789,61 @@ input region leaves the panel band below it click-through; "Screen edge"
 returns to the margin from the screen edge; a panel reserving nothing is
 ignored. Resizing a real Plasma panel, "Floating" off beside a panel, and
 step 8 (no KWin scripting) remain manual checks.
+
+---
+
+## TC SET-022: Badge Position, Color, and Accent Settings
+
+**Preconditions:** Krema runs with a fresh configuration and a running app
+whose dock context menu opens Settings. The badge defaults are Number
+(`BadgeDisplayMode=0`), Top-Right (`BadgePosition=0`), system accent color
+(`BadgeUseAccentColor=true`), and custom color `#e93a40`.
+
+**Steps:**
+1. Open Settings → Animations & Badges. Verify "Number" is selected,
+   "Badge position" shows "Top-Right", "Use accent color" is checked, and
+   the "Badge color" swatch is hidden.
+2. Select "Off" in "Badge display". Verify "Badge position", "Use accent
+   color", and the color swatch are hidden.
+3. Select "Dot". Verify the position and accent controls return with
+   "Top-Right" selected and "Use accent color" checked. The swatch stays
+   hidden.
+4. Choose "Top-Left" in "Badge position". Verify the row shows "Top-Left"
+   and `BadgePosition=1` is saved in `[General]` in `kremarc`.
+5. Choose "Auto (edge-aware)". Verify the row shows that choice and
+   `BadgePosition=2` is saved.
+6. Turn "Use accent color" off. Verify the switch is unchecked,
+   `BadgeUseAccentColor=false` is saved, and the swatch appears with the
+   accessible name "Badge color: #e93a40".
+7. Click the swatch. In "Choose badge color", enter `#1080ff` in the Hex
+   field and click OK. Verify the swatch reads "Badge color: #1080ff" and
+   `BadgeCustomColor=#1080ff` is saved.
+8. Close Settings and restart Krema. Reopen Animations & Badges and verify
+   "Dot", "Auto (edge-aware)", the unchecked accent switch, and the
+   "Badge color: #1080ff" swatch are restored.
+
+**Expected Result:**
+- Position and color controls appear in Number and Dot modes and disappear
+  in Off mode. The color swatch appears only when accent color is off.
+- Top-Right and Top-Left select a fixed badge corner. Auto uses Top-Left
+  on a left-edge dock and Top-Right on top-, bottom-, and right-edge docks.
+- Accent mode uses the system highlight and highlighted text colors.
+  Custom mode uses the selected background with black or white text chosen
+  automatically for contrast.
+- Changes save without closing Settings and survive a process restart.
+
+**Verification:** AT-SPI (card selection, combo choice, checkbox state,
+control visibility, swatch name, and native color dialog), `kremarc`
+(`BadgeDisplayMode`, `BadgePosition`, `BadgeUseAccentColor`, and
+`BadgeCustomColor`), and a changed process identity after restart.
+Badge geometry and text contrast are checked separately by QML tests.
+
+**Automated:**
+`tests/appium/test_06_settings.py::test_set022_badge_settings_visibility_and_controls`
+covers steps 1–8 through real pointer and keyboard input, AT-SPI assertions,
+autosave checks, and a process restart.
+`tests/qml/tst_dockitem_indicators.qml` covers badge corners on all four
+edges, Number/Dot/Off rendering, accent colors, custom colors, and text
+contrast.
+`tests/unit/test_settings_autosave.cpp` covers badge defaults, position
+bounds, and saved settings.

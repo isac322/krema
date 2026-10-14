@@ -92,6 +92,27 @@ private:
 
 } // namespace
 
+TEST_CASE("KremaSettings badge defaults and bounds", "[settings]")
+{
+    const ScopedConfigHome home;
+    KremaSettings settings;
+
+    CHECK(settings.badgePosition() == 0);
+    CHECK(settings.badgeUseAccentColor());
+    CHECK(settings.badgeCustomColor() == QStringLiteral("#e93a40"));
+    CHECK(settings.badgeDisplayMode() == 0);
+
+    const auto *position = settings.findItem(QStringLiteral("BadgePosition"));
+    REQUIRE(position);
+    CHECK(position->minValue().toInt() == 0);
+    CHECK(position->maxValue().toInt() == 2);
+
+    settings.setBadgePosition(-1);
+    CHECK(settings.badgePosition() == 0);
+    settings.setBadgePosition(7);
+    CHECK(settings.badgePosition() == 2);
+}
+
 TEST_CASE("Changing any single setting persists it across a restart", "[settings]")
 {
     // Item names come from the schema, so entries added to krema.kcfg later

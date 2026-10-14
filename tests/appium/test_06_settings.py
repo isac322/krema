@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-014).
+"""E2E automation of tests/e2e/scenarios/06-settings.md (SET-001..SET-022).
 
 The real Kirigami/FormCard settings window is driven with real pointer and
 keyboard input (KWin fake-input) and located through AT-SPI. Every test
@@ -1788,3 +1788,93 @@ def test_set015_reservation_switch_is_native_conditional_and_autosaves(
     pick(krema, "Visibility mode", "Always visible")
     assert has_state(scroll_into_view(krema, RESERVE_SWITCH), "checked") == (not reserved)
     assert krema.pid == pid, "changing visibility policy must not restart Krema or discard the reservation preference"
+
+
+# ------------------------------------------------------------------- SET-022 / QA-28..QA-31
+@pytest.mark.kremarc({"PinnedLaunchers": []})
+def test_set022_badge_settings_visibility_and_controls(krema: Krema, apps: TestWindows) -> None:
+    apps.open("Alpha")
+    open_settings(krema)
+    open_page(krema, "Animations & Badges")
+    position = f"{SETTINGS}//list_item[@name='Badge position']"
+    accent = f"{SETTINGS}//check_box[@name='Use accent color']"
+    swatch = f"{SETTINGS}//button[starts-with(@name, 'Badge color: ')]"
+
+    assert current_card(krema, "Badge display") == "Number"
+    assert has_state(scroll_into_view(krema, position), "showing")
+    assert current_choice(krema, "Badge position") == "Top-Right"
+    assert has_state(scroll_into_view(krema, accent), "checked")
+    assert not any(has_state(el, "visible") for el in krema.find_all(swatch))
+
+    pick(krema, "Badge display", "Off")
+    for xpath in (position, accent, swatch):
+        wait_until(
+            lambda xpath=xpath: not any(has_state(el, "visible") for el in krema.find_all(xpath)),
+            message=f"badge control hidden with Off: {xpath}",
+        )
+
+    pick(krema, "Badge display", "Dot")
+    assert has_state(scroll_into_view(krema, position), "showing")
+    assert current_choice(krema, "Badge position") == "Top-Right"
+    assert has_state(scroll_into_view(krema, accent), "checked")
+    assert not any(has_state(el, "visible") for el in krema.find_all(swatch))
+
+    choose(krema, "Badge position", "Top-Left")
+    assert current_choice(krema, "Badge position") == "Top-Left"
+    wait_until(lambda: config_value(krema, "BadgePosition") == "1", message="Top-Left badge position autosaved")
+    choose(krema, "Badge position", "Auto (edge-aware)")
+    assert current_choice(krema, "Badge position") == "Auto (edge-aware)"
+    wait_until(lambda: config_value(krema, "BadgePosition") == "2", message="Auto badge position autosaved")
+
+    click_el(krema, scroll_into_view(krema, accent))
+    wait_until(lambda: not has_state(krema.wait_for(accent), "checked"), message="Use accent color off")
+    wait_until(lambda: config_value(krema, "BadgeUseAccentColor") == "false", message="custom badge color mode autosaved")
+    default_swatch = f"{SETTINGS}//button[@name='Badge color: #e93a40']"
+    click_el(krema, scroll_into_view(krema, default_swatch))
+    color_dialog = "//frame[@name='Choose badge color']"
+    dialog = wait_until(
+        lambda: next((w for w in krema.windows() if w.title.startswith("Choose badge color")), None),
+        message="badge colour dialog window",
+    )
+    hex_field = krema.wait_for(f"{color_dialog}//combo_box[@name='Hex']/following-sibling::text")
+
+    def dialog_click(el) -> None:
+        r = Rect.of(el)
+        inp.click(dialog.client_x + r.center[0], dialog.client_y + r.center[1])
+
+    dialog_click(hex_field)
+    inp.key("ctrl", "a")
+    inp.type_text("#1080ff")
+    inp.key("tab")
+    dialog_click(krema.wait_for(f"{color_dialog}//button[@name='OK']"))
+    wait_until(
+        lambda: not [w for w in krema.windows() if w.title.startswith("Choose badge color")],
+        message="badge colour dialog closed",
+    )
+    custom_swatch = f"{SETTINGS}//button[@name='Badge color: #1080ff']"
+    assert has_state(scroll_into_view(krema, custom_swatch), "showing")
+    wait_until(lambda: config_value(krema, "BadgeCustomColor") == "#1080ff", message="custom badge colour autosaved")
+    saved = {
+        "BadgeDisplayMode": "1",
+        "BadgePosition": "2",
+        "BadgeUseAccentColor": "false",
+        "BadgeCustomColor": "#1080ff",
+    }
+    wait_until(
+        lambda: {key: config_value(krema, key) for key in saved} == saved,
+        message="all badge settings saved before restart",
+    )
+    close_settings(krema)
+    old_pid = krema.pid
+    krema.restart()
+    assert krema.pid != old_pid
+    assert {key: config_value(krema, key) for key in saved} == saved
+
+    open_settings(krema)
+    open_page(krema, "Animations & Badges")
+    assert current_card(krema, "Badge display") == "Dot"
+    assert has_state(scroll_into_view(krema, position), "showing")
+    assert current_choice(krema, "Badge position") == "Auto (edge-aware)"
+    assert not has_state(scroll_into_view(krema, accent), "checked")
+    assert has_state(scroll_into_view(krema, custom_swatch), "showing")
+    close_settings(krema)

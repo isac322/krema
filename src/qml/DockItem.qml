@@ -96,6 +96,27 @@ Item {
         return 0
     }
 
+    readonly property bool _badgeOnLeft: DockSettings.badgePosition === 1
+        || (DockSettings.badgePosition === 2 && DockView.edge === 2)
+    readonly property color _badgeBgColor: {
+        if (DockSettings.badgeUseAccentColor) {
+            return Kirigami.Theme.highlightColor
+        }
+        let str = DockSettings.badgeCustomColor ? DockSettings.badgeCustomColor.trim() : ""
+        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
+            return Qt.color(str)
+        }
+        return Kirigami.Theme.highlightColor
+    }
+    readonly property color _badgeTextColor: {
+        if (DockSettings.badgeUseAccentColor) {
+            return Kirigami.Theme.highlightedTextColor
+        }
+        return Kirigami.ColorUtils.brightnessForColor(dockItem._badgeBgColor) === Kirigami.ColorUtils.Light
+            ? "#000000"
+            : "#ffffff"
+    }
+
     // === Notification (transient attention) ===
     // Sources: Window.IsDemandingAttention, LauncherEntry urgent, SNI NeedsAttention, badgeCount increase
 
@@ -639,17 +660,18 @@ Item {
     Rectangle {
         id: badge
         objectName: "badge"
+        z: 2
         visible: dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
-        anchors.right: iconImage.right
-        anchors.top: iconImage.top
-        anchors.rightMargin: -width * 0.2
-        anchors.topMargin: -height * 0.2
+        x: dockItem._badgeOnLeft
+            ? iconImage.x - width * 0.2
+            : iconImage.x + iconImage.width - width * 0.8
+        y: iconImage.y - height * 0.2
         width: DockSettings.badgeDisplayMode === 1
                ? Math.round(iconSize * 0.18)
                : Math.round(iconSize * 0.38)
         height: width
         radius: width / 2
-        color: Kirigami.Theme.highlightColor
+        color: dockItem._badgeBgColor
         Accessible.ignored: true
 
         layer.enabled: DockSettings.badgeDisplayMode === 0
@@ -661,10 +683,12 @@ Item {
         }
 
         QQC2.Label {
+            id: badgeLabel
+            objectName: "badgeLabel"
             visible: DockSettings.badgeDisplayMode === 0
             anchors.centerIn: parent
             text: dockItem._badgeCount > 99 ? "99+" : dockItem._badgeCount.toString()
-            color: Kirigami.Theme.highlightedTextColor
+            color: dockItem._badgeTextColor
             font.pixelSize: parent.height * 0.55
             font.bold: true
             fontSizeMode: Text.Fit
@@ -901,6 +925,7 @@ Item {
 
         // Margin compensation for icon padding from iconScale
         property real _iconPaddingCompensation: iconImage.height * (1.0 - DockSettings.iconScale) / 2.0
+        readonly property real _dotSecondaryMargin: Math.round((dockItem._indicatorSpace - (dockItem.model.IsActive ? 4 : 3)) / 2)
 
         states: [
             State {
@@ -917,7 +942,7 @@ Item {
                 }
                 PropertyChanges {
                     target: indicatorRow
-                    anchors.topMargin: Kirigami.Units.smallSpacing - indicatorRow._iconPaddingCompensation
+                    anchors.topMargin: indicatorRow._dotSecondaryMargin - indicatorRow._iconPaddingCompensation
                 }
             },
             State {
@@ -934,7 +959,7 @@ Item {
                 }
                 PropertyChanges {
                     target: indicatorRow
-                    anchors.bottomMargin: Kirigami.Units.smallSpacing - indicatorRow._iconPaddingCompensation
+                    anchors.bottomMargin: indicatorRow._dotSecondaryMargin - indicatorRow._iconPaddingCompensation
                 }
             },
             State {
@@ -951,7 +976,7 @@ Item {
                 }
                 PropertyChanges {
                     target: indicatorRow
-                    anchors.rightMargin: Kirigami.Units.smallSpacing
+                    anchors.rightMargin: indicatorRow._dotSecondaryMargin - indicatorRow._iconPaddingCompensation
                 }
             },
             State {
@@ -968,7 +993,7 @@ Item {
                 }
                 PropertyChanges {
                     target: indicatorRow
-                    anchors.leftMargin: Kirigami.Units.smallSpacing
+                    anchors.leftMargin: indicatorRow._dotSecondaryMargin - indicatorRow._iconPaddingCompensation
                 }
             }
         ]

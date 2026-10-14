@@ -57,6 +57,31 @@ Item {
     property real opacityMinimized: DockSettings.iconOpacityMinimized
     /// 0 Number, 1 Dot, 2 Off.
     property int badgeDisplayMode: DockSettings.badgeDisplayMode
+    /// 0 Top-Right, 1 Top-Left, 2 Auto (edge-aware).
+    property int badgePosition: DockSettings.badgePosition
+    property bool badgeUseAccentColor: DockSettings.badgeUseAccentColor
+    property string badgeCustomColor: DockSettings.badgeCustomColor
+
+    readonly property bool _badgeOnLeft: badgePosition === 1
+        || (badgePosition === 2 && edge === 2)
+    readonly property color _badgeBgColor: {
+        if (badgeUseAccentColor) {
+            return Kirigami.Theme.highlightColor
+        }
+        let str = badgeCustomColor ? badgeCustomColor.trim() : ""
+        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
+            return Qt.color(str)
+        }
+        return Kirigami.Theme.highlightColor
+    }
+    readonly property color _badgeTextColor: {
+        if (badgeUseAccentColor) {
+            return Kirigami.Theme.highlightedTextColor
+        }
+        return Kirigami.ColorUtils.brightnessForColor(_badgeBgColor) === Kirigami.ColorUtils.Light
+            ? "#000000"
+            : "#ffffff"
+    }
 
     /// Dock entries: icon name, fallback icon, window state ("active",
     /// "inactive", "minimized" or "launcher"), badge count and the simulated
@@ -388,21 +413,24 @@ Item {
 
                 // Badge (DockItem.qml): number or dot at the icon's corner.
                 Rectangle {
+                    objectName: "miniDockBadge"
+                    z: 2
                     visible: (slot.modelData.badge ?? 0) > 0 && dock.badgeDisplayMode !== 2
                     width: Math.round(box.width * (dock.badgeDisplayMode === 1 ? 0.18 : 0.38))
                     height: width
                     radius: width / 2
-                    x: box.x + box.width - width * 0.8
+                    x: dock._badgeOnLeft ? box.x - width * 0.2 : box.x + box.width - width * 0.8
                     y: box.y - height * 0.2
-                    color: Kirigami.Theme.highlightColor
+                    color: dock._badgeBgColor
 
                     QQC2.Label {
+                        objectName: "miniDockBadgeLabel"
                         visible: dock.badgeDisplayMode === 0
                         anchors.centerIn: parent
                         width: parent.width - 2
                         height: parent.height - 2
                         text: (slot.modelData.badge ?? 0) > 99 ? "99+" : String(slot.modelData.badge ?? 0)
-                        color: Kirigami.Theme.highlightedTextColor
+                        color: dock._badgeTextColor
                         font.pixelSize: Math.max(1, parent.height * 0.55)
                         font.bold: true
                         fontSizeMode: Text.Fit

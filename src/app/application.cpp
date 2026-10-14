@@ -118,6 +118,9 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::IconScaleChanged, context, saveSettings);
     connect(settings, &KremaSettings::AttentionAnimationDurationChanged, context, saveSettings);
     connect(settings, &KremaSettings::BadgeDisplayModeChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgePositionChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgeUseAccentColorChanged, context, saveSettings);
+    connect(settings, &KremaSettings::BadgeCustomColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::UseSystemColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::UseAccentColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::DodgeActiveOnlyChanged, context, saveSettings);

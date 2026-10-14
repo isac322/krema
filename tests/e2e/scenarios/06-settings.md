@@ -800,9 +800,11 @@ whose dock context menu opens Settings. The badge defaults are Number
 (`BadgeUseAccentColor=true`), and custom color `#e93a40`.
 
 **Steps:**
-1. Open Settings → Animations & Badges. Verify "Number" is selected,
-   "Badge position" shows "Top-Right", "Use accent color" is checked, and
-   the "Badge color" swatch is hidden.
+1. Open Settings (default Icons page), search for "Badge position", "Badge
+   color", and "Use accent color", and verify "Animations & Badges" remains
+   listed in the sidebar for each query. Clear the search and open Animations &
+   Badges. Verify "Number" is selected, "Badge position" shows "Top-Right",
+   "Use accent color" is checked, and the "Badge color" swatch is hidden.
 2. Select "Off" in "Badge display". Verify "Badge position", "Use accent
    color", and the color swatch are hidden.
 3. Select "Dot". Verify the position and accent controls return with

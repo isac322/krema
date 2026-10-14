@@ -323,7 +323,6 @@ Item {
                 { tag: "light-green", hex: "#a8ffb2", expectedTextColor: "#000000" },
                 { tag: "trimmed", hex: "  #1e3a5f  ", expectedTextColor: "#ffffff" },
                 { tag: "short-hex", hex: "#fff", expectedTextColor: "#000000" },
-                { tag: "alpha-hex", hex: "#801e3a5f", expectedTextColor: "#ffffff" },
             ]
         }
 
@@ -340,6 +339,8 @@ Item {
                 { tag: "empty", hex: "" },
                 { tag: "invalid-name", hex: "invalid-hex" },
                 { tag: "invalid-hex", hex: "#xyz" },
+                { tag: "alpha-hex", hex: "#801e3a5f" },
+                { tag: "transparent-alpha-hex", hex: "#00ffffff" },
             ]
         }
 
@@ -433,6 +434,8 @@ Item {
             verify(Qt.colorEqual(label.color, "#000000"))
             DockSettings.badgeCustomColor = "invalid-hex"
             verify(Qt.colorEqual(badge.color, Kirigami.Theme.highlightColor))
+            DockSettings.badgeCustomColor = "#00ffffff"
+            verify(Qt.colorEqual(badge.color, Kirigami.Theme.highlightColor))
         }
 
         function test_animationsPageChoiceCardBadgePreviewParity() {
@@ -469,6 +472,8 @@ Item {
             verify(Qt.colorEqual(numberBadge.color, "#ffff00"))
             verify(Qt.colorEqual(numberLabel.color, "#000000"))
             DockSettings.badgeCustomColor = "invalid-hex"
+            verify(Qt.colorEqual(numberBadge.color, Kirigami.Theme.highlightColor))
+            DockSettings.badgeCustomColor = "#00ffffff"
             verify(Qt.colorEqual(numberBadge.color, Kirigami.Theme.highlightColor))
         }
 

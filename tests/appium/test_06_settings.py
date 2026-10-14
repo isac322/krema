@@ -1795,6 +1795,21 @@ def test_set015_reservation_switch_is_native_conditional_and_autosaves(
 def test_set022_badge_settings_visibility_and_controls(krema: Krema, apps: TestWindows) -> None:
     apps.open("Alpha")
     open_settings(krema)
+    search = krema.wait_for(f"{SETTINGS}//text[@name='Search settings']")
+    click_el(krema, search)
+    for query in ("Badge position", "Badge color", "Use accent color"):
+        inp.key("ctrl", "a")
+        inp.type_text(query)
+        wait_until(
+            lambda: "Animations & Badges" in [e.get_attribute("name") for e in krema.find_all(SIDEBAR)],
+            message=f"Animations & Badges found by search query {query!r}",
+        )
+    inp.key("ctrl", "a")
+    inp.key("BackSpace")
+    wait_until(
+        lambda: len(krema.find_all(SIDEBAR)) >= 8,
+        message="all settings pages restored after clearing search",
+    )
     open_page(krema, "Animations & Badges")
     position = f"{SETTINGS}//list_item[@name='Badge position']"
     accent = f"{SETTINGS}//check_box[@name='Use accent color']"

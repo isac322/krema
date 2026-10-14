@@ -103,7 +103,7 @@ Item {
             return Kirigami.Theme.highlightColor
         }
         let str = DockSettings.badgeCustomColor ? DockSettings.badgeCustomColor.trim() : ""
-        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
+        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(str)) {
             return Qt.color(str)
         }
         return Kirigami.Theme.highlightColor

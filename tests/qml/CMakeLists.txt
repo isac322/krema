@@ -36,6 +36,7 @@ set(KREMA_QML_TEST_FILES
     tst_dockitem_indicators
     tst_dock_main
     tst_preview_popup
+    tst_shadow_geometry
 )
 
 foreach(test_name IN LISTS KREMA_QML_TEST_FILES)

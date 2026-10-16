@@ -44,6 +44,7 @@ class DockView : public QQuickView
     Q_PROPERTY(QColor backgroundColor READ backgroundColor NOTIFY backgroundColorChanged)
     Q_PROPERTY(int backgroundStyleType READ backgroundStyleType NOTIFY backgroundStyleTypeChanged)
     Q_PROPERTY(int floatingPadding READ floatingPadding NOTIFY floatingPaddingChanged)
+    Q_PROPERTY(int shadowOverflow READ shadowOverflow NOTIFY shadowOverflowChanged)
     Q_PROPERTY(int iconCacheVersion READ iconCacheVersion NOTIFY iconCacheVersionChanged)
     Q_PROPERTY(int edge READ edge NOTIFY edgeChanged)
     Q_PROPERTY(bool isVertical READ isVertical NOTIFY edgeChanged)
@@ -68,6 +69,7 @@ public:
     [[nodiscard]] QColor backgroundColor() const;
     [[nodiscard]] int backgroundStyleType() const;
     [[nodiscard]] int floatingPadding() const;
+    [[nodiscard]] int shadowOverflow() const;
     [[nodiscard]] int iconCacheVersion() const;
     [[nodiscard]] int edge() const;
     [[nodiscard]] bool isVertical() const;
@@ -146,6 +148,7 @@ Q_SIGNALS:
     void backgroundColorChanged();
     void backgroundStyleTypeChanged();
     void floatingPaddingChanged();
+    void shadowOverflowChanged();
     void iconCacheVersionChanged();
     void edgeChanged();
     void sideTooltipReserveChanged();

@@ -29,7 +29,15 @@ TEST_CASE("Surface geometry calculations", "[geometry]")
     {
         const int overflow = krema::shadowOverflowHeight(64, -150, 100, 15, 5.0);
         REQUIRE(overflow >= 60);
-        REQUIRE(krema::surfaceHeight(48, 8, 1.6, 36, 8, overflow) == 132);
+        REQUIRE(krema::surfaceHeight(48, 8, 1.6, 36, 8, overflow) == 184);
+    }
+
+    SECTION("Shadow overflow is reserved on both surface sides")
+    {
+        const int overflow = krema::shadowOverflowHeight(64, -150, 100, 15, 5.0);
+        const int surface = krema::surfaceHeight(48, 8, 1.6, 36, 0, overflow);
+        REQUIRE(surface - (48 + 8 * 2) >= overflow * 2);
+        REQUIRE(overflow >= 60);
     }
 
     SECTION("Shadow overflow is not capped for valid extreme settings")

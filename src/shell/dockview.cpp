@@ -166,6 +166,20 @@ int DockView::floatingPadding() const
     return m_panelInset.total + (m_settings->floating() ? m_settings->floatingMargin() : 0);
 }
 
+int DockView::shadowOverflow() const
+{
+    if (!m_settings->shadowEnabled()) {
+        return 0;
+    }
+
+    const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
+    return krema::shadowOverflowHeight(iconSize + s_padding * 2,
+                                       isVertical() ? m_settings->shadowLightX() : m_settings->shadowLightY(),
+                                       m_settings->shadowLightZ(),
+                                       m_settings->shadowElevation(),
+                                       m_settings->shadowLightRadius());
+}
+
 int DockView::reservedPanelInset() const
 {
     return m_panelInset.reserved;
@@ -336,13 +350,7 @@ void DockView::updateSize()
     // Horizontal docks open the tooltip above/below the panel (fits s_tooltipReserve);
     // vertical docks open it beside the panel, so the reserve must fit its full width.
     const int tooltipReserve = isVertical() ? std::max(s_tooltipReserve, m_sideTooltipReserve) : s_tooltipReserve;
-    const int shadowOverflow = m_settings->shadowEnabled()
-        ? krema::shadowOverflowHeight(iconSize + s_padding * 2,
-                                      isVertical() ? m_settings->shadowLightX() : m_settings->shadowLightY(),
-                                      m_settings->shadowLightZ(),
-                                      m_settings->shadowElevation(),
-                                      m_settings->shadowLightRadius())
-        : 0;
+    const int shadowOverflow = this->shadowOverflow();
     const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding(), shadowOverflow);
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
@@ -367,6 +375,7 @@ void DockView::updateSize()
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
     }
+    Q_EMIT shadowOverflowChanged();
 }
 
 int DockView::zoomOverflowHeight() const

@@ -25,7 +25,8 @@ inline int shadowOverflowHeight(int panelExtent, int lightOffset, int lightZ, in
     return static_cast<int>(std::ceil(panelOverhang + softness + 10.0));
 }
 
-/// Total surface height including dock, zoom / tooltip / shadow reserve, and floating padding.
+/// Total surface height including dock, inward zoom / tooltip / shadow reserve,
+/// outward shadow / floating reserve, and the dock content.
 inline int surfaceHeight(int iconSize,
                          int padding,
                          double maxZoomFactor,
@@ -37,7 +38,9 @@ inline int surfaceHeight(int iconSize,
     const int zoomOverflow = zoomOverflowHeight(iconSize, maxZoomFactor);
 
     const int topOverflow = std::max({zoomOverflow, tooltipReserve, shadowOverflow});
-    const int bottomOverflow = floatingPadding;
+    // The shader effect is symmetric around the panel. Keep equivalent room
+    // on the outward side so any light direction remains inside the surface.
+    const int bottomOverflow = std::max(floatingPadding, shadowOverflow);
 
     return dockHeight + topOverflow + bottomOverflow;
 }

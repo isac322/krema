@@ -80,6 +80,14 @@ Kirigami.AbstractApplicationWindow {
                 i18n("Use accent color"), i18n("Badge color")]
         },
         {
+            moduleId: "notifications",
+            text: i18n("Notifications"),
+            iconName: "preferences-desktop-notification",
+            group: "",
+            keywords: [i18n("Notification inbox"), i18n("Unread notifications"), i18n("Local notification history"),
+                i18n("Notification actions"), i18n("Read"), i18n("Dismissed")]
+        },
+        {
             moduleId: "behavior",
             text: i18n("Behavior"),
             iconName: "preferences-system",
@@ -128,6 +136,7 @@ Kirigami.AbstractApplicationWindow {
         "shadow": "settings/ShadowPage.qml",
         "animations": "settings/AnimationsPage.qml",
         "behavior": "settings/BehaviorPage.qml",
+        "notifications": "settings/NotificationsPage.qml",
         "monitors": "settings/MonitorsPage.qml",
         "preview": "settings/PreviewPage.qml"
     })

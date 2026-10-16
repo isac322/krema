@@ -23,9 +23,9 @@ RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
     dnf -y --setopt=install_weak_deps=False --setopt=keepcache=True install \
         kwin-wayland kglobalacceld \
         mesa-dri-drivers mesa-libEGL mesa-libgbm \
-        dbus-daemon dbus-tools wayland-utils qt6-qttools xdg-desktop-portal-kde \
+        dbus-daemon dbus-tools wayland-utils qt6-qttools \
         at-spi2-core at-spi2-atk python3-pyatspi \
-        pipewire wireplumber pipewire-utils wf-recorder ffmpeg \
+        pipewire wireplumber pipewire-utils \
         breeze-icon-theme hicolor-icon-theme plasma-breeze kf6-qqc2-desktop-style xkeyboard-config \
         google-noto-sans-fonts dejavu-sans-fonts dejavu-sans-mono-fonts \
         kwrite kfind konsole dolphin \
@@ -38,12 +38,12 @@ RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
         kf6-kcolorscheme-devel kf6-kiconthemes-devel kf6-kcrash-devel \
         kf6-kxmlgui-devel kf6-kservice-devel kf6-kio-devel kf6-kjobwidgets-devel kf6-kitemmodels-devel \
         kf6-kirigami-devel kf6-kirigami-addons kf6-kirigami-addons-devel \
-        plasma-workspace plasma-workspace-devel kpipewire-devel \
+        plasma-workspace-devel kpipewire-devel \
         layer-shell-qt layer-shell-qt-devel wayland-devel \
         kwayland-devel plasma-wayland-protocols-devel libxkbcommon-devel \
         catch-devel \
         ruby rubygems \
-        python3 python3-pip python3-flask python3-lxml python3-gobject python3-dbus python3-pyqt6 python3-numpy \
+        python3 python3-pip python3-flask python3-lxml python3-gobject python3-numpy \
         python3-pytest python3-pillow gtk3 gobject-introspection \
         procps-ng findutils libcap rsync psmisc
 
@@ -88,6 +88,10 @@ RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
         ccache
 
 FROM base
+RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
+    dnf -y --setopt=install_weak_deps=False --setopt=keepcache=True install \
+        plasma-workspace xdg-desktop-portal-kde python3-dbus python3-pyqt6 \
+        wf-recorder ffmpeg
 COPY --from=swas-build /out/ /
 # run.rb pip-installs requirements.txt unless this marker exists; everything
 # is preinstalled above so skip that network round-trip on every run.

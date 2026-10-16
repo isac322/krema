@@ -18,6 +18,7 @@ QtObject {
     function sniNeedsAttention(appId) { return !!sni[appId] }
     function clearUnreadNotifications(appId) {
         _record("clearUnreadNotifications", arguments)
+        if (!Object.prototype.hasOwnProperty.call(unread, appId) || unread[appId] <= 0) return
         let u = Object.assign({}, unread); delete u[appId]; unread = u; revision++
     }
     function setUnread(appId, n) { let u = Object.assign({}, unread); u[appId] = n; unread = u; revision++ }

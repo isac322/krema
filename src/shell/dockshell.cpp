@@ -137,8 +137,14 @@ void DockShell::connectSettingsSignals()
         m_previewController->updateEdge();
     });
 
-    // Shadow: no surface resize needed — shadow renders within available space
-    // and naturally clips at surface boundaries (QML ShaderEffect computes its own margin)
+    // Shadow overflow is part of the surface's interior reserve so low light
+    // heights do not clip the projected shadow at the QQuickWindow boundary.
+    connect(s, &KremaSettings::ShadowEnabledChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightXChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightYChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightZChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightRadiusChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowElevationChanged, m_view.get(), &DockView::updateSize);
 
     // Background style changes — per-screen overrideable: backgroundOpacity, backgroundStyle, cornerRadius
     connect(ss, &ScreenSettings::backgroundOpacityChanged, m_view.get(), &DockView::applyBackgroundStyle);

@@ -336,7 +336,14 @@ void DockView::updateSize()
     // Horizontal docks open the tooltip above/below the panel (fits s_tooltipReserve);
     // vertical docks open it beside the panel, so the reserve must fit its full width.
     const int tooltipReserve = isVertical() ? std::max(s_tooltipReserve, m_sideTooltipReserve) : s_tooltipReserve;
-    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding());
+    const int shadowOverflow = m_settings->shadowEnabled()
+        ? krema::shadowOverflowHeight(iconSize + s_padding * 2,
+                                      isVertical() ? m_settings->shadowLightX() : m_settings->shadowLightY(),
+                                      m_settings->shadowLightZ(),
+                                      m_settings->shadowElevation(),
+                                      m_settings->shadowLightRadius())
+        : 0;
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding(), shadowOverflow);
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {

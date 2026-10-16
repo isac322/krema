@@ -6,6 +6,7 @@ import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
 import com.bhyoo.krema 1.0
+import "shadowgeometry.js" as ShadowGeometry
 
 /**
  * Main dock container.
@@ -938,7 +939,7 @@ Item {
     // Projective SDF drop shadow via ShaderEffect.
     // Each pixel projects a ray from the light source through the ground plane
     // to determine shadow intensity — no blur/offset needed.
-    // Shadow renders within available surface space; overflow clips naturally at screen edges.
+    // The surface reserves enough interior space for the projected shadow.
     ShaderEffect {
         id: dockShadow
         visible: DockSettings.shadowEnabled
@@ -962,15 +963,10 @@ Item {
         property real margin: _margin
 
         // Compute shadow margin: how far the shadow can extend beyond the panel
-        // Takes the larger of physical projection margin and Gaussian 3-sigma spread
-        property real _margin: {
-            let denom = Math.max(lightZ - elevation, 1)
-            let lightDist = Math.sqrt(lightX * lightX + lightY * lightY)
-            let physicalMargin = (lightDist + lightRadius) * elevation / denom
-            // Gaussian decays to ~0.1% at 3*sigma
-            let softnessMargin = lightRadius * 3.0
-            return Math.min(Math.max(physicalMargin, softnessMargin) + 10, 200)
-        }
+        // The panel dimensions are part of the projective overhang, so this
+        // must grow when a low light height magnifies a wide dock.
+        property real _margin: ShadowGeometry.projectedMargin(
+            panelWidth, panelHeight, elevation, lightX, lightY, lightZ, lightRadius)
 
         // Centered on the visible background, expanded by margin on each side
         x: dockPanel.x + dockBackground.x - _margin

@@ -25,6 +25,18 @@ TEST_CASE("Surface geometry calculations", "[geometry]")
         REQUIRE(h == 108);
     }
 
+    SECTION("Shadow overflow covers low light heights")
+    {
+        const int overflow = krema::shadowOverflowHeight(64, -150, 100, 15, 5.0);
+        REQUIRE(overflow >= 60);
+        REQUIRE(krema::surfaceHeight(48, 8, 1.6, 36, 8, overflow) == 132);
+    }
+
+    SECTION("Shadow overflow is not capped for valid extreme settings")
+    {
+        REQUIRE(krema::shadowOverflowHeight(64, 300, 100, 50, 20.0) > 200);
+    }
+
     SECTION("Tooltip reserve wins when zoom overflow is small")
     {
         int h = krema::surfaceHeight(48, 8, 1.2, 36, 0);

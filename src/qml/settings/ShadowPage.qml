@@ -8,6 +8,7 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.formcard as FormCard
 import com.bhyoo.krema 1.0
+import "../shadowgeometry.js" as ShadowGeometry
 
 SettingsPage {
     id: page
@@ -36,13 +37,8 @@ SettingsPage {
         property real shadowG: _shadowColor.g
         property real shadowB: _shadowColor.b
         property real shadowA: DockSettings.shadowIntensity
-        property real margin: {
-            const denom = Math.max(lightZ - elevation, 1)
-            const lightDist = Math.sqrt(lightX * lightX + lightY * lightY)
-            const physicalMargin = (lightDist + lightRadius) * elevation / denom
-            const softnessMargin = lightRadius * 3.0
-            return Math.min(Math.max(physicalMargin, softnessMargin) + 10, 200)
-        }
+        property real margin: ShadowGeometry.projectedMargin(
+            panelWidth, panelHeight, elevation, lightX, lightY, lightZ, lightRadius)
 
         width: panelWidth + margin * 2
         height: panelHeight + margin * 2

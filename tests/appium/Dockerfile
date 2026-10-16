@@ -91,7 +91,7 @@ FROM base
 RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
     dnf -y --setopt=install_weak_deps=False --setopt=keepcache=True install \
         plasma-workspace xdg-desktop-portal-kde python3-dbus python3-pyqt6 \
-        wf-recorder ffmpeg
+        wf-recorder ffmpeg openh264
 COPY --from=swas-build /out/ /
 # run.rb pip-installs requirements.txt unless this marker exists; everything
 # is preinstalled above so skip that network round-trip on every run.

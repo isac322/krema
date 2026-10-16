@@ -90,6 +90,7 @@ run_app() {
     fi
 }
 
+app_pid=
 recorder_pid=
 recorder_status=0
 cleanup() {

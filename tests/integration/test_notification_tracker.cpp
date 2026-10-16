@@ -18,11 +18,10 @@
 
 #include <QCoreApplication>
 #include <QDBusConnection>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTest>
 #include <QVariantMap>
-
-#include <functional>
 
 namespace
 {
@@ -136,7 +135,7 @@ TEST_CASE("Notification tracker honors Plasma badge settings", "[notification][t
     const bool hadAppSetting = application.hasKey(QStringLiteral("ShowBadges"));
     const QVariant previousAppSetting = application.readEntry(QStringLiteral("ShowBadges"), QVariant());
 
-    auto restore = [&] {
+    const auto restore = qScopeGuard([&] {
         if (hadGlobalSetting) {
             badges.writeEntry(QStringLiteral("InTaskManager"), previousGlobalSetting, KConfig::Notify);
         } else {
@@ -148,7 +147,7 @@ TEST_CASE("Notification tracker honors Plasma badge settings", "[notification][t
             application.deleteEntry(QStringLiteral("ShowBadges"), KConfig::Notify);
         }
         config->sync();
-    };
+    });
 
     badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
     application.writeEntry(QStringLiteral("ShowBadges"), true, KConfig::Notify);
@@ -171,8 +170,28 @@ TEST_CASE("Notification tracker honors Plasma badge settings", "[notification][t
     REQUIRE(waitFor([&] {
         return tracker.unreadCount(QStringLiteral("org.example.settings")) == 0;
     }));
+}
 
-    restore();
+TEST_CASE("Notification tracker ignores a duplicate broadcast after directed close", "[notification][tracker]")
+{
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    QSignalSpy revisions(&tracker, &krema::NotificationTracker::revisionChanged);
+
+    notify(tracker, 350, QStringLiteral("Mail"), QStringLiteral("org.example.mail"));
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.mail")) == 1);
+
+    tracker.CloseNotification(350);
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.mail")) == 0);
+    const int revisionAfterDirectedClose = tracker.revision();
+    const int signalsAfterDirectedClose = revisions.count();
+
+    // CloseReason is private, so this verifies the public no-double-decrement
+    // seam; the internal directed-to-broadcast reason update is not observable.
+    tracker.NotificationClosed(350, 2);
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.mail")) == 0);
+    CHECK(tracker.revision() == revisionAfterDirectedClose);
+    CHECK(revisions.count() == signalsAfterDirectedClose);
 }
 
 TEST_CASE("Clearing notifications emits one revision only when state changes", "[notification][tracker]")

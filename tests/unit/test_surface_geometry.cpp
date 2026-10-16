@@ -40,6 +40,14 @@ TEST_CASE("Surface geometry calculations", "[geometry]")
         REQUIRE(overflow >= 60);
     }
 
+    SECTION("Screen reservation follows the inset panel edge")
+    {
+        const int overflow = krema::shadowOverflowHeight(64, -150, 100, 15, 5.0);
+        REQUIRE(krema::screenReserveDepth(48, 8, 0, overflow, 0) == 124);
+        REQUIRE(krema::screenReserveDepth(48, 8, 8, overflow, 0) == 124);
+        REQUIRE(krema::screenReserveDepth(48, 8, 8, 0, 0) == 72);
+    }
+
     SECTION("Shadow overflow is not capped for valid extreme settings")
     {
         REQUIRE(krema::shadowOverflowHeight(64, 300, 100, 50, 20.0) > 200);

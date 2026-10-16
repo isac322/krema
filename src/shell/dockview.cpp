@@ -368,9 +368,15 @@ void DockView::updateSize()
         m_platform->setSize(QSize(0, h));
     }
 
-    // Reserve the panel bar only when screen-space reservation is enabled.
-    // While measuring from panels the reservation starts past theirs.
-    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? panelBarHeight() - m_panelInset.reserved : 0);
+    // Reserve the panel bar and any extra inward shadow offset when
+    // screen-space reservation is enabled. While measuring from panels the
+    // reservation starts past theirs.
+    const int exclusiveZone = krema::screenReserveDepth(iconSize,
+                                                         s_padding,
+                                                         floatingPadding(),
+                                                         shadowOverflow,
+                                                         m_panelInset.reserved);
+    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? exclusiveZone : 0);
 
     if (m_visibilityController) {
         m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());

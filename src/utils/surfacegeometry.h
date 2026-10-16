@@ -51,4 +51,11 @@ inline int panelBarHeight(int iconSize, int padding, int floatingPadding)
     return iconSize + padding * 2 + floatingPadding;
 }
 
+/// Screen-space reservation needed when the panel is inset for shadow overflow.
+inline int screenReserveDepth(int iconSize, int padding, int floatingPadding, int shadowOverflow, int reservedInset)
+{
+    const int panelEdgeOffset = std::max(floatingPadding, shadowOverflow);
+    return iconSize + padding * 2 + panelEdgeOffset - reservedInset;
+}
+
 } // namespace krema

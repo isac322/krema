@@ -250,6 +250,7 @@ plus `arch`:
 | `ubuntu-25.04` | debian | `ubuntu:25.04` | amd64, arm64 |
 | `ubuntu-25.10` | debian | `ubuntu:25.10` | amd64, arm64 |
 | `ubuntu-26.04` | debian | `ubuntu:26.04` | amd64, arm64 |
+| `ubuntu-26.10` | debian | `ubuntu:26.10` | amd64, arm64 |
 | `arch` | arch | `archlinux:latest` | amd64 |
 
 `arch` and `opensuse-slowroll` publish amd64 packages only; on an arm64 host

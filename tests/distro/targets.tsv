@@ -21,3 +21,4 @@ debian-13	debian	debian:13-slim	sha256:b6e2a152f22a40ff69d92cb397223c906017e1391
 ubuntu-25.04	debian	ubuntu:25.04	sha256:27771fb7b40a58237c98e8d3e6b9ecdd9289cec69a857fccfb85ff36294dac20	xUbuntu_25.04	*.deb
 ubuntu-25.10	debian	ubuntu:25.10	sha256:4a9232cc47bf99defcc8860ef6222c99773330367fcecbf21ba2edb0b810a31e	xUbuntu_25.10	*.deb
 ubuntu-26.04	debian	ubuntu:26.04	sha256:f3d28607ddd78734bb7f71f117f3c6706c666b8b76cbff7c9ff6e5718d46ff64	xUbuntu_26.04	*.deb
+ubuntu-26.10	debian	ubuntu:26.10	sha256:ee126c2fa0249079a7e24ae3a3d29b04783ef93ab33c868751c9a1289d3fffff	xUbuntu_26.10	*.deb

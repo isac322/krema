@@ -13,7 +13,7 @@ debian_install() {
 }
 
 # Packages that only some releases have (split or renamed across Debian 13 and
-# Ubuntu 25.04..26.04): kept only when the archive has an installable version
+# Ubuntu 25.04..26.10): kept only when the archive has an installable version
 # (a package another one replaced is known to apt but has no candidate).
 debian_available() {
     for p do

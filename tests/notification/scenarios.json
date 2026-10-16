@@ -1,0 +1,417 @@
+{
+  "schema": "krema.notification-qa/v1",
+  "description": "Wire-level notification QA scenarios for a real Plasma/KWin session.",
+  "event_contract": {
+    "required_fields": [
+      "ts",
+      "dir",
+      "scenario",
+      "mechanism",
+      "corr",
+      "serverId",
+      "reason",
+      "payload"
+    ],
+    "directions": ["sent", "observed", "reset"],
+    "mechanisms": [
+      "freedesktop-notifications",
+      "portal-notification",
+      "unity-launcher-entry",
+      "status-notifier-item",
+      "kde-job",
+      "inbox-simulation",
+      "dnd"
+    ]
+  },
+  "gui_contract": {
+    "window": "notificationDebuggerWindow",
+    "target": "targetBar",
+    "tabs": [
+      "notificationsTab",
+      "portalTab",
+      "smartLauncherTab",
+      "sniTab",
+      "jobsTab",
+      "inboxTab",
+      "dndTab"
+    ],
+    "state": "scenarioState",
+    "sent_events": "sentTable",
+    "observed_events": "observedTable",
+    "limitations": "limitationLabel",
+    "reset": "resetAllButton"
+  },
+  "reset_order": [
+    "close tracked fd.o notification IDs",
+    "remove tracked portal IDs",
+    "send Unity zero/not-visible state",
+    "set SNI Active and unregister",
+    "terminate tracked Jobs where possible",
+    "release DND cookies",
+    "clear local Inbox simulation state"
+  ],
+  "scenarios": [
+    {
+      "id": "notifications-basic",
+      "title": "freedesktop.org notification send, observe, and close",
+      "tab": "Notifications",
+      "mechanism": "freedesktop-notifications",
+      "correlation": "notify-basic-<run>",
+      "preconditions": [
+        "A Plasma 6 Wayland session is running with its session D-Bus available.",
+        "The QA app is started with --scenario notifications-basic.",
+        "The notification server advertises the action or inline-reply capability when those observations are required."
+      ],
+      "steps": [
+        "Select a target desktop entry and leave Override desktop-entry from target enabled.",
+        "Set Summary to QA fd.o notification, Body to a unique run marker, and Timeout to 0 or a value long enough to interact.",
+        "Enter actions default=Open and action1=Reply, then enable inline-reply when the server advertises inline replies.",
+        "Press Send Notification.",
+        "Confirm a sent JSONL record has dir=sent, mechanism=freedesktop-notifications, and the returned numeric notification ID.",
+        "Confirm the Notifications table shows the notification as active and a dir=observed Notify record is present through RegisterWatcher.",
+        "Activate Open or Reply in the real Plasma notification when available and confirm ActionInvoked or NotificationReplied is observed; record unsupported capabilities as a limitation, not a pass.",
+        "Set Close ID to the returned ID and press CloseNotification.",
+        "Confirm NotificationClosed is observed with reason=closed-by-call or the server's reported reason."
+      ],
+      "expected": [
+        "The GUI distinguishes the outgoing Notify/CloseNotification calls from watcher and signal observations.",
+        "The event correlation remains stable from send through close.",
+        "No Krema implementation API is called by the QA app."
+      ],
+      "capture": [
+        "QA app status panel before send",
+        "Plasma notification visible",
+        "Notifications table showing observed state",
+        "CloseNotification and observed NotificationClosed"
+      ],
+      "automation": {
+        "controls": [
+          "Notifications tab",
+          "Send Notification",
+          "CloseNotification",
+          "Close ID",
+          "Received Notifications"
+        ],
+        "assertions": [
+          "At least one sent event and one observed Notify event share the scenario correlation.",
+          "A NotificationClosed event follows the close request."
+        ]
+      }
+    },
+    {
+      "id": "portal-notification",
+      "title": "Portal AddNotification, action, and removal",
+      "tab": "Portal",
+      "mechanism": "portal-notification",
+      "correlation": "portal-<run>",
+      "preconditions": [
+        "The xdg-desktop-portal notification interface is available on the session bus.",
+        "The QA app is started with --scenario portal-notification."
+      ],
+      "steps": [
+        "Press Auto to create a unique portal notification ID, or enter one that is unique for this run.",
+        "Set Title and Body to a unique run marker. Add a Default action or button if action observation is required.",
+        "Press AddNotification.",
+        "Confirm a sent JSONL record identifies the portal notification ID and includes the requested title, body, and actions without secrets.",
+        "If Plasma forwards the portal notification, activate its action and confirm the portal ActionInvoked observation. If it is not forwarded, record the forwarding limitation and retain the successful AddNotification observation.",
+        "Press RemoveNotification and confirm a sent reset/removal record for the same portal ID."
+      ],
+      "expected": [
+        "The GUI visibly separates portal calls from portal ActionInvoked observations.",
+        "Portal forwarding into the fd.o notification server is environment-dependent and is never inferred from AddNotification alone.",
+        "The portal ID remains the correlation identifier even when no visual notification is rendered."
+      ],
+      "capture": [
+        "Portal tab showing the generated ID",
+        "AddNotification sent status",
+        "Forwarded notification and action, when available",
+        "RemoveNotification result"
+      ],
+      "automation": {
+        "controls": [
+          "Portal tab",
+          "Auto",
+          "AddNotification",
+          "RemoveNotification",
+          "Notification ID"
+        ],
+        "assertions": [
+          "AddNotification is recorded as sent.",
+          "RemoveNotification is recorded for the same ID.",
+          "ActionInvoked is required only when the portal presents an actionable notification."
+        ]
+      }
+    },
+    {
+      "id": "smart-launcher",
+      "title": "Unity LauncherEntry progress, count, and urgent state",
+      "tab": "SmartLauncher",
+      "mechanism": "unity-launcher-entry",
+      "correlation": "unity-<run>",
+      "preconditions": [
+        "The target desktop entry is installed or otherwise visible to Krema.",
+        "The QA app is started with --scenario smart-launcher."
+      ],
+      "steps": [
+        "Set Progress to 50% and leave Visible checked; press Send Progress.",
+        "Set Count to 3 and leave Visible checked; press Send Count.",
+        "Enable Urgent and press Send Urgent.",
+        "Confirm each Update signal is recorded as dir=sent with the target desktop entry and a shared correlation.",
+        "Observe the target dock item for progress, badge count, or urgent visual state. Record observed visual state only when it is actually visible in this Plasma/Krema session.",
+        "Send zero state: set Count to 0, clear Visible, set Progress visibility off, clear Urgent, and send each update."
+      ],
+      "expected": [
+        "Unity LauncherEntry.Update is a signal with no protocol acknowledgement; sent and observed states remain distinct.",
+        "A missing badge or progress visualization is an environment/product observation, not evidence that the signal was not sent.",
+        "Reset returns all Unity fields to zero or not visible."
+      ],
+      "capture": [
+        "SmartLauncher controls and sent event status",
+        "Target dock item with badge/progress/urgent state",
+        "Zero-state reset"
+      ],
+      "automation": {
+        "controls": [
+          "SmartLauncher tab",
+          "Send Progress",
+          "Send Count",
+          "Send Urgent",
+          "Progress",
+          "Count",
+          "Visible",
+          "Urgent"
+        ],
+        "assertions": [
+          "Three Unity Update sent records are emitted.",
+          "Reset emits zero/not-visible Unity state records."
+        ]
+      }
+    },
+    {
+      "id": "status-notifier-item",
+      "title": "SNI registration, properties, signals, and unregister",
+      "tab": "SNI",
+      "mechanism": "status-notifier-item",
+      "correlation": "sni-<run>",
+      "preconditions": [
+        "The Plasma StatusNotifierWatcher is available.",
+        "The QA app is started with --scenario status-notifier-item."
+      ],
+      "steps": [
+        "Set Id to a unique, non-empty value for this run; keep the service name and object path unchanged.",
+        "Press Register and confirm StatusNotifierItemRegistered is observed by the external SNI monitor.",
+        "Set Status to NeedsAttention and press NewStatus.",
+        "Change IconName and press NewIcon; change AttentionIcon or OverlayIcon and send the corresponding signal.",
+        "Set ToolTip title/body and press NewToolTip.",
+        "Confirm each outgoing property/signal is shown as sent and each watcher callback or monitor update is shown as observed.",
+        "Press Register again only to test re-registration; do not treat duplicate registration as a second item without an observed watcher event.",
+        "During reset set Status to Active, clear overlay/attention state, and unregister the item where the session permits it."
+      ],
+      "expected": [
+        "The configurable SNI Id is the value advertised by the item, not a hard-coded label in the GUI.",
+        "SNI registration and watcher observations are distinct from visual presence in the Plasma tray.",
+        "The final reset state is Active and unregistered when supported by the watcher."
+      ],
+      "capture": [
+        "SNI Id and Register controls",
+        "External SNI Items table showing registration",
+        "NeedsAttention, icon, and tooltip changes",
+        "Active/unregistered reset state"
+      ],
+      "automation": {
+        "controls": [
+          "SNI tab",
+          "Id",
+          "Register",
+          "Re-register",
+          "NewStatus",
+          "NewIcon",
+          "NewAttentionIcon",
+          "NewOverlayIcon",
+          "NewToolTip",
+          "External SNI Items"
+        ],
+        "assertions": [
+          "Registration is observed with the configured Id/service.",
+          "At least one status or icon signal is observed by the SNI monitor.",
+          "Reset returns Status to Active and removes the tracked item where possible."
+        ]
+      }
+    },
+    {
+      "id": "jobs",
+      "title": "KDE JobView request, updates, signals, and termination",
+      "tab": "Jobs",
+      "mechanism": "kde-job",
+      "correlation": "job-<run>",
+      "preconditions": [
+        "org.kde.kuiserver and JobViewServer are available on the session bus.",
+        "The QA app is started with --scenario jobs."
+      ],
+      "steps": [
+        "Press Create Job (requestView).",
+        "Confirm the returned object path is shown as an active job and a sent requestView record is emitted.",
+        "Set Percent to 50 and press Set; set Info to a unique marker and press Set; set Total and Processed amounts and press Set.",
+        "Set a description field and destination URL, then toggle Suspended and confirm any request signal shown by the GUI.",
+        "Confirm job update calls are recorded as sent. Do not require a Krema notification: Jobs are not consumed by Krema's notification tracker.",
+        "Press Terminate Job and confirm the termination call and local inactive state."
+      ],
+      "expected": [
+        "The returned JobView object path is the job correlation/id.",
+        "The GUI reports protocol sends and observed cancel/suspend/resume callbacks separately.",
+        "No Jobs-to-Krema forwarding is assumed; this limitation is visible in the QA status panel."
+      ],
+      "capture": [
+        "Create Job result and object path",
+        "Job controls and update records",
+        "Signal log, if a callback occurs",
+        "Terminated state"
+      ],
+      "automation": {
+        "controls": [
+          "Jobs tab",
+          "Create Job (requestView)",
+          "Set",
+          "Suspended",
+          "Terminate Job",
+          "Signals"
+        ],
+        "assertions": [
+          "requestView returns a tracked object path or reports unavailable service.",
+          "At least one JobView update is recorded as sent.",
+          "Termination is recorded and the job is no longer active."
+        ]
+      }
+    },
+    {
+      "id": "inbox-simulation",
+      "title": "Inbox simulation, unread state, and badge synchronization",
+      "tab": "Inbox",
+      "mechanism": "inbox-simulation",
+      "correlation": "inbox-<run>",
+      "preconditions": [
+        "The QA app is started with --scenario inbox-simulation.",
+        "The target desktop entry is selected."
+      ],
+      "steps": [
+        "Create a channel with a unique name.",
+        "Send one message and confirm the Inbox list shows it as UNREAD with a server notification ID.",
+        "Confirm the resulting fd.o notification send and Unity/SNI badge synchronization are recorded as sent; observe any real dock badge or SNI attention state separately.",
+        "Select the message and press Mark Selected Read, then confirm the app sends CloseNotification and clears its simulated unread state.",
+        "Press Mark All Read if more messages were created, then delete the channel."
+      ],
+      "expected": [
+        "Inbox unread/read state is local QA-app simulation state, not Krema application read state.",
+        "A message's server ID is used for fd.o close correlation.",
+        "The GUI explicitly labels the simulation limitation and does not claim that Krema read an inbox."
+      ],
+      "capture": [
+        "Channel and UNREAD message",
+        "Badge/attention synchronization",
+        "Mark Selected Read and closed notification",
+        "Deleted channel/reset state"
+      ],
+      "automation": {
+        "controls": [
+          "Inbox tab",
+          "Channel name",
+          "+",
+          "Send",
+          "Mark Selected Read",
+          "Mark All Read",
+          "Total unread"
+        ],
+        "assertions": [
+          "A message is locally tracked with a server ID.",
+          "Read action closes the corresponding notification.",
+          "The run is reported as simulation-only for inbox read state."
+        ]
+      }
+    },
+    {
+      "id": "dnd",
+      "title": "Do Not Disturb inhibition and observed property",
+      "tab": "DND",
+      "mechanism": "dnd",
+      "correlation": "dnd-<run>",
+      "preconditions": [
+        "The fd.o notification server exposes Inhibit, UnInhibit, and the Inhibited property.",
+        "The QA app is started with --scenario dnd."
+      ],
+      "steps": [
+        "Enter a unique app name and reason, then press Inhibit.",
+        "Confirm the returned cookie is listed and a dir=sent Inhibit record includes the cookie correlation.",
+        "Press Read Inhibited and confirm the observed property is true while the cookie is active.",
+        "Press UnInhibit Selected and then Read Inhibited again; confirm the cookie is removed and the observed property is false when no other inhibition remains.",
+        "If another application holds an inhibition, record that shared-session limitation instead of treating true as a failure."
+      ],
+      "expected": [
+        "The DND GUI visibly reports the Inhibit/UnInhibit signatures and the observed Inhibited property.",
+        "Cookies are released in reset order, even when a call fails because the server already removed one.",
+        "The observed property reflects the whole session, not only this QA app's cookies."
+      ],
+      "capture": [
+        "DND Inhibit controls",
+        "Cookie list",
+        "Inhibited = true",
+        "UnInhibit and final property"
+      ],
+      "automation": {
+        "controls": [
+          "DND tab",
+          "Inhibit",
+          "UnInhibit Selected",
+          "UnInhibit All",
+          "Read Inhibited",
+          "Active Inhibitions",
+          "Inhibited"
+        ],
+        "assertions": [
+          "An inhibition cookie is returned and tracked.",
+          "Read Inhibited observes true while this cookie is active.",
+          "The cookie is released during reset."
+        ]
+      }
+    },
+    {
+      "id": "reset-all",
+      "title": "Deterministic reset of every tracked protocol object",
+      "tab": "All tabs",
+      "mechanism": "freedesktop-notifications",
+      "correlation": "reset-<run>",
+      "preconditions": [
+        "At least one tracked object exists, or the reset is being used as a clean-session baseline."
+      ],
+      "steps": [
+        "Press Reset All from the QA status panel.",
+        "Wait for the status panel to report reset completion and for reset JSONL records to be flushed.",
+        "Review the JSONL sequence in this order: close tracked fd.o numeric IDs; remove tracked portal IDs; send Unity zero/not-visible state; set SNI Active and unregister; terminate tracked jobs where possible; release DND cookies; clear local Inbox simulation state.",
+        "Confirm each attempted operation has a reset record with its correlation/id and either a success payload or a reason explaining an unavailable protocol.",
+        "Confirm the final status panel has no tracked notification IDs, portal IDs, jobs, cookies, unread inbox messages, or SNI attention state."
+      ],
+      "expected": [
+        "Reset is deterministic and idempotent for objects owned by this QA app.",
+        "Reset never claims that portal forwarding, Jobs consumption, or inbox read state was observed.",
+        "Reset records contain no secrets or unrestricted message contents."
+      ],
+      "capture": [
+        "Reset All button and pre-reset state",
+        "Status panel during reset",
+        "Final clean state",
+        "JSONL reset sequence"
+      ],
+      "automation": {
+        "controls": [
+          "Reset All",
+          "QA status panel",
+          "JSONL path"
+        ],
+        "assertions": [
+          "Every reset phase emits dir=reset records.",
+          "The documented order is preserved.",
+          "Reset completion is visible in the GUI."
+        ]
+      }
+    }
+  ]
+}

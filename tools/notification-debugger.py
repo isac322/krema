@@ -15,8 +15,11 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import sys
+import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -117,6 +120,134 @@ _unread: dict[str, set[int]] = defaultdict(set)
 _sni_attention_apps: set[str] = set()
 _inbox_ref = None
 _send_counter = 0
+_recorder = None
+_tracked_notif_ids: set[int] = set()
+_tracked_jobs: dict[str, object] = {}
+_tracked_dnd_cookies: set[int] = set()
+_tracked_portal_ids: set[str] = set()
+_tracked_unity_entries: set[str] = set()
+_event_table_callback = None
+
+_CANONICAL_MECHANISMS = {
+    "freedesktop-notifications",
+    "portal-notification",
+    "unity-launcher-entry",
+    "status-notifier-item",
+    "kde-job",
+    "inbox-simulation",
+    "dnd",
+}
+
+
+def _canonical_event(mechanism: str, payload) -> tuple[str, dict]:
+    raw = str(mechanism)
+    if raw in _CANONICAL_MECHANISMS:
+        return raw, dict(payload or {})
+    if raw.startswith("portal.") or raw.startswith("reset.portal"):
+        canonical = "portal-notification"
+    elif raw.startswith("unity.") or raw.startswith("reset.unity"):
+        canonical = "unity-launcher-entry"
+    elif raw.startswith("sni.") or raw.startswith("reset.sni"):
+        canonical = "status-notifier-item"
+    elif raw.startswith("jobs.") or raw.startswith("reset.jobs"):
+        canonical = "kde-job"
+    elif (
+        raw.startswith("freedesktop.Inhibit")
+        or raw.startswith("freedesktop.UnInhibit")
+        or raw == "freedesktop.Notifications.Inhibited"
+        or raw.startswith("reset.dnd")
+    ):
+        canonical = "dnd"
+    elif raw.startswith("reset.inbox"):
+        canonical = "inbox-simulation"
+    else:
+        canonical = "freedesktop-notifications"
+    event_payload = dict(payload or {})
+    event_payload.setdefault("operation", raw)
+    return canonical, event_payload
+
+
+def _json_safe(value, key: str = ""):
+    if re.search(r"(pass|secret|token|credential|cookie|auth)", key, re.I):
+        return "<redacted>"
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v, str(k)) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value if not isinstance(value, str) else value[:2048]
+    try:
+        return _json_safe(value.__int__())
+    except (AttributeError, TypeError, ValueError):
+        return str(value)[:2048]
+
+
+class EventRecorder:
+    def __init__(self, path: str, scenario: str) -> None:
+        self.path = path
+        self.scenario = scenario
+        self.counts = {"sent": 0, "observed": 0, "reset": 0}
+        self.error = None
+        try:
+            self._stream = open(path, "a", encoding="utf-8", buffering=1)
+        except OSError as exc:
+            self._stream = None
+            self.error = str(exc)
+
+    def record(
+        self, direction: str, mechanism: str, *, correlation=None,
+        event_id=None, reason="", payload=None, scenario=None,
+    ) -> None:
+        if direction not in self.counts:
+            return
+        canonical, event_payload = _canonical_event(mechanism, payload)
+        event = {
+            "ts": datetime.now().astimezone().isoformat(timespec="milliseconds"),
+            "dir": direction,
+            "scenario": scenario or self.scenario,
+            "mechanism": canonical,
+            "corr": correlation,
+            "serverId": event_id,
+            "reason": reason,
+            "payload": _json_safe(event_payload),
+        }
+        self.counts[direction] += 1
+        if self._stream:
+            try:
+                self._stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+                self._stream.flush()
+            except OSError as exc:
+                self.error = str(exc)
+
+
+def _record_event(
+    direction: str, mechanism: str, *, correlation=None,
+    event_id=None, reason="", payload=None,
+) -> None:
+    canonical, event_payload = _canonical_event(mechanism, payload)
+    if _recorder:
+        _recorder.record(
+            direction, canonical, correlation=correlation, event_id=event_id,
+            reason=reason, payload=event_payload,
+        )
+    if _event_table_callback:
+        _event_table_callback(
+            direction, canonical, correlation, event_id, reason, event_payload
+        )
+    _update_status()
+
+
+def _track_notification(nid: int) -> None:
+    _tracked_notif_ids.add(int(nid))
+
+
+def _track_portal(notification_id: str) -> None:
+    _tracked_portal_ids.add(str(notification_id))
+
+
+def _track_unity(desktop_entry: str) -> None:
+    _tracked_unity_entries.add(str(desktop_entry))
+
 
 
 def _log(tag: str, msg: str) -> None:
@@ -172,6 +303,13 @@ class NotificationWatcherService(dbus.service.Object):
         _log("Notify",
              f"id={nid} app={desktop_entry} summary={summary!r} "
              f"replaces={replaces_id} unread={count}")
+        _record_event(
+            "observed", "freedesktop.Notify", correlation=f"notification:{nid}",
+            event_id=int(nid), payload={
+                "app": desktop_entry, "summary": str(summary), "body": str(body),
+                "replaces_id": int(replaces_id),
+            },
+        )
         if _notif_table_callback:
             _notif_table_callback(int(nid), desktop_entry, str(summary), "active")
         _update_status()
@@ -188,6 +326,11 @@ class NotificationWatcherService(dbus.service.Object):
         if not _unread[entry]:
             del _unread[entry]
         _log("CloseNotification", f"id={nid} app={entry}")
+        _record_event(
+            "observed", "krema.NotificationWatcher.CloseNotification",
+            correlation=f"notification:{nid}", event_id=int(nid),
+            payload={"app": entry},
+        )
         if _notif_table_callback:
             _notif_table_callback(int(nid), entry, "", "closed")
         _update_status()
@@ -216,41 +359,95 @@ class StatusNotifierItemService(dbus.service.Object):
             "Menu": dbus.ObjectPath("/NO_DBUSMENU"),
         }
         self._service_name = "org.krema.NotificationDebugger"
-        bus_name = dbus.service.BusName(self._service_name, bus=bus)
-        super().__init__(bus_name, "/StatusNotifierItem")
+        self._bus_name = dbus.service.BusName(self._service_name, bus=bus)
+        super().__init__(self._bus_name, "/StatusNotifierItem")
 
     def register_with_watcher(self) -> None:
         try:
+            if self._bus_name is None:
+                self._bus_name = dbus.service.BusName(
+                    self._service_name, bus=self._bus
+                )
             proxy = self._bus.get_object(
                 "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher"
             )
             iface = dbus.Interface(proxy, "org.kde.StatusNotifierWatcher")
             iface.RegisterStatusNotifierItem(self._service_name)
+            _record_event(
+                "sent", "sni.RegisterStatusNotifierItem",
+                correlation=f"sni:{self._service_name}",
+                event_id=str(self._props["Id"]),
+                payload={"service": self._service_name, "id": self._props["Id"]},
+            )
             _log("SNI", f"RegisterStatusNotifierItem succeeded (Id={self._props['Id']})")
         except dbus.DBusException as e:
+            _record_event(
+                "sent", "sni.RegisterStatusNotifierItem",
+                correlation=f"sni:{self._service_name}", reason=str(e),
+            )
             _log("SNI-ERROR", f"RegisterStatusNotifierItem failed: {e}")
+
+    def unregister_with_watcher(self) -> None:
+        try:
+            self._bus.release_name(self._service_name)
+            self._bus_name = None
+            _record_event(
+                "sent", "sni.UnregisterStatusNotifierItem",
+                correlation=f"sni:{self._service_name}",
+                event_id=str(self._props["Id"]),
+                reason="released bus name",
+            )
+            _log("SNI", "StatusNotifierItem unregistered by releasing bus name")
+        except dbus.DBusException as e:
+            _record_event(
+                "sent", "sni.UnregisterStatusNotifierItem",
+                correlation=f"sni:{self._service_name}", reason=str(e),
+            )
+            _log("SNI-ERROR", f"UnregisterStatusNotifierItem failed: {e}")
+
 
     def set_property(self, name: str, value) -> None:
         self._props[name] = value
+        self.PropertiesChanged(self.IFACE, {name: value}, [])
+        _record_event(
+            "sent", "sni.PropertiesChanged", correlation=f"sni:{name}",
+            payload={"property": name, "value": value},
+        )
 
     def set_status(self, status: str) -> None:
         self._props["Status"] = status
         self.NewStatus(status)
+        _record_event(
+            "sent", "sni.NewStatus", correlation="sni:status",
+            payload={"status": status},
+        )
         _log("SNI", f"NewStatus -> {status}")
 
     def set_icon(self, icon_name: str) -> None:
         self._props["IconName"] = icon_name
         self.NewIcon()
+        _record_event(
+            "sent", "sni.NewIcon", correlation="sni:icon",
+            payload={"icon": icon_name},
+        )
         _log("SNI", f"NewIcon -> {icon_name}")
 
     def set_overlay_icon(self, icon_name: str) -> None:
         self._props["OverlayIconName"] = icon_name
         self.NewOverlayIcon()
+        _record_event(
+            "sent", "sni.NewOverlayIcon", correlation="sni:overlay",
+            payload={"icon": icon_name},
+        )
         _log("SNI", f"NewOverlayIcon -> {icon_name}")
 
     def set_attention_icon(self, icon_name: str) -> None:
         self._props["AttentionIconName"] = icon_name
         self.NewAttentionIcon()
+        _record_event(
+            "sent", "sni.NewAttentionIcon", correlation="sni:attention",
+            payload={"icon": icon_name},
+        )
         _log("SNI", f"NewAttentionIcon -> {icon_name}")
 
     def set_tooltip(self, title: str, body: str = "") -> None:
@@ -259,7 +456,12 @@ class StatusNotifierItemService(dbus.service.Object):
             signature=None,
         )
         self.NewToolTip()
+        _record_event(
+            "sent", "sni.NewToolTip", correlation="sni:tooltip",
+            payload={"title": title, "body": body},
+        )
         _log("SNI", f"NewToolTip -> title={title!r} body={body!r}")
+
 
     # -- D-Bus signals --
 
@@ -281,6 +483,13 @@ class StatusNotifierItemService(dbus.service.Object):
 
     @dbus.service.signal(dbus_interface="org.kde.StatusNotifierItem")
     def NewToolTip(self):
+        pass
+
+    @dbus.service.signal(
+        dbus_interface="org.freedesktop.DBus.Properties",
+        signature="sa{sv}as",
+    )
+    def PropertiesChanged(self, interface, changed, invalidated):
         pass
 
     # -- D-Bus properties --
@@ -326,27 +535,50 @@ def _on_notification_closed(nid: int, reason: int) -> None:
 
     if _notif_table_callback:
         _notif_table_callback(int(nid), "", "", f"closed ({reason_str})")
+    _record_event(
+        "observed", "freedesktop.NotificationClosed",
+        correlation=f"notification:{nid}", event_id=int(nid),
+        reason=reason_str,
+    )
     if _inbox_ref:
         _inbox_ref.on_external_close(int(nid))
+    _tracked_notif_ids.discard(int(nid))
     _update_status()
 
 
 def _on_action_invoked(nid: int, action_key: str) -> None:
     _log("ActionInvoked", f"id={nid} action={action_key!r}")
+    _record_event(
+        "observed", "freedesktop.ActionInvoked",
+        correlation=f"notification:{nid}", event_id=int(nid),
+        payload={"action": action_key},
+    )
 
 
 def _on_notification_replied(nid: int, text: str) -> None:
     _log("NotificationReplied", f"id={nid} text={text!r}")
-
+    _record_event(
+        "observed", "freedesktop.NotificationReplied",
+        correlation=f"notification:{nid}", event_id=int(nid),
+        payload={"text": text},
+    )
 
 def _on_sni_registered(service: str) -> None:
     _log("SNI-Registered", f"service={service}")
+    _record_event(
+        "observed", "sni.StatusNotifierItemRegistered",
+        correlation=f"sni:{service}", event_id=service,
+    )
     _update_status()
 
 
 def _on_sni_unregistered(service: str) -> None:
     _sni_attention_apps.discard(service)
     _log("SNI-Unregistered", f"service={service}")
+    _record_event(
+        "observed", "sni.StatusNotifierItemUnregistered",
+        correlation=f"sni:{service}", event_id=service,
+    )
     _update_status()
 
 
@@ -357,7 +589,20 @@ def _on_sni_new_status(status: str, *, sender: str = None, **kwargs) -> None:
     else:
         _sni_attention_apps.discard(src)
     _log("SNI-NewStatus", f"sender={src} status={status}")
+    _record_event(
+        "observed", "sni.NewStatus", correlation=f"sni:{src}",
+        payload={"sender": src, "status": status},
+    )
     _update_status()
+
+
+def _on_sni_signal(name: str, *, sender: str = None, **kwargs) -> None:
+    src = sender or "unknown"
+    _log(f"SNI-{name}", f"sender={src}")
+    _record_event(
+        "observed", f"sni.{name}", correlation=f"sni:{src}",
+        payload={"sender": src},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +623,17 @@ def send_notify_dbus(bus, *, app_name, replaces_id=0,
         h = dbus.Dictionary(hints or {}, signature="sv")
         nid = iface.Notify(app_name, dbus.UInt32(replaces_id), icon,
                            summary, body, act, h, dbus.Int32(timeout))
+        nid = int(nid)
+        _track_notification(nid)
+        _record_event(
+            "sent", "freedesktop.Notify", correlation=f"notification:{nid}",
+            event_id=nid, payload={
+                "app": app_name, "summary": summary, "body": body,
+                "replaces_id": replaces_id, "timeout": timeout,
+            },
+        )
         _log("SEND", f"Notify -> id={nid} app={app_name} summary={summary!r}")
-        return int(nid)
+        return nid
     except dbus.DBusException as e:
         _log("SEND-ERROR", f"Notify: {e}")
         return None
@@ -397,16 +651,19 @@ def send_portal(bus, *, notification_id, title="", body="",
         )
         iface = dbus.Interface(proxy, "org.freedesktop.portal.Notification")
         data = {"title": title, "priority": priority}
-        if markup_body:
-            data["markup-body"] = body
-        else:
-            data["body"] = body
+        data["markup-body" if markup_body else "body"] = body
         if icon:
             data["icon"] = dbus.Struct(
-                ("themed", dbus.Array([icon], signature="s")), signature=None
+                (
+                    "themed",
+                    dbus.Variant(
+                        dbus.Array([icon], signature="s"),
+                        signature="as",
+                    ),
+                ),
+                signature="(sv)",
             )
-        if sound:
-            data["sound"] = dbus.Boolean(True)
+        data["sound"] = dbus.String("default" if sound else "silent")
         if display_hint:
             data["display-hint"] = dbus.Array([display_hint], signature="s")
         if category:
@@ -428,6 +685,16 @@ def send_portal(bus, *, notification_id, title="", body="",
         iface.AddNotification(
             notification_id, dbus.Dictionary(data, signature="sv")
         )
+        _track_portal(notification_id)
+        _record_event(
+            "sent", "portal.AddNotification",
+            correlation=f"portal:{notification_id}", event_id=notification_id,
+            payload={
+                "title": title,
+                "markup-body" if markup_body else "body": body,
+                "priority": priority,
+            },
+        )
         _log("PORTAL", f"AddNotification id={notification_id!r} title={title!r}")
     except dbus.DBusException as e:
         _log("PORTAL-ERROR", f"AddNotification: {e}")
@@ -441,10 +708,16 @@ def remove_portal(bus, notification_id):
         )
         iface = dbus.Interface(proxy, "org.freedesktop.portal.Notification")
         iface.RemoveNotification(notification_id)
+        _tracked_portal_ids.discard(str(notification_id))
+        _record_event(
+            "sent", "portal.RemoveNotification",
+            correlation=f"portal:{notification_id}", event_id=notification_id,
+        )
         _log("PORTAL", f"RemoveNotification id={notification_id!r}")
+        return True
     except dbus.DBusException as e:
         _log("PORTAL-ERROR", f"RemoveNotification: {e}")
-
+        return False
 
 def send_unity_update(bus, desktop_entry, props):
     """Send com.canonical.Unity.LauncherEntry.Update signal."""
@@ -456,10 +729,17 @@ def send_unity_update(bus, desktop_entry, props):
         msg.append(uri, signature="s")
         msg.append(dbus.Dictionary(props, signature="sv"), signature="a{sv}")
         bus.send_message(msg)
+        _track_unity(desktop_entry)
+        _record_event(
+            "sent", "unity.LauncherEntry.Update",
+            correlation=f"unity:{desktop_entry}", event_id=desktop_entry,
+            payload={"uri": uri, "props": dict(props)},
+        )
         _log("UNITY", f"Update({uri}, {dict(props)})")
+        return True
     except Exception as e:
         _log("UNITY-ERROR", f"{e}")
-
+        return False
 
 def close_notification(bus, nid):
     try:
@@ -468,10 +748,16 @@ def close_notification(bus, nid):
         )
         iface = dbus.Interface(proxy, "org.freedesktop.Notifications")
         iface.CloseNotification(dbus.UInt32(nid))
+        _tracked_notif_ids.discard(int(nid))
+        _record_event(
+            "sent", "freedesktop.CloseNotification",
+            correlation=f"notification:{nid}", event_id=int(nid),
+        )
         _log("SEND", f"CloseNotification(id={nid})")
+        return True
     except dbus.DBusException as e:
         _log("SEND-ERROR", f"CloseNotification: {e}")
-
+        return False
 
 def get_capabilities(bus):
     try:
@@ -511,6 +797,11 @@ def create_job(bus, desktop_entry, capabilities=0):
         _log("JOB", f"requestView -> {path}")
         job_proxy = bus.get_object("org.kde.kuiserver", path)
         job_iface = dbus.Interface(job_proxy, "org.kde.JobViewV2")
+        _tracked_jobs[str(path)] = job_iface
+        _record_event(
+            "sent", "jobs.requestView", correlation=f"job:{path}",
+            event_id=str(path), payload={"desktop_entry": desktop_entry},
+        )
         return str(path), job_iface
     except dbus.DBusException as e:
         _log("JOB-ERROR", f"requestView: {e}")
@@ -523,9 +814,15 @@ def inhibit_dnd(bus, app, reason):
             "org.freedesktop.Notifications", "/org/freedesktop/Notifications"
         )
         iface = dbus.Interface(proxy, "org.freedesktop.Notifications")
-        cookie = iface.Inhibit(app, reason)
+        cookie = iface.Inhibit(app, reason, dbus.Dictionary({}, signature="sv"))
+        cookie = int(cookie)
+        _tracked_dnd_cookies.add(cookie)
+        _record_event(
+            "sent", "freedesktop.Inhibit", correlation=f"dnd:{cookie}",
+            event_id=cookie, payload={"app": app, "reason": reason},
+        )
         _log("DND", f"Inhibit({app!r}, {reason!r}) -> cookie={cookie}")
-        return int(cookie)
+        return cookie
     except dbus.DBusException as e:
         _log("DND-ERROR", f"Inhibit: {e}")
         return None
@@ -538,10 +835,16 @@ def uninhibit_dnd(bus, cookie):
         )
         iface = dbus.Interface(proxy, "org.freedesktop.Notifications")
         iface.UnInhibit(dbus.UInt32(cookie))
+        _tracked_dnd_cookies.discard(int(cookie))
+        _record_event(
+            "sent", "freedesktop.UnInhibit", correlation=f"dnd:{cookie}",
+            event_id=int(cookie),
+        )
         _log("DND", f"UnInhibit(cookie={cookie})")
+        return True
     except dbus.DBusException as e:
         _log("DND-ERROR", f"UnInhibit: {e}")
-
+        return False
 
 # ---------------------------------------------------------------------------
 # Inbox model
@@ -1051,7 +1354,7 @@ class PortalTab(QWidget):
         self._body = QLineEdit("Portal body text")
         layout.addWidget(self._body)
 
-        self._markup = QCheckBox("markup-body (HTML)")
+        self._markup = QCheckBox("Body contains markup (sent as markup-body)")
         layout.addWidget(self._markup)
 
         row = QHBoxLayout()
@@ -1605,17 +1908,28 @@ class JobsTab(QWidget):
 
     def _on_signal(self, name: str) -> None:
         _log("JOB-SIGNAL", f"{name} on {self._job_path}")
+        _record_event(
+            "observed", f"jobs.{name}", correlation=f"job:{self._job_path}",
+            event_id=self._job_path,
+        )
         self._signal_log.setText(f"Last signal: {name}")
 
-    def _call(self, method: str, *args) -> None:
+    def _call(self, method: str, *args) -> bool:
         if not self._job_iface:
             _log("JOB-ERROR", "No active job")
-            return
+            return False
         try:
             getattr(self._job_iface, method)(*args)
+            _record_event(
+                "sent", f"jobs.{method}", correlation=f"job:{self._job_path}",
+                event_id=self._job_path,
+                payload={"args": [str(a) for a in args]},
+            )
             _log("JOB", f"{method}({', '.join(str(a) for a in args)})")
+            return True
         except dbus.DBusException as e:
             _log("JOB-ERROR", f"{method}: {e}")
+            return False
 
     def _on_percent(self):
         self._call("setPercent", dbus.UInt32(self._percent.value()))
@@ -1643,11 +1957,14 @@ class JobsTab(QWidget):
         self._call("setSuspended", dbus.Boolean(self._suspended.isChecked()))
 
     def _on_terminate(self):
-        self._call("terminate", "User requested")
-        self._job_status.setText("Job terminated")
-        self._job_status.setStyleSheet("color: red;")
-        self._job_path = None
-        self._job_iface = None
+        job_path = self._job_path
+        if self._call("terminate", "User requested"):
+            if job_path:
+                _tracked_jobs.pop(str(job_path), None)
+            self._job_status.setText("Job terminated")
+            self._job_status.setStyleSheet("color: red;")
+            self._job_path = None
+            self._job_iface = None
 
 
 # ---------------------------------------------------------------------------
@@ -1909,6 +2226,11 @@ class DNDTab(QWidget):
             inhibited = props.Get("org.freedesktop.Notifications", "Inhibited")
             self._inhibited_label.setText(f"Inhibited = {bool(inhibited)}")
             _log("DND", f"Inhibited = {bool(inhibited)}")
+            _record_event(
+                "observed", "freedesktop.Notifications.Inhibited",
+                correlation="dnd:inhibited",
+                payload={"inhibited": bool(inhibited)},
+            )
         except dbus.DBusException as e:
             _log("DND-ERROR", f"Read Inhibited: {e}")
             self._inhibited_label.setText("Error")
@@ -1929,6 +2251,7 @@ class DNDTab(QWidget):
 class DebuggerWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("notificationDebuggerWindow")
         self.setWindowTitle("Krema Notification Debugger")
         self.resize(1024, 700)
 
@@ -1938,43 +2261,233 @@ class DebuggerWindow(QWidget):
         self._inbox_model = InboxModel()
         self._build_ui()
 
+    def reset_all(self) -> None:
+        if not self._bus:
+            _log("RESET", "Reset All skipped: D-Bus not connected")
+            for job_path, job_iface in list(_tracked_jobs.items()):
+                try:
+                    job_iface.terminate("Reset All")
+                    _record_event(
+                        "reset", "jobs.terminate",
+                        correlation=f"job:{job_path}",
+                        event_id=job_path, reason="completed",
+                    )
+                except dbus.DBusException as exc:
+                    _log("JOB-ERROR", f"Reset terminate: {exc}")
+                    _record_event(
+                        "reset", "jobs.terminate",
+                        correlation=f"job:{job_path}",
+                        event_id=job_path, reason=str(exc),
+                    )
+            _tracked_jobs.clear()
+            _tracked_dnd_cookies.clear()
+            _tracked_portal_ids.clear()
+            _tracked_unity_entries.clear()
+            self._jobs_tab._job_path = None
+            self._jobs_tab._job_iface = None
+            self._jobs_tab._job_status.setText("No active job")
+            self._jobs_tab._job_status.setStyleSheet("color:#888;")
+            self._dnd_tab._cookies.clear()
+            self._dnd_tab._refresh()
+            self._inbox_model.channels.clear()
+            self._inbox_tab._refresh()
+            _record_event("reset", "reset-all", reason="D-Bus not connected")
+            self.update_status()
+            return
+
+        _log("RESET", "Reset All: notifications")
+        notification_ids = list(_tracked_notif_ids)
+        for nid in notification_ids:
+            success = close_notification(self._bus, nid)
+            _record_event(
+                "reset", "reset.notifications",
+                correlation=f"notification:{nid}", event_id=nid,
+                reason="completed" if success else "unavailable",
+            )
+        if not notification_ids:
+            _record_event("reset", "reset.notifications", reason="none tracked")
+        _tracked_notif_ids.clear()
+
+        _log("RESET", "Reset All: portal notifications")
+        portal_ids = list(_tracked_portal_ids)
+        for notification_id in portal_ids:
+            success = remove_portal(self._bus, notification_id)
+            _record_event(
+                "reset", "reset.portal",
+                correlation=f"portal:{notification_id}",
+                event_id=notification_id,
+                reason="completed" if success else "unavailable",
+            )
+        if not portal_ids:
+            _record_event("reset", "reset.portal", reason="none tracked")
+        _tracked_portal_ids.clear()
+
+        _log("RESET", "Reset All: Unity zero state")
+        unity_entries = list(_tracked_unity_entries)
+        for desktop_entry in unity_entries:
+            success = send_unity_update(self._bus, desktop_entry, {
+                "count": dbus.Int64(0), "count-visible": dbus.Boolean(False),
+                "progress": dbus.Double(0.0), "progress-visible": dbus.Boolean(False),
+                "urgent": dbus.Boolean(False),
+            })
+            _record_event(
+                "reset", "reset.unity",
+                correlation=f"unity:{desktop_entry}", event_id=desktop_entry,
+                reason="completed" if success else "unavailable",
+            )
+        _tracked_unity_entries.clear()
+        if not unity_entries:
+            _record_event("reset", "reset.unity", reason="none tracked")
+
+        _log("RESET", "Reset All: SNI Active then unregister")
+        if self._sni:
+            self._sni.set_status("Active")
+            self._sni.unregister_with_watcher()
+            _record_event(
+                "reset", "reset.sni",
+                correlation=f"sni:{self._sni._service_name}",
+                event_id=str(self._sni._props["Id"]),
+                reason="completed",
+            )
+        else:
+            _record_event("reset", "reset.sni", reason="unavailable")
+
+        _log("RESET", "Reset All: terminate jobs")
+        tracked_jobs = list(_tracked_jobs.items())
+        for job_path, job_iface in tracked_jobs:
+            try:
+                job_iface.terminate("Reset All")
+                _record_event(
+                    "reset", "jobs.terminate",
+                    correlation=f"job:{job_path}",
+                    event_id=job_path, reason="completed",
+                )
+            except dbus.DBusException as exc:
+                _log("JOB-ERROR", f"Reset terminate: {exc}")
+                _record_event(
+                    "reset", "jobs.terminate",
+                    correlation=f"job:{job_path}",
+                    event_id=job_path, reason=str(exc),
+                )
+        if not tracked_jobs:
+            _record_event("reset", "jobs.terminate", reason="none active")
+        _tracked_jobs.clear()
+        self._jobs_tab._job_path = None
+        self._jobs_tab._job_iface = None
+        self._jobs_tab._job_status.setText("No active job")
+        self._jobs_tab._job_status.setStyleSheet("color:#888;")
+
+        _log("RESET", "Reset All: release DND cookies")
+        dnd_cookies = list(_tracked_dnd_cookies)
+        for cookie in dnd_cookies:
+            success = uninhibit_dnd(self._bus, cookie)
+            _record_event(
+                "reset", "reset.dnd",
+                correlation=f"dnd:{cookie}", event_id=cookie,
+                reason="completed" if success else "unavailable",
+            )
+        if not dnd_cookies:
+            _record_event("reset", "reset.dnd", reason="none tracked")
+        _tracked_dnd_cookies.clear()
+        self._dnd_tab._cookies.clear()
+        self._dnd_tab._refresh()
+
+        _log("RESET", "Reset All: clear inbox simulation")
+        self._inbox_model.channels.clear()
+        self._inbox_tab._refresh()
+        _record_event(
+            "reset", "reset.inbox", correlation="inbox:reset", reason="completed"
+        )
+        _record_event("reset", "reset-all", reason="completed")
+        self.update_status()
+
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
 
         self._target_bar = TargetBar()
+        self._target_bar.setObjectName("targetBar")
         root.addWidget(self._target_bar)
 
         main = QHBoxLayout()
 
         self._tabs = QTabWidget()
         self._notif_tab = NotificationsTab(self._target_bar)
+        self._notif_tab.setObjectName("notificationsTab")
         self._tabs.addTab(self._notif_tab, "Notifications")
         self._portal_tab = PortalTab(self._target_bar)
+        self._portal_tab.setObjectName("portalTab")
         self._tabs.addTab(self._portal_tab, "Portal")
         self._smart_tab = SmartLauncherTab(self._target_bar)
+        self._smart_tab.setObjectName("smartLauncherTab")
         self._tabs.addTab(self._smart_tab, "SmartLauncher")
         self._sni_tab = SNITab()
+        self._sni_tab.setObjectName("sniTab")
         self._tabs.addTab(self._sni_tab, "SNI")
         self._jobs_tab = JobsTab(self._target_bar)
+        self._jobs_tab.setObjectName("jobsTab")
         self._tabs.addTab(self._jobs_tab, "Jobs")
         self._inbox_tab = InboxTab(self._target_bar, self._inbox_model)
+        self._inbox_tab.setObjectName("inboxTab")
         self._tabs.addTab(self._inbox_tab, "Inbox")
         self._dnd_tab = DNDTab()
+        self._dnd_tab.setObjectName("dndTab")
         self._tabs.addTab(self._dnd_tab, "DND")
 
         main.addWidget(self._tabs, stretch=2)
 
+        event_views = QVBoxLayout()
+        event_views.addWidget(QLabel("Sent Events"))
+        self._sent_table = QTableWidget(0, 4)
+        self._sent_table.setObjectName("sentTable")
+        self._sent_table.setHorizontalHeaderLabels(
+            ["Operation", "Correlation", "ID", "Reason"]
+        )
+        self._sent_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        event_views.addWidget(self._sent_table)
+
+        event_views.addWidget(QLabel("Observed Events"))
+        self._observed_table = QTableWidget(0, 4)
+        self._observed_table.setObjectName("observedTable")
+        self._observed_table.setHorizontalHeaderLabels(
+            ["Operation", "Correlation", "ID", "Reason"]
+        )
+        self._observed_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        event_views.addWidget(self._observed_table)
+
         self._log_panel = LogPanel()
-        main.addWidget(self._log_panel, stretch=1)
+        event_views.addWidget(QLabel("Debug Log"))
+        event_views.addWidget(self._log_panel)
+        main.addLayout(event_views, stretch=1)
 
-        root.addLayout(main)
-
-        self._status = QLabel("Initializing...")
+        status_panel = QGroupBox("QA Status")
+        status_panel.setObjectName("scenarioState")
+        status_layout = QVBoxLayout(status_panel)
+        scenario = _recorder.scenario if _recorder else "manual"
+        status_panel.setTitle(f"QA Status — scenario: {scenario}")
+        self._status = QLabel(f"Scenario: {scenario} | State: Initializing...")
         self._status.setWordWrap(True)
         self._status.setStyleSheet(
             "padding:4px; background:#f5f5f5; border-radius:4px;"
         )
-        root.addWidget(self._status)
+        status_layout.addWidget(self._status)
+        self._event_counts = QLabel("Sent: 0 | Observed: 0 | Reset: 0")
+        status_layout.addWidget(self._event_counts)
+        self._limitation = QLabel(
+            "Limitations: Portal forwarding depends on the desktop portal; "
+            "Jobs are not consumed by Krema; Inbox is a simulation, not app read state."
+        )
+        self._limitation.setObjectName("limitationLabel")
+        self._limitation.setWordWrap(True)
+        status_layout.addWidget(self._limitation)
+        reset_btn = QPushButton("Reset All")
+        reset_btn.setObjectName("resetAllButton")
+        reset_btn.clicked.connect(self.reset_all)
+        status_layout.addWidget(reset_btn)
+        root.addWidget(status_panel)
 
     def append_log(self, line: str, tag: str) -> None:
         self._log_panel.append(line, tag)
@@ -1983,6 +2496,19 @@ class DebuggerWindow(QWidget):
             m = re.search(r"(?:service|sender)=(\S+)", line)
             if m:
                 self._sni_tab.add_external_event(m.group(1), tag)
+
+    def append_event(
+        self, direction: str, mechanism: str, correlation, event_id, reason, payload
+    ) -> None:
+        if direction not in ("sent", "observed"):
+            return
+        table = self._sent_table if direction == "sent" else self._observed_table
+        row = table.rowCount()
+        table.insertRow(row)
+        operation = payload.get("operation", mechanism) if isinstance(payload, dict) else mechanism
+        values = (str(operation), str(correlation or ""), str(event_id or ""), str(reason or ""))
+        for column, value in enumerate(values):
+            table.setItem(row, column, QTableWidgetItem(value))
 
     def update_status(self) -> None:
         parts = []
@@ -1999,7 +2525,14 @@ class DebuggerWindow(QWidget):
         inbox_unread = self._inbox_model.total_unread
         if inbox_unread > 0:
             parts.append(f"Inbox: {inbox_unread} unread")
-        self._status.setText("  |  ".join(parts))
+        scenario = _recorder.scenario if _recorder else "manual"
+        self._status.setText(f"Scenario: {scenario} | State: " + "  |  ".join(parts))
+        if _recorder:
+            counts = _recorder.counts
+            self._event_counts.setText(
+                f"Sent: {counts['sent']} | Observed: {counts['observed']} | "
+                f"Reset: {counts['reset']} | JSONL: {_recorder.path}"
+            )
 
     def set_bus(self, bus) -> None:
         self._bus = bus
@@ -2065,6 +2598,10 @@ def _setup_dbus(window: DebuggerWindow) -> None:
         )
         iface = dbus.Interface(proxy, "org.kde.NotificationManager")
         iface.RegisterWatcher()
+        _record_event(
+            "sent", "kde.NotificationManager.RegisterWatcher",
+            correlation="watcher:register",
+        )
         _log("INIT", "RegisterWatcher() succeeded")
     except dbus.DBusException as e:
         _log("INIT-ERROR", f"RegisterWatcher: {e}")
@@ -2095,14 +2632,31 @@ def _setup_dbus(window: DebuggerWindow) -> None:
         dbus_interface="org.kde.StatusNotifierItem",
         sender_keyword="sender",
     )
+    for signal_name in ("NewIcon", "NewOverlayIcon", "NewAttentionIcon", "NewToolTip"):
+        bus.add_signal_receiver(
+            lambda *args, _name=signal_name, **kwargs: _on_sni_signal(
+                _name, **kwargs
+            ),
+            signal_name=signal_name,
+            dbus_interface="org.kde.StatusNotifierItem",
+            sender_keyword="sender",
+        )
 
     # Portal ActionInvoked
     try:
-        bus.add_signal_receiver(
-            lambda app_id, nid, action, param: _log(
+        def on_portal_action(nid, action, param):
+            _log(
                 "PORTAL-ACTION",
-                f"ActionInvoked app={app_id} id={nid} action={action}",
-            ),
+                f"ActionInvoked id={nid} action={action}",
+            )
+            _record_event(
+                "observed", "portal.ActionInvoked",
+                correlation=f"portal:{nid}", event_id=str(nid),
+                payload={"action": str(action), "parameter": param},
+            )
+
+        bus.add_signal_receiver(
+            on_portal_action,
             signal_name="ActionInvoked",
             dbus_interface="org.freedesktop.portal.Notification",
         )
@@ -2116,14 +2670,36 @@ def _setup_dbus(window: DebuggerWindow) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--jsonl", default=None, metavar="PATH",
+        help="append machine-readable QA events to PATH",
+    )
+    parser.add_argument(
+        "--scenario", default="manual", metavar="ID",
+        help="scenario identifier written to JSONL records",
+    )
+    args = parser.parse_args()
+    global _recorder
+    if args.jsonl:
+        path = args.jsonl
+    else:
+        temp_file = tempfile.NamedTemporaryFile(
+            prefix="krema-notification-debugger-", suffix=".jsonl",
+            delete=False,
+        )
+        path = temp_file.name
+        temp_file.close()
+    _recorder = EventRecorder(path, args.scenario)
     DBusGMainLoop(set_as_default=True)
 
     app = QApplication(sys.argv)
     window = DebuggerWindow()
 
-    global _log_callback, _status_callback
+    global _log_callback, _status_callback, _event_table_callback
     _log_callback = window.append_log
     _status_callback = window.update_status
+    _event_table_callback = window.append_event
 
     window.show()
 

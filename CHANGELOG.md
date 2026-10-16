@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Preserved pinned app order when startup notifications gave way to windows
 

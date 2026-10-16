@@ -14,7 +14,7 @@ Background and bug histories: `docs/kde/lessons-learned.md`.
 
 ## Surface sizing
 - Surface height MUST include animation overflow (zoom, bounce, etc.).
-- Formula: `surfaceHeight = panelHeight + max(ceil(iconSize * (maxZoomFactor - 1.0)), tooltipReserve) + floatingPadding`.
+- Formula: `surfaceHeight = panelHeight + max(animationOverflow, tooltipReserve) + floatingPadding`, where `animationOverflow` includes the transformed icon cell and the largest launch/attention bounce.
 
 ## Input region / hit box
 - Always set the input region explicitly: an empty `QRegion` accepts ALL input, not none.

@@ -403,6 +403,11 @@ void NotificationTracker::NotificationClosed(uint id, uint reason)
 {
     auto it = m_notifIdToEntry.find(id);
     if (it == m_notifIdToEntry.end()) {
+        if (auto recordIt = m_notificationRecords.find(id); recordIt != m_notificationRecords.end()
+            && recordIt->closeReason == CloseReason::Directed) {
+            recordIt->broadcastReason = reason;
+            recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+        }
         return;
     }
 

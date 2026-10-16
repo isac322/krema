@@ -390,6 +390,49 @@ target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
 - **History retention**: The local lifecycle history keeps at most 100 inactive records;
   active records remain indexed for badge correctness.
 
+## Stage 2 notification model
+
+`NotificationTracker` is also the QML-facing notification model. It consumes
+the existing `RegisterWatcher` callback path; Krema does not create a second
+watcher and does not use the external-process `NotificationManager::Notifications`
+proxy.
+
+The model exposes these roles:
+
+| Role group | Roles |
+|---|---|
+| Metadata | `id`, `desktopEntry`, `appName`, `appIcon`, `summary`, `body`, `actions`, `hints`, `timeout`, `replacesId`, `urgency` |
+| Lifecycle | `active`, `read`, `dismissed`, `closeReason`, `broadcastReason`, `createdAt`, `updatedAt` |
+
+QML can query and update the model with:
+
+```qml
+NotificationTracker.notifications(desktopEntry = {}, activeOnly = false)
+NotificationTracker.markRead(id)
+NotificationTracker.markDismissed(id)
+NotificationTracker.invokeAction(id, action)
+```
+
+`invokeAction()` sends the official
+`org.kde.NotificationManager.InvokeAction` method with the notification ID
+and action key. `markRead()` and `markDismissed()` are local Krema state;
+they do not claim to move an app's server-side read cursor.
+
+Replacement removes the replaced ID from the active set while retaining its
+lifecycle record with `closeReason: "replaced"`. Directed
+`CloseNotification` and broadcast `NotificationClosed` remain distinguishable.
+Broadcast reasons are retained as both a named close state and the numeric
+`broadcastReason`.
+
+The QML presentation distinguishes summary, body, app, urgency, timeout,
+`Unread`, `Read`, `Dismissed`, and `Closed`. It provides payload action buttons,
+`Mark read`, and `Dismiss`, and displays:
+
+> Read and dismissed state is local to Krema; it is not synchronized with the app's server.
+
+Use `notifications(..., true)` for the active-only view. Use the default query
+to inspect retained closed or locally dismissed records.
+
 ---
 
 ## Known Limitations

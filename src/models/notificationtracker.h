@@ -3,15 +3,18 @@
 
 #pragma once
 
+#include <QAbstractListModel>
 #include <QDateTime>
 #include <QDBusMessage>
 #include <QDBusServiceWatcher>
-#include <QHash>
 #include <QMap>
+#include <QHash>
 #include <QObject>
 #include <QSet>
 #include <QStringList>
+#include <QVariantList>
 #include <QVariantMap>
+#include <QVector>
 
 #include <memory>
 
@@ -35,7 +38,7 @@ namespace krema
  * reactive dependency: QML bindings that read `revision` are re-evaluated
  * whenever notification state changes.
  */
-class NotificationTracker : public QObject
+class NotificationTracker : public QAbstractListModel
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.kde.NotificationWatcher")
@@ -44,11 +47,49 @@ class NotificationTracker : public QObject
     Q_PROPERTY(bool dndActive READ dndActive NOTIFY dndActiveChanged)
 
 public:
+    enum NotificationRole {
+        IdRole = Qt::UserRole + 1,
+        DesktopEntryRole,
+        AppNameRole,
+        AppIconRole,
+        SummaryRole,
+        BodyRole,
+        ActionsRole,
+        HintsRole,
+        TimeoutRole,
+        ReplacesIdRole,
+        UrgencyRole,
+        ActiveRole,
+        ReadRole,
+        DismissedRole,
+        CloseReasonRole,
+        BroadcastReasonRole,
+        CreatedAtRole,
+        UpdatedAtRole,
+    };
+    Q_ENUM(NotificationRole)
+
     explicit NotificationTracker(QObject *parent = nullptr);
     ~NotificationTracker() override;
 
+    [[nodiscard]] int rowCount(const QModelIndex &parent = {}) const override;
+    [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
+
     [[nodiscard]] int revision() const;
     [[nodiscard]] bool dndActive() const;
+
+    /// Return a snapshot of retained notifications, optionally filtered by app and active state.
+    [[nodiscard]] Q_INVOKABLE QVariantList notifications(const QString &desktopEntry = {}, bool activeOnly = false) const;
+
+    /// Mark a notification read locally; this does not update the originating application.
+    [[nodiscard]] Q_INVOKABLE bool markRead(uint id);
+
+    /// Mark a notification dismissed locally; this does not close it at the server.
+    [[nodiscard]] Q_INVOKABLE bool markDismissed(uint id);
+
+    /// Invoke an action through KDE's notification manager.
+    [[nodiscard]] Q_INVOKABLE bool invokeAction(uint id, const QString &action);
 
     /// Return the number of unread notifications for the given desktop entry (e.g. "slack").
     [[nodiscard]] Q_INVOKABLE int unreadCount(const QString &desktopEntry) const;
@@ -83,19 +124,21 @@ public Q_SLOTS:
     Q_SCRIPTABLE void NotificationClosed(uint id, uint reason);
 
 private Q_SLOTS:
-    // SNI D-Bus signal handlers
+    // SNI signal handlers
     void onSniRegistered(const QString &item);
     void onSniUnregistered(const QString &item);
     void onSniNewStatus(const QString &status, const QDBusMessage &message);
     void onSniServiceUnregistered(const QString &service);
 
 private:
+    struct NotificationRecord;
     void setupNotificationWatcher();
     void setupSniWatcher();
     void bumpRevision();
     void pruneInactiveNotificationRecords();
     void markNotificationInactive(uint id);
     void removeInactiveNotification(uint id);
+    void resetNotificationModel();
     void updateDndState();
 
     void queryRegisteredSniItems();
@@ -133,7 +176,11 @@ private:
         QDateTime updatedAt;
         CloseReason closeReason = CloseReason::Active;
         uint broadcastReason = 0;
+        bool read = false;
+        bool dismissed = false;
     };
+
+    QVector<uint> m_modelIds;
 
     // Active notification ID -> canonical desktop entry (for reverse lookup).
     QHash<uint, QString> m_notifIdToEntry;

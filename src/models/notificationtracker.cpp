@@ -5,6 +5,10 @@
 
 #include <settings.h>
 
+#include <algorithm>
+
+#include <KService>
+
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -20,8 +24,6 @@ namespace krema
 {
 
 // Strip ".desktop" suffix if present.
-// TasksModel's AppId includes ".desktop" (e.g. "org.kde.konsole.desktop"),
-// while notification desktop-entry hints do not (e.g. "org.kde.konsole").
 static QString stripDesktopSuffix(const QString &id)
 {
     static const QLatin1String suffix(".desktop");
@@ -31,25 +33,28 @@ static QString stripDesktopSuffix(const QString &id)
     return id;
 }
 
-// Extract the last dot-separated segment of a desktop entry ID.
-// e.g. "org.kde.konsole" → "konsole", "konsole" → "konsole"
-static QString lastSegment(const QString &id)
+// Canonicalize the identity used by notification storage, queries, and
+// blacklist checks. KService resolves aliases to the installed storage ID;
+// unresolved hints/app names deliberately fall back to their lower-case,
+// suffix-stripped value rather than using fuzzy last-segment matching.
+static QString canonicalDesktopId(const QString &rawId)
 {
-    const int dot = id.lastIndexOf(QLatin1Char('.'));
-    return (dot >= 0) ? id.mid(dot + 1) : id;
-}
-
-// Check if two desktop entry IDs match, considering reverse-domain naming.
-// Strips ".desktop" suffix before comparison.
-// e.g. "konsole" matches "org.kde.konsole" and "org.kde.konsole.desktop"
-static bool desktopEntryMatches(const QString &a, const QString &b)
-{
-    const QString na = stripDesktopSuffix(a);
-    const QString nb = stripDesktopSuffix(b);
-    if (na == nb) {
-        return true;
+    QString id = stripDesktopSuffix(rawId.trimmed().toLower());
+    if (id.isEmpty()) {
+        return {};
     }
-    return lastSegment(na) == lastSegment(nb);
+
+    KService::Ptr service = KService::serviceByStorageId(id);
+    if (!service) {
+        service = KService::serviceByStorageId(id + QStringLiteral(".desktop"));
+    }
+    if (!service) {
+        service = KService::serviceByDesktopName(id);
+    }
+    if (service) {
+        id = stripDesktopSuffix(service->storageId().toLower());
+    }
+    return id;
 }
 
 NotificationTracker::NotificationTracker(QObject *parent)
@@ -126,32 +131,30 @@ int NotificationTracker::unreadCount(const QString &desktopEntry) const
         return 0;
     }
 
-    if (m_notifSettings && m_notifSettings->badgeBlacklistedApplications().contains(desktopEntry, Qt::CaseInsensitive)) {
-        qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0 (blacklisted)";
+    const QString normalized = canonicalDesktopId(desktopEntry);
+    if (normalized.isEmpty()) {
         return 0;
     }
 
-    const QString normalized = stripDesktopSuffix(desktopEntry.toLower());
-
-    // Exact match (after stripping .desktop suffix from both sides)
-    auto it = m_unreadNotifs.find(normalized);
-    if (it != m_unreadNotifs.end()) {
-        qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") =" << it->size() << "(exact match, normalized=" << normalized << ")";
-        return it->size();
-    }
-
-    // Suffix match: "org.kde.konsole" ↔ "konsole"
-    for (auto it2 = m_unreadNotifs.cbegin(); it2 != m_unreadNotifs.cend(); ++it2) {
-        if (desktopEntryMatches(it2.key(), normalized)) {
-            qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") =" << it2->size() << "(suffix match: stored=" << it2.key() << " query=" << normalized
-                            << ")";
-            return it2->size();
+    if (m_notifSettings) {
+        const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
+        const bool blacklisted = std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized](const QString &entry) {
+            return canonicalDesktopId(entry) == normalized;
+        });
+        if (blacklisted) {
+            qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0 (blacklisted)";
+            return 0;
         }
     }
 
-    // No match — only log when there are notifications to match against
+    const auto it = m_unreadNotifs.constFind(normalized);
+    if (it != m_unreadNotifs.cend()) {
+        qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") =" << it->size() << "(canonical=" << normalized << ")";
+        return it->size();
+    }
+
     if (!m_unreadNotifs.isEmpty()) {
-        qCDebug(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0, no match. stored keys:" << m_unreadNotifs.keys();
+        qCDebug(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0, no exact match. stored keys:" << m_unreadNotifs.keys();
     }
     return 0;
 }
@@ -162,9 +165,9 @@ bool NotificationTracker::sniNeedsAttention(const QString &appId) const
         return false;
     }
 
-    const QString normalized = stripDesktopSuffix(appId.toLower());
+    const QString normalized = canonicalDesktopId(appId);
     for (const auto &entry : m_sniItems) {
-        if (desktopEntryMatches(entry.id.toLower(), normalized) && entry.status == QLatin1String("NeedsAttention")) {
+        if (canonicalDesktopId(entry.id) == normalized && entry.status == QLatin1String("NeedsAttention")) {
             qCInfo(lcNotif) << "  sniNeedsAttention(" << appId << ") = true (sniId=" << entry.id << ")";
             return true;
         }
@@ -178,16 +181,19 @@ void NotificationTracker::clearUnreadNotifications(const QString &appId)
         return;
     }
 
-    const QString normalized = stripDesktopSuffix(appId.toLower());
+    const QString normalized = canonicalDesktopId(appId);
     bool changed = false;
 
-    // Find and remove all notification entries matching this app
+    // Find and remove all notification entries matching this canonical app.
     for (auto it = m_unreadNotifs.begin(); it != m_unreadNotifs.end();) {
-        if (desktopEntryMatches(it.key(), normalized)) {
+        if (it.key() == normalized) {
             qCInfo(lcNotif) << "clearUnreadNotifications: clearing" << it->size() << "notifications for" << it.key() << "(triggered by SNI" << appId << ")";
-            // Remove reverse-lookup entries
             for (uint notifId : *it) {
                 m_notifIdToEntry.remove(notifId);
+                if (auto recordIt = m_notificationRecords.find(notifId); recordIt != m_notificationRecords.end()) {
+                    recordIt->closeReason = CloseReason::Cleared;
+                    recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+                }
             }
             it = m_unreadNotifs.erase(it);
             changed = true;
@@ -198,6 +204,7 @@ void NotificationTracker::clearUnreadNotifications(const QString &appId)
 
     if (changed) {
         qCInfo(lcNotif) << "clearUnreadNotifications: cleared for" << appId;
+        bumpRevision();
     }
 }
 
@@ -291,28 +298,57 @@ void NotificationTracker::setupNotificationWatcher()
 void NotificationTracker::Notify(uint id,
                                  const QString &appName,
                                  uint replacesId,
-                                 const QString & /*appIcon*/,
+                                 const QString &appIcon,
                                  const QString &summary,
-                                 const QString & /*body*/,
-                                 const QStringList & /*actions*/,
+                                 const QString &body,
+                                 const QStringList &actions,
                                  const QVariantMap &hints,
-                                 int /*expireTimeout*/)
+                                 int expireTimeout)
 {
-    // Extract desktop entry from hints (primary) or fall back to appName,
-    // then normalize to full storageId via KService (e.g. "konsole" → "org.kde.konsole")
     QString rawEntry = hints.value(QStringLiteral("desktop-entry")).toString();
     if (rawEntry.isEmpty()) {
         rawEntry = appName;
     }
-    const QString desktopEntry = rawEntry.toLower();
+    const QString desktopEntry = canonicalDesktopId(rawEntry);
+    if (desktopEntry.isEmpty()) {
+        return;
+    }
+
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    NotificationRecord record;
+    record.serverId = id;
+    record.desktopEntry = desktopEntry;
+    record.appName = appName;
+    record.appIcon = appIcon;
+    record.summary = summary;
+    record.body = body;
+    record.actions = actions;
+    record.hints = hints;
+    record.timeout = expireTimeout;
+    record.replacesId = replacesId;
+    record.urgency = static_cast<quint8>(qMin(hints.value(QStringLiteral("urgency")).toUInt(), 255u));
+    record.createdAt = now;
+    record.updatedAt = now;
 
     qCInfo(lcNotif) << ">>> Notify: id=" << id << "appName=" << appName << "desktop-entry hint=" << hints.value(QStringLiteral("desktop-entry")).toString()
                     << "resolved=" << desktopEntry << "replacesId=" << replacesId << "summary=" << summary;
 
-    // If replacing, remove old entry first
+    // A reused server ID is no longer active before its new payload is stored.
+    if (auto current = m_notifIdToEntry.find(id); current != m_notifIdToEntry.end()) {
+        const QString oldEntry = current.value();
+        if (auto setIt = m_unreadNotifs.find(oldEntry); setIt != m_unreadNotifs.end()) {
+            setIt->remove(id);
+            if (setIt->isEmpty()) {
+                m_unreadNotifs.erase(setIt);
+            }
+        }
+        m_notifIdToEntry.erase(current);
+    }
+
+    // If replacing, remove the old active ID while retaining its lifecycle.
     if (replacesId > 0) {
         if (auto it = m_notifIdToEntry.find(replacesId); it != m_notifIdToEntry.end()) {
-            const QString &oldEntry = it.value();
+            const QString oldEntry = it.value();
             if (auto setIt = m_unreadNotifs.find(oldEntry); setIt != m_unreadNotifs.end()) {
                 setIt->remove(replacesId);
                 if (setIt->isEmpty()) {
@@ -320,10 +356,15 @@ void NotificationTracker::Notify(uint id,
                 }
             }
             m_notifIdToEntry.erase(it);
+            if (auto oldRecord = m_notificationRecords.find(replacesId); oldRecord != m_notificationRecords.end()) {
+                oldRecord->closeReason = CloseReason::Replaced;
+                oldRecord->updatedAt = now;
+            }
             qCInfo(lcNotif) << "    replaced old notif id=" << replacesId << "entry=" << oldEntry;
         }
     }
 
+    m_notificationRecords.insert(id, record);
     m_notifIdToEntry[id] = desktopEntry;
     m_unreadNotifs[desktopEntry].insert(id);
 
@@ -348,20 +389,25 @@ void NotificationTracker::CloseNotification(uint id)
             m_unreadNotifs.erase(setIt);
         }
     }
+    if (auto recordIt = m_notificationRecords.find(id); recordIt != m_notificationRecords.end()) {
+        recordIt->closeReason = CloseReason::Directed;
+        recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+        recordIt->broadcastReason = 0;
+    }
 
     bumpRevision();
-
-    qCInfo(lcNotif) << "<<< CloseNotification: id=" << id << "entry=" << entry;
+    qCInfo(lcNotif) << "<<< CloseNotification (directed): id=" << id << "entry=" << entry;
 }
 
-void NotificationTracker::NotificationClosed(uint id, uint /*reason*/)
+void NotificationTracker::NotificationClosed(uint id, uint reason)
 {
     auto it = m_notifIdToEntry.find(id);
     if (it == m_notifIdToEntry.end()) {
         return;
     }
 
-    const QString &entry = it.value();
+    const QString entry = it.value();
+    m_notifIdToEntry.erase(it);
 
     if (auto setIt = m_unreadNotifs.find(entry); setIt != m_unreadNotifs.end()) {
         setIt->remove(id);
@@ -369,11 +415,27 @@ void NotificationTracker::NotificationClosed(uint id, uint /*reason*/)
             m_unreadNotifs.erase(setIt);
         }
     }
+    if (auto recordIt = m_notificationRecords.find(id); recordIt != m_notificationRecords.end()) {
+        switch (reason) {
+        case 1:
+            recordIt->closeReason = CloseReason::BroadcastExpired;
+            break;
+        case 2:
+            recordIt->closeReason = CloseReason::BroadcastDismissed;
+            break;
+        case 3:
+            recordIt->closeReason = CloseReason::BroadcastClosedByCall;
+            break;
+        default:
+            recordIt->closeReason = CloseReason::BroadcastUndefined;
+            break;
+        }
+        recordIt->broadcastReason = reason;
+        recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+    }
 
-    m_notifIdToEntry.erase(it);
     bumpRevision();
-
-    qCInfo(lcNotif) << "<<< NotificationClosed (broadcast): id=" << id << "entry=" << entry;
+    qCInfo(lcNotif) << "<<< NotificationClosed (broadcast): id=" << id << "reason=" << reason << "entry=" << entry;
 }
 
 // --- SNI watcher ---

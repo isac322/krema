@@ -3,11 +3,14 @@
 
 #pragma once
 
+#include <QDateTime>
 #include <QDBusMessage>
 #include <QDBusServiceWatcher>
 #include <QHash>
 #include <QObject>
 #include <QSet>
+#include <QStringList>
+#include <QVariantMap>
 
 #include <memory>
 
@@ -97,11 +100,42 @@ private:
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
 
-    // Per-app unread notification tracking
-    // notificationId -> desktopEntry (for reverse lookup on close)
+    enum class CloseReason : quint8 {
+        Active,
+        Replaced,
+        Directed,
+        Cleared,
+        BroadcastExpired,
+        BroadcastDismissed,
+        BroadcastClosedByCall,
+        BroadcastUndefined,
+    };
+
+    // Retain the full watcher payload and lifecycle for each server ID. Closed
+    // records remain available internally until the server reuses their ID.
+    struct NotificationRecord {
+        uint serverId = 0;
+        QString desktopEntry;
+        QString appName;
+        QString appIcon;
+        QString summary;
+        QString body;
+        QStringList actions;
+        QVariantMap hints;
+        int timeout = 0;
+        uint replacesId = 0;
+        quint8 urgency = 0;
+        QDateTime createdAt;
+        QDateTime updatedAt;
+        CloseReason closeReason = CloseReason::Active;
+        uint broadcastReason = 0;
+    };
+
+    // Active notification ID -> canonical desktop entry (for reverse lookup).
     QHash<uint, QString> m_notifIdToEntry;
-    // desktopEntry -> set of active notification IDs
+    // Canonical desktop entry -> set of active notification IDs.
     QHash<QString, QSet<uint>> m_unreadNotifs;
+    QHash<uint, NotificationRecord> m_notificationRecords;
 
     // SNI tracking: "busName/objectPath" -> {id, status}
     struct SniEntry {

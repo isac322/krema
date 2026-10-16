@@ -41,7 +41,7 @@ QtObject {
     }
     function markDismissed(id) {
         _record("markDismissed", arguments)
-        _replaceNotification(id, { dismissed: true, active: false, closeReason: "dismissed" })
+        _replaceNotification(id, { dismissed: true })
     }
     function invokeAction(id, action) {
         _record("invokeAction", arguments)

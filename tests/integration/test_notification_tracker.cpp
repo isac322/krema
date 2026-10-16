@@ -344,14 +344,17 @@ TEST_CASE("Notification model exposes replacement metadata and preserves payload
            3000,
            1);
 
-    REQUIRE(tracker.rowCount() == 1);
-    CHECK(roleValue(&tracker, 0, "id").toUInt() == 502);
-    CHECK(roleValue(&tracker, 0, "replacesId").toUInt() == 501);
-    CHECK(roleValue(&tracker, 0, "summary").toString() == QStringLiteral("Replacement summary"));
-    CHECK(roleValue(&tracker, 0, "body").toString() == QStringLiteral("Replacement body"));
-    CHECK(roleValue(&tracker, 0, "actions").toStringList() == QStringList{QStringLiteral("reply"), QStringLiteral("Reply")});
-    CHECK(roleValue(&tracker, 0, "timeout").toInt() == 3000);
-    CHECK(roleValue(&tracker, 0, "urgency").toInt() == 1);
+    REQUIRE(tracker.rowCount() == 2);
+    CHECK(roleValue(&tracker, 0, "id").toUInt() == 501);
+    CHECK_FALSE(roleValue(&tracker, 0, "active").toBool());
+    CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("replaced"));
+    CHECK(roleValue(&tracker, 1, "id").toUInt() == 502);
+    CHECK(roleValue(&tracker, 1, "replacesId").toUInt() == 501);
+    CHECK(roleValue(&tracker, 1, "summary").toString() == QStringLiteral("Replacement summary"));
+    CHECK(roleValue(&tracker, 1, "body").toString() == QStringLiteral("Replacement body"));
+    CHECK(roleValue(&tracker, 1, "actions").toStringList() == QStringList{QStringLiteral("reply"), QStringLiteral("Reply")});
+    CHECK(roleValue(&tracker, 1, "timeout").toInt() == 3000);
+    CHECK(roleValue(&tracker, 1, "urgency").toInt() == 1);
 }
 
 TEST_CASE("Notification model tracks local read and dismiss state", "[notification][model]")

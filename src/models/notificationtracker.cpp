@@ -364,9 +364,7 @@ void NotificationTracker::resetNotificationModel()
     QVector<uint> ids;
     ids.reserve(m_notificationRecords.size());
     for (auto it = m_notificationRecords.cbegin(); it != m_notificationRecords.cend(); ++it) {
-        if (it->closeReason != CloseReason::Replaced) {
-            ids.append(it.key());
-        }
+        ids.append(it.key());
     }
     std::sort(ids.begin(), ids.end());
     beginResetModel();

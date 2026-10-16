@@ -94,20 +94,33 @@ Item {
             verify(textObject(inbox, "notificationInboxSyncNotice").text.indexOf("not synchronized") >= 0)
         }
 
+        function test_dismissButtonKeepsNotificationActive() {
+            NotificationTracker.setNotifications([sample()])
+            let inbox = makeInbox()
+            let button = T.findFirst(inbox, o => o.objectName === "dismissNotificationButton")
+            verify(button)
+            button.clicked()
+            tryCompare(textObject(inbox, "notificationState"), "text", "Dismissed")
+            compare(NotificationTracker.callsTo("markDismissed").length, 1)
+            compare(NotificationTracker.callsTo("markDismissed")[0].args[0], 101)
+            verify(card(inbox).opacity < 1)
+            verify(!T.findFirst(inbox, o => o.objectName === "notificationCloseReason").visible)
+        }
+
         function test_dismissedAndClosedStatesAreDistinct() {
             NotificationTracker.setNotifications([
-                sample({ dismissed: true, active: false, closeReason: "dismissed" }),
-                sample({ id: 102, dismissed: false, active: false, closeReason: "expired" }),
+                sample({ dismissed: true, active: true, closeReason: "active" }),
+                sample({ id: 102, dismissed: false, active: false, closeReason: "broadcast-expired" }),
             ])
             let inbox = makeInbox()
             tryVerify(() => !!card(inbox))
             compare(textObject(inbox, "notificationState").text, "Dismissed")
-            compare(textObject(inbox, "notificationCloseReason").text, "Closed: dismissed")
+            verify(!textObject(inbox, "notificationCloseReason").visible)
             let closedCard = T.findFirst(inbox, o => o.objectName === "notificationCard-102")
             verify(closedCard)
             compare(T.findFirst(closedCard, o => o.objectName === "notificationState").text, "Closed")
             compare(T.findFirst(closedCard, o => o.objectName === "notificationCloseReason").text,
-                    "Closed: expired")
+                    "Closed: broadcast-expired")
             verify(card(inbox).opacity < 1)
         }
 

@@ -91,7 +91,7 @@ run_app() {
 }
 
 recorder_pid=
-app_pid=
+recorder_status=0
 cleanup() {
     if [ -n "$app_pid" ] && kill -0 "$app_pid" 2>/dev/null; then
         kill "$app_pid" 2>/dev/null || true
@@ -126,9 +126,15 @@ if [ -n "$recorder_pid" ]; then
     kill -INT "$recorder_pid" 2>/dev/null || true
     sleep 1
     kill "$recorder_pid" 2>/dev/null || true
-    wait "$recorder_pid" 2>/dev/null || true
+    set +e
+    wait "$recorder_pid" 2>/dev/null
+    recorder_status=$?
+    set -e
     recorder_pid=
 fi
 
 trap - INT TERM EXIT
+if [ "$status" -eq 0 ] && [ "$recorder_status" -ne 0 ]; then
+    exit "$recorder_status"
+fi
 exit "$status"

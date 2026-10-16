@@ -131,7 +131,7 @@ def main() -> int:
                 "vfr",
                 "-an",
                 "-c:v",
-                "libx264",
+                "libopenh264",
                 "-pix_fmt",
                 "yuv420p",
                 "-movflags",

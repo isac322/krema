@@ -118,3 +118,26 @@ TEST_CASE("Visual Trash row never maps to a task source row", "[trash][mapping]"
     CHECK(model.trashIndex() == 0);
     CHECK(model.taskIndex(model.trashIndex()) == -1);
 }
+
+TEST_CASE("Trash updates publish display and decoration roles", "[trash][model]")
+{
+    Q_UNUSED(guiApplication());
+
+    krema::TrashManager manager;
+    krema::DockItemsModel model(nullptr, &manager);
+    int changeCount = 0;
+    QModelIndex changedIndex;
+    QList<int> changedRoles;
+    QObject::connect(&model, &QAbstractItemModel::dataChanged, [&](const QModelIndex &topLeft, const QModelIndex &, const QList<int> &roles) {
+        ++changeCount;
+        changedIndex = topLeft;
+        changedRoles = roles;
+    });
+
+    manager.iconNameChanged();
+
+    REQUIRE(changeCount == 1);
+    CHECK(changedIndex.row() == model.trashIndex());
+    CHECK(changedRoles.contains(Qt::DisplayRole));
+    CHECK(changedRoles.contains(Qt::DecorationRole));
+}

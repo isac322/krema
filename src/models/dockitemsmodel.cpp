@@ -265,7 +265,9 @@ void DockItemsModel::emitTrashDataChanged()
     if (row < 0) {
         return;
     }
-    Q_EMIT dataChanged(index(row), index(row), m_roleNames.keys());
+    QList<int> roles = m_roleNames.keys();
+    roles << Qt::DisplayRole << Qt::DecorationRole;
+    Q_EMIT dataChanged(index(row), index(row), roles);
 }
 
 bool DockItemsModel::isPinnedSourceRow(int sourceRow) const

@@ -81,7 +81,7 @@ Item {
 
     function rebuildChildModel() {
         let parentIdx = PreviewController.parentIndex
-        if (parentIdx < 0) {
+        if (parentIdx < 0 || DockModel.isTrash(parentIdx)) {
             // Keep delegates alive so PipeWire streams pause/resume naturally
             // via visibility cascade. Destroying delegates triggers
             // ScreencastingRequest race conditions on reopen.
@@ -90,13 +90,16 @@ Item {
         }
 
         // Get ALL window IDs from the parent task (like Plasma does).
-        let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
+        let parentModelIdx = DockModel.taskModelIndex(parentIdx)
+        if (!parentModelIdx.valid) {
+            parentWinIds = []
+            return
+        }
         let allWinIds = DockModel.tasksModel.data(
             parentModelIdx, TaskManager.AbstractTasksModel.WinIdList) || []
         parentWinIds = allWinIds
 
         let childCount = DockModel.childCount(parentIdx)
-
         // === Single window (not grouped): parent row IS the window ===
         // KDE TasksModel tree: single window → rowCount(idx) = 0 (no children)
         // Group (2+ windows) → rowCount(idx) = N (N children)
@@ -137,7 +140,8 @@ Item {
             // Incremental update: set() preserves existing delegates (and their
             // PipeWire streams), append() adds new ones, remove() trims excess.
             for (let i = 0; i < maxCount; i++) {
-                let childModelIndex = DockModel.tasksModel.makeModelIndex(parentIdx, i)
+                let childModelIndex = DockModel.tasksModel.makeModelIndex(
+                    DockModel.taskIndex(parentIdx), i)
                 let entry = {
                     title: DockModel.tasksModel.data(childModelIndex, Qt.DisplayRole) || "",
                     isMinimized: DockModel.tasksModel.data(
@@ -179,7 +183,8 @@ Item {
             root.rebuildChildModel()
         }
         function onVisibleChanged() {
-            if (PreviewController.visible && PreviewController.parentIndex >= 0) {
+            if (PreviewController.visible && PreviewController.parentIndex >= 0
+                    && !DockModel.isTrash(PreviewController.parentIndex)) {
                 let count = childWindowModel.count
                 root.announcePreviewOpen(PreviewController.appName, count)
             }
@@ -205,10 +210,10 @@ Item {
             if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 // Child removed: check if parent still valid
                 let parentIdx = PreviewController.parentIndex
-                let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
-                if (!parentModelIdx.valid) {
-                    if (PreviewController.previewKeyboardActive)
-                        PreviewController.endPreviewKeyboardNav()
+let parentModelIdx = DockModel.taskModelIndex(parentIdx)
+if (!parentModelIdx || !parentModelIdx.valid) {
+    if (PreviewController.previewKeyboardActive)
+        PreviewController.endPreviewKeyboardNav()
                     PreviewController.hidePreview()
                 } else {
                     root.rebuildChildModel()
@@ -221,10 +226,10 @@ Item {
     // The visible popup container
     Rectangle {
         id: popup
-        visible: PreviewController.visible
-            && PreviewController.parentIndex >= 0
-            && root.hasWindowContent
-
+visible: PreviewController.visible
+    && PreviewController.parentIndex >= 0
+    && root.hasWindowContent
+    && !DockModel.isTrash(PreviewController.parentIndex)
         Accessible.role: Accessible.PopupMenu
         Accessible.name: PreviewController.appName
             ? i18n("Preview for %1", PreviewController.appName)
@@ -282,6 +287,7 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: Kirigami.Units.smallSpacing
                 visible: PreviewController.visible && PreviewController.parentIndex >= 0
+                    && !DockModel.isTrash(PreviewController.parentIndex)
 
                 Repeater {
                     id: thumbnailRepeater

@@ -188,6 +188,40 @@ TEST_CASE("TaskIconProvider refreshes normalization after raw replacement", "[ta
     REQUIRE(replacementBounds == alphaBounds(freshReplacement));
 }
 
+TEST_CASE("TaskIconProvider preserves padded shaped artwork", "[taskiconprovider][normalization]")
+{
+    Q_UNUSED(guiApplication());
+
+    const QString key = QStringLiteral("raw:test-padded-shaped-8e41");
+    const QColor artwork(65, 150, 220);
+    QImage image(256, 256, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(artwork);
+        painter.drawEllipse(QRect(21, 21, 214, 214));
+    }
+    krema::TaskIconProvider::registerRawIcon(key, QIcon(QPixmap::fromImage(image)));
+
+    krema::TaskIconProvider rawProvider(false);
+    const QPixmap raw = rawProvider.requestPixmap(key, nullptr, QSize(32, 32));
+    const QRect rawBounds = alphaBounds(raw);
+
+    krema::TaskIconProvider normalizedProvider(true);
+    const QPixmap normalized = normalizedProvider.requestPixmap(key, nullptr, QSize(32, 32));
+    const QRect normalizedBounds = alphaBounds(normalized);
+
+    requireColorAtCenter(normalized, artwork);
+    REQUIRE(rawBounds.width() >= 24);
+    REQUIRE(normalizedBounds.width() <= rawBounds.width() + 1);
+    REQUIRE(normalizedBounds.height() <= rawBounds.height() + 1);
+    REQUIRE(normalizedBounds.width() < 30);
+    REQUIRE(normalizedBounds.height() < 30);
+}
+
+
 TEST_CASE("TaskIconProvider preserves healthy named theme lookup", "[taskiconprovider][theme]")
 {
     Q_UNUSED(guiApplication());

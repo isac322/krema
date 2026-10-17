@@ -143,8 +143,8 @@ void collectDelegates(QQuickItem *item, QList<QQuickItem *> &out)
     }
 }
 
-// Dock icon delegates in dock order (along the primary axis).
-QList<QQuickItem *> delegates(krema::DockView *view)
+// Dock item delegates in dock order (along the primary axis).
+QList<QQuickItem *> allDelegates(krema::DockView *view)
 {
     QList<QQuickItem *> items;
     if (view->rootObject()) {
@@ -153,6 +153,21 @@ QList<QQuickItem *> delegates(krema::DockView *view)
     std::sort(items.begin(), items.end(), [](QQuickItem *a, QQuickItem *b) {
         return a->property("itemCenterX").toReal() < b->property("itemCenterX").toReal();
     });
+    return items;
+}
+
+bool isTrashDelegate(QQuickItem *item)
+{
+    const QVariant visualIndex = item->property("index");
+    return visualIndex.isValid() && app().model->isTrash(visualIndex.toInt());
+}
+
+// Task delegates in dock order. The model's visual index identifies Trash
+// without relying on its translated accessible name.
+QList<QQuickItem *> taskDelegates(krema::DockView *view)
+{
+    auto items = allDelegates(view);
+    items.erase(std::remove_if(items.begin(), items.end(), isTrashDelegate), items.end());
     return items;
 }
 
@@ -227,7 +242,7 @@ void runEdge(Edge edge)
     unchanged.start();
     REQUIRE(QTest::qWaitFor(
         [&] {
-            const auto items = delegates(view);
+            const auto items = taskDelegates(view);
             QList<QRectF> now;
             for (auto *item : items) {
                 now.append(baseRect(item));
@@ -249,17 +264,19 @@ void runEdge(Edge edge)
 
     for (int i : {0, kLauncherCount / 2, kLauncherCount - 1}) {
         INFO("icon " << i);
-        auto items = delegates(view);
+        auto items = taskDelegates(view);
         REQUIRE(items.size() == kLauncherCount);
         QQuickItem *icon = items.at(i);
+        const int visualIndex = icon->property("index").toInt();
+        REQUIRE(!isTrashDelegate(icon));
         REQUIRE(icon->property("displayName").toString() == launcherName(i));
         const QRectF r = baseRect(icon);
 
-        // hoveredIndex once it equals i, or its value after a short wait.
+        // hoveredIndex and DockActions use the delegate's visual model index.
         auto hoveredAfterWait = [&] {
             QTest::qWaitFor(
                 [&] {
-                    return root->property("hoveredIndex").toInt() == i;
+                    return root->property("hoveredIndex").toInt() == visualIndex;
                 },
                 2000);
             return root->property("hoveredIndex").toInt();
@@ -269,7 +286,7 @@ void runEdge(Edge edge)
         QTest::mouseMove(view, r.center().toPoint());
         const int centerHovered = hoveredAfterWait();
         qInfo("HIT edge=%s icon=%d where=center at=(%d,%d) hovered=%d", edgeName(edge), i, r.center().toPoint().x(), r.center().toPoint().y(), centerHovered);
-        CHECK(centerHovered == i);
+        CHECK(centerHovered == visualIndex);
 
         // Let the zoom grow, then hover the zoomed part of the icon.
         CHECK(QTest::qWaitFor(
@@ -287,7 +304,7 @@ void runEdge(Edge edge)
               ext.y(),
               icon->property("currentScale").toReal(),
               extHovered);
-        CHECK(extHovered == i);
+        CHECK(extHovered == visualIndex);
 
         // Clicking there activates exactly this launcher.
         launching.clear();
@@ -299,7 +316,7 @@ void runEdge(Edge edge)
             2000);
         const int activated = launching.isEmpty() ? -1 : launching.first().first().toInt();
         qInfo("HIT edge=%s icon=%d where=click at=(%d,%d) activated=%d", edgeName(edge), i, ext.x(), ext.y(), activated);
-        CHECK(activated == i);
+        CHECK(activated == visualIndex);
 
         // Along the dock an icon is claimed only up to half its scaled
         // along-dock extent, widened by 25% hysteresis for the hovered one
@@ -308,18 +325,20 @@ void runEdge(Edge edge)
         // On vertical docks that extent is item.height, not item.width.
         const bool vertical = (edge == Edge::Left || edge == Edge::Right);
         const qreal depthPos = vertical ? r.center().x() : r.center().y();
-        QQuickItem *next = i + 1 < items.size() ? items.at(i + 1) : nullptr;
+        const auto allItems = allDelegates(view);
+        const int dockPosition = allItems.indexOf(icon);
+        QQuickItem *next = dockPosition >= 0 && dockPosition + 1 < allItems.size() ? allItems.at(dockPosition + 1) : nullptr;
         const qreal extent = vertical ? icon->height() : icon->width();
         const qreal scale = icon->property("currentScale").toReal();
         const qreal centerPos = vertical ? r.center().y() : r.center().x();
         const qreal alongPos = centerPos + extent * scale / 2.0 * 1.25 + 1.0;
         const QPoint along =
             vertical ? QPoint(static_cast<int>(depthPos), static_cast<int>(alongPos)) : QPoint(static_cast<int>(alongPos), static_cast<int>(depthPos));
-        const int neighborIndex = next ? i + 1 : -1;
+        const int neighborIndex = next ? next->property("index").toInt() : -1;
         QTest::mouseMove(view, along);
         QTest::qWaitFor(
             [&] {
-                return root->property("hoveredIndex").toInt() != i;
+                return root->property("hoveredIndex").toInt() != visualIndex;
             },
             2000);
         const int alongHovered = root->property("hoveredIndex").toInt();

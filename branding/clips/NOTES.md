@@ -24,9 +24,9 @@ machine without a GPU; it cannot show window previews.
 | `keyboard` | Meta+Alt+D focuses the dock, the arrow keys move the focus, and Escape leaves. |
 | `autohide` | Auto-hide: the dock slides in at the bottom edge, zooms under the pointer, and slides out after the pointer leaves. |
 | `previews` | Hover over the running Konsole: the preview popup opens with a live PipeWire thumbnail of the window (`top` refreshing). The pointer moves onto the thumbnail and leaves. |
-| `groups` | Three Konsole windows with slowly updating output. The popup shows three live thumbnails; a click on the middle one brings that window to the front, and after the popup opens again a click on the third brings it back on top, restoring the starting stack. |
+| `groups` | Three Konsole windows with slowly updating output. The popup shows three live thumbnails; a click on the middle one brings its window to the front, and after the popup opens again a click on the third brings that one back on top, restoring the starting stack. |
 | `progress` | Dolphin (pinned, not running) reports a transfer over the Unity LauncherEntry API: a count badge (3, 2, 1) and a progress bar filling to 100 %, both cleared at the end. |
-
+| `trash` | A disposable file is dragged from Dolphin onto Trash. The icon changes to full; its native menu opens, `Empty Trash` is selected, the native confirmation is accepted, and the icon returns to empty. The pointer finishes away from the dock for a clean loop. |
 Sizes and durations are printed by `encode.sh`. Clips are 2560×1280 (2×
 density of a 1280×640 logical crop), 60 fps constant frame rate resampled
 from the variable-rate capture, no audio, at most 1.8 MB per file. The

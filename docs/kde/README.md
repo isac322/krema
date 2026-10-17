@@ -78,6 +78,12 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 |----------|-------------|
 | [settings-window-patterns.md](settings-window-patterns.md) | KDE settings window patterns — KConfigDialog, KQuickConfigModule, ConfigurationView+ConfigurationModule, StatefulWindow; Krema's custom sidebar window and its per-open lifecycle |
 
+### Dock Items
+
+| Document | Description |
+|----------|-------------|
+| [trash.md](trash.md) | KIO Trash — KCoreDirLister `trash:/` watching, EmptyTrashJob, OpenUrlJob, drop-to-trash, KNotificationJobUiDelegate |
+
 ### Reference
 
 | Document | Description |

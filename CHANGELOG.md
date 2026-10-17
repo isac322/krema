@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges could use the system accent color or a custom color with automatic text contrast (#103)
 - Added a persistent attention-only dot to dock badges for live SNI, Unity urgent, and task-manager attention states with no numeric count; Badge display: Off hides numeric badges while keeping the live attention marker visible.
 - Added a "Reveal trigger" setting (Settings → Behavior, Auto hide and Dodge windows) for a hidden dock that rests past an always-visible Plasma panel on the same edge. With Screen edge, the default, pushing the pointer against the screen edge revealed the dock even over the panel, and the panel still got every click there. With Dock position, the dock was revealed only from the panel's inner edge. Without KWin scripting, panel-relative placement is unavailable and both reveal choices used the dock surface's screen-edge strip (#90)
+- Added a Trash item to the dock that opens the Trash, asks for confirmation before emptying it, moves files dropped onto it to the Trash, and can be placed anywhere in the dock. Its icon shows the system's empty or full Trash icon, with a fallback when the theme lacks one
 
 ### Changed
 

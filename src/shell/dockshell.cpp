@@ -15,6 +15,7 @@
 #include "settingswindow.h"
 
 #include <QQuickItem>
+#include <QUrl>
 #include <QtQml>
 
 namespace krema
@@ -39,7 +40,32 @@ DockShell::DockShell(KremaSettings *globalSettings,
 {
 }
 
-DockShell::~DockShell() = default;
+DockShell::~DockShell()
+{
+    // Unload the dock component while all context objects and the long-lived
+    // model are still valid. This prevents late model signals from reaching
+    // QQmlDelegateModel instances during QQuickView teardown.
+    if (m_view) {
+        m_view->setSource(QUrl());
+    }
+
+    // PreviewController owns a QQuickView that shares the dock's QML engine,
+    // so destroy it while the shared context properties are still valid.
+    m_previewController.reset();
+
+    if (m_view) {
+        auto *context = m_view->engine()->rootContext();
+        context->setContextProperty(QStringLiteral("DockView"), nullptr);
+        context->setContextProperty(QStringLiteral("DockActions"), nullptr);
+        context->setContextProperty(QStringLiteral("DockContextMenu"), nullptr);
+        context->setContextProperty(QStringLiteral("PreviewController"), nullptr);
+        context->setContextProperty(QStringLiteral("DockVisibility"), nullptr);
+    }
+
+    m_contextMenu.reset();
+    m_actions.reset();
+    m_view.reset();
+}
 
 void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode visibilityMode)
 {

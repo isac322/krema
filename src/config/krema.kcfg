@@ -364,6 +364,12 @@
       <default>applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:org.kde.kate.desktop,applications:systemsettings.desktop</default>
     </entry>
 
+    <entry name="TrashSlot" type="Int">
+      <label>Trash item position after the pinned launcher set</label>
+      <default>-1</default>
+    </entry>
+
+
     <entry name="SeparateLaunchers" type="Bool">
       <label>Separate pinned and running applications</label>
       <default>false</default>

@@ -28,6 +28,7 @@
 #include "shell/multidockmanager.h"
 #include "shell/previewcontroller.h"
 
+#include <QTest>
 #include <KAboutData>
 #include <LayerShellQt/Window>
 #include <catch2/catch_session.hpp>
@@ -43,6 +44,8 @@
 #endif
 
 #include <QApplication>
+#include <QDir>
+#include <QFile>
 #include <QProcess>
 #include <QQuickItem>
 #include <QQuickStyle>
@@ -50,7 +53,7 @@
 #include <QScreen>
 #include <QSet>
 #include <QStandardPaths>
-#include <QTest>
+#include <QUrl>
 #include <QtQml>
 
 #include <atomic>
@@ -279,6 +282,24 @@ void countingHandler(QtMsgType type, const QMessageLogContext &ctx, const QStrin
 }
 #endif // KREMA_TEST_HAS_MONITOR
 
+void pinPreviewLauncher()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/applications");
+    REQUIRE(QDir().mkpath(dir));
+
+    const QString path = dir + QStringLiteral("/krema-primary-output-preview.desktop");
+    QFile desktop(path);
+    REQUIRE(desktop.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    desktop.write(
+        QByteArrayLiteral("[Desktop Entry]\nType=Application\nName=Krema Preview Test\nExec=true\nStartupNotify=false\nIcon=utilities-terminal\n"));
+    desktop.close();
+
+    QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+    const QString url = QUrl::fromLocalFile(path).toString();
+    app().settings->setPinnedLaunchers({url});
+    app().model->setPinnedLaunchers({url});
+}
+
 std::unique_ptr<MultiDockManager> makeManager()
 {
     auto &a = app();
@@ -431,6 +452,7 @@ TEST_CASE("Preview popup centers on its icon on an output not at the desktop ori
     using Edge = krema::DockPlatform::Edge;
     REQUIRE(QGuiApplication::screens().size() == 2);
     app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
+    pinPreviewLauncher();
 
     QScreen *originScreen = nullptr;
     QScreen *otherScreen = nullptr;
@@ -479,7 +501,15 @@ TEST_CASE("Preview popup centers on its icon on an output not at the desktop ori
 
         auto *preview = shell->previewController();
         REQUIRE(preview);
-
+        int previewIndex = -1;
+        REQUIRE(QTest::qWaitFor(
+            [&] {
+                previewIndex = app().model->visualIndex(0);
+                return previewIndex >= 0 && app().model->taskModelIndex(previewIndex).isValid();
+            },
+            kTimeoutMs));
+        // showPreview() consumes the visual dock row, not the source task row.
+        // Trash occupies a visual row, so resolve the pinned task through DockModel.
         // Icon at dock-local 500 along the dock axis, 48 px long; popup
         // content 300x200.
         constexpr qreal iconLocal = 500;
@@ -489,7 +519,7 @@ TEST_CASE("Preview popup centers on its icon on an output not at the desktop ori
         preview->setContentSize(contentWidth, contentHeight);
         // Same call main.qml makes: item.mapToGlobal(0, 0) on the icon.
         const QPointF iconGlobal = view->contentItem()->mapToGlobal(vertical ? QPointF(0, iconLocal) : QPointF(iconLocal, 0));
-        preview->showPreview(0, vertical ? iconGlobal.y() : iconGlobal.x(), iconExtent);
+        preview->showPreview(previewIndex, vertical ? iconGlobal.y() : iconGlobal.x(), iconExtent);
 
         INFO("output " << target->name().toStdString() << " at " << target->geometry().x() << "," << target->geometry().y() << ", edge "
                        << static_cast<int>(edge));

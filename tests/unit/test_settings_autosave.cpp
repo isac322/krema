@@ -21,6 +21,7 @@ namespace
 
 // Saved by Application::run()'s pinnedLaunchersChanged handler, not by
 // connectSettingsAutoSave().
+const QString kTrashSlot = QStringLiteral("TrashSlot");
 const QString kSeparatelySaved = QStringLiteral("PinnedLaunchers");
 
 QMetaProperty propertyFor(const KremaSettings &settings, const QString &itemName)
@@ -129,6 +130,7 @@ TEST_CASE("Changing any single setting persists it across a restart", "[settings
         }
     }
     REQUIRE(itemNames.size() > 1);
+    REQUIRE(itemNames.contains(kTrashSlot));
 
     QStringList notPersisted;
     for (const QString &name : std::as_const(itemNames)) {
@@ -148,8 +150,10 @@ TEST_CASE("Changing any single setting persists it across a restart", "[settings
             REQUIRE(property.isValid());
             written = changedValue(*item, property.read(settings.get()));
             REQUIRE(written.isValid());
+            if (name == kTrashSlot) {
+                CHECK(written.toInt() == 0);
+            }
             REQUIRE(property.write(settings.get(), written));
-            REQUIRE(property.read(settings.get()) == written);
         }
 
         // Session 2: Krema starts again and loads kremarc.

@@ -24,8 +24,15 @@ suse_repos() {
         zypper --non-interactive addrepo --refresh \
             https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update
     fi
-    if zypper --non-interactive repos | grep -qw repo-openh264; then
-        zypper --non-interactive modifyrepo --disable openSUSE:repo-openh264 || true
+    openh264_alias=$(
+        zypper --non-interactive repos |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*(repo-openh264|openSUSE:repo-openh264)[[:space:]]*\|' |
+            sed -n 's/^[^|]*|[[:space:]]*\([^|]*\)[[:space:]]*|.*/\1/p' |
+            sed -n '1p' |
+            sed 's/[[:space:]]*$//'
+    )
+    if [ -n "$openh264_alias" ]; then
+        zypper --non-interactive modifyrepo --disable "$openh264_alias" || true
     fi
     suse_refresh "$@"
 }

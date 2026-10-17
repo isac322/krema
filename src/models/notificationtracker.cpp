@@ -22,6 +22,10 @@ Q_LOGGING_CATEGORY(lcNotif, "krema.notifications")
 
 namespace krema
 {
+namespace
+{
+constexpr qsizetype kMaxInactiveNotificationRecords = 100;
+}
 
 // Strip ".desktop" suffix if present.
 static QString stripDesktopSuffix(const QString &id)
@@ -214,8 +218,9 @@ void NotificationTracker::dumpState() const
 
     // Notification watcher data
     const bool badgesEnabled = m_notifSettings ? m_notifSettings->badgesInTaskManager() : true;
-    qCInfo(lcNotif).noquote() << QStringLiteral("[Notification Watcher] (tracked IDs: %1, badgesEnabled: %2)")
+    qCInfo(lcNotif).noquote() << QStringLiteral("[Notification Watcher] (tracked IDs: %1, retained records: %2, badgesEnabled: %3)")
                                      .arg(m_notifIdToEntry.size())
+                                     .arg(m_notificationRecords.size())
                                      .arg(badgesEnabled ? QStringLiteral("true") : QStringLiteral("false"));
 
     for (auto it = m_unreadNotifs.cbegin(); it != m_unreadNotifs.cend(); ++it) {
@@ -478,10 +483,37 @@ void NotificationTracker::setupSniWatcher()
     queryRegisteredSniItems();
 }
 
+void NotificationTracker::pruneInactiveNotificationRecords()
+{
+    qsizetype inactiveCount = 0;
+    for (auto it = m_notificationRecords.cbegin(); it != m_notificationRecords.cend(); ++it) {
+        if (!m_notifIdToEntry.contains(it.key())) {
+            ++inactiveCount;
+        }
+    }
+    while (inactiveCount > kMaxInactiveNotificationRecords) {
+        auto oldest = m_notificationRecords.end();
+        for (auto it = m_notificationRecords.begin(); it != m_notificationRecords.end(); ++it) {
+            if (m_notifIdToEntry.contains(it.key())) {
+                continue;
+            }
+            if (oldest == m_notificationRecords.end() || it->updatedAt < oldest->updatedAt
+                || (it->updatedAt == oldest->updatedAt && it.key() < oldest.key())) {
+                oldest = it;
+            }
+        }
+        if (oldest == m_notificationRecords.end()) {
+            break;
+        }
+        m_notificationRecords.erase(oldest);
+        --inactiveCount;
+    }
+}
+
 void NotificationTracker::bumpRevision()
 {
     ++m_revision;
-
+    pruneInactiveNotificationRecords();
     // Build state summary for debugging
     QStringList summary;
     for (auto it = m_unreadNotifs.cbegin(); it != m_unreadNotifs.cend(); ++it) {

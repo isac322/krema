@@ -387,6 +387,8 @@ target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
 
 - **Respect user settings**: Always check `NotificationManager::Settings::badgesInTaskManager()`
   and `badgeBlacklistedApplications()` before showing any notification-derived badge.
+- **History retention**: The local lifecycle history keeps at most 100 inactive records;
+  active records remain indexed for badge correctness.
 
 ---
 

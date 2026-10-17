@@ -12,6 +12,7 @@
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 
 #include <KConfigGroup>
 #include <KSharedConfig>
@@ -22,11 +23,21 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <QVariantMap>
+#include <QStringList>
 
 namespace
 {
 
 constexpr int kTimeoutMs = 5000;
+
+QStringList *g_messageCapture = nullptr;
+
+void captureMessage(QtMsgType, const QMessageLogContext &, const QString &message)
+{
+    if (g_messageCapture) {
+        g_messageCapture->append(message);
+    }
+}
 
 class ScopedTracker
 {
@@ -110,6 +121,29 @@ TEST_CASE("Notification tracker canonicalizes identities and keeps replacements 
     CHECK(tracker.unreadCount(QStringLiteral("com.other.mail")) == 0);
     CHECK(tracker.revision() == initialRevision + 5);
     CHECK(revisions.count() == 5);
+}
+
+TEST_CASE("Notification tracker bounds inactive record retention", "[notification][tracker][retention]")
+{
+    QStringList messages;
+    g_messageCapture = &messages;
+    const auto previousHandler = qInstallMessageHandler(captureMessage);
+    const auto restoreHandler = qScopeGuard([previousHandler] {
+        g_messageCapture = nullptr;
+        qInstallMessageHandler(previousHandler);
+    });
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    for (uint id = 9000; id < 9101; ++id) {
+        notify(tracker, id, QStringLiteral("History"), QStringLiteral("org.example.history"));
+        tracker.NotificationClosed(id, 1);
+    }
+
+    tracker.dumpState();
+    CHECK(std::any_of(messages.cbegin(), messages.cend(), [](const QString &message) {
+        return message.contains(QStringLiteral("retained records: 100"));
+    }));
 }
 
 TEST_CASE("Notification tracker falls back to app name when no desktop hint exists", "[notification][tracker]")

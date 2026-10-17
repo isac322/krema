@@ -92,6 +92,7 @@ private:
     void setupNotificationWatcher();
     void setupSniWatcher();
     void bumpRevision();
+    void pruneInactiveNotificationRecords();
     void updateDndState();
 
     void queryRegisteredSniItems();

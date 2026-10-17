@@ -27,6 +27,10 @@ QtObject {
                                            minEdge, maxEdge)
     }
 
+    function surfaceHeight(iconSize, padding, maxZoomFactor, tooltipReserve, floatingPadding) {
+        return ZoomLayoutEngine.surfaceHeight(iconSize, padding, maxZoomFactor, tooltipReserve, floatingPadding)
+    }
+
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["edge", "backgroundStyleType", "backgroundColor", "floatingPadding", "iconCacheVersion", "pointerInside"]
     property var _defaults: ({})

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Notification badges now react immediately when notifications are cleared locally, use canonical case-insensitive desktop identities without fuzzy last-segment matching, and retain watcher metadata and close reasons while distinguishing directed closes from broadcast reasons
 

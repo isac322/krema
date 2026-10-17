@@ -85,6 +85,8 @@ public:
     /// measured from the screen edge, so it includes the panel inset.
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;
+    /// Outward visual extent needed by zoomed and bouncing icons.
+    [[nodiscard]] int animationOverflowHeight() const;
 
     /// Depth of the space other always-visible panels reserve on the dock's
     /// edge while the gap is measured from panels; 0 otherwise.
@@ -152,9 +154,6 @@ Q_SIGNALS:
     void pointerInsideChanged();
 
 private:
-    /// Extra height above the panel needed for zoomed icons.
-    [[nodiscard]] int zoomOverflowHeight() const;
-
     void handleScreenChanged(QScreen *newScreen);
     void handleScreenGeometryChanged();
     /// Whether the gap is currently measured from panels (setting on and KWin scripting available).

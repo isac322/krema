@@ -523,9 +523,9 @@ void PreviewController::applyEdgeLayout()
     const auto *visibility = m_dockView->visibilityController();
     const bool dockReservesPanelBar =
         visibility && visibility->mode() == static_cast<int>(DockPlatform::VisibilityMode::AlwaysVisible) && m_settings->reserveScreenSpace();
-    const int zoomOverflow = static_cast<int>(std::ceil(m_settings->iconSize() * (m_settings->maxZoomFactor() - 1.0)));
+    const int animationOverflow = m_dockView->animationOverflowHeight();
     const int otherPanels = m_dockView->reservedPanelInset();
-    const int dockMargin = (dockReservesPanelBar ? 0 : m_dockView->panelBarHeight() - otherPanels) + zoomOverflow + 4;
+    const int dockMargin = (dockReservesPanelBar ? 0 : m_dockView->panelBarHeight() - otherPanels) + animationOverflow + 4;
 
     const QRect screenGeo = m_dockView->screen() ? m_dockView->screen()->geometry() : QRect(0, 0, 1920, 1080);
 

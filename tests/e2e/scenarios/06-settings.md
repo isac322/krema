@@ -1,7 +1,7 @@
 # Settings UI
 
 ## Features
-- settings-window: Sidebar of 8 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
+- settings-window: Sidebar of 9 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Notifications, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
 - settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a live desktop preview (real wallpaper, miniature dock with real theme icons) and measurement guides
 - settings-layout: Screen edge picker on the live desktop preview, floating, floating margin, gap reference (screen edge or panels), corner radius
 - settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
@@ -12,6 +12,7 @@
 - settings-reserve-screen-space: Independent Always Visible reservation switch applies to maximized windows live and persists
 - settings-separate-launchers: Optional pinned/running sections apply live and persist without duplicating running pinned apps
 - settings-preview: Preview enable/disable, thumbnail size
+- settings-notifications: Local notification inbox showing metadata, read/dismissed state, close lifecycle, and payload actions
 - settings-persist: Settings saved to KConfig and restored on restart
 - settings-live-preview: Changes apply in real-time without restart
 - settings-tint-color: Custom tint color selection through a color swatch button
@@ -35,6 +36,8 @@
 - src/qml/settings/BehaviorPage.qml
 - src/qml/settings/PreviewPage.qml
 - src/qml/SettingsDialog.qml
+- src/qml/NotificationInbox.qml
+- src/qml/settings/NotificationsPage.qml
 - src/qml/main.qml
 - src/qml/ZoomAnimationProfile.qml
 - src/app/application.cpp
@@ -79,7 +82,7 @@ and task-section rows check their real controls and consumer effects.
 2. Choose "Settings..."
 3. Wait 1500ms (settings window creation)
 4. Check the window list — krema window count increased
-5. Check the AT-SPI tree: frame "Settings", "Search settings" field, list "Settings pages" whose items are, in order, "Icons", "Layout & Position", "Panel Style", "Shadow", "Animations & Badges", "Behavior", "Monitors & Desktops", "Window Preview", "About Krema", "About KDE"; "Icons" is checked. The Icons page shows the "Icon size" slider and the "Zoom animation" card: the "Preset" tab is selected and the "Natural" preset card is checked
+5. Check the AT-SPI tree: frame "Settings", "Search settings" field, list "Settings pages" whose items are, in order, "Icons", "Layout & Position", "Panel Style", "Shadow", "Animations & Badges", "Notifications", "Behavior", "Monitors & Desktops", "Window Preview", "About Krema", "About KDE"; "Icons" is checked. The Icons page shows the "Icon size" slider and the "Zoom animation" card: the "Preset" tab is selected and the "Natural" preset card is checked
 6. Screenshot — verify settings dialog
 7. Right-click the dock again → "Settings..." while the dialog is open
 8. Check the window list — there is still exactly one settings window (it is raised, not duplicated). Run this on the oldest supported kirigami-addons (1.7.0, Debian 13 / Ubuntu 25.04) as well
@@ -89,7 +92,7 @@ and task-section rows check their real controls and consumer effects.
 
 **Expected:**
 - Settings dialog opens as separate window ("Settings" title, localized)
-- Left sidebar: search field, then Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, and an "About" section with About Krema and About KDE
+- Left sidebar: search field, then Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Notifications, Behavior, Monitors & Desktops, Window Preview, and an "About" section with About Krema and About KDE
 - Icons page shown by default
 - FormCard layout with sliders, card pickers, switches, spin boxes and combo boxes
 - All controls accessible via AT-SPI (labels, sliders with Increase/Decrease, cards as radio buttons)
@@ -98,7 +101,7 @@ and task-section rows check their real controls and consumer effects.
 - Escape closes the window; the next open creates a fresh window
 
 **Verification:** window list (window count +1), AT-SPI (sidebar list, FormCard widgets), screenshot
-**Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown checks the 10 sidebar entries in order, the Icons default, page switching (to Animations & Badges, which shows 7 "Attention animation" and 3 "Badge display" radio cards), and the single window (English session: title "Settings"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope). A fresh window after close is checked by `test_set005_changed_settings_persist_across_restart` and `test_set008_monitor_mode_all_monitors_from_open_settings` (closed with Alt+F4). The search (step 10) and Escape (step 11) remain manual checks.
+**Automated:** tests/appium/test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown checks the 11 sidebar entries in order, including Notifications, the Icons default, page switching (to Animations & Badges, which shows 7 "Attention animation" and 3 "Badge display" radio cards), and the single window (English session: title "Settings"; the harness image is Fedora 43 with kirigami-addons ≥ 1.8, so the kirigami-addons 1.7.0 / Debian 13 / Ubuntu 25.04 run is out of this harness's scope). A fresh window after close is checked by `test_set005_changed_settings_persist_across_restart` and `test_set008_monitor_mode_all_monitors_from_open_settings` (closed with Alt+F4). The search (step 10) and Escape (step 11) remain manual checks.
 
 ---
 

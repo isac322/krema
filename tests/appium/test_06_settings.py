@@ -76,6 +76,7 @@ PAGES = [
     "Panel Style",
     "Shadow",
     "Animations & Badges",
+    "Notifications",
     "Behavior",
     "Monitors & Desktops",
     "Window Preview",

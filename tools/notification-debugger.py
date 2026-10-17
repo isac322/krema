@@ -349,6 +349,7 @@ class StatusNotifierItemService(dbus.service.Object):
 
     def __init__(self, bus: dbus.Bus) -> None:
         self._bus = bus
+        self._unique_name = str(bus.get_unique_name())
         self._props = {
             "Id": "krema-notification-debugger",
             "Status": "Active",
@@ -2372,7 +2373,7 @@ class DebuggerWindow(QWidget):
             sni_success = self._sni.unregister_with_watcher()
             reset_failed |= not sni_success
             if sni_success:
-                _sni_attention_apps.clear()
+                _sni_attention_apps.discard(self._sni._unique_name)
             _record_event(
                 "reset", "reset.sni",
                 correlation=f"sni:{self._sni._service_name}",

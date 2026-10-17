@@ -143,8 +143,6 @@ QVariant NotificationTracker::data(const QModelIndex &index, int role) const
             return QStringLiteral("replaced");
         case CloseReason::Directed:
             return QStringLiteral("directed");
-        case CloseReason::Cleared:
-            return QStringLiteral("cleared");
         case CloseReason::BroadcastExpired:
             return QStringLiteral("broadcast-expired");
         case CloseReason::BroadcastDismissed:
@@ -306,9 +304,6 @@ QVariantMap NotificationTracker::notificationMap(const NotificationRecord &recor
     case CloseReason::Directed:
         closeReason = QStringLiteral("directed");
         break;
-    case CloseReason::Cleared:
-        closeReason = QStringLiteral("cleared");
-        break;
     case CloseReason::BroadcastExpired:
         closeReason = QStringLiteral("broadcast-expired");
         break;
@@ -464,12 +459,9 @@ void NotificationTracker::clearUnreadNotifications(const QString &appId)
         if (it.key() == normalized) {
             qCInfo(lcNotif) << "clearUnreadNotifications: clearing" << it->size() << "notifications for" << it.key() << "(triggered by SNI" << appId << ")";
             for (uint notifId : *it) {
-                m_notifIdToEntry.remove(notifId);
                 if (auto recordIt = m_notificationRecords.find(notifId); recordIt != m_notificationRecords.end()) {
                     recordIt->read = true;
-                    recordIt->closeReason = CloseReason::Cleared;
                     recordIt->updatedAt = QDateTime::currentDateTimeUtc();
-                    markNotificationInactive(notifId);
                 }
             }
             it = m_unreadNotifs.erase(it);

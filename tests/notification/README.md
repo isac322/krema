@@ -244,9 +244,9 @@ NotificationTracker.invokeAction(id, action)
 
 `invokeAction()` sends the official KDE
 `org.kde.NotificationManager.InvokeAction` method with the notification ID and
-action key. `markRead()` and `markDismissed()` update Krema's local
-desktop-notification state only. They do not write a Slack, Telegram, Discord,
-email, or other application-server read cursor.
+action key. `markRead()`, `markDismissed()`, and `clearUnreadNotifications()`
+update Krema's local desktop-notification state only. They do not write a Slack,
+Telegram, Discord, email, or other application-server read cursor.
 
 The QML presentation uses these labels and distinctions:
 
@@ -256,12 +256,12 @@ The QML presentation uses these labels and distinctions:
 - payload action buttons, plus `Mark read` and `Dismiss`; and
 - `Read and dismissed state is local to Krema; it is not synchronized with the app's server.`
 
-`markDismissed(id)` does not close the server notification. A dismissed row
-remains active until a directed `CloseNotification` or a broadcast
-`NotificationClosed` is observed. The Stage 2 catalog uses
-`krema-notification-model` for model-only scenarios; those assertions are
-made in the Krema QML surface or `tst_notification_inbox`, not as fabricated
-wire events.
+`markRead(id)`, `markDismissed(id)`, and `clearUnreadNotifications(appId)` do not
+close the server notification. A locally read or dismissed row remains active
+until a directed `CloseNotification` or a broadcast `NotificationClosed` is
+observed. The Stage 2 catalog uses `krema-notification-model` for model-only
+scenarios; those assertions are made in the Krema QML surface or
+`tst_notification_inbox`, not as fabricated wire events.
 
 ## Stage 2 QA procedure
 

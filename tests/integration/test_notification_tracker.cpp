@@ -304,6 +304,31 @@ TEST_CASE("Clearing notifications emits one revision only when state changes", "
     CHECK(revisions.count() == signalsBeforeClear + 1);
 }
 
+TEST_CASE("Clearing notifications keeps server-active records active", "[notification][model][tracker]")
+{
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+
+    notify(tracker, 410, QStringLiteral("Clear App"), QStringLiteral("org.example.clear"));
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.clear")) == 1);
+    REQUIRE(tracker.notifications(QStringLiteral("org.example.clear"), true).size() == 1);
+
+    tracker.clearUnreadNotifications(QStringLiteral("org.example.clear"));
+
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.clear")) == 0);
+    const auto activeRows = tracker.notifications(QStringLiteral("org.example.clear"), true);
+    REQUIRE(activeRows.size() == 1);
+    CHECK(activeRows.constFirst().toMap().value(QStringLiteral("active")).toBool());
+    CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("active"));
+
+    tracker.NotificationClosed(410, 2);
+
+    CHECK(tracker.notifications(QStringLiteral("org.example.clear"), true).isEmpty());
+    CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("broadcast-dismissed"));
+}
+
+
+
 TEST_CASE("Notification model exposes replacement metadata and preserves payload fields", "[notification][model]")
 {
     ScopedTracker scoped;

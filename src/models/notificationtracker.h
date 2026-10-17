@@ -96,8 +96,8 @@ public:
 
     /// Return true if the SNI item matching @p appId has NeedsAttention status.
     [[nodiscard]] Q_INVOKABLE bool sniNeedsAttention(const QString &appId) const;
-
-    /// Clear all unread notifications for the given app (e.g. when user reads them).
+    /// Clear the local unread contribution for the given app without closing
+    /// its server notification.
     Q_INVOKABLE void clearUnreadNotifications(const QString &appId);
 
     /// Dump all tracked state to the console (debug tool).
@@ -151,7 +151,6 @@ private:
         Active,
         Replaced,
         Directed,
-        Cleared,
         BroadcastExpired,
         BroadcastDismissed,
         BroadcastClosedByCall,

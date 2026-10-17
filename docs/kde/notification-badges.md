@@ -78,9 +78,9 @@ matches a different desktop entry.
 
 Each active server notification ID contributes one count under its canonical identity. A
 replacement removes the replaced ID before storing the new ID, so it keeps one count. Any
-directed or broadcast close removes the ID from the active count. Clearing an app removes all
-of its tracked IDs and emits `revisionChanged()` exactly when at least one ID was removed, so
-QML updates immediately.
+directed or broadcast close removes the ID from the active count. Clearing an app removes
+its IDs from the local unread set and marks the records read, but does not close or remove
+the server-active IDs; `revisionChanged()` is emitted when the local unread state changes.
 
 ---
 
@@ -115,8 +115,9 @@ This is how apps identify themselves to the notification server.
 - **Electron apps**: Typically send `app_name` but may omit `desktop-entry` hint
 
 **Badge count derivation**: `NotificationTracker` counts active notification IDs per canonical
-desktop identity from `Notify()` until a directed or broadcast close (or
-`clearUnreadNotifications()` when the app is activated or cleared from its context menu).
+desktop identity from `Notify()` until a directed or broadcast close. Calling
+`clearUnreadNotifications()` removes those IDs from the local unread count without closing
+the server notifications, so the lifecycle model can continue to report them as active.
 
 This is NOT the same as the app-reported badge count from Unity API, but it's the best
 approximation available for all apps. When the `desktop-entry` hint is missing or cannot be

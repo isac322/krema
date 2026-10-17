@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Notification badges now react immediately when notifications are cleared locally, use canonical case-insensitive desktop identities without fuzzy last-segment matching, and retain watcher metadata and close reasons while distinguishing directed closes from broadcast reasons
+- Local notification clearing now removes only the dock's unread contribution while keeping the server-active lifecycle until KDE reports a close.
 
 ## [0.12.0] - 2026-10-12
 

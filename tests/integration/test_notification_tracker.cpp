@@ -357,6 +357,36 @@ TEST_CASE("Notification model exposes replacement metadata and preserves payload
     CHECK(roleValue(&tracker, 1, "urgency").toInt() == 1);
 }
 
+TEST_CASE("Notification model bounds inactive history without evicting active records", "[notification][model][retention]")
+{
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+
+    notify(tracker, 10000, QStringLiteral("History"), QStringLiteral("org.example.history"));
+    for (uint id = 9000; id < 9101; ++id) {
+        notify(tracker, id, QStringLiteral("History"), QStringLiteral("org.example.history"));
+        tracker.NotificationClosed(id, 1);
+    }
+
+    const auto rows = tracker.notifications(QStringLiteral("org.example.history"));
+    REQUIRE(rows.size() == 101);
+    CHECK(tracker.notifications(QStringLiteral("org.example.history"), true).size() == 1);
+
+    bool oldestPresent = false;
+    bool newestPresent = false;
+    bool activePresent = false;
+    for (const auto &value : rows) {
+        const auto row = value.toMap();
+        const uint id = row.value(QStringLiteral("id")).toUInt();
+        oldestPresent |= id == 9000;
+        newestPresent |= id == 9100;
+        activePresent |= id == 10000 && row.value(QStringLiteral("active")).toBool();
+    }
+    CHECK_FALSE(oldestPresent);
+    CHECK(newestPresent);
+    CHECK(activePresent);
+}
+
 TEST_CASE("Notification model tracks local read and dismiss state", "[notification][model]")
 {
     ScopedTracker scoped;

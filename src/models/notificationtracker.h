@@ -140,7 +140,6 @@ private:
     void removeInactiveNotification(uint id);
     void resetNotificationModel();
     void updateDndState();
-
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
 

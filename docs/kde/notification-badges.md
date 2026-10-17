@@ -431,7 +431,8 @@ The QML presentation distinguishes summary, body, app, urgency, timeout,
 > Read and dismissed state is local to Krema; it is not synchronized with the app's server.
 
 Use `notifications(..., true)` for the active-only view. Use the default query
-to inspect retained closed or locally dismissed records.
+to inspect retained closed or locally dismissed records. Krema retains at most
+100 inactive lifecycle records; active records are not evicted by this limit.
 
 ---
 

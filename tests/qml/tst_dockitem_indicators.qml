@@ -583,10 +583,21 @@ Item {
             let item = makeItem({ IsWindow: true, IsActive: false })
             NotificationTracker.setUnread("org.kde.dolphin", 4)
             tryCompare(item, "_badgeCount", 4)
+            let clearRevision = NotificationTracker.revision
             DockModel.tasksModel.setTaskData(0, "IsActive", true)
             tryCompare(item, "_badgeCount", 0)
+            compare(NotificationTracker.revision, clearRevision + 1)
             compare(NotificationTracker.callsTo("clearUnreadNotifications").length, 1)
             compare(NotificationTracker.callsTo("clearUnreadNotifications")[0].args[0], "org.kde.dolphin")
+            verify(!T.badge(item).visible)
+        }
+
+        function test_clearingWithoutUnreadDoesNotAdvanceTrackerRevision() {
+            let item = makeItem({ IsWindow: true })
+            let revision = NotificationTracker.revision
+            NotificationTracker.clearUnreadNotifications("org.kde.dolphin")
+            compare(NotificationTracker.revision, revision)
+            compare(item._badgeCount, 0)
             verify(!T.badge(item).visible)
         }
 

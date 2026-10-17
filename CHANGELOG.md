@@ -17,12 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
+- Bounded retained inactive notification history to 100 records while preserving active badge state.
 
 ### Fixed
 
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
-- Preserved pinned app order when startup notifications gave way to windows
+- Notification badges now react immediately when notifications are cleared locally, use canonical case-insensitive desktop identities without fuzzy last-segment matching, and retain watcher metadata and close reasons while distinguishing directed closes from broadcast reasons
 
 ## [0.12.0] - 2026-10-12
 

@@ -139,6 +139,7 @@ private:
     void markNotificationInactive(uint id);
     void removeInactiveNotification(uint id);
     void resetNotificationModel();
+    QVariantMap notificationMap(const NotificationRecord &record) const;
     void updateDndState();
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);

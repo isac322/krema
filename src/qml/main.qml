@@ -958,8 +958,7 @@ Item {
                 if (!DockModel.isTrash(root.hoveredIndex))
                     DockActions.newInstance(root.hoveredIndex)
             } else if (mouse.button === Qt.RightButton) {
-                if (!DockModel.isTrash(root.hoveredIndex))
-                    DockContextMenu.showForTask(root.hoveredIndex)
+                DockContextMenu.showForTask(root.hoveredIndex)
             }
         }
 

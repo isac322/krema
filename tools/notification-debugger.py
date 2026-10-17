@@ -197,9 +197,9 @@ class EventRecorder:
     def record(
         self, direction: str, mechanism: str, *, correlation=None,
         event_id=None, reason="", payload=None, scenario=None,
-    ) -> None:
-        if direction not in self.counts:
-            return
+    ) -> bool:
+        if direction not in self.counts or self._stream is None:
+            return False
         canonical, event_payload = _canonical_event(mechanism, payload)
         event = {
             "ts": datetime.now().astimezone().isoformat(timespec="milliseconds"),
@@ -211,13 +211,19 @@ class EventRecorder:
             "reason": reason,
             "payload": _json_safe(event_payload),
         }
-        self.counts[direction] += 1
-        if self._stream:
+        try:
+            self._stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+            self._stream.flush()
+        except OSError as exc:
+            self.error = str(exc)
             try:
-                self._stream.write(json.dumps(event, separators=(",", ":")) + "\n")
-                self._stream.flush()
-            except OSError as exc:
-                self.error = str(exc)
+                self._stream.close()
+            except OSError:
+                pass
+            self._stream = None
+            return False
+        self.counts[direction] += 1
+        return True
 
 
 def _record_event(
@@ -358,7 +364,7 @@ class StatusNotifierItemService(dbus.service.Object):
             "ItemIsMenu": dbus.Boolean(False),
             "Menu": dbus.ObjectPath("/NO_DBUSMENU"),
         }
-        self._service_name = "org.krema.NotificationDebugger"
+        self._service_name = "org.krema.NotificationDebugger.StatusNotifierItem"
         self._bus_name = dbus.service.BusName(self._service_name, bus=bus)
         super().__init__(self._bus_name, "/StatusNotifierItem")
 
@@ -387,7 +393,7 @@ class StatusNotifierItemService(dbus.service.Object):
             )
             _log("SNI-ERROR", f"RegisterStatusNotifierItem failed: {e}")
 
-    def unregister_with_watcher(self) -> None:
+    def unregister_with_watcher(self) -> bool:
         try:
             self._bus.release_name(self._service_name)
             self._bus_name = None
@@ -398,12 +404,14 @@ class StatusNotifierItemService(dbus.service.Object):
                 reason="released bus name",
             )
             _log("SNI", "StatusNotifierItem unregistered by releasing bus name")
+            return True
         except dbus.DBusException as e:
             _record_event(
                 "sent", "sni.UnregisterStatusNotifierItem",
                 correlation=f"sni:{self._service_name}", reason=str(e),
             )
             _log("SNI-ERROR", f"UnregisterStatusNotifierItem failed: {e}")
+            return False
 
 
     def set_property(self, name: str, value) -> None:
@@ -2259,27 +2267,33 @@ class DebuggerWindow(QWidget):
         self._sni = None
         self._watcher = None
         self._inbox_model = InboxModel()
+        self._reset_state = "ready"
         self._build_ui()
 
     def reset_all(self) -> None:
+        self._reset_state = "resetting"
+        self.update_status()
+        reset_failed = False
+
         if not self._bus:
             _log("RESET", "Reset All skipped: D-Bus not connected")
             for job_path, job_iface in list(_tracked_jobs.items()):
                 try:
                     job_iface.terminate("Reset All")
+                    _tracked_jobs.pop(job_path, None)
                     _record_event(
                         "reset", "jobs.terminate",
                         correlation=f"job:{job_path}",
                         event_id=job_path, reason="completed",
                     )
                 except dbus.DBusException as exc:
+                    reset_failed = True
                     _log("JOB-ERROR", f"Reset terminate: {exc}")
                     _record_event(
                         "reset", "jobs.terminate",
                         correlation=f"job:{job_path}",
                         event_id=job_path, reason=str(exc),
                     )
-            _tracked_jobs.clear()
             _tracked_dnd_cookies.clear()
             _tracked_portal_ids.clear()
             _tracked_unity_entries.clear()
@@ -2292,6 +2306,7 @@ class DebuggerWindow(QWidget):
             self._inbox_model.channels.clear()
             self._inbox_tab._refresh()
             _record_event("reset", "reset-all", reason="D-Bus not connected")
+            self._reset_state = "reset-incomplete"
             self.update_status()
             return
 
@@ -2299,6 +2314,7 @@ class DebuggerWindow(QWidget):
         notification_ids = list(_tracked_notif_ids)
         for nid in notification_ids:
             success = close_notification(self._bus, nid)
+            reset_failed |= not success
             _record_event(
                 "reset", "reset.notifications",
                 correlation=f"notification:{nid}", event_id=nid,
@@ -2306,12 +2322,12 @@ class DebuggerWindow(QWidget):
             )
         if not notification_ids:
             _record_event("reset", "reset.notifications", reason="none tracked")
-        _tracked_notif_ids.clear()
 
         _log("RESET", "Reset All: portal notifications")
         portal_ids = list(_tracked_portal_ids)
         for notification_id in portal_ids:
             success = remove_portal(self._bus, notification_id)
+            reset_failed |= not success
             _record_event(
                 "reset", "reset.portal",
                 correlation=f"portal:{notification_id}",
@@ -2320,7 +2336,6 @@ class DebuggerWindow(QWidget):
             )
         if not portal_ids:
             _record_event("reset", "reset.portal", reason="none tracked")
-        _tracked_portal_ids.clear()
 
         _log("RESET", "Reset All: Unity zero state")
         unity_entries = list(_tracked_unity_entries)
@@ -2330,26 +2345,32 @@ class DebuggerWindow(QWidget):
                 "progress": dbus.Double(0.0), "progress-visible": dbus.Boolean(False),
                 "urgent": dbus.Boolean(False),
             })
+            reset_failed |= not success
+            if success:
+                _tracked_unity_entries.discard(desktop_entry)
             _record_event(
                 "reset", "reset.unity",
                 correlation=f"unity:{desktop_entry}", event_id=desktop_entry,
                 reason="completed" if success else "unavailable",
             )
-        _tracked_unity_entries.clear()
         if not unity_entries:
             _record_event("reset", "reset.unity", reason="none tracked")
 
         _log("RESET", "Reset All: SNI Active then unregister")
         if self._sni:
             self._sni.set_status("Active")
-            self._sni.unregister_with_watcher()
+            self._sni.set_overlay_icon("")
+            self._sni.set_attention_icon("dialog-warning")
+            sni_success = self._sni.unregister_with_watcher()
+            reset_failed |= not sni_success
             _record_event(
                 "reset", "reset.sni",
                 correlation=f"sni:{self._sni._service_name}",
                 event_id=str(self._sni._props["Id"]),
-                reason="completed",
+                reason="completed" if sni_success else "unavailable",
             )
         else:
+            reset_failed = True
             _record_event("reset", "reset.sni", reason="unavailable")
 
         _log("RESET", "Reset All: terminate jobs")
@@ -2357,12 +2378,14 @@ class DebuggerWindow(QWidget):
         for job_path, job_iface in tracked_jobs:
             try:
                 job_iface.terminate("Reset All")
+                _tracked_jobs.pop(job_path, None)
                 _record_event(
                     "reset", "jobs.terminate",
                     correlation=f"job:{job_path}",
                     event_id=job_path, reason="completed",
                 )
             except dbus.DBusException as exc:
+                reset_failed = True
                 _log("JOB-ERROR", f"Reset terminate: {exc}")
                 _record_event(
                     "reset", "jobs.terminate",
@@ -2371,7 +2394,6 @@ class DebuggerWindow(QWidget):
                 )
         if not tracked_jobs:
             _record_event("reset", "jobs.terminate", reason="none active")
-        _tracked_jobs.clear()
         self._jobs_tab._job_path = None
         self._jobs_tab._job_iface = None
         self._jobs_tab._job_status.setText("No active job")
@@ -2381,6 +2403,7 @@ class DebuggerWindow(QWidget):
         dnd_cookies = list(_tracked_dnd_cookies)
         for cookie in dnd_cookies:
             success = uninhibit_dnd(self._bus, cookie)
+            reset_failed |= not success
             _record_event(
                 "reset", "reset.dnd",
                 correlation=f"dnd:{cookie}", event_id=cookie,
@@ -2388,8 +2411,9 @@ class DebuggerWindow(QWidget):
             )
         if not dnd_cookies:
             _record_event("reset", "reset.dnd", reason="none tracked")
-        _tracked_dnd_cookies.clear()
-        self._dnd_tab._cookies.clear()
+        self._dnd_tab._cookies = [
+            item for item in self._dnd_tab._cookies if item[0] in _tracked_dnd_cookies
+        ]
         self._dnd_tab._refresh()
 
         _log("RESET", "Reset All: clear inbox simulation")
@@ -2398,7 +2422,15 @@ class DebuggerWindow(QWidget):
         _record_event(
             "reset", "reset.inbox", correlation="inbox:reset", reason="completed"
         )
-        _record_event("reset", "reset-all", reason="completed")
+        _record_event(
+            "reset", "reset-all",
+            reason="incomplete" if reset_failed else "completed",
+        )
+        self._reset_state = (
+            "reset-incomplete"
+            if reset_failed or (_recorder and _recorder.error)
+            else "reset-complete"
+        )
         self.update_status()
 
     def _build_ui(self) -> None:
@@ -2468,7 +2500,7 @@ class DebuggerWindow(QWidget):
         status_layout = QVBoxLayout(status_panel)
         scenario = _recorder.scenario if _recorder else "manual"
         status_panel.setTitle(f"QA Status — scenario: {scenario}")
-        self._status = QLabel(f"Scenario: {scenario} | State: Initializing...")
+        self._status = QLabel(f"Scenario: {scenario} | State: ready")
         self._status.setWordWrap(True)
         self._status.setStyleSheet(
             "padding:4px; background:#f5f5f5; border-radius:4px;"
@@ -2525,13 +2557,24 @@ class DebuggerWindow(QWidget):
         inbox_unread = self._inbox_model.total_unread
         if inbox_unread > 0:
             parts.append(f"Inbox: {inbox_unread} unread")
+        state = self._reset_state
+        if _recorder and _recorder.error:
+            state = "recorder-error"
+            self._limitation.setText(
+                f"JSONL recorder error: {_recorder.error}. "
+                "This run cannot provide machine-readable evidence."
+            )
         scenario = _recorder.scenario if _recorder else "manual"
-        self._status.setText(f"Scenario: {scenario} | State: " + "  |  ".join(parts))
+        self._status.setText(f"Scenario: {scenario} | State: {state} | " + "  |  ".join(parts))
         if _recorder:
             counts = _recorder.counts
+            jsonl = (
+                f"ERROR: {_recorder.error}"
+                if _recorder.error else _recorder.path
+            )
             self._event_counts.setText(
                 f"Sent: {counts['sent']} | Observed: {counts['observed']} | "
-                f"Reset: {counts['reset']} | JSONL: {_recorder.path}"
+                f"Reset: {counts['reset']} | JSONL: {jsonl}"
             )
 
     def set_bus(self, bus) -> None:
@@ -2669,7 +2712,7 @@ def _setup_dbus(window: DebuggerWindow) -> None:
     _notif_table_callback = window._notif_tab.add_received
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--jsonl", default=None, metavar="PATH",
@@ -2691,6 +2734,9 @@ def main() -> None:
         path = temp_file.name
         temp_file.close()
     _recorder = EventRecorder(path, args.scenario)
+    if _recorder.error:
+        print(f"Unable to open JSONL recorder {path}: {_recorder.error}", file=sys.stderr)
+        return 2
     DBusGMainLoop(set_as_default=True)
 
     app = QApplication(sys.argv)
@@ -2713,8 +2759,8 @@ def main() -> None:
 
     QTimer.singleShot(100, lambda: _setup_dbus(window))
 
-    sys.exit(app.exec())
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

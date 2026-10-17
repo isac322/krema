@@ -2315,6 +2315,14 @@ class DebuggerWindow(QWidget):
         for nid in notification_ids:
             success = close_notification(self._bus, nid)
             reset_failed |= not success
+            if success:
+                entry = _notif_id_to_entry.pop(int(nid), None)
+                if entry is not None:
+                    ids = _unread.get(entry)
+                    if ids is not None:
+                        ids.discard(int(nid))
+                        if not ids:
+                            del _unread[entry]
             _record_event(
                 "reset", "reset.notifications",
                 correlation=f"notification:{nid}", event_id=nid,
@@ -2363,6 +2371,8 @@ class DebuggerWindow(QWidget):
             self._sni.set_attention_icon("dialog-warning")
             sni_success = self._sni.unregister_with_watcher()
             reset_failed |= not sni_success
+            if sni_success:
+                _sni_attention_apps.clear()
             _record_event(
                 "reset", "reset.sni",
                 correlation=f"sni:{self._sni._service_name}",

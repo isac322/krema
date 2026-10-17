@@ -31,9 +31,9 @@ S=$SCALE
 CROP_Y=$((H - 640))       # the recorded band: logical (0, CROP_Y) 1280x640
 
 if [ -n "${GPU:-}" ]; then
-    CLIPS="zoom attention wheel reorder dodge autohide keyboard styles settings launch previews groups progress"
+    CLIPS="zoom attention wheel reorder dodge autohide keyboard styles settings launch previews groups progress trash"
 else
-    CLIPS="zoom launch attention wheel middle reorder pin settings styles autohide dodge keyboard"
+    CLIPS="zoom launch attention wheel middle reorder pin settings styles autohide dodge keyboard trash"
 fi
 # Wallpaper: branding/wallpaper/roast-contours.png, mounted at /wallpaper by
 # thumbs.sh; Plasma's "Next" where it is missing (Xvfb session).
@@ -47,7 +47,10 @@ ICON_Y=${ICON_Y:-664}
 ICON_X0=${ICON_X0:-374} ICON_STEP=76
 LAUNCHERS=(org.kde.dolphin org.mozilla.firefox org.kde.konsole org.kde.kate org.kde.okular org.kde.gwenview org.kde.kcalc systemsettings)
 DOLPHIN=0 FIREFOX=1 KONSOLE=2 KATE=3 KCALC=6 SYSSETTINGS=7
+TRASH=${#LAUNCHERS[@]}
 icon_x() { echo $((ICON_X0 + ICON_STEP * $1)); }
+# Trash follows the launchers and the Flow is centered on the logical screen.
+trash_x() { echo $((W / 2 + TRASH * ICON_STEP / 2)); }
 
 p() { echo $(($1 * S)); }
 move() { xdotool mousemove "$(p "$1")" "$(p "$2")"; }
@@ -706,6 +709,72 @@ clip_keyboard() {
     sleep 1.0
     rec_stop
 }
+
+# 17. Trash: create a disposable Desktop file, drag it from Dolphin onto the
+#     Trash item, then use its native context-menu action to empty it.
+clip_trash() {
+    local name=00-krema-trash-demo.txt
+    local trash_dir="${XDG_DATA_HOME:-$HOME/.local/share}/Trash/files"
+    local fx=${PIN_FILE_X:-597} fy=${PIN_FILE_Y:-250}
+    local tx
+
+    close_class dolphin
+    wait_gone dolphin
+    gio trash --empty
+    rm -f "$HOME/Desktop/$name"
+    mkdir -p "$HOME/Desktop"
+    tx=$(trash_x)
+
+    move 1000 250
+    rec_start trash
+    sleep 0.8
+    printf 'Krema Trash demo file\n' >"$HOME/Desktop/$name"
+    dolphin --new-window "$HOME/Desktop" >/dev/null 2>&1 &
+    wait_class dolphin 1
+    sleep 1.0
+    place dolphin 380 130 520 330
+    sleep 1.0
+
+    glide 1000 250 "$fx" "$fy" 0.9
+    sleep 0.3
+    drag "$fx" "$fy" "$tx" "$ICON_Y" 1.5
+    for _ in $(seq 40); do
+        [ -e "$trash_dir/$name" ] && break
+        sleep 0.1
+    done
+    [ -e "$trash_dir/$name" ] || {
+        echo "timeout waiting for Trash drop" >&2
+        return 1
+    }
+    sleep 1.5
+
+    move "$tx" "$ICON_Y"
+    xdotool click 3
+    kwin_until "for (const w of workspace.windowList()) if (w.resourceClass == 'krema' && w.popupWindow) print('TRASH-MENU');" TRASH-MENU
+    sleep 0.4
+    # Home jumps to the first enabled action (Open Trash), Down moves to Empty Trash;
+    # the disabled header and separators are skipped by the menu.
+    xdotool key Home Down Return
+    kwin_until "for (const w of workspace.windowList()) if (w.normalWindow && w.caption == 'Empty Trash') print('TRASH-DIALOG');" TRASH-DIALOG
+    sleep 0.3
+    # KMessageBox's primary action is the destructive confirmation.
+    xdotool key Return
+    for _ in $(seq 60); do
+        [ ! -e "$trash_dir/$name" ] && break
+        sleep 0.1
+    done
+    [ ! -e "$trash_dir/$name" ] || {
+        echo "timeout waiting for Empty Trash" >&2
+        return 1
+    }
+    sleep 1.5
+    move 1000 250
+    close_class dolphin
+    wait_gone dolphin
+    sleep 0.8
+    rec_stop
+}
+
 
 # ---- GPU session only (session-gpu.sh): live PipeWire window thumbnails ----
 

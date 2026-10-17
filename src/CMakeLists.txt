@@ -48,6 +48,10 @@ add_library(krema_lib STATIC
 
     models/dockmodel.h
     models/dockmodel.cpp
+    models/dockitemsmodel.h
+    models/dockitemsmodel.cpp
+    models/trashmanager.h
+    models/trashmanager.cpp
     models/dockactions.h
     models/dockactions.cpp
     models/dockcontextmenu.h

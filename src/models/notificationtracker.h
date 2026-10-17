@@ -7,6 +7,7 @@
 #include <QDBusMessage>
 #include <QDBusServiceWatcher>
 #include <QHash>
+#include <QMap>
 #include <QObject>
 #include <QSet>
 #include <QStringList>
@@ -93,6 +94,8 @@ private:
     void setupSniWatcher();
     void bumpRevision();
     void pruneInactiveNotificationRecords();
+    void markNotificationInactive(uint id);
+    void removeInactiveNotification(uint id);
     void updateDndState();
 
     void queryRegisteredSniItems();
@@ -137,6 +140,8 @@ private:
     // Canonical desktop entry -> set of active notification IDs.
     QHash<QString, QSet<uint>> m_unreadNotifs;
     QHash<uint, NotificationRecord> m_notificationRecords;
+    QMap<QPair<QDateTime, uint>, uint> m_inactiveRecordOrder;
+    QHash<uint, QPair<QDateTime, uint>> m_inactiveRecordKeys;
 
     // SNI tracking: "busName/objectPath" -> {id, status}
     struct SniEntry {

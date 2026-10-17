@@ -197,6 +197,7 @@ void NotificationTracker::clearUnreadNotifications(const QString &appId)
                 if (auto recordIt = m_notificationRecords.find(notifId); recordIt != m_notificationRecords.end()) {
                     recordIt->closeReason = CloseReason::Cleared;
                     recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+                    markNotificationInactive(notifId);
                 }
             }
             it = m_unreadNotifs.erase(it);
@@ -338,7 +339,8 @@ void NotificationTracker::Notify(uint id,
     qCInfo(lcNotif) << ">>> Notify: id=" << id << "appName=" << appName << "desktop-entry hint=" << hints.value(QStringLiteral("desktop-entry")).toString()
                     << "resolved=" << desktopEntry << "replacesId=" << replacesId << "summary=" << summary;
 
-    // A reused server ID is no longer active before its new payload is stored.
+    // A reused server ID no longer refers to any previous retained record.
+    removeInactiveNotification(id);
     if (auto current = m_notifIdToEntry.find(id); current != m_notifIdToEntry.end()) {
         const QString oldEntry = current.value();
         if (auto setIt = m_unreadNotifs.find(oldEntry); setIt != m_unreadNotifs.end()) {
@@ -365,6 +367,7 @@ void NotificationTracker::Notify(uint id,
                 oldRecord->closeReason = CloseReason::Replaced;
                 oldRecord->updatedAt = now;
             }
+            markNotificationInactive(replacesId);
             qCInfo(lcNotif) << "    replaced old notif id=" << replacesId << "entry=" << oldEntry;
         }
     }
@@ -398,6 +401,7 @@ void NotificationTracker::CloseNotification(uint id)
         recordIt->closeReason = CloseReason::Directed;
         recordIt->updatedAt = QDateTime::currentDateTimeUtc();
         recordIt->broadcastReason = 0;
+        markNotificationInactive(id);
     }
 
     bumpRevision();
@@ -412,6 +416,7 @@ void NotificationTracker::NotificationClosed(uint id, uint reason)
             && recordIt->closeReason == CloseReason::Directed) {
             recordIt->broadcastReason = reason;
             recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+            markNotificationInactive(id);
         }
         return;
     }
@@ -442,6 +447,7 @@ void NotificationTracker::NotificationClosed(uint id, uint reason)
         }
         recordIt->broadcastReason = reason;
         recordIt->updatedAt = QDateTime::currentDateTimeUtc();
+        markNotificationInactive(id);
     }
 
     bumpRevision();
@@ -483,30 +489,36 @@ void NotificationTracker::setupSniWatcher()
     queryRegisteredSniItems();
 }
 
+void NotificationTracker::removeInactiveNotification(uint id)
+{
+    const auto keyIt = m_inactiveRecordKeys.find(id);
+    if (keyIt == m_inactiveRecordKeys.end()) {
+        return;
+    }
+    m_inactiveRecordOrder.remove(keyIt.value());
+    m_inactiveRecordKeys.erase(keyIt);
+}
+
+void NotificationTracker::markNotificationInactive(uint id)
+{
+    removeInactiveNotification(id);
+    const auto recordIt = m_notificationRecords.constFind(id);
+    if (recordIt == m_notificationRecords.cend()) {
+        return;
+    }
+    const auto key = qMakePair(recordIt->updatedAt, id);
+    m_inactiveRecordOrder.insert(key, id);
+    m_inactiveRecordKeys.insert(id, key);
+}
+
 void NotificationTracker::pruneInactiveNotificationRecords()
 {
-    qsizetype inactiveCount = 0;
-    for (auto it = m_notificationRecords.cbegin(); it != m_notificationRecords.cend(); ++it) {
-        if (!m_notifIdToEntry.contains(it.key())) {
-            ++inactiveCount;
-        }
-    }
-    while (inactiveCount > kMaxInactiveNotificationRecords) {
-        auto oldest = m_notificationRecords.end();
-        for (auto it = m_notificationRecords.begin(); it != m_notificationRecords.end(); ++it) {
-            if (m_notifIdToEntry.contains(it.key())) {
-                continue;
-            }
-            if (oldest == m_notificationRecords.end() || it->updatedAt < oldest->updatedAt
-                || (it->updatedAt == oldest->updatedAt && it.key() < oldest.key())) {
-                oldest = it;
-            }
-        }
-        if (oldest == m_notificationRecords.end()) {
-            break;
-        }
-        m_notificationRecords.erase(oldest);
-        --inactiveCount;
+    while (m_inactiveRecordOrder.size() > kMaxInactiveNotificationRecords) {
+        const auto oldest = m_inactiveRecordOrder.cbegin();
+        const uint id = oldest.value();
+        m_inactiveRecordKeys.remove(id);
+        m_inactiveRecordOrder.erase(oldest);
+        m_notificationRecords.remove(id);
     }
 }
 

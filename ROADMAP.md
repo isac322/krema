@@ -188,7 +188,8 @@ Extensible widget architecture.
 - [ ] X11 platform backend (NET_WM hints, strut, input region) — low priority since KDE Plasma 6 is Wayland-first
 - [ ] Plasmoid hosting feasibility study
 - [ ] Liquid Glass background effect (multi-layer refraction)
-- [ ] App menu / trash can widgets
+- [ ] App menu widget
+- [x] Trash can widget
 - [x] CI pipeline (GitHub Actions)
 - [x] Comprehensive test suite (Catch2 unit/integration/KWin, Qt Quick Test QML, selenium-webdriver-at-spi E2E)
 

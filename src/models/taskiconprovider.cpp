@@ -90,23 +90,17 @@ QPixmap TaskIconProvider::requestPixmap(const QString &id, QSize *size, const QS
         // Analyze icon padding (cached)
         auto info = analyzeIcon(iconName, icon);
 
-        // Shape correction only applies when there's actual padding to reclaim.
-        // If the bounding box already fills the canvas (contentRatio > 0.95), scaling up
-        // would clip the icon edges — so skip normalization entirely.
-        // For icons WITH padding, use effective ratio that penalizes round shapes
-        // (a circle's visual mass is ~sqrt(π/4) ≈ 89% of same-bbox square).
+        // Theme icons commonly include deliberate optical padding. Only crop and
+        // enlarge clear outliers; shaped and padded artwork keeps its source size.
         const bool hasSignificantPadding = info.contentRatio < 0.95;
         const qreal effectiveRatio = hasSignificantPadding ? info.contentRatio * std::sqrt(info.fillRatio) : info.contentRatio;
 
-        // If content fills most of the icon (accounting for shape), skip normalization.
-        // Shrink so that content fills exactly kEdgeToEdgeFill of the canvas,
-        // matching the target fill used by normalizePixmap for square icons.
-        if (effectiveRatio >= kMinContentRatio) {
+        if (effectiveRatio < kOutlierContentRatio) {
+            result = normalizePixmap(icon, targetSize, info);
+        } else {
+            // Keep near-full icons within the shared 0.88 canvas ceiling.
             const qreal shrinkFactor = (info.contentRatio > kEdgeToEdgeFill) ? kEdgeToEdgeFill / info.contentRatio : 1.0;
             result = shrinkPixmap(icon, targetSize, shrinkFactor);
-        } else {
-            // Normalize: crop padding and rescale
-            result = normalizePixmap(icon, targetSize, info);
         }
     }
 
@@ -257,11 +251,9 @@ IconNormalizationInfo TaskIconProvider::analyzeIcon(const QString &iconName, con
 
 QPixmap TaskIconProvider::normalizePixmap(const QIcon &icon, int targetSize, const IconNormalizationInfo &info)
 {
-    // Adaptive margin: circular icons (low fillRatio) have inherent visual spacing
-    // in their transparent corners, so they need less explicit margin.
-    // Square (fill≈1.0) → full margin (4%), Circle (fill≈0.785) → minimal margin (1%).
-    const qreal margin = (info.fillRatio < 0.95) ? 0.01 : kMinMarginRatio;
-    const qreal maxFill = 1.0 - margin * 2;
+    // Use one canvas ceiling for every shape. Theme padding is intentional and
+    // must not be removed merely because the icon is not a solid square.
+    const qreal maxFill = kEdgeToEdgeFill;
 
     const qreal effectiveRatio = info.contentRatio * std::sqrt(info.fillRatio);
     qreal targetFill = std::min(effectiveRatio * kMaxEffectiveScale, maxFill);

@@ -126,6 +126,7 @@ void Application::connectSettingsAutoSave(KremaSettings *settings, QObject *cont
     connect(settings, &KremaSettings::UseAccentColorChanged, context, saveSettings);
     connect(settings, &KremaSettings::DodgeActiveOnlyChanged, context, saveSettings);
     connect(settings, &KremaSettings::ReserveScreenSpaceChanged, context, saveSettings);
+    connect(settings, &KremaSettings::TrashSlotChanged, context, saveSettings);
     connect(settings, &KremaSettings::SeparateLaunchersChanged, context, saveSettings);
 }
 
@@ -194,7 +195,9 @@ int Application::run(const KAboutData &aboutData)
     // Create data model
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
+    m_dockModel->setTrashSlot(m_settings->trashSlot());
     m_dockModel->setSeparateLaunchers(m_settings->separateLaunchers());
+
 
     // Create notification trackers (before QML loading)
     m_notificationTracker = std::make_unique<NotificationTracker>();
@@ -246,6 +249,12 @@ int Application::run(const KAboutData &aboutData)
         m_settings->setPinnedLaunchers(m_dockModel->pinnedLaunchers());
         m_settings->save();
     });
+
+    // Auto-save the global Trash position when it changes.
+    connect(m_dockModel.get(), &DockModel::trashSlotChanged, this, [this]() {
+        m_settings->setTrashSlot(m_dockModel->trashSlot());
+    });
+
 
     // Auto-save on any setting change
     auto *s = m_settings.get();

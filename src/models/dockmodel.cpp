@@ -84,6 +84,8 @@ QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &
 DockModel::DockModel(QObject *parent)
     : QObject(parent)
     , m_tasksModel(std::make_unique<TaskManager::TasksModel>(this))
+    , m_trashManager(std::make_unique<TrashManager>(this))
+    , m_itemsModel(std::make_unique<DockItemsModel>(m_tasksModel.get(), m_trashManager.get(), this))
     , m_virtualDesktopInfo(std::make_shared<TaskManager::VirtualDesktopInfo>(this))
     , m_activityInfo(std::make_shared<TaskManager::ActivityInfo>(this))
 {
@@ -170,6 +172,9 @@ DockModel::DockModel(QObject *parent)
     connect(m_tasksModel.get(), &QAbstractItemModel::modelReset, this, &DockModel::scheduleTaskPartition);
     connect(m_tasksModel.get(), &QAbstractItemModel::layoutChanged, this, &DockModel::scheduleTaskPartition);
     connect(m_tasksModel.get(), &TaskManager::TasksModel::launcherListChanged, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel.get(), &TaskManager::TasksModel::launcherListChanged, this, [this] {
+        setTrashSlot(m_trashSlot);
+    });
     connect(m_tasksModel.get(), &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
         if (roles.isEmpty() || roles.contains(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon)
             || roles.contains(TaskManager::AbstractTasksModel::LauncherUrl) || roles.contains(TaskManager::AbstractTasksModel::HasLauncher)
@@ -193,6 +198,16 @@ DockModel::~DockModel() = default;
 TaskManager::TasksModel *DockModel::tasksModel() const
 {
     return m_tasksModel.get();
+}
+
+DockItemsModel *DockModel::items() const
+{
+    return m_itemsModel.get();
+}
+
+TrashManager *DockModel::trashManager() const
+{
+    return m_trashManager.get();
 }
 
 TaskManager::VirtualDesktopInfo *DockModel::virtualDesktopInfo() const
@@ -242,6 +257,7 @@ void DockModel::setPinnedLaunchers(const QStringList &launchers)
         }
         scheduleTaskPartition();
     }
+    setTrashSlot(m_trashSlot);
     Q_EMIT pinnedLaunchersChanged();
 }
 
@@ -455,26 +471,28 @@ void DockModel::snapshotSettledRows()
 
 QString DockModel::iconName(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    if (m_itemsModel->isTrash(index)) {
+        const QString name = m_trashManager->iconName();
+        return name.isEmpty() ? QStringLiteral("user-trash") : name;
+    }
+
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    if (sourceIndex < 0) {
+        return {};
+    }
+    const QModelIndex idx = m_tasksModel->index(sourceIndex, 0);
     if (!idx.isValid()) {
         return {};
     }
 
     const QIcon icon = idx.data(Qt::DecorationRole).value<QIcon>();
     QString name = icon.name();
-
-    // A nameless, non-null DecorationRole is authoritative artwork. Give it
-    // an opaque task/content key so it outranks an unrelated AppId fallback,
-    // remains stable when rows move, and changes when the artwork changes.
     if (name.isEmpty() && !icon.isNull()) {
         name = rawIconKey(idx, appId(index), icon);
         TaskIconProvider::registerRawIcon(name, icon);
         return name;
     }
 
-    // KWin/LibTaskManager can provide these named placeholders when a window
-    // has no resolved decoration. Prefer a resolvable TaskManager/KService
-    // AppId, but preserve the usable placeholder when no fallback exists.
     static const QSet<QString> genericPlaceholderIconNames{QStringLiteral("wayland"), QStringLiteral("unknown")};
     if (genericPlaceholderIconNames.contains(name)) {
         const QString app = appId(index);
@@ -484,8 +502,6 @@ QString DockModel::iconName(int index) const
         return name;
     }
 
-    // AppId is the TaskManager/KService desktop-entry or executable identity,
-    // not a promise that the raw Wayland app_id is a theme icon name.
     if (name.isEmpty() || QIcon::fromTheme(name).isNull()) {
         const QString app = appId(index);
         if (!app.isEmpty() && !QIcon::fromTheme(app).isNull()) {
@@ -498,7 +514,11 @@ QString DockModel::iconName(int index) const
 
 QUrl DockModel::launcherUrl(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    if (sourceIndex < 0) {
+        return {};
+    }
+    const QModelIndex idx = m_tasksModel->index(sourceIndex, 0);
     if (!idx.isValid()) {
         return {};
     }
@@ -518,12 +538,17 @@ bool DockModel::isDesktopFile(const QUrl &url) const
 
 bool DockModel::isPinned(int index) const
 {
-    return isPinnedTask(*m_tasksModel, m_tasksModel->index(index, 0));
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    return sourceIndex >= 0 && isPinnedTask(*m_tasksModel, m_tasksModel->index(sourceIndex, 0));
 }
 
 QVariantList DockModel::windowIds(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    if (sourceIndex < 0) {
+        return {};
+    }
+    const QModelIndex idx = m_tasksModel->index(sourceIndex, 0);
     if (!idx.isValid()) {
         return {};
     }
@@ -532,7 +557,11 @@ QVariantList DockModel::windowIds(int index) const
 
 int DockModel::childCount(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    if (sourceIndex < 0) {
+        return 0;
+    }
+    const QModelIndex idx = m_tasksModel->index(sourceIndex, 0);
     if (!idx.isValid()) {
         return 0;
     }
@@ -541,7 +570,8 @@ int DockModel::childCount(int index) const
 
 QModelIndex DockModel::taskModelIndex(int index) const
 {
-    return m_tasksModel->index(index, 0);
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    return sourceIndex >= 0 ? m_tasksModel->index(sourceIndex, 0) : QModelIndex{};
 }
 
 void DockModel::publishDelegateGeometry(int index, QObject *delegate)
@@ -550,7 +580,7 @@ void DockModel::publishDelegateGeometry(int index, QObject *delegate)
         return;
     }
 
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const QModelIndex idx = taskModelIndex(index);
     if (!idx.isValid()
         || (!idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
             && !idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool())) {
@@ -562,7 +592,11 @@ void DockModel::publishDelegateGeometry(int index, QObject *delegate)
 
 QString DockModel::appId(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    if (sourceIndex < 0) {
+        return {};
+    }
+    const QModelIndex idx = m_tasksModel->index(sourceIndex, 0);
     if (!idx.isValid()) {
         return {};
     }
@@ -584,6 +618,44 @@ void DockModel::setVirtualDesktopMode(int mode)
     m_tasksModel->setFilterByVirtualDesktop(mode == 2);
     Q_EMIT virtualDesktopModeChanged();
 }
+int DockModel::trashSlot() const
+{
+    return m_trashSlot;
+}
+
+void DockModel::setTrashSlot(int slot)
+{
+    int normalized = std::max(-1, slot);
+    if (normalized >= 0) {
+        normalized = std::min(normalized, static_cast<int>(m_tasksModel->launcherList().size()));
+    }
+    if (m_trashSlot == normalized) {
+        return;
+    }
+    m_trashSlot = normalized;
+    m_itemsModel->setTrashSlot(m_trashSlot);
+    Q_EMIT trashSlotChanged();
+}
+
+int DockModel::taskIndex(int visualIndex) const
+{
+    return m_itemsModel->taskIndex(visualIndex);
+}
+
+bool DockModel::isTrash(int visualIndex) const
+{
+    return m_itemsModel->isTrash(visualIndex);
+}
+
+int DockModel::trashIndex() const
+{
+    return m_itemsModel->trashIndex();
+}
+
+int DockModel::visualIndex(int taskIndex) const
+{
+    return m_itemsModel->visualIndex(taskIndex);
+}
 
 QVariant DockModel::currentDesktop() const
 {
@@ -592,7 +664,11 @@ QVariant DockModel::currentDesktop() const
 
 bool DockModel::isOnCurrentDesktop(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const int sourceIndex = m_itemsModel->taskIndex(index);
+    if (sourceIndex < 0) {
+        return true;
+    }
+    const QModelIndex idx = m_tasksModel->index(sourceIndex, 0);
     if (!idx.isValid()) {
         return true;
     }

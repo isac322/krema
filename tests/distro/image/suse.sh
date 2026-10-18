@@ -63,7 +63,7 @@ family_runtime() {
         google-noto-sans-fonts dejavu-fonts \
         kwrite kfind \
         ruby \
-        python3 python3-pip python3-Flask python3-lxml python3-gobject python3-numpy \
+        python3 python3-pip python3-Flask python3-lxml python3-dbus-python python3-gobject python3-numpy \
         python3-pytest python3-Pillow typelib-1_0-Gtk-3_0 \
         procps findutils gawk coreutils libcap-progs psmisc
     zypper --non-interactive clean --all

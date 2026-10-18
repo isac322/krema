@@ -9,6 +9,8 @@ find_package(Qt6 REQUIRED COMPONENTS Test DBus)
 
 set(CMAKE_AUTOMOC ON)
 
+set(CMAKE_AUTOMOC ON)
+
 add_executable(krema_integration_tests
     test_settings_lifecycle.cpp
 )

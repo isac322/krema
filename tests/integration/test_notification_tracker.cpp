@@ -624,7 +624,6 @@ TEST_CASE("DND Until is active before its boundary and clears after expiry", "[n
         return !tracker.dndActive();
     }));
 }
-
 int main(int argc, char *argv[])
 {
     QCoreApplication application(argc, argv);

@@ -13,7 +13,7 @@ that do NOT support the Unity Launcher API.
 
 Krema combines four badge sources:
 1. `LauncherEntryTracker` (C++) — Unity Launcher API `com.canonical.Unity.LauncherEntry` (exact count, progress, urgent)
-2. `NotificationTracker` (C++) — unread notifications via `RegisterWatcher` (per `desktop-entry`)
+2. `NotificationTracker` (C++) — unread notifications via `RegisterWatcher` (canonical desktop identity)
 3. `NotificationTracker` (C++) — SNI `NeedsAttention` (boolean)
 4. `model.IsDemandingAttention` — EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` (boolean, all apps)
 
@@ -53,10 +53,36 @@ Use `RegisterWatcher` (C++) or `WatchedNotificationsModel` (QML) instead.
 2. Call `RegisterWatcher()` on `org.freedesktop.Notifications` `/org/freedesktop/Notifications`,
    interface `org.kde.NotificationManager`. The unique bus name (`:1.xxx`) is enough.
 3. The server calls `Notify` with signature `ususssasa{sv}i`: the server-assigned `id` comes
-   FIRST (unlike the spec's `Notify`, where `replaces_id` is first and returns the id).
+   FIRST (unlike the spec's `Notify`, where `replaces_id` is first and returns the id). Krema
+   retains the server ID, app name and icon, summary and body, action list, hints, timeout,
+   replaces ID, urgency byte, and created/updated timestamps in the tracker record.
 4. `NotificationClosed(uint id, uint reason)` arrives as a **broadcast signal** on
    `org.freedesktop.Notifications`, not as a directed call — subscribe with `QDBusConnection::connect()`.
-5. Call `UnRegisterWatcher()` on shutdown.
+   The broadcast reason byte is retained with the record.
+5. The directed watcher `CloseNotification(uint id)` has no reason argument and is recorded as a
+   directed close, never as a timeout. Broadcast close reasons remain distinguishable from it.
+6. Call `UnRegisterWatcher()` on shutdown.
+
+### Canonical desktop identity and lifecycle
+
+Krema canonicalizes every desktop identity to lower case and strips one trailing `.desktop`
+suffix. When possible, KService resolves the canonical identity to the full desktop entry.
+Storage, queries, SNI correlation, and blacklist checks use that same canonical form.
+The tracker uses exact canonical equality; it does not compare only the last dot-separated
+segment or use substring matching, so unrelated reverse-domain IDs cannot be merged.
+
+The `desktop-entry` hint is the primary identity. If it is missing or cannot be resolved by
+KService, the normalized hint or normalized `app_name` is retained as an explicit fallback
+identity so the notification is not lost. That fallback is not treated as proof that the app
+matches a different desktop entry.
+
+Each active server notification ID contributes one count under its canonical identity. A
+replacement removes the replaced ID before storing the new ID, so it keeps one count. Any
+directed or broadcast close removes the ID from the active count. Clearing an app removes
+its IDs from the local unread set and marks the records read, but does not close or remove
+the server-active IDs; `revisionChanged()` is emitted when the local unread state changes.
+
+---
 
 Only notifications sent after registration are received. `RegisterWatcher` needs plasmashell
 (owner of `org.freedesktop.Notifications`). Quick check: `qdbus6 <krema-bus-name> /NotificationWatcher`
@@ -88,12 +114,19 @@ This is how apps identify themselves to the notification server.
 - **Discord**: May or may not send `desktop-entry` (varies by version/platform)
 - **Electron apps**: Typically send `app_name` but may omit `desktop-entry` hint
 
-**Badge count derivation**: `NotificationTracker` counts notification IDs per desktop entry from
-`Notify()` until `NotificationClosed` (or `clearUnreadNotifications()` when the app is activated).
+**Badge count derivation**: `NotificationTracker` counts active notification IDs per canonical
+desktop identity from `Notify()` until a directed or broadcast close. Calling
+`clearUnreadNotifications()` removes those IDs from the local unread count without closing
+the server notifications, so the lifecycle model can continue to report them as active.
 
 This is NOT the same as the app-reported badge count from Unity API, but it's the best
-approximation available for all apps. When the `desktop-entry` hint is missing,
-`NotificationTracker` falls back to `app_name` (normalized through KService).
+approximation available for all apps. When the `desktop-entry` hint is missing or cannot be
+resolved,
+`NotificationTracker` retains a normalized hint or `app_name` fallback identity rather than
+silently merging it with another app.
+
+Replacements keep one active count: the old server ID is removed before the new ID is stored.
+Every close removes the ID from the count.
 
 ### Feasibility Assessment
 
@@ -192,17 +225,17 @@ void onSniRegistered(const QString &serviceAndPath) {
 
 ### SNI → Dock Item Correlation
 
-The SNI `Id` field typically matches the `.desktop` file stem:
+The SNI `Id` field typically matches the canonical `.desktop` file stem:
 - SNI `Id: "discord"` → desktop file `discord.desktop` → TaskManager `AppId: "discord"`
 - SNI `Id: "spotify"` → `spotify.desktop`
 - SNI `Id: "kime"` (input method) → no corresponding dock item
 
 **Match algorithm**:
 ```cpp
-// Compare SNI Id with TaskManager AppId (lowercase desktop file stem)
+// Compare canonical desktop identities (lowercase, one trailing .desktop removed).
+// Do not use last-segment or substring matching.
 bool matchSniToDockItem(const QString &sniId, const QString &appId) {
-    return sniId.toLower() == appId.toLower() ||
-           appId.contains(sniId, Qt::CaseInsensitive);
+    return canonicalDesktopIdentity(sniId) == canonicalDesktopIdentity(appId);
 }
 ```
 
@@ -347,12 +380,60 @@ target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
 
 - **Notification watcher**: Receives notification content (summary, body, app name) — the same
   data the notification bell applet reads. No special permissions needed.
-  `NotificationTracker` stores only notification IDs per desktop entry, not bodies.
+  `NotificationTracker` retains the server ID, canonical identity, app metadata, summary/body,
+  actions, hints, timeout, replacement ID, urgency byte, timestamps, and close kind/reason
+  already delivered by the watcher.
 
 - **SNI monitoring**: Only reads app name, status, and icon. No sensitive data.
 
 - **Respect user settings**: Always check `NotificationManager::Settings::badgesInTaskManager()`
   and `badgeBlacklistedApplications()` before showing any notification-derived badge.
+- **History retention**: The local lifecycle history keeps at most 100 inactive records;
+  active records remain indexed for badge correctness.
+
+## Stage 2 notification model
+
+`NotificationTracker` is also the QML-facing notification model. It consumes
+the existing `RegisterWatcher` callback path; Krema does not create a second
+watcher and does not use the external-process `NotificationManager::Notifications`
+proxy.
+
+The model exposes these roles:
+
+| Role group | Roles |
+|---|---|
+| Metadata | `id`, `desktopEntry`, `appName`, `appIcon`, `summary`, `body`, `actions`, `hints`, `timeout`, `replacesId`, `urgency` |
+| Lifecycle | `active`, `read`, `dismissed`, `closeReason`, `broadcastReason`, `createdAt`, `updatedAt` |
+
+QML can query and update the model with:
+
+```qml
+NotificationTracker.notifications(desktopEntry = {}, activeOnly = false)
+NotificationTracker.markRead(id)
+NotificationTracker.markDismissed(id)
+NotificationTracker.invokeAction(id, action)
+```
+
+`invokeAction()` sends the official
+`org.kde.NotificationManager.InvokeAction` method with the notification ID
+and action key. `markRead()` and `markDismissed()` are local Krema state;
+they do not claim to move an app's server-side read cursor.
+
+Replacement removes the replaced ID from the active set while retaining its
+lifecycle record with `closeReason: "replaced"`. Directed
+`CloseNotification` and broadcast `NotificationClosed` remain distinguishable.
+Broadcast reasons are retained as both a named close state and the numeric
+`broadcastReason`.
+
+The QML presentation distinguishes summary, body, app, urgency, timeout,
+`Unread`, `Read`, `Dismissed`, and `Closed`. It provides payload action buttons,
+`Mark read`, and `Dismiss`, and displays:
+
+> Read and dismissed state is local to Krema; it is not synchronized with the app's server.
+
+Use `notifications(..., true)` for the active-only view. Use the default query
+to inspect retained closed or locally dismissed records. Krema retains at most
+100 inactive lifecycle records; active records are not evicted by this limit.
 
 ---
 
@@ -363,20 +444,21 @@ target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
    server. Use the D-Bus watcher (see above) or `WatchedNotificationsModel` via QML instead.
 
 1. **`desktop-entry` hint is optional** — apps that don't send it cannot be correlated exactly.
-   `app_name` is always present but may differ from the desktop file stem; `NotificationTracker`
-   falls back to it.
+   The hint is canonicalized first. If it is missing or cannot be resolved, the normalized hint
+   or `app_name` remains as a fallback identity; Krema does not use fuzzy last-segment matching.
 
 2. **Requires plasmashell** — without Plasma's notification server there is no `RegisterWatcher`.
 
 3. **"Unread" is dock-managed** — Krema clears an app's count when it is focused, from the
    context menu, or when its SNI returns to `Active`; it does not share read state with the
-   notification bell applet.
+   notification bell applet. A successful local clear emits `revisionChanged()` so QML sees the
+   new count immediately.
 
 4. **Electron apps** (Discord, VS Code, etc.) — Notification behavior varies by Electron version.
    Older versions may send `app_name` without `desktop-entry`.
 
-5. **SNI ID matching** — Not standardized. Heuristic matching may produce false positives for
-   similarly-named apps.
+5. **SNI IDs are not standardized** — exact canonical matching avoids false positives, but an
+   unresolved or differently named SNI ID may not correlate with a dock item.
 
 ---
 

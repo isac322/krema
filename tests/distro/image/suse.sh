@@ -8,6 +8,13 @@
 # Refresh the repositories. opensuse-slowroll's base image is
 # opensuse/tumbleweed: its first call swaps the repositories to Slowroll's
 # (family_upgrade then dups onto them).
+suse_refresh() {
+    if zypper --non-interactive --gpg-auto-import-keys refresh "$@"; then
+        return 0
+    fi
+    zypper --non-interactive --gpg-auto-import-keys refresh --force
+}
+
 suse_repos() {
     if [ "$TARGET_ID" = opensuse-slowroll ] \
         && ! zypper --non-interactive repos | grep -qw slowroll-oss; then
@@ -17,10 +24,24 @@ suse_repos() {
         zypper --non-interactive addrepo --refresh \
             https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update
     fi
-    zypper --non-interactive --gpg-auto-import-keys refresh
+    openh264_alias=$(
+        zypper --non-interactive repos |
+            grep -E '^[[:space:]]*[0-9]+[[:space:]]*\|[[:space:]]*(repo-openh264|openSUSE:repo-openh264)[[:space:]]*\|' |
+            sed -n 's/^[^|]*|[[:space:]]*\([^|]*\)[[:space:]]*|.*/\1/p' |
+            sed -n '1p' |
+            sed 's/[[:space:]]*$//'
+    )
+    if [ -n "$openh264_alias" ]; then
+        zypper --non-interactive modifyrepo --disable "$openh264_alias" || true
+    fi
+    suse_refresh "$@"
 }
 
 suse_install() {
+    if zypper --non-interactive install --no-recommends "$@"; then
+        return 0
+    fi
+    suse_repos --force
     zypper --non-interactive install --no-recommends "$@"
 }
 
@@ -51,6 +72,7 @@ family_runtime() {
 family_build() {
     # --force-resolution: the -devel packages need GNU diffutils, which the
     # base image's busybox-diffutils blocks unless zypper may replace it.
+    suse_repos
     suse_install --force-resolution \
         extra-cmake-modules cmake ninja gcc-c++ git pkgconf \
         qt6-base-devel qt6-base-private-devel qt6-wayland-devel qt6-wayland-private-devel \
@@ -92,16 +114,11 @@ family_clean() {
 family_depfetch() {
     zypper --non-interactive modifyrepo -k --all
     suse_repos
-    zypper --non-interactive install --no-recommends --download-only "$@"
+    suse_install --download-only "$@"
 }
 
 family_krema() {
-    if ! suse_install --allow-unsigned-rpm /pkgs/*.rpm; then
-        # A stale metadata snapshot can reference packages the repos no
-        # longer publish: refresh and retry once.
-        zypper --non-interactive --gpg-auto-import-keys refresh --force
-        suse_install --allow-unsigned-rpm /pkgs/*.rpm
-    fi
+    suse_install --allow-unsigned-rpm /pkgs/*.rpm
     # Shrink the committed diff: no cached packages or metadata.
     zypper --non-interactive clean --all
 }

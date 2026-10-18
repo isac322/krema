@@ -1,6 +1,9 @@
 # Context Menu
 
 ## Features
+
+- ctx-clear-notifications: Clear watcher unread notifications for the selected app
+  without touching another app or a visible Unity LauncherEntry count
 - ctx-pin-unpin: Toggle pin/unpin app in dock
 - ctx-new-instance: Launch new instance from menu
 - ctx-close: Close all windows of the app
@@ -226,6 +229,33 @@ app with a distinct window title.
 **Verification:** window list (new window's app id and title), kremarc
 (pinned membership), AT-SPI (item name and window count), screenshot (labels and icons)
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx008_pinned_launcher_launches_the_chosen_desktop_action, tests/appium/test_04_context_menu.py::test_ctx008_grouped_windows_launch_the_chosen_desktop_action (order and NoDisplay are verified by effect: a wrong position launches a window with another title; labels, icons and the launch-error notification are screenshot/manual only). Resolution (Actions= order, NoDisplay, separators, localized names, applications:/local/absolute-path desktop files) is unit-tested in tests/unit/test_desktop_actions.cpp.
+
+## TC CTX-010: Clear Notifications Is App-Scoped
+
+**Precondition:** The real integration harness has pinned Konsole and Dolphin
+launchers. Seed one watcher-unread notification for each app and a visible
+Unity LauncherEntry count for Konsole.
+**Steps:**
+1. Open Konsole's native context menu and inspect its actions.
+2. Trigger `Clear Notifications`.
+3. Read both watcher unread counts and the Unity count.
+4. Reopen Konsole's menu, then open Dolphin's menu.
+
+**Expected:**
+- `Clear Notifications` is present for an app with watcher unread and absent
+  after that app's watcher unread is cleared.
+- Triggering the action clears Konsole's watcher unread count only; Dolphin's
+  watcher unread count remains and the visible Unity count remains unchanged.
+- Dolphin's menu still offers `Clear Notifications` while Dolphin has watcher
+  unread.
+
+**Tier:** Tier 2 (KWin/native QMenu integration).
+**Verification:** real `QMenu::actions()` lookup and `QAction::trigger()`;
+watcher unread counts and Unity LauncherEntry count.
+**Automated:** `tests/integration/test_launcher_entry.cpp` —
+`Context menu clears only watcher unread notifications`.
+
+---
 
 ## TC CTX-009: Menu Holds the Hovered Item's Zoom and Preview
 

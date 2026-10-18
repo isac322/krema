@@ -11,6 +11,7 @@
 // session bus and throwaway XDG directories.
 
 #include "krema.h"
+#include "models/dockcontextmenu.h"
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
@@ -26,10 +27,12 @@
 #include <KConfigGroup>
 #include <KSharedConfig>
 
+#include <QAction>
 #include <QApplication>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
+#include <QMenu>
 #include <QDateTime>
 #include <QQuickItem>
 #include <QQuickStyle>
@@ -214,6 +217,41 @@ QQuickItem *dockItemFor(const QUrl &url)
     return found;
 }
 
+QMenu *openContextMenu(QQuickItem *dockItem)
+{
+    REQUIRE(dockItem);
+    const int index = dockItem->property("index").toInt();
+    app().manager->primaryShell()->contextMenu()->showForTask(index);
+
+    QMenu *menu = nullptr;
+    REQUIRE(waitFor([&] {
+        menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+        return menu != nullptr;
+    }));
+    return menu;
+}
+
+QAction *menuAction(QMenu *menu, const QString &text)
+{
+    REQUIRE(menu);
+    const auto actions = menu->actions();
+    const auto it = std::find_if(actions.cbegin(), actions.cend(), [&](QAction *action) {
+        return action->text() == text;
+    });
+    return it == actions.cend() ? nullptr : *it;
+}
+
+void closeContextMenu(QMenu *menu)
+{
+    if (!menu) {
+        return;
+    }
+    menu->close();
+    REQUIRE(waitFor([] {
+        return QApplication::activePopupWidget() == nullptr;
+    }));
+}
+
 QQuickItem *child(QQuickItem *dockItem, const QString &objectName)
 {
     return findItem(dockItem, [&](QQuickItem *item) {
@@ -305,6 +343,71 @@ TEST_CASE("A visible Unity zero count takes priority over notification fallback"
     REQUIRE(waitFor([&] {
         return app().tracker->unreadCount(QStringLiteral("org.kde.konsole")) == 0;
     }));
+    resetEntries();
+}
+
+TEST_CASE("Context menu clears only watcher unread notifications", "[notification][context-menu][dock]")
+{
+    auto *konsoleItem = dockItemFor(kKonsole);
+    auto *dolphinItem = dockItemFor(kDolphin);
+    REQUIRE(konsoleItem);
+    REQUIRE(dolphinItem);
+
+    auto *tracker = app().tracker.get();
+    tracker->clearUnreadNotifications(QStringLiteral("org.kde.konsole"));
+    tracker->clearUnreadNotifications(QStringLiteral("org.kde.dolphin"));
+    resetEntries();
+
+    tracker->Notify(1200,
+                    QStringLiteral("Konsole"),
+                    0,
+                    QStringLiteral("org.kde.konsole"),
+                    QStringLiteral("Konsole notification"),
+                    QStringLiteral("Fixture notification"),
+                    {},
+                    QVariantMap{{QStringLiteral("desktop-entry"), QStringLiteral("org.kde.konsole")}},
+                    -1);
+    tracker->Notify(1201,
+                    QStringLiteral("Dolphin"),
+                    0,
+                    QStringLiteral("org.kde.dolphin"),
+                    QStringLiteral("Dolphin notification"),
+                    QStringLiteral("Fixture notification"),
+                    {},
+                    QVariantMap{{QStringLiteral("desktop-entry"), QStringLiteral("org.kde.dolphin")}},
+                    -1);
+    REQUIRE(waitFor([&] {
+        return tracker->unreadCount(QStringLiteral("org.kde.konsole")) == 1 && tracker->unreadCount(QStringLiteral("org.kde.dolphin")) == 1;
+    }));
+
+    FakeApp konsole(QStringLiteral("context-menu-unity-count"));
+    konsole.update(kKonsoleUri, {{QStringLiteral("count"), 7}, {QStringLiteral("count-visible"), true}});
+    REQUIRE(waitFor([&] {
+        return app().launcherEntries->countVisible(kKonsole) && app().launcherEntries->count(kKonsole) == 7;
+    }));
+
+    QMenu *menu = openContextMenu(konsoleItem);
+    QAction *clear = menuAction(menu, QStringLiteral("Clear Notifications"));
+    REQUIRE(clear);
+    clear->trigger();
+    REQUIRE(waitFor([&] {
+        return tracker->unreadCount(QStringLiteral("org.kde.konsole")) == 0;
+    }));
+    CHECK(tracker->unreadCount(QStringLiteral("org.kde.dolphin")) == 1);
+    CHECK(app().launcherEntries->countVisible(kKonsole));
+    CHECK(app().launcherEntries->count(kKonsole) == 7);
+    closeContextMenu(menu);
+
+    // The action is present exactly while the selected app has watcher unread.
+    menu = openContextMenu(konsoleItem);
+    CHECK(menuAction(menu, QStringLiteral("Clear Notifications")) == nullptr);
+    closeContextMenu(menu);
+
+    menu = openContextMenu(dolphinItem);
+    REQUIRE(menuAction(menu, QStringLiteral("Clear Notifications")));
+    closeContextMenu(menu);
+
+    tracker->clearUnreadNotifications(QStringLiteral("org.kde.dolphin"));
     resetEntries();
 }
 

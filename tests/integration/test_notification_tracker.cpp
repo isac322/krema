@@ -17,10 +17,15 @@
 
 #include <KConfigGroup>
 #include <KSharedConfig>
+#include <settings.h>
+#include <server.h>
 
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusMessage>
+#include <QDBusReply>
 #include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTest>
@@ -567,14 +572,31 @@ TEST_CASE("SNI registration, status transitions, re-registration and owner loss 
         return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
     }));
 
-    item.setStatus(QStringLiteral("Passive"));
+    notify(tracker, 500, QStringLiteral("SNI App"), QStringLiteral("org.example.sni.desktop"));
+    notify(tracker, 501, QStringLiteral("Other App"), QStringLiteral("org.example.other.desktop"));
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.sni")) == 1);
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.other")) == 1);
+
+    const int revisionBeforeAttention = tracker.revision();
+    item.setStatus(QStringLiteral("Active"));
     REQUIRE(waitFor([&] {
-        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni")) && tracker.unreadCount(QStringLiteral("org.example.sni")) == 0
+            && tracker.revision() != revisionBeforeAttention;
     }));
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.other")) == 1);
 
     item.setStatus(QStringLiteral("NeedsAttention"));
     REQUIRE(waitFor([&] {
         return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+    // Re-entering attention is a boolean state transition; it does not
+    // synthesize a numeric badge after the watcher unread state was cleared.
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.sni")) == 0);
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.other")) == 1);
+
+    item.setStatus(QStringLiteral("Passive"));
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
     }));
 
     item.stop();
@@ -582,6 +604,7 @@ TEST_CASE("SNI registration, status transitions, re-registration and owner loss 
         return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
     }));
 
+    item.setStatus(QStringLiteral("NeedsAttention"));
     REQUIRE(item.start());
     watcher.removeItem(item.itemAddress());
     watcher.addItem(item.itemAddress());
@@ -594,6 +617,76 @@ TEST_CASE("SNI registration, status transitions, re-registration and owner loss 
     watcher.setRegisteredItems({item.itemAddress()});
     REQUIRE(waitFor([&] {
         return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+}
+
+TEST_CASE("DND application inhibition is active without an Until deadline and clears", "[notification][dnd][settings]")
+{
+    auto &notificationServer = NotificationManager::Server::self();
+    notificationServer.clearInhibitions();
+    REQUIRE(notificationServer.init());
+
+    NotificationManager::Settings settings;
+    settings.load();
+    REQUIRE_FALSE(settings.notificationsInhibitedByApplication());
+
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup dnd = config->group(QStringLiteral("DoNotDisturb"));
+    const bool hadUntil = dnd.hasKey(QStringLiteral("Until"));
+    const QVariant previousUntil = dnd.readEntry(QStringLiteral("Until"), QVariant());
+    uint cookie = 0;
+    QDBusInterface notifications(QStringLiteral("org.freedesktop.Notifications"),
+                                 QStringLiteral("/org/freedesktop/Notifications"),
+                                 QStringLiteral("org.freedesktop.Notifications"),
+                                 QDBusConnection::sessionBus());
+    const auto restore = qScopeGuard([&] {
+        if (cookie != 0) {
+            notifications.call(QStringLiteral("UnInhibit"), cookie);
+        }
+        if (hadUntil) {
+            dnd.writeEntry(QStringLiteral("Until"), previousUntil, KConfig::Notify);
+        } else {
+            dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+        }
+        config->sync();
+        notificationServer.clearInhibitions();
+        auto bus = QDBusConnection::sessionBus();
+        bus.unregisterObject(QStringLiteral("/org/freedesktop/Notifications"));
+        bus.unregisterService(QStringLiteral("org.freedesktop.Notifications"));
+    });
+
+    // Remove the expiry source so this gate exercises the application-owned
+    // inhibition path, not the separate Until path.
+    dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+    config->sync();
+    settings.load();
+    REQUIRE_FALSE(settings.notificationsInhibitedUntil().isValid());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return !tracker.dndActive();
+    }));
+
+    const QDBusReply<uint> inhibition = notifications.call(QStringLiteral("Inhibit"),
+                                                           QStringLiteral("org.krema.test"),
+                                                           QStringLiteral("deterministic DND gate"),
+                                                           QVariantMap());
+    REQUIRE(inhibition.isValid());
+    cookie = inhibition.value();
+    REQUIRE(cookie != 0);
+    CHECK(settings.notificationsInhibitedByApplication());
+    CHECK_FALSE(settings.notificationsInhibitedUntil().isValid());
+    REQUIRE(waitFor([&] {
+        return tracker.dndActive();
+    }));
+
+    const QDBusMessage release = notifications.call(QStringLiteral("UnInhibit"), cookie);
+    REQUIRE(release.type() == QDBusMessage::ReplyMessage);
+    cookie = 0;
+    CHECK_FALSE(settings.notificationsInhibitedByApplication());
+    REQUIRE(waitFor([&] {
+        return !tracker.dndActive();
     }));
 }
 

@@ -238,6 +238,24 @@ Do not treat an unverified or empty artifact as a passing capture. ScreenShot2
 requires OpenGL/DRM capture support; QPainter-only sessions fail honestly
 instead of producing synthetic or mock frames.
 
+## Krema notification product-input gates
+
+These deterministic integration gates cover Krema's direct notification
+inputs. They are separate from the wire-level Portal and JobView scenarios,
+which are transport/coverage evidence only and are not Krema notification
+inputs.
+
+| Gate | Tier | Permanent test | Observable oracle |
+|---|---|---|---|
+| Application-owned DND inhibition | Tier 2 (KWin integration) | `tests/integration/test_notification_tracker.cpp` — `DND application inhibition is active without an Until deadline and clears` | Real `Inhibit/UnInhibit` drives the private notification server; `NotificationManager::Settings::notificationsInhibitedByApplication()` reads true/false with no `Until`, and `NotificationTracker::dndActive` follows |
+| SNI attention clears watcher unread state | Tier 2 (KWin/private D-Bus integration) | `tests/integration/test_notification_tracker.cpp` — `SNI registration, status transitions, re-registration and owner loss are observable` | Real SNI `NeedsAttention -> Active/Passive` clears only the matching canonical app's watcher unread count and changes revision; re-entering `NeedsAttention` keeps the boolean attention state without recreating a numeric badge |
+| Context-menu Clear Notifications | Tier 2 (KWin/native QMenu integration) | `tests/integration/test_launcher_entry.cpp` — `Context menu clears only watcher unread notifications` | The real `QMenu` contains `Clear Notifications` iff the selected app has watcher unread; triggering it clears only that app's watcher count and leaves another app plus a visible Unity count unchanged |
+
+The tests use the private notification/SNI peers and installed pinned
+launchers from the integration harness. They do not assert Portal forwarding,
+JobView synchronization, application-server read cursors, or
+`ActionInvoked`/`NotificationReplied` as product inputs.
+
 ## Stage 2 QML model surface
 
 Stage 2 adds QML-facing assertions to the wire-level catalog. It consumes the

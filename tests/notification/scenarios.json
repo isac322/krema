@@ -550,6 +550,68 @@
       }
     },
     {
+      "id": "krema-dock-notification-inbox",
+      "title": "External watcher badge and local Settings inbox lifecycle",
+      "tab": "Notifications settings",
+      "mechanism": "freedesktop-notifications",
+      "correlation": "krema-e2e-<run>",
+      "preconditions": [
+        "A running Krema dock and a test window with a resolvable desktop entry share the private Appium session D-Bus.",
+        "The E2E test launches tests/notification/notify.py serve, which owns org.freedesktop.Notifications and forwards to Krema's /NotificationWatcher.",
+        "tests/notification/notify.py is executable with Python dbus bindings."
+      ],
+      "stimulus": {
+        "script": "tests/notification/notify.py",
+        "commands": [
+          "notify --desktop-entry <target> --summary <unique> --body <unique>",
+          "close <numeric notification id>"
+        ],
+        "wire_jsonl": false
+      },
+      "steps": [
+        "Send two persistent notifications for the running test window and retain their numeric IDs.",
+        "Verify the matching Krema dock item exposes 2 notifications through its AT-SPI description.",
+        "Close the two IDs one at a time and verify the observable count changes to 1 and then clears.",
+        "Send two more persistent notifications, open Settings → Notifications, and verify both cards start Unread.",
+        "Use Mark read on one card and verify Read plus a reduced local unread count while the card remains active.",
+        "Use Dismiss on the other card and verify Dismissed plus a cleared local unread count while the card remains active.",
+        "Verify the inbox states are local to Krema and do not claim an application/server read acknowledgement; close all remaining IDs."
+      ],
+      "expected": [
+        "An external Notify reaches Krema's running watcher and contributes to the dock badge count.",
+        "External CloseNotification updates the dock count without restarting Krema.",
+        "Read and Dismissed are distinct local model states.",
+        "The Settings inbox local-sync notice remains visible."
+      ],
+      "capture": [
+        "Dock item AT-SPI description at counts 2, 1, and 0",
+        "Notifications settings cards before and after Mark read/Dismiss",
+        "Visible local-sync notice"
+      ],
+      "limitations": [
+        "Portal AddNotification forwarding into Plasma is optional and is not inferred here; use portal-notification for its explicit limitation result.",
+        "Jobs are sent to kuiserver and are not consumed as Krema notifications; use jobs for protocol-only coverage.",
+        "SNI, Unity, and DND compatibility are covered only by their separate scenarios when their external callback/property oracle is available.",
+        "Attention-animation pixels are intentionally outside this deterministic gate."
+      ],
+      "automation": {
+        "controls": [
+          "tests/notification/notify.py notify",
+          "tests/notification/notify.py close",
+          "Notifications settings page",
+          "Mark read",
+          "Dismiss"
+        ],
+        "test": "tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle",
+        "assertion_source": "Krema dock AT-SPI and Notifications settings AT-SPI",
+        "assertions": [
+          "Two external notification IDs produce a 2 → 1 → 0 observable dock count.",
+          "Settings inbox transitions Unread → Read and Unread → Dismissed locally.",
+          "No server/application read synchronization is claimed."
+        ]
+      }
+    },
+    {
       "id": "dnd",
       "title": "Do Not Disturb inhibition and observed property",
       "tab": "DND",

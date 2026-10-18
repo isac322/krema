@@ -8,6 +8,8 @@
 // surface as the session-bus callbacks without depending on a particular
 // notification server implementation or its transient notification state.
 
+#include "../notification/fixtures/dbuspeers.h"
+
 #include "models/notificationtracker.h"
 
 #include <catch2/catch_session.hpp>
@@ -469,6 +471,158 @@ TEST_CASE("Notification model retains broadcast close reason", "[notification][m
     CHECK(tracker.notifications(QStringLiteral("org.example.closer")).size() == 1);
     CHECK(roleValue(&tracker, 0, "broadcastReason").toUInt() == 2);
     CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("broadcast-dismissed"));
+}
+
+TEST_CASE("Notification watcher receives real D-Bus transport and lifecycle signals", "[notification][dbus][transport]")
+{
+    krema::test::NotificationServerPeer server;
+    REQUIRE(server.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return server.registerWatcherCalls() >= 1;
+    }));
+
+    REQUIRE(server.sendNotify(QStringLiteral("Fixture Mail"),
+                              900,
+                              0,
+                              QStringLiteral("org.example.fixture"),
+                              QStringLiteral("Initial"),
+                              QStringLiteral("Initial body"),
+                              {QStringLiteral("open"), QStringLiteral("Open")},
+                              5000,
+                              1));
+    REQUIRE(waitFor([&] {
+        return tracker.rowCount() == 1 && tracker.unreadCount(QStringLiteral("org.example.fixture")) == 1;
+    }));
+    CHECK(roleValue(&tracker, 0, "summary").toString() == QStringLiteral("Initial"));
+
+    REQUIRE(server.sendNotify(QStringLiteral("Fixture Mail"),
+                              901,
+                              900,
+                              QStringLiteral("org.example.fixture"),
+                              QStringLiteral("Replacement"),
+                              QStringLiteral("Replacement body")));
+    REQUIRE(waitFor([&] {
+        return tracker.rowCount() == 2 && tracker.unreadCount(QStringLiteral("org.example.fixture")) == 1;
+    }));
+    CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("replaced"));
+    CHECK(roleValue(&tracker, 1, "id").toUInt() == 901);
+
+    REQUIRE(server.sendClose(901));
+    REQUIRE(waitFor([&] {
+        return tracker.notifications(QStringLiteral("org.example.fixture"), true).isEmpty();
+    }));
+    CHECK(roleValue(&tracker, 1, "closeReason").toString() == QStringLiteral("directed"));
+
+    REQUIRE(server.sendNotify(QStringLiteral("Fixture Mail"), 902, 0, QStringLiteral("org.example.fixture")));
+    REQUIRE(waitFor([&] {
+        return tracker.unreadCount(QStringLiteral("org.example.fixture")) == 1;
+    }));
+    REQUIRE(server.broadcastClose(902, 1));
+    REQUIRE(waitFor([&] {
+        return tracker.notifications(QStringLiteral("org.example.fixture"), true).isEmpty();
+    }));
+    CHECK(roleValue(&tracker, 2, "broadcastReason").toUInt() == 1);
+    CHECK(roleValue(&tracker, 2, "closeReason").toString() == QStringLiteral("broadcast-expired"));
+}
+
+TEST_CASE("Notification watcher re-registers after notification service owner loss", "[notification][dbus][lifecycle]")
+{
+    krema::test::NotificationServerPeer server;
+    REQUIRE(server.start());
+
+    ScopedTracker scoped;
+    REQUIRE(waitFor([&] {
+        return server.registerWatcherCalls() >= 1;
+    }));
+
+    server.stop();
+    REQUIRE(waitFor([&] {
+        return !server.isRegistered();
+    }));
+    REQUIRE(server.start());
+    REQUIRE(waitFor([&] {
+        return server.registerWatcherCalls() >= 2;
+    }));
+}
+
+TEST_CASE("SNI registration, status transitions, re-registration and owner loss are observable", "[notification][sni][dbus]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.Sni"));
+    // The tracker issues Id and Status property calls independently; publish
+    // the status first so either reply order must still converge.
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    item.setId(QStringLiteral("org.example.sni"));
+    REQUIRE(item.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    item.setStatus(QStringLiteral("Passive"));
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    item.stop();
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    REQUIRE(item.start());
+    watcher.removeItem(item.itemAddress());
+    watcher.addItem(item.itemAddress());
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    watcher.stop();
+    REQUIRE(watcher.start());
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+}
+
+TEST_CASE("DND Until is active before its boundary and clears after expiry", "[notification][dnd][settings]")
+{
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup dnd = config->group(QStringLiteral("DoNotDisturb"));
+    const bool hadUntil = dnd.hasKey(QStringLiteral("Until"));
+    const QVariant previousUntil = dnd.readEntry(QStringLiteral("Until"), QVariant());
+    const auto restore = qScopeGuard([&] {
+        if (hadUntil) {
+            dnd.writeEntry(QStringLiteral("Until"), previousUntil, KConfig::Notify);
+        } else {
+            dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+        }
+        config->sync();
+    });
+
+    dnd.writeEntry(QStringLiteral("Until"), QDateTime::currentDateTime().addMSecs(350), KConfig::Notify);
+    config->sync();
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.dndActive();
+    }));
+    REQUIRE(waitFor([&] {
+        return !tracker.dndActive();
+    }));
 }
 
 int main(int argc, char *argv[])

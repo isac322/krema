@@ -10,7 +10,7 @@
 #include <QMap>
 #include <QHash>
 #include <QObject>
-#include <QSet>
+#include <QTimer>
 #include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
@@ -124,14 +124,20 @@ public Q_SLOTS:
     Q_SCRIPTABLE void NotificationClosed(uint id, uint reason);
 
 private Q_SLOTS:
+    void onNotificationServiceRegistered(const QString &service);
+    void onNotificationServiceUnregistered(const QString &service);
     // SNI signal handlers
     void onSniRegistered(const QString &item);
     void onSniUnregistered(const QString &item);
     void onSniNewStatus(const QString &status, const QDBusMessage &message);
     void onSniServiceUnregistered(const QString &service);
+    void onSniWatcherServiceRegistered(const QString &service);
+    void onSniWatcherServiceUnregistered(const QString &service);
 
 private:
     struct NotificationRecord;
+    void registerNotificationWatcher();
+    void connectNotificationClosedMatch();
     void setupNotificationWatcher();
     void setupSniWatcher();
     void bumpRevision();
@@ -143,6 +149,8 @@ private:
     void updateDndState();
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
+    QString sniKeyForMessage(const QDBusMessage &message) const;
+    void clearSniItems();
 
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
@@ -189,14 +197,29 @@ private:
     QMap<QPair<QDateTime, uint>, uint> m_inactiveRecordOrder;
     QHash<uint, QPair<QDateTime, uint>> m_inactiveRecordKeys;
 
-    // SNI tracking: "busName/objectPath" -> {id, status}
+    // SNI tracking: "service|objectPath" -> {id, status}
     struct SniEntry {
         QString id; // Application identifier from SNI Id property
         QString status; // "Passive", "Active", "NeedsAttention"
+        quint64 generation = 0;
     };
     QHash<QString, SniEntry> m_sniItems;
 
+    QDBusServiceWatcher m_notificationServiceWatcher;
+    QDBusServiceWatcher m_sniWatcherServiceWatcher;
     QDBusServiceWatcher m_sniServiceWatcher;
+    QTimer m_dndExpiryTimer;
+
+    quint64 m_notificationOwnerGeneration = 0;
+    quint64 m_sniWatcherGeneration = 0;
+    quint64 m_sniItemGeneration = 0;
+    bool m_notificationObjectRegistered = false;
+    bool m_notificationClosedMatchConnected = false;
+    bool m_notificationRegisterPending = false;
+    bool m_notificationWatcherRegistered = false;
+    bool m_sniWatcherRegisteredMatchConnected = false;
+    bool m_sniWatcherUnregisteredMatchConnected = false;
+    bool m_sniStatusMatchConnected = false;
 
     int m_revision = 0;
     bool m_dndActive = false;

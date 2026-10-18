@@ -36,7 +36,7 @@ In particular:
 
 ## Prerequisites
 
-Run this on a real Plasma 6 Wayland session with:
+Run the manual wire scenarios on a real Plasma 6 Wayland session with:
 
 - a working user/session D-Bus;
 - `python3`, PyQt6, `dbus-python`, and PyGObject;
@@ -46,6 +46,9 @@ Run this on a real Plasma 6 Wayland session with:
 - `selenium-webdriver-at-spi-screenshotter` and `ffmpeg` when container video
   capture is requested; and
 - `wf-recorder` when host `run-qa.sh --capture` is requested.
+
+The Appium lifecycle case uses `notify.py serve` as a test-owned notification
+server and does not require Plasma's notification server.
 
 ScreenShot2 capture requires KWin to have OpenGL/DRM capture support. In the
 container, provide a DRM render node (for example, `vgem`); QPainter-only KWin
@@ -77,6 +80,22 @@ tests/notification/run-qa.sh \
   --jsonl "$PWD/sni.jsonl" \
   --capture "$PWD/sni.wcap"
 ```
+
+
+For the Appium notification lifecycle case, the test launches a test-owned
+server without relying on Plasma's notification daemon:
+
+```sh
+python3 tests/notification/notify.py serve \
+  --ready-file /tmp/krema-notify.ready \
+  --watcher-ready-file /tmp/krema-notify.watcher.ready
+```
+
+The server owns `org.freedesktop.Notifications`, accepts the standard
+`Notify` and `CloseNotification` calls, accepts KDE
+`RegisterWatcher`/`UnRegisterWatcher`, forwards notifications to Krema's
+`/NotificationWatcher`, and emits `NotificationClosed`. The Appium test uses
+ready files before sending stimuli; it terminates the process during cleanup.
 
 `--scenario ID` is passed to the app and selects the scenario shown to the
 operator. `--jsonl PATH` selects the event file. If omitted, the app uses its

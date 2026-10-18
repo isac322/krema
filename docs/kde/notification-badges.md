@@ -20,6 +20,24 @@ Krema combines four badge sources:
 Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux, so
 sources 2–4 cover the rest.
 
+## Input boundaries and service lifecycle
+
+Krema consumes the KDE watcher, Unity LauncherEntry, SNI `NeedsAttention`,
+task-manager attention, and `NotificationManager::Settings`. The notification
+tracker re-registers with the Freedesktop notification service after a late
+startup or owner restart. It also re-queries the StatusNotifierWatcher after
+that service appears or restarts and ignores stale asynchronous `Id` and
+`Status` replies.
+
+The desktop portal is a transport, not a second badge source. When the KDE
+portal forwards a notification to Plasma's Freedesktop server, Krema receives
+the resulting watcher `Notify` call. If the portal does not forward it, Krema
+does not receive the notification directly.
+
+`org.kde.kuiserver` and `JobViewV2` report file-operation progress. They are not
+Krema notification inputs and do not create inbox rows or unread badges.
+
+
 ---
 
 ## Approach 1: RegisterWatcher (Notification Watcher)

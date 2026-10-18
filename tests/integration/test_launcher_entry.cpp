@@ -263,6 +263,51 @@ TEST_CASE("A LauncherEntry count shows as a badge on the dock item", "[launcher-
     }));
 }
 
+TEST_CASE("A visible Unity zero count takes priority over notification fallback", "[launcher-entry][notification][dock]")
+{
+    auto *item = dockItemFor(kKonsole);
+    REQUIRE(item);
+    auto *badge = child(item, QStringLiteral("badge"));
+    REQUIRE(badge);
+
+    app().tracker->clearUnreadNotifications(QStringLiteral("org.kde.konsole"));
+    app().tracker->Notify(990,
+                          QStringLiteral("org.kde.konsole"),
+                          0,
+                          QStringLiteral("org.kde.konsole"),
+                          QStringLiteral("New mail"),
+                          QStringLiteral("Fixture notification"),
+                          {},
+                          {},
+                          -1);
+    REQUIRE(waitFor([&] {
+        return app().tracker->unreadCount(QStringLiteral("org.kde.konsole")) == 1;
+    }));
+    CHECK(waitFor([&] {
+        return item->property("_badgeCount").toInt() == 1;
+    }));
+
+    FakeApp konsole(QStringLiteral("launcher-entry-zero-count"));
+    konsole.update(kKonsoleUri, {{QStringLiteral("count"), 0}, {QStringLiteral("count-visible"), true}});
+    REQUIRE(waitFor([&] {
+        return app().launcherEntries->countVisible(kKonsole) && app().launcherEntries->count(kKonsole) == 0;
+    }));
+    CHECK(item->property("_badgeCount").toInt() == 0);
+    CHECK_FALSE(badge->isVisible());
+
+    // Hiding the Unity count reveals the watched-notification fallback again.
+    konsole.update(kKonsoleUri, {{QStringLiteral("count-visible"), false}});
+    CHECK(waitFor([&] {
+        return item->property("_badgeCount").toInt() == 1 && badge->isVisible();
+    }));
+
+    app().tracker->NotificationClosed(990, 2);
+    REQUIRE(waitFor([&] {
+        return app().tracker->unreadCount(QStringLiteral("org.kde.konsole")) == 0;
+    }));
+    resetEntries();
+}
+
 TEST_CASE("A LauncherEntry progress shows as a progress bar on the dock item", "[launcher-entry][dock]")
 {
     auto *item = dockItemFor(kKonsole);

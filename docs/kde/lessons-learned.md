@@ -142,12 +142,12 @@
 **오해:** `classBegin()` + `componentComplete()` 수동 호출로 해결된다고 생각했으나 무관.
 **진짜 문제:** 소스 모델 타입이 잘못됨 (`NotificationsModel` vs `WatchedNotificationsModel`).
 
-**올바른 해결책:**
 - **방법 1 (권장)**: 커스텀 D-Bus 감시자 직접 구현
-  - `/org/freedesktop/Notifications` 경로에 D-Bus 객체 등록 (`registerObject`)
+  - `/NotificationWatcher` 경로에 `org.kde.NotificationWatcher` 객체 등록
+    (`ExportScriptableSlots`)
   - `org.kde.NotificationManager.RegisterWatcher()` 호출
-  - plasmashell이 `Notify()` 슬롯을 직접 호출해 줌
-  - `hints["desktop-entry"]`로 앱 식별
+  - plasmashell이 `Notify()`와 `CloseNotification()` 슬롯을 호출
+  - `NotificationClosed`는 Freedesktop 서비스의 broadcast signal로 구독
 - **방법 2**: QML 엔진에서 `WatchedNotificationsModel` 인스턴스 생성
 
 **상세 분석:** `docs/kde/notification-badges.md` 섹션 "CRITICAL BUG" 참조

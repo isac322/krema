@@ -5,7 +5,7 @@
 # KWin virtual compositor (see tests/run-with-kwin.sh).
 find_program(KWIN_WAYLAND_EXECUTABLE kwin_wayland)
 find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
-find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Test DBus)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -36,6 +36,8 @@ target_link_libraries(krema_launcher_entry_tests PRIVATE
 
 add_executable(krema_notification_tracker_tests
     test_notification_tracker.cpp
+    ../notification/fixtures/dbuspeers.cpp
+    ../notification/fixtures/dbuspeers.h
 )
 
 kde_target_enable_exceptions(krema_notification_tracker_tests PRIVATE)
@@ -43,6 +45,7 @@ kde_target_enable_exceptions(krema_notification_tracker_tests PRIVATE)
 target_link_libraries(krema_notification_tracker_tests PRIVATE
     Catch2::Catch2
     Qt6::Test
+    Qt6::DBus
     krema_lib
 )
 

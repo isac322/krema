@@ -7,9 +7,12 @@
 
 #include <KService>
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
+
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
@@ -25,6 +28,13 @@ namespace krema
 namespace
 {
 constexpr qsizetype kMaxInactiveNotificationRecords = 100;
+constexpr auto kNotificationService = "org.freedesktop.Notifications";
+constexpr auto kSniWatcherService = "org.kde.StatusNotifierWatcher";
+constexpr auto kSniKeySeparator = QLatin1Char('|');
+
+static QString sniKey(const QString &service, const QString &objectPath)
+{
+    return service + kSniKeySeparator + objectPath;
 }
 
 // Strip ".desktop" suffix if present.
@@ -60,10 +70,19 @@ static QString canonicalDesktopId(const QString &rawId)
     }
     return id;
 }
+} // namespace
+
 
 NotificationTracker::NotificationTracker(QObject *parent)
     : QAbstractListModel(parent)
+    , m_notificationServiceWatcher(QStringLiteral("org.freedesktop.Notifications"),
+                                    QDBusConnection::sessionBus(),
+                                    QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration)
+    , m_sniWatcherServiceWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"),
+                                  QDBusConnection::sessionBus(),
+                                  QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration)
     , m_sniServiceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForUnregistration)
+    , m_dndExpiryTimer(this)
 {
     // Settings — must load() explicitly (constructor doesn't auto-load)
     m_notifSettings = std::make_unique<NotificationManager::Settings>(this);
@@ -75,7 +94,8 @@ NotificationTracker::NotificationTracker(QObject *parent)
     // DND state tracking
     connect(m_notifSettings.get(), &NotificationManager::Settings::settingsChanged, this, &NotificationTracker::updateDndState);
     connect(m_notifSettings.get(), &NotificationManager::Settings::notificationsInhibitedByApplicationChanged, this, &NotificationTracker::updateDndState);
-
+    m_dndExpiryTimer.setSingleShot(true);
+    connect(&m_dndExpiryTimer, &QTimer::timeout, this, &NotificationTracker::updateDndState);
     setupNotificationWatcher();
     setupSniWatcher();
     updateDndState();
@@ -83,7 +103,10 @@ NotificationTracker::NotificationTracker(QObject *parent)
 
 NotificationTracker::~NotificationTracker()
 {
-    // Unregister watcher from notification server
+    m_dndExpiryTimer.stop();
+    if (!m_notificationWatcherRegistered) {
+        return;
+    }
     QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"),
                                                       QStringLiteral("/org/freedesktop/Notifications"),
                                                       QStringLiteral("org.kde.NotificationManager"),
@@ -369,18 +392,19 @@ void NotificationTracker::resetNotificationModel()
 
 void NotificationTracker::updateDndState()
 {
+    m_dndExpiryTimer.stop();
     bool active = false;
     if (m_notifSettings) {
         active = m_notifSettings->notificationsInhibitedByApplication();
         if (!active) {
             const auto until = m_notifSettings->notificationsInhibitedUntil();
-            if (until.isValid() && until > QDateTime::currentDateTime()) {
+            const auto now = QDateTime::currentDateTime();
+            if (until.isValid() && until > now) {
                 active = true;
-                // Schedule re-check when DND period expires
-                const int msUntil = static_cast<int>(QDateTime::currentDateTime().msecsTo(until));
-                if (msUntil > 0) {
-                    QTimer::singleShot(msUntil + 100, this, &NotificationTracker::updateDndState);
-                }
+                const qint64 msUntil = now.msecsTo(until);
+                const auto delay = std::chrono::milliseconds(std::max<qint64>(1, msUntil));
+                m_dndExpiryTimer.start(delay);
+                qCDebug(lcNotif) << "DND expiry scheduled in" << delay.count() << "ms";
             }
         }
     }
@@ -524,44 +548,107 @@ void NotificationTracker::dumpState() const
 void NotificationTracker::setupNotificationWatcher()
 {
     auto bus = QDBusConnection::sessionBus();
+    connect(&m_notificationServiceWatcher, &QDBusServiceWatcher::serviceRegistered, this, &NotificationTracker::onNotificationServiceRegistered);
+    connect(&m_notificationServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onNotificationServiceUnregistered);
 
-    // Register our object at /NotificationWatcher with org.kde.NotificationWatcher interface.
-    // The notification server (plasmashell) hardcodes this path/interface when calling watchers.
-    // Do NOT use /org/freedesktop/Notifications or org.freedesktop.Notifications here.
-    bool registered =
-        bus.registerObject(QStringLiteral("/NotificationWatcher"), QStringLiteral("org.kde.NotificationWatcher"), this, QDBusConnection::ExportScriptableSlots);
-    if (!registered) {
-        qCWarning(lcNotif) << "Failed to register D-Bus notification watcher object:" << bus.lastError().message();
+    // The notification server hardcodes this object path/interface for
+    // RegisterWatcher callbacks; it is not the freedesktop server path.
+    if (!m_notificationObjectRegistered) {
+        if (!bus.registerObject(QStringLiteral("/NotificationWatcher"),
+                                QStringLiteral("org.kde.NotificationWatcher"),
+                                this,
+                                QDBusConnection::ExportScriptableSlots)) {
+            qCWarning(lcNotif) << "Failed to register D-Bus notification watcher object:" << bus.lastError().message();
+        } else {
+            m_notificationObjectRegistered = true;
+            qCInfo(lcNotif) << "D-Bus watcher object registered at /NotificationWatcher";
+        }
+    }
+
+    connectNotificationClosedMatch();
+
+    const auto *dbusInterface = bus.interface();
+    if (dbusInterface && dbusInterface->isServiceRegistered(QString::fromLatin1(kNotificationService))) {
+        registerNotificationWatcher();
+    } else {
+        qCInfo(lcNotif) << "Notification server is not owned yet; waiting for service registration";
+    }
+}
+
+void NotificationTracker::connectNotificationClosedMatch()
+{
+    if (m_notificationClosedMatchConnected) {
+        return;
+    }
+    auto bus = QDBusConnection::sessionBus();
+    if (!bus.connect(QString::fromLatin1(kNotificationService),
+                     QStringLiteral("/org/freedesktop/Notifications"),
+                     QStringLiteral("org.freedesktop.Notifications"),
+                     QStringLiteral("NotificationClosed"),
+                     this,
+                     SLOT(NotificationClosed(uint, uint)))) {
+        qCWarning(lcNotif) << "Failed to subscribe to NotificationClosed:" << bus.lastError().message();
+        return;
+    }
+    m_notificationClosedMatchConnected = true;
+}
+
+void NotificationTracker::registerNotificationWatcher()
+{
+    if (!m_notificationObjectRegistered || m_notificationRegisterPending || m_notificationWatcherRegistered) {
         return;
     }
 
-    qCInfo(lcNotif) << "D-Bus watcher object registered at /NotificationWatcher (interface=org.kde.NotificationWatcher)";
+    auto bus = QDBusConnection::sessionBus();
+    const auto *dbusInterface = bus.interface();
+    if (!dbusInterface || !dbusInterface->isServiceRegistered(QString::fromLatin1(kNotificationService))) {
+        return;
+    }
 
-    // Subscribe to NotificationClosed broadcast signal.
-    // This is a broadcast signal from org.freedesktop.Notifications, NOT a directed call
-    // to our watcher object. Must be subscribed separately.
-    bus.connect(QStringLiteral("org.freedesktop.Notifications"),
-                QStringLiteral("/org/freedesktop/Notifications"),
-                QStringLiteral("org.freedesktop.Notifications"),
-                QStringLiteral("NotificationClosed"),
-                this,
-                SLOT(NotificationClosed(uint, uint)));
-
-    // Tell the notification server we want to watch all notifications
-    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"),
+    QDBusMessage msg = QDBusMessage::createMethodCall(QString::fromLatin1(kNotificationService),
                                                       QStringLiteral("/org/freedesktop/Notifications"),
                                                       QStringLiteral("org.kde.NotificationManager"),
                                                       QStringLiteral("RegisterWatcher"));
+    const quint64 generation = ++m_notificationOwnerGeneration;
+    m_notificationRegisterPending = true;
     auto *watcher = new QDBusPendingCallWatcher(bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, generation](QDBusPendingCallWatcher *w) {
         QDBusPendingReply<> reply = *w;
+        w->deleteLater();
+        if (generation != m_notificationOwnerGeneration) {
+            return;
+        }
+        m_notificationRegisterPending = false;
         if (reply.isError()) {
             qCWarning(lcNotif) << "RegisterWatcher FAILED:" << reply.error().message();
-        } else {
-            qCInfo(lcNotif) << "RegisterWatcher succeeded — now receiving notifications";
+            return;
         }
+        m_notificationWatcherRegistered = true;
+        qCInfo(lcNotif) << "RegisterWatcher succeeded — now receiving notifications";
     });
+}
+
+void NotificationTracker::onNotificationServiceRegistered(const QString &service)
+{
+    if (service != QString::fromLatin1(kNotificationService)) {
+        return;
+    }
+    ++m_notificationOwnerGeneration;
+    m_notificationWatcherRegistered = false;
+    m_notificationRegisterPending = false;
+    qCInfo(lcNotif) << "Notification server appeared; registering watcher";
+    registerNotificationWatcher();
+}
+
+void NotificationTracker::onNotificationServiceUnregistered(const QString &service)
+{
+    if (service != QString::fromLatin1(kNotificationService)) {
+        return;
+    }
+    ++m_notificationOwnerGeneration;
+    m_notificationWatcherRegistered = false;
+    m_notificationRegisterPending = false;
+    qCInfo(lcNotif) << "Notification server owner lost; watcher registration invalidated";
 }
 
 void NotificationTracker::Notify(uint id,
@@ -724,33 +811,53 @@ void NotificationTracker::setupSniWatcher()
 {
     auto bus = QDBusConnection::sessionBus();
 
-    bus.connect(QStringLiteral("org.kde.StatusNotifierWatcher"),
-                QStringLiteral("/StatusNotifierWatcher"),
-                QStringLiteral("org.kde.StatusNotifierWatcher"),
-                QStringLiteral("StatusNotifierItemRegistered"),
-                this,
-                SLOT(onSniRegistered(QString)));
-
-    bus.connect(QStringLiteral("org.kde.StatusNotifierWatcher"),
-                QStringLiteral("/StatusNotifierWatcher"),
-                QStringLiteral("org.kde.StatusNotifierWatcher"),
-                QStringLiteral("StatusNotifierItemUnregistered"),
-                this,
-                SLOT(onSniUnregistered(QString)));
-
-    // Listen to ALL NewStatus signals from any StatusNotifierItem.
-    bus.connect(QString(),
-                QString(),
-                QStringLiteral("org.kde.StatusNotifierItem"),
-                QStringLiteral("NewStatus"),
-                this,
-                SLOT(onSniNewStatus(QString, QDBusMessage)));
+    if (!m_sniWatcherRegisteredMatchConnected) {
+        m_sniWatcherRegisteredMatchConnected =
+            bus.connect(QString::fromLatin1(kSniWatcherService),
+                        QStringLiteral("/StatusNotifierWatcher"),
+                        QStringLiteral("org.kde.StatusNotifierWatcher"),
+                        QStringLiteral("StatusNotifierItemRegistered"),
+                        this,
+                        SLOT(onSniRegistered(QString)));
+        if (!m_sniWatcherRegisteredMatchConnected) {
+            qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItemRegistered:" << bus.lastError().message();
+        }
+    }
+    if (!m_sniWatcherUnregisteredMatchConnected) {
+        m_sniWatcherUnregisteredMatchConnected =
+            bus.connect(QString::fromLatin1(kSniWatcherService),
+                        QStringLiteral("/StatusNotifierWatcher"),
+                        QStringLiteral("org.kde.StatusNotifierWatcher"),
+                        QStringLiteral("StatusNotifierItemUnregistered"),
+                        this,
+                        SLOT(onSniUnregistered(QString)));
+        if (!m_sniWatcherUnregisteredMatchConnected) {
+            qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItemUnregistered:" << bus.lastError().message();
+        }
+    }
+    if (!m_sniStatusMatchConnected) {
+        m_sniStatusMatchConnected =
+            bus.connect(QString(),
+                        QString(),
+                        QStringLiteral("org.kde.StatusNotifierItem"),
+                        QStringLiteral("NewStatus"),
+                        this,
+                        SLOT(onSniNewStatus(QString, QDBusMessage)));
+        if (!m_sniStatusMatchConnected) {
+            qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItem.NewStatus:" << bus.lastError().message();
+        }
+    }
 
     connect(&m_sniServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onSniServiceUnregistered);
+    connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceRegistered, this, &NotificationTracker::onSniWatcherServiceRegistered);
+    connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onSniWatcherServiceUnregistered);
 
-    qCInfo(lcNotif) << "SNI watcher signals subscribed";
-
-    queryRegisteredSniItems();
+    const auto *dbusInterface = bus.interface();
+    if (dbusInterface && dbusInterface->isServiceRegistered(QString::fromLatin1(kSniWatcherService))) {
+        queryRegisteredSniItems();
+    } else {
+        qCInfo(lcNotif) << "SNI watcher is not owned yet; waiting for service registration";
+    }
 }
 
 void NotificationTracker::bumpRevision()
@@ -777,24 +884,27 @@ void NotificationTracker::bumpRevision()
 
 void NotificationTracker::queryRegisteredSniItems()
 {
-    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.StatusNotifierWatcher"),
+    QDBusMessage msg = QDBusMessage::createMethodCall(QString::fromLatin1(kSniWatcherService),
                                                       QStringLiteral("/StatusNotifierWatcher"),
                                                       QStringLiteral("org.freedesktop.DBus.Properties"),
                                                       QStringLiteral("Get"));
     msg << QStringLiteral("org.kde.StatusNotifierWatcher") << QStringLiteral("RegisteredStatusNotifierItems");
 
+    const quint64 watcherGeneration = m_sniWatcherGeneration;
     auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcherGeneration](QDBusPendingCallWatcher *w) {
         QDBusPendingReply<QDBusVariant> reply = *w;
+        w->deleteLater();
+        if (watcherGeneration != m_sniWatcherGeneration) {
+            return;
+        }
         if (reply.isError()) {
             qCWarning(lcNotif) << "Failed to query SNI items:" << reply.error().message();
             return;
         }
 
         const QStringList items = reply.value().variant().toStringList();
-        qCInfo(lcNotif) << "Registered SNI items at startup:" << items.size() << items;
-
+        qCInfo(lcNotif) << "Registered SNI items:" << items.size() << items;
         for (const QString &item : items) {
             onSniRegistered(item);
         }
@@ -803,57 +913,85 @@ void NotificationTracker::queryRegisteredSniItems()
 
 void NotificationTracker::trackSniItem(const QString &service, const QString &objectPath)
 {
-    const QString key = service + objectPath;
-
+    if (service.isEmpty() || objectPath.isEmpty() || !objectPath.startsWith(QLatin1Char('/'))) {
+        qCWarning(lcNotif) << "Ignoring malformed SNI item:" << service << objectPath;
+        return;
+    }
+    auto bus = QDBusConnection::sessionBus();
+    const auto *dbusInterface = bus.interface();
+    if (!dbusInterface || !dbusInterface->isServiceRegistered(service)) {
+        qCInfo(lcNotif) << "Ignoring SNI item whose service is no longer owned:" << service << objectPath;
+        return;
+    }
+    const QString key = sniKey(service, objectPath);
     if (m_sniItems.contains(key)) {
         return;
     }
 
     m_sniServiceWatcher.addWatchedService(service);
-    m_sniItems[key] = SniEntry{.id = QString(), .status = QStringLiteral("Passive")};
+    const quint64 generation = ++m_sniItemGeneration;
+    m_sniItems.insert(key, SniEntry{.id = QString(), .status = QStringLiteral("Passive"), .generation = generation});
 
-    auto bus = QDBusConnection::sessionBus();
-
-    // Query Id property
     QDBusMessage idMsg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
     idMsg << QStringLiteral("org.kde.StatusNotifierItem") << QStringLiteral("Id");
-
     auto *idWatcher = new QDBusPendingCallWatcher(bus.asyncCall(idMsg), this);
-    connect(idWatcher, &QDBusPendingCallWatcher::finished, this, [this, key](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
+    connect(idWatcher, &QDBusPendingCallWatcher::finished, this, [this, key, generation](QDBusPendingCallWatcher *w) {
         QDBusPendingReply<QDBusVariant> reply = *w;
+        w->deleteLater();
         if (reply.isError()) {
             qCInfo(lcNotif) << "SNI Id query failed for" << key << ":" << reply.error().message();
             return;
         }
-        if (auto it = m_sniItems.find(key); it != m_sniItems.end()) {
-            it->id = reply.value().variant().toString();
-            qCInfo(lcNotif) << "SNI tracked:" << key << "id=" << it->id;
+        const auto it = m_sniItems.find(key);
+        if (it == m_sniItems.end() || it->generation != generation) {
+            return;
         }
+        const QString newId = reply.value().variant().toString();
+        if (it->id == newId) {
+            return;
+        }
+        it->id = newId;
+        qCInfo(lcNotif) << "SNI tracked:" << key << "id=" << it->id;
+        bumpRevision();
     });
 
-    // Query Status property
     QDBusMessage statusMsg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
     statusMsg << QStringLiteral("org.kde.StatusNotifierItem") << QStringLiteral("Status");
-
     auto *statusWatcher = new QDBusPendingCallWatcher(bus.asyncCall(statusMsg), this);
-    connect(statusWatcher, &QDBusPendingCallWatcher::finished, this, [this, key](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
+    connect(statusWatcher, &QDBusPendingCallWatcher::finished, this, [this, key, generation](QDBusPendingCallWatcher *w) {
         QDBusPendingReply<QDBusVariant> reply = *w;
+        w->deleteLater();
         if (reply.isError()) {
             qCInfo(lcNotif) << "SNI Status query failed for" << key << ":" << reply.error().message();
             return;
         }
-        if (auto it = m_sniItems.find(key); it != m_sniItems.end()) {
-            const QString newStatus = reply.value().variant().toString();
-            if (it->status != newStatus) {
-                qCInfo(lcNotif) << "SNI initial status:" << key << it->status << "->" << newStatus;
-                it->status = newStatus;
-                bumpRevision();
-            }
+        const auto it = m_sniItems.find(key);
+        if (it == m_sniItems.end() || it->generation != generation) {
+            return;
+        }
+        const QString newStatus = reply.value().variant().toString();
+        if (it->status != newStatus) {
+            qCInfo(lcNotif) << "SNI initial status:" << key << it->status << "->" << newStatus;
+            it->status = newStatus;
+            bumpRevision();
         }
     });
 }
+void NotificationTracker::clearSniItems()
+{
+    if (m_sniItems.isEmpty()) {
+        return;
+    }
+    for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
+        const int separator = it.key().indexOf(kSniKeySeparator);
+        if (separator > 0) {
+            m_sniServiceWatcher.removeWatchedService(it.key().left(separator));
+        }
+    }
+    m_sniItems.clear();
+    bumpRevision();
+}
+
 
 // --- SNI D-Bus slot handlers ---
 
@@ -876,22 +1014,53 @@ void NotificationTracker::onSniRegistered(const QString &item)
 void NotificationTracker::onSniUnregistered(const QString &item)
 {
     const int slashIdx = item.indexOf(QLatin1Char('/'));
-    QString key;
-    if (slashIdx > 0) {
-        key = item;
-    } else {
-        key = item + QStringLiteral("/StatusNotifierItem");
-    }
+    const QString service = slashIdx > 0 ? item.left(slashIdx) : item;
+    const QString objectPath = slashIdx > 0 ? item.mid(slashIdx) : QStringLiteral("/StatusNotifierItem");
+    const QString key = sniKey(service, objectPath);
 
     if (m_sniItems.remove(key) > 0) {
+        bool hasMoreItems = false;
+        const QString prefix = service + kSniKeySeparator;
+        for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
+            if (it.key().startsWith(prefix)) {
+                hasMoreItems = true;
+                break;
+            }
+        }
+        if (!hasMoreItems) {
+            m_sniServiceWatcher.removeWatchedService(service);
+        }
         bumpRevision();
-        qCInfo(lcNotif) << "SNI unregistered:" << key;
+        qCInfo(lcNotif) << "SNI unregistered:" << service << objectPath;
     }
+}
+
+QString NotificationTracker::sniKeyForMessage(const QDBusMessage &message) const
+{
+    const QString directKey = sniKey(message.service(), message.path());
+    if (m_sniItems.contains(directKey)) {
+        return directKey;
+    }
+
+    const auto *dbusInterface = QDBusConnection::sessionBus().interface();
+    for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
+        const int separator = it.key().indexOf(kSniKeySeparator);
+        if (separator <= 0 || it.key().mid(separator + 1) != message.path()) {
+            continue;
+        }
+
+        const QString registeredService = it.key().left(separator);
+        if (registeredService == message.service()
+            || (dbusInterface && dbusInterface->serviceOwner(registeredService) == message.service())) {
+            return it.key();
+        }
+    }
+    return directKey;
 }
 
 void NotificationTracker::onSniNewStatus(const QString &status, const QDBusMessage &message)
 {
-    const QString key = message.service() + message.path();
+    const QString key = sniKeyForMessage(message);
 
     if (auto it = m_sniItems.find(key); it != m_sniItems.end()) {
         if (it->status != status) {
@@ -915,19 +1084,41 @@ void NotificationTracker::onSniNewStatus(const QString &status, const QDBusMessa
 
 void NotificationTracker::onSniServiceUnregistered(const QString &service)
 {
+    const QString prefix = service + kSniKeySeparator;
     bool changed = false;
     for (auto it = m_sniItems.begin(); it != m_sniItems.end();) {
-        if (it.key().startsWith(service)) {
-            qCInfo(lcNotif) << "SNI service gone:" << it.key() << "id=" << it->id;
+        if (it.key().startsWith(prefix)) {
+            qCInfo(lcNotif) << "SNI service gone:" << service << it.key() << "id=" << it->id;
             it = m_sniItems.erase(it);
             changed = true;
         } else {
             ++it;
         }
     }
+    m_sniServiceWatcher.removeWatchedService(service);
     if (changed) {
         bumpRevision();
     }
+}
+
+void NotificationTracker::onSniWatcherServiceRegistered(const QString &service)
+{
+    if (service != QString::fromLatin1(kSniWatcherService)) {
+        return;
+    }
+    ++m_sniWatcherGeneration;
+    qCInfo(lcNotif) << "SNI watcher appeared; re-querying registered items";
+    queryRegisteredSniItems();
+}
+
+void NotificationTracker::onSniWatcherServiceUnregistered(const QString &service)
+{
+    if (service != QString::fromLatin1(kSniWatcherService)) {
+        return;
+    }
+    ++m_sniWatcherGeneration;
+    qCInfo(lcNotif) << "SNI watcher owner lost; clearing tracked items";
+    clearSniItems();
 }
 
 } // namespace krema

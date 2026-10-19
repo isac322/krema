@@ -12,7 +12,7 @@
 # tests/distro/run-distro-e2e.sh, not by the lockfile.
 opensuse-tumbleweed	suse	opensuse/tumbleweed:latest	sha256:0b5175be65a62f660359d97eda0f7e27187d16307b3dd55b18aeb41b97edcb9f	openSUSE_Tumbleweed	*.rpm
 opensuse-slowroll	suse	opensuse/tumbleweed:latest	sha256:0b5175be65a62f660359d97eda0f7e27187d16307b3dd55b18aeb41b97edcb9f	openSUSE_Slowroll	*.rpm
-opensuse-leap-16.0	suse	opensuse/leap:16.0	sha256:859560554b625c225fa767b76d61253d529b95d082c2d68579ad69168d5e3da7	openSUSE_Leap_16.0	*.rpm
+opensuse-leap-16.0	suse	opensuse/leap:16.0	sha256:5e54545c0726b48ed1c86253f6ad3da65886cd4c447123b8019569de4c157c76	openSUSE_Leap_16.0	*.rpm
 fedora-42	fedora	fedora:42	sha256:99e203b80b1c3d8f7e161ec10a68fd02b081ef83a3963553e513c82846b97814	Fedora_42	*.rpm
 fedora-43	fedora	fedora:43	sha256:762d73ba1c455232b0272c5d445a34f36c4b9f421cbc05ce8102552325b6a222	Fedora_43	*.rpm
 fedora-44	fedora	fedora:44	sha256:6c75d5bf57cb0fa5aa4b92c6a83c86c791644496d9ac230de7711f5b8ec3b898	Fedora_44	*.rpm

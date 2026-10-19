@@ -78,9 +78,9 @@ matches a different desktop entry.
 
 Each active server notification ID contributes one count under its canonical identity. A
 replacement removes the replaced ID before storing the new ID, so it keeps one count. Any
-directed or broadcast close removes the ID from the active count. Clearing an app removes all
-of its tracked IDs and emits `revisionChanged()` exactly when at least one ID was removed, so
-QML updates immediately.
+directed or broadcast close removes the ID from the active count. Clearing an app removes
+its IDs from the local unread set and marks the records read, but does not close or remove
+the server-active IDs; `revisionChanged()` is emitted when the local unread state changes.
 
 ---
 
@@ -115,8 +115,9 @@ This is how apps identify themselves to the notification server.
 - **Electron apps**: Typically send `app_name` but may omit `desktop-entry` hint
 
 **Badge count derivation**: `NotificationTracker` counts active notification IDs per canonical
-desktop identity from `Notify()` until a directed or broadcast close (or
-`clearUnreadNotifications()` when the app is activated or cleared from its context menu).
+desktop identity from `Notify()` until a directed or broadcast close. Calling
+`clearUnreadNotifications()` removes those IDs from the local unread count without closing
+the server notifications, so the lifecycle model can continue to report them as active.
 
 This is NOT the same as the app-reported badge count from Unity API, but it's the best
 approximation available for all apps. When the `desktop-entry` hint is missing or cannot be
@@ -389,6 +390,50 @@ target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
   and `badgeBlacklistedApplications()` before showing any notification-derived badge.
 - **History retention**: The local lifecycle history keeps at most 100 inactive records;
   active records remain indexed for badge correctness.
+
+## Stage 2 notification model
+
+`NotificationTracker` is also the QML-facing notification model. It consumes
+the existing `RegisterWatcher` callback path; Krema does not create a second
+watcher and does not use the external-process `NotificationManager::Notifications`
+proxy.
+
+The model exposes these roles:
+
+| Role group | Roles |
+|---|---|
+| Metadata | `id`, `desktopEntry`, `appName`, `appIcon`, `summary`, `body`, `actions`, `hints`, `timeout`, `replacesId`, `urgency` |
+| Lifecycle | `active`, `read`, `dismissed`, `closeReason`, `broadcastReason`, `createdAt`, `updatedAt` |
+
+QML can query and update the model with:
+
+```qml
+NotificationTracker.notifications(desktopEntry = {}, activeOnly = false)
+NotificationTracker.markRead(id)
+NotificationTracker.markDismissed(id)
+NotificationTracker.invokeAction(id, action)
+```
+
+`invokeAction()` sends the official
+`org.kde.NotificationManager.InvokeAction` method with the notification ID
+and action key. `markRead()` and `markDismissed()` are local Krema state;
+they do not claim to move an app's server-side read cursor.
+
+Replacement removes the replaced ID from the active set while retaining its
+lifecycle record with `closeReason: "replaced"`. Directed
+`CloseNotification` and broadcast `NotificationClosed` remain distinguishable.
+Broadcast reasons are retained as both a named close state and the numeric
+`broadcastReason`.
+
+The QML presentation distinguishes summary, body, app, urgency, timeout,
+`Unread`, `Read`, `Dismissed`, and `Closed`. It provides payload action buttons,
+`Mark read`, and `Dismiss`, and displays:
+
+> Read and dismissed state is local to Krema; it is not synchronized with the app's server.
+
+Use `notifications(..., true)` for the active-only view. Use the default query
+to inspect retained closed or locally dismissed records. Krema retains at most
+100 inactive lifecycle records; active records are not evicted by this limit.
 
 ---
 

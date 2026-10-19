@@ -7,6 +7,8 @@ find_program(KWIN_WAYLAND_EXECUTABLE kwin_wayland)
 find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
+set(CMAKE_AUTOMOC ON)
+
 add_executable(krema_integration_tests
     test_settings_lifecycle.cpp
 )

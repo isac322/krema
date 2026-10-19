@@ -244,6 +244,39 @@ tool bar is exposed and bottom-anchored, windows group into one dock item,
 a click activates a window, hover zooms, the Focus Dock shortcut focuses a
 dock button, and ScreenShot2 captures the rendered dock.
 
+### Notification video evidence
+
+`record_notifications.py` is an explicit recorder (it is not collected by the
+normal `test_*.py` suite). It reuses `test_12_notifications.py`'s real
+notification server and stimulus helpers and records this observable
+sequence:
+
+1. dock badge `2 → 1 → 0`;
+2. notification-server stop/start and a post-reconnect badge;
+3. the debugger's real SNI `NeedsAttention → Active` transitions;
+4. attention before a timed DND deadline, suppression, and expiry; and
+5. Krema's local inbox `Unread → Read → Dismissed` states.
+
+The wrapper uses a real KWin Wayland session nested on Xvfb, so it does not need
+a DRM render node. Run it in an isolated Appium container with `Xvfb`,
+`xdotool`, `ffmpeg` (including the OpenH264 encoder), and `ffprobe` installed.
+Mount the source at `/src`, a writable artifact directory at `/artifacts`, and
+the built revision at `/build/bin/krema`:
+
+```sh
+docker exec -e GITHUB_SHA="$(git rev-parse HEAD)" <capture-container> \
+  bash /src/tests/notification/record-visual-evidence.sh
+```
+
+The wrapper records live X11 frames with a visible cursor at real speed, then
+writes `notifications.mp4`, recording timestamps, binary checksum, revision,
+and video probe data. The scenario writes
+`visual-evidence/notifications/{events.jsonl,metadata.json,dnd-config.jsonl}`.
+SNI state is checked through the real dock description. DND requires observed
+tracker transitions and visual review of suppressed and resumed animation;
+elapsed time or a written `Until` value alone cannot pass.
+
+
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
 automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.
 `test_08_reservation.py` adds the real maximized-window geometry checks.

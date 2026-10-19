@@ -156,9 +156,9 @@ Item {
         onTriggered: dockItem._animationActive = false
     }
 
-    // Attention animation won't run during launch bounce or DND
+    // Attention waits for the final launch bounce cycle as well as launching.
     readonly property bool _showAttentionAnim:
-        _animationActive && !launching && DockSettings.attentionAnimation > 0
+        _animationActive && !launching && !bounceAnim.running && DockSettings.attentionAnimation > 0
         && !NotificationTracker.dndActive
 
     readonly property int _attentionType: DockSettings.attentionAnimation

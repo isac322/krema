@@ -61,10 +61,12 @@ If the dock is hidden (Auto hide / Dodge windows), show it first (README "Showin
 3. Wait 2000ms for app launch
 4. Check the window list — new app window appeared
 5. Repeat with the pointer held over the icon on Bottom and Right docks at maximum zoom factors 1.5, 1.6, and 2.0
+6. Trigger an attention notification during launch; let launching end while the bounce is near its peak
 
 **Expected:**
 - New app instance launches
 - Bounce animation plays on the dock item; its full icon remains inside the dock surface throughout the motion, including while hover zoom is held
+- Attention waits for the final launch bounce cycle, then starts without overlapping its displacement
 - Indicator dot appears under the icon
 
 **Verification:** window list (new window), screenshot (indicator dot), video (zoomed launch bounce), mapped icon bounds (surface containment)

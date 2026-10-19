@@ -7,6 +7,7 @@
 // then samples mapped icon bounds instead of inspecting implementation state.
 import QtQuick
 import QtTest
+import org.kde.kirigami as Kirigami
 import com.bhyoo.krema 1.0
 import "TestUtils.js" as T
 
@@ -84,7 +85,7 @@ Item {
         }
 
         function test_launchBounceStaysInsideSurface_data() {
-            return [
+            let cases = [
                 { tag: "bottom-1.5-control", edge: 1, factor: 1.5 },
                 { tag: "bottom-1.6", edge: 1, factor: 1.6 },
                 { tag: "bottom-2.0", edge: 1, factor: 2.0 },
@@ -92,6 +93,12 @@ Item {
                 { tag: "right-1.6", edge: 3, factor: 1.6 },
                 { tag: "right-2.0", edge: 3, factor: 2.0 },
             ]
+            return cases.concat(cases.map(data => ({
+                tag: data.tag + "-launch-to-attention",
+                edge: data.edge,
+                factor: data.factor,
+                finishIntoAttention: true,
+            })))
         }
 
         function test_launchBounceStaysInsideSurface(data) {
@@ -121,6 +128,14 @@ Item {
                       data.tag + ": zoom did not activate, scale=" + item.currentScale)
 
             item.manualLaunching = true
+            if (data.finishIntoAttention) {
+                // Attention arrives during launch and must wait for the
+                // final launch cycle before using its own bounce reserve.
+                DockSettings.attentionAnimation = 1
+                item._animationActive = true
+                wait(Kirigami.Units.longDuration)
+                item.manualLaunching = false
+            }
             for (let sample = 0; sample < 60; sample++) {
                 wait(10)
                 let bounds = mappedBounds(item)
@@ -134,6 +149,9 @@ Item {
                        data.tag + ": icon bottom escaped surface at sample " + sample + ": " + bounds.bottom)
             }
             item.manualLaunching = false
+            if (data.finishIntoAttention)
+                tryVerify(() => item._showAttentionAnim, 1000,
+                          data.tag + ": attention did not resume after launch bounce")
         }
     }
 }

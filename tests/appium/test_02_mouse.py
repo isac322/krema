@@ -5,6 +5,7 @@ real pointer input through KWin fake-input and KWin / AT-SPI / screenshot oracle
 
 from __future__ import annotations
 
+import math
 import os
 import signal
 import time
@@ -15,7 +16,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from krema_e2e import config, env, kwin
+from krema_e2e import config, env, kwin, preview
 from krema_e2e import input as inp
 from krema_e2e.krema import ITEMS_XPATH, DescriptionChanges, Krema, Rect, painted_rect
 from krema_e2e.shortcuts import invoke_shortcut
@@ -1163,3 +1164,76 @@ def test_mouse016_nonleft_activation_paths_ignore_mouse_click_policies(
     wait_until(alpha.is_active, message="right-click menu to return existing focus")
     assert all((w := child.refresh()) is not None and not w.minimized for child in (alpha, beta, solo))
     assert not krema.preview_visible()
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.parametrize("edge", [config.EDGE_BOTTOM, config.EDGE_RIGHT], ids=["bottom", "right"])
+@pytest.mark.parametrize("zoom", [1.6, 2.0], ids=["zoom16", "zoom20"])
+def test_mouse017_slow_pointer_transfer_between_zoomed_dock_and_preview(
+    krema: Krema, apps: TestWindows, edge: int, zoom: float
+) -> None:
+    """The enlarged bounce reserve preserves the default preview transfer corridor."""
+    _require_capture()
+    krema.write_config(
+        {
+            "PinnedLaunchers": [],
+            "Edge": edge,
+            "IconSize": 48,
+            "MaxZoomFactor": zoom,
+            "Floating": True,
+            "FloatingMargin": 8,
+            "FloatingMarginReference": 0,
+            "PreviewEnabled": True,
+            "PreviewHoverDelay": 500,
+            "PreviewHideDelay": 200,
+            "VisibilityMode": config.ALWAYS_VISIBLE,
+        }
+    )
+    children = [apps.open(title, app_id=APP1) for title in ("Alpha", "Beta")]
+    for child in children:
+        kwin.set_minimized(child.internal_id, True)
+    krema.start()
+    krema.wait_for_item(NAME1)
+    popup = preview.open_by_hover(krema, NAME1)
+    # The popup can overlap the transparent Right-dock surface; the generic
+    # painted-pixel helper treats that whole surface as an occluder. This
+    # transfer case needs settled layout rather than thumbnail pixel proof.
+    popup_rect = wait_stable(lambda: preview.screen_rect(krema, popup), duration=0.3)
+    assert popup_rect.width > 100 and popup_rect.height > 100
+    assert krema.preview_visible()
+    start = kwin.cursor_pos()
+    if edge == config.EDGE_BOTTOM:
+        target = (start[0], popup_rect.y + popup_rect.height - 8)
+    else:
+        target = (popup_rect.x + popup_rect.width - 8, start[1])
+    assert popup_rect.contains(*target), (popup_rect, start, target)
+
+    # Two pixels per 20 ms is 100 px/s. One input chain preserves continuous
+    # movement without paying an AT-SPI request between points. The path is
+    # intentionally slower than a flick across the old 200 ms hide deadline.
+    steps = math.ceil(math.dist(start, target) / 2)
+    inp.move_path(inp.line(start, target, steps), step_ms=20)
+    assert krema.preview_visible(), "preview closed before slow pointer entry"
+    time.sleep(0.5)
+    assert krema.preview_visible(), "preview did not retain pointer hover after entry"
+
+    inp.move_path(inp.line(target, start, steps), step_ms=20)
+    assert krema.preview_visible(), "preview closed during slow return to its dock item"
+    time.sleep(0.5)
+    assert krema.preview_visible(), "preview did not retain hover on the source item"
+
+    # The corridor follows the projected popup span, so a diagonal approach
+    # toward another thumbnail must also survive the enlarged reserve.
+    diagonal = (target[0] + 64, target[1]) if edge == config.EDGE_BOTTOM else (target[0], target[1] + 64)
+    assert popup_rect.contains(*diagonal)
+    diagonal_steps = math.ceil(math.dist(start, diagonal) / 2)
+    inp.move_path(inp.line(start, diagonal, diagonal_steps), step_ms=20)
+    assert krema.preview_visible(), "preview closed during diagonal pointer transfer"
+    time.sleep(0.5)
+    assert krema.preview_visible(), "preview did not retain hover after diagonal entry"
+
+    # Leaving both the popup and the corridor still uses the configured hide
+    # delay. A permanently retained hover must not satisfy the transfer test.
+    outside = (24, 24)
+    inp.move_path(inp.line(diagonal, outside, 30), step_ms=20)
+    wait_until(lambda: not krema.preview_visible(), timeout=2, message="preview to close after leaving its transfer corridor")

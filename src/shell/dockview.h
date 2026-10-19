@@ -86,7 +86,7 @@ public:
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;
     /// Outward visual extent needed by zoomed and bouncing icons.
-    [[nodiscard]] int animationOverflowHeight() const;
+    Q_INVOKABLE int animationOverflowHeight() const;
 
     /// Depth of the space other always-visible panels reserve on the dock's
     /// edge while the gap is measured from panels; 0 otherwise.

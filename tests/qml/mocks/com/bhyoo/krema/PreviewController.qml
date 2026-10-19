@@ -23,6 +23,7 @@ QtObject {
     function showPreview(i, pos, ext) { _record("showPreview", arguments); parentIndex = i; visible = true }
     function hidePreview() { _record("hidePreview", arguments); visible = false }
     function hidePreviewDelayed() { _record("hidePreviewDelayed", arguments) }
+    function cancelHide() { _record("cancelHide", arguments) }
     function setPreviewHovered(v) { previewHovered = v }
     function setContentSize(w, h) { contentWidth = w; contentHeight = h }
     function startPreviewKeyboardNav() { _record("startPreviewKeyboardNav", arguments); previewKeyboardActive = true; focusedThumbnailIndex = 0 }

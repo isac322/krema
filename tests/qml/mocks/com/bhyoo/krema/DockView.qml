@@ -31,6 +31,11 @@ QtObject {
         return ZoomLayoutEngine.surfaceHeight(iconSize, padding, maxZoomFactor, tooltipReserve, floatingPadding)
     }
 
+    function animationOverflowHeight() {
+        return surfaceHeight(DockSettings.iconSize, 8, DockSettings.maxZoomFactor, 0, 0)
+            - DockSettings.iconSize - 16
+    }
+
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["edge", "backgroundStyleType", "backgroundColor", "floatingPadding", "iconCacheVersion", "pointerInside"]
     property var _defaults: ({})

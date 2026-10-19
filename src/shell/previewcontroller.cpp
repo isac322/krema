@@ -525,7 +525,9 @@ void PreviewController::applyEdgeLayout()
         visibility && visibility->mode() == static_cast<int>(DockPlatform::VisibilityMode::AlwaysVisible) && m_settings->reserveScreenSpace();
     const int animationOverflow = m_dockView->animationOverflowHeight();
     const int otherPanels = m_dockView->reservedPanelInset();
-    const int dockMargin = (dockReservesPanelBar ? 0 : m_dockView->panelBarHeight() - otherPanels) + animationOverflow + 4;
+    // Meet the dock's animated input extent. An extra gap here would leave
+    // neither surface receiving pointer motion during the transfer.
+    const int dockMargin = (dockReservesPanelBar ? 0 : m_dockView->panelBarHeight() - otherPanels) + animationOverflow;
 
     const QRect screenGeo = m_dockView->screen() ? m_dockView->screen()->geometry() : QRect(0, 0, 1920, 1080);
 

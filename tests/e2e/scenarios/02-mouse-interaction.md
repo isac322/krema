@@ -60,14 +60,15 @@ If the dock is hidden (Auto hide / Dodge windows), show it first (README "Showin
 2. Left-click the dock item
 3. Wait 2000ms for app launch
 4. Check the window list — new app window appeared
+5. Repeat with the pointer held over the icon on Bottom and Right docks at maximum zoom factors 1.5, 1.6, and 2.0
 
 **Expected:**
 - New app instance launches
-- Bounce animation plays on the dock item (visual only — verify with a screenshot)
+- Bounce animation plays on the dock item; its full icon remains inside the dock surface throughout the motion, including while hover zoom is held
 - Indicator dot appears under the icon
 
-**Verification:** window list (new window), screenshot (indicator dot)
-**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces)
+**Verification:** window list (new window), screenshot (indicator dot), video (zoomed launch bounce), mapped icon bounds (surface containment)
+**Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces); tests/qml/tst_dockitem_surface_geometry.qml::test_launchBounceStaysInsideSurface (Bottom/Right at 1.5, 1.6, and 2.0); tests/unit/test_input_region.cpp (animated input reserve)
 
 ---
 

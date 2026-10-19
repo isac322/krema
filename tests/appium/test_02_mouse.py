@@ -892,11 +892,38 @@ def _tooltip_bbox(shot: np.ndarray, baseline: np.ndarray) -> Rect | None:
     return bbox if bbox is not None and 14 <= bbox.height <= 48 else None
 
 
-def _tooltip_glyph_count(shot: np.ndarray, rect: Rect) -> int:
+def _tooltip_glyph_mask(shot: np.ndarray, rect: Rect) -> np.ndarray:
     region = shot[rect.y : rect.y + rect.height, rect.x : rect.x + rect.width]
     luminance = region[..., :3] @ np.array([0.299, 0.587, 0.114])
     background = np.median(luminance)
-    return int((np.abs(luminance - background) > 80).sum())
+    return np.abs(luminance - background) > 80
+
+
+def _tooltip_glyph_count(shot: np.ndarray, rect: Rect, glyphs: np.ndarray | None = None) -> int:
+    observed = _tooltip_glyph_mask(shot, rect)
+    if glyphs is not None:
+        # The preview can cross this rectangle: its edge against the black
+        # desktop is high contrast too. Only count positions where the real
+        # reference tooltip painted glyphs, rather than that unrelated edge.
+        observed &= glyphs
+    return int(observed.sum())
+
+
+def test_mouse013_tooltip_glyph_oracle_rejects_popup_boundary() -> None:
+    rect = Rect(0, 0, 80, 25)
+    reference = np.full((rect.height, rect.width, 3), 240, dtype=np.int16)
+    # Two character strokes inside a light tooltip, away from its border.
+    reference[7:17, 20:23] = 0
+    reference[7:17, 30:33] = 0
+    glyphs = _tooltip_glyph_mask(reference, rect)
+    assert _tooltip_glyph_count(reference, rect, glyphs) >= 40
+
+    preview = np.full_like(reference, 240)
+    preview[-2:] = 0
+    # This is the observed failure: the old oracle reports 160 "glyphs"
+    # from two full-width rows below the popup, despite no text being drawn.
+    assert _tooltip_glyph_count(preview, rect) >= 40
+    assert _tooltip_glyph_count(preview, rect, glyphs) < 40
 
 
 @pytest.mark.parametrize(
@@ -939,7 +966,9 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
         message=f"text tooltip before explicit click, target {target!r}",
     )
     assert target_tip is not None and 14 <= target_tip.height <= 48
-    assert _tooltip_glyph_count(_pixels(krema.screenshot("qa011-target-tooltip-glyphs", band)), target_tip) >= 40
+    target_reference = _pixels(krema.screenshot("qa011-target-tooltip-glyphs", band))
+    target_glyphs = _tooltip_glyph_mask(target_reference, target_tip)
+    assert _tooltip_glyph_count(target_reference, target_tip, target_glyphs) >= 40
     krema.move_away(close_preview=False)
     wait_until(
         lambda: _bbox(_changed(_pixels(krema.screenshot("qa011-target-tip-cleared", band)), baseline)) is None,
@@ -952,10 +981,13 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
         message="group text tooltip before explicit preview",
     )
     assert group_tip is not None
+    group_reference = _pixels(krema.screenshot("qa011-group-tooltip-glyphs", band))
+    group_glyphs = _tooltip_glyph_mask(group_reference, group_tip)
+    assert _tooltip_glyph_count(group_reference, group_tip, group_glyphs) >= 40
     krema.click_item(NAME1)
     wait_until(krema.preview_visible, message="explicit group preview to become visible")
     wait_until(
-        lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-popup-no-tooltip", band)), group_tip) < 40,
+        lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-popup-no-tooltip", band)), group_tip, group_glyphs) < 40,
         message="explicit preview to clear its text tooltip",
     )
     krema.click_item(NAME1)
@@ -987,7 +1019,7 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
         shot = _pixels(krema.screenshot("qa011-pending-hide-no-tooltip", band))
         if not krema.preview_visible():
             return True
-        glyph_count = _tooltip_glyph_count(shot, target_tip)
+        glyph_count = _tooltip_glyph_count(shot, target_tip, target_glyphs)
         if glyph_count >= 40:
             overlap_counts.append(glyph_count)
         return False
@@ -999,7 +1031,7 @@ def test_mouse013_group_preview_clears_tooltip_and_restores_it_after_close(
     )
     assert not overlap_counts, f"text tooltip overlapped the still-visible preview ({overlap_counts})"
     wait_until(
-        lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-tooltip-after-close", band)), target_tip) >= 40,
+        lambda: _tooltip_glyph_count(_pixels(krema.screenshot("qa011-tooltip-after-close", band)), target_tip, target_glyphs) >= 40,
         message="target tooltip to recover after the popup closes without further pointer motion",
     )
 

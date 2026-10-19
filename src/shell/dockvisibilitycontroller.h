@@ -9,10 +9,10 @@
 #include <QRect>
 #include <memory>
 
-#include <QObject>
 #include <QModelIndex>
-#include <QVariantList>
+#include <QObject>
 #include <QTimer>
+#include <QVariantList>
 
 namespace TaskManager
 {

@@ -48,7 +48,6 @@ from krema_e2e.waits import KWIN_POLL_INTERVAL, wait_stable, wait_until
 from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.windows import TestWindows
 from test_02_mouse import ZOOM_KREMARC, _require_capture
-from test_06_settings import close_settings
 
 import pytest
 
@@ -548,9 +547,11 @@ def hold_painted(krema: Krema, rest: dict[str, Rect], name: str = HOLD_TARGET) -
 
 
 def hold_painted_sizes(krema: Krema, rest: dict[str, Rect]) -> dict[str, tuple[int, int]]:
-    """Painted (width, height) of the items in ``rest``, by name. Items added
-    later (the Settings window's task) are ignored; sizes rather than rects
-    are compared because such an item re-centres the row horizontally."""
+    """Painted sizes by current item name; ``rest`` must follow group renames.
+
+    Sizes rather than rects are compared because task changes can re-centre
+    the row horizontally. A missing expected item still fails the comparison.
+    """
     sizes = {}
     for e in krema.items():
         name = e.get_attribute("name")
@@ -655,8 +656,12 @@ def test_ctx009_zoom_and_hover_hold_while_menu_is_open(krema: Krema, apps: TestW
 
 @pytest.mark.kremarc(HOLD_KREMARC)
 def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, apps: TestWindows) -> None:
+    known = {w.pid for w in app_windows(HOLD_TARGET_APP)}
     try:
         rest, base, zoomed, dock = hover_zoomed_with_preview(krema, apps)
+        before = app_windows(HOLD_TARGET_APP)
+        assert len(before) == 1, f"expected one target window before New Instance: {before}"
+        known.update(w.pid for w in before)
 
         menu = right_click_in_place(krema)
         wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
@@ -668,7 +673,7 @@ def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, 
         for _ in range(PINNED_WINDOW.index("New Instance") + 1):
             inp.key("Down")
         row = wait_stable(
-            lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-settings", area), area)).getbbox(),
+            lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-new-instance", area), area)).getbbox(),
             duration=0.5,
         )
         assert row is not None, "keyboard highlight of 'New Instance' not visible in the menu"
@@ -681,10 +686,14 @@ def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, 
         inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
         inp.click()
         wait_menu_closed(menu)
-        wait_until(lambda: len(app_windows()) >= 2, timeout=15, message="New Instance launched another window")
+        wait_until(lambda: len(app_windows(HOLD_TARGET_APP)) == 2, timeout=15, message="New Instance launched a second target-app window")
+        krema.wait_for_item(HOLD_TARGET_LAUNCHER)
+        wait_until(lambda: "2 windows" in description(krema, HOLD_TARGET_LAUNCHER), message="new instance joined the target group")
+        wait_until(lambda: "Starting" not in description(krema, HOLD_TARGET_LAUNCHER), timeout=10, message="new-instance launch feedback to end")
 
-        # The launched window may change task state; only the items present
-        # before the menu opened are checked.
+        # A single window is named by its title, but two windows group under
+        # the desktop launcher name. Keep the same slot's resting geometry.
+        rest = {HOLD_TARGET_LAUNCHER if name == HOLD_TARGET else name: r for name, r in rest.items()}
         rest_sizes = {name: (r.width, r.height) for name, r in rest.items()}
         wait_until(
             lambda: hold_painted_sizes(krema, rest) == rest_sizes,
@@ -692,10 +701,12 @@ def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, 
             message=lambda: f"icons to return to rest size (base {base}px, now {hold_painted_sizes(krema, rest)})",
         )
         assert not krema.preview_visible(), "preview reopened although the pointer left the dock"
-        close_settings(krema)
     finally:
         # Never leave the pointer resting on the dock, even after a failure.
         krema.move_away(close_preview=False)
+        # New Instance is launched by Krema, not tracked by the apps fixture.
+        for pid in {w.pid for w in app_windows(HOLD_TARGET_APP)} - known:
+            kill_pid(pid)
 
 
 @pytest.mark.no_krema_autostart

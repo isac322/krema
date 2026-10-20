@@ -4,9 +4,11 @@
 
 Moving global actions out of task menus must preserve a separate keyboard
 route on populated docks. Test both scopes, with and without tasks, rather
-than checking only the pointer path. For pointer QA, derive empty-space
-targets from the centred row's resting extent; transformed icon bounds move
-as zoom retracts and can put a fixed target outside the resting input mask.
+than checking only the pointer path. For pointer QA, clear hover outside the
+whole dock surface and observe settled delegate geometry before approaching
+inner padding from the desktop side. Resting primary-axis padding alone is
+not safe: InPlace zoom can cover it, while wide icon spacing extends the
+primary hit slot beyond the panel. Check the secondary hit span too.
 Compile-only Python checks do not catch undefined names: execute default
 configuration paths and run an undefined-name check as well.
 

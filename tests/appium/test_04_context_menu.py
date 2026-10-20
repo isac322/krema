@@ -62,6 +62,37 @@ PINNED_WINDOW = context_menu_entries(pinned=True, is_window=True)
 PINNED_LAUNCHER = context_menu_entries(pinned=True, is_window=False)
 
 
+def _padding_cases():
+    for edge in (config.EDGE_TOP, config.EDGE_BOTTOM, config.EDGE_LEFT, config.EDGE_RIGHT):
+        for style in (0, 1):
+            for spacing in (0, 4, 64):
+                yield pytest.param(edge, style, spacing, marks=pytest.mark.kremarc({
+                    "PinnedLaunchers": [config.launcher(APP), config.launcher(env.TEST_APP2_ID)],
+                    "VisibilityMode": config.ALWAYS_VISIBLE, "Edge": edge,
+                    "ZoomStyle": style, "IconSpacing": spacing, "MaxZoomFactor": 1.6,
+                    "PreviewEnabled": False,
+                }), id=f"edge-{edge}-zoom-{style}-spacing-{spacing}")
+
+
+@pytest.mark.parametrize("edge,style,spacing", list(_padding_cases()))
+def test_ctx012_padding_after_zoom_opens_dock_settings(krema: Krema, edge: int, style: int, spacing: int) -> None:
+    def two_items():
+        items = krema.items()
+        return items if len(items) == 2 else None
+
+    items = wait_until(two_items, message="two pinned launchers")
+    rest = wait_stable(lambda: krema.screen_rect(items[0]), duration=0.2)
+    inp.move_path(inp.line(kwin.cursor_pos(), rest.center, 12), 20)
+    wait_until(lambda: krema.screen_rect(items[0]) != rest, message="first launcher to magnify")
+    zoomed = wait_stable(lambda: krema.screen_rect(items[0]), duration=0.2)
+    assert zoomed != rest, "hover must be fully established before testing the padding route"
+    before = pinned_launchers(krema)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
+    wait_until(lambda: settings_window(krema), timeout=15, message="Settings from padding after zoom")
+    assert pinned_launchers(krema) == before, "padding opened the app menu and changed pinning"
+
+
 @pytest.mark.parametrize("with_app", [False, True], ids=["empty", "populated"])
 def test_ctx011_keyboard_opens_dock_settings(krema: Krema, apps: TestWindows, with_app: bool) -> None:
     if with_app:

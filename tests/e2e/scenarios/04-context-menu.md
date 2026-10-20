@@ -103,6 +103,19 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx011_keyboard_opens_dock_settings; tests/qml/tst_dock_main.qml::test_keyboardMenus (empty and populated variants); tests/integration/test_settings_lifecycle.cpp [context-menu][keyboard] (idle empty dock receives compositor focus).
 
+## TC CTX-012: Dock Menu After Hover Zoom
+
+**Steps:**
+1. Show two pinned launchers and hover the leading launcher until it magnifies.
+2. Leave the entire dock surface and wait for hover zoom to retract.
+3. Approach the leading inner padding from the desktop side and right-click.
+4. Select Settings..., then check both the settings window and saved pins.
+5. Repeat for Parabolic and In place zoom, spacing 0/4/64, and all four edges.
+
+**Expected:** The dock menu opens and Settings appears; application pinning is unchanged. The click remains inside the panel but outside delegate hit spans, including the secondary span when wide spacing expands a primary hit slot. If clearing hover auto-hides the dock, restore visibility without keyboard-selecting an icon before approaching the padding.
+
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx012_padding_after_zoom_opens_dock_settings (24 pointer-interaction cases); tests/appium/test_context_menu_geometry.py (inner padding and neutral-point constraints).
+
 ---
 
 ## TC CTX-002: Pin/Unpin Toggle

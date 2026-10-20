@@ -1,38 +1,46 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""Pure geometry regression tests; may run with pytest --noconftest."""
+"""Pure geometry checks; live routing is covered by CTX-012."""
 
 import pytest
 
 from krema_e2e import config
-from krema_e2e.krema import Rect, dock_padding_target
+from krema_e2e.krema import Rect, dock_menu_neutral_point, dock_padding_target
 
 
-@pytest.mark.parametrize("zoom", [1.0, 1.6, 3.0])
-@pytest.mark.parametrize("edge,expected", [
-    (config.EDGE_TOP, (456, 32)),
-    (config.EDGE_BOTTOM, (456, 736)),
-    (config.EDGE_LEFT, (32, 328)),
-    (config.EDGE_RIGHT, (992, 328)),
-])
-def test_padding_stays_inside_resting_panel_as_zoom_retracts(zoom, edge, expected):
-    # Two 48px slots with 4px spacing: rest content is 100px, centred.
-    # The slot's hit area includes half the spacing; the target must be
-    # outside it, but within even an 8px resting panel padding.
+@pytest.mark.parametrize("spacing", [0, 4, 32, 64])
+@pytest.mark.parametrize("edge", [config.EDGE_TOP, config.EDGE_BOTTOM, config.EDGE_LEFT, config.EDGE_RIGHT])
+def test_target_is_inside_panel_but_outside_unzoomed_hit_span(edge, spacing):
+    # Two rest delegates, 8px panel padding, and an 8px indicator strip.
+    # Large spacing can extend the primary hit slot across leading padding;
+    # the target must therefore be outside the secondary hit span as well.
+    primary = ((768 if edge >= config.EDGE_LEFT else 1024) - (96 + spacing)) // 2
+    if edge == config.EDGE_TOP:
+        first, panel = Rect(primary, 8, 48, 56), Rect(primary - 8, 8, 112 + spacing, 64)
+    elif edge == config.EDGE_BOTTOM:
+        first, panel = Rect(primary, 704, 48, 56), Rect(primary - 8, 696, 112 + spacing, 64)
+    elif edge == config.EDGE_LEFT:
+        first, panel = Rect(8, primary, 56, 48), Rect(8, primary - 8, 64, 112 + spacing)
+    else:
+        first, panel = Rect(960, primary, 56, 48), Rect(952, primary - 8, 64, 112 + spacing)
+    target = dock_padding_target(Rect(0, 0, 1024, 768), {"Edge": edge, "IconSpacing": spacing}, first)
+    assert panel.contains(*target)
+    assert not first.contains(*target)
+    if edge <= config.EDGE_BOTTOM:
+        assert target[1] < first.y or target[1] >= first.y + first.height
+    else:
+        assert target[0] < first.x or target[0] >= first.x + first.width
+
+
+@pytest.mark.parametrize("edge", [config.EDGE_TOP, config.EDGE_BOTTOM, config.EDGE_LEFT, config.EDGE_RIGHT])
+def test_neutral_point_is_outside_entire_surface(edge):
     area = Rect(0, 0, 1024, 768)
-    settings = {"Edge": edge, "MaxZoomFactor": zoom}
-    assert dock_padding_target(area, 2, settings) == expected
+    assert not area.contains(*dock_menu_neutral_point(area, edge))
 
 
-def test_default_edge_and_empty_dock():
-    assert dock_padding_target(Rect(0, 668, 1024, 100), 0, {}) == (512, 736)
+def test_empty_dock_and_default_edge():
+    assert dock_padding_target(Rect(0, 668, 1024, 100), {}) == (512, 736)
 
 
-def test_second_output_and_separator_use_resting_extent():
-    area = Rect(1024, 668, 1024, 100)
-    assert dock_padding_target(area, 2, {}, separator=True) == (1478, 736)
-
-
-def test_nonfloating_dock_ignores_stored_floating_margin():
-    settings = {"Floating": "false", "FloatingMargin": 128}
-    assert dock_padding_target(Rect(0, 668, 1024, 100), 2, settings) == (456, 744)
+def test_second_output_uses_observed_rest_geometry():
+    assert dock_padding_target(Rect(1024, 668, 1024, 100), {}, Rect(1486, 704, 48, 56)) == (1482, 700)

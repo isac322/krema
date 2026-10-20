@@ -52,7 +52,6 @@ private:
     bool m_open = false;
 
     void setOpen(bool open);
-    void addSettingsActions(QMenu *menu);
     void popup(QMenu *menu);
 };
 

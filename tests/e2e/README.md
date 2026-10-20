@@ -172,7 +172,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` (including the fallback icon) | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03, 04 |
-| `src/shell/dockshell.*` | 01, 06 |
+| `src/shell/dockshell.*` | 01, 04, 06 |
 | `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
 | `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
 | `src/models/dockcontextmenu.*` | 04 |

@@ -1129,6 +1129,34 @@ TEST_CASE("Dock-wide actions are only available from empty dock space", "[contex
     CHECK(interactionHeld);
 }
 
+TEST_CASE("An idle empty dock receives compositor keyboard focus", "[context-menu][keyboard]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    const auto oldLaunchers = app().model->pinnedLaunchers();
+    const auto oldVisibility = app().settings->visibilityMode();
+    const auto restore = qScopeGuard([&] {
+        app().model->setPinnedLaunchers(oldLaunchers);
+        app().settings->setVisibilityMode(oldVisibility);
+    });
+    app().model->setPinnedLaunchers({});
+    app().settings->setVisibilityMode(0);
+    restartDocks();
+    auto *shell = app().manager->primaryShell();
+    auto *view = shell->view();
+    REQUIRE(QTest::qWaitForWindowExposed(view));
+    // Let startup rendering settle: no icon animation may commit focus for us.
+    QTest::qWait(200);
+    shell->focusDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return view->isActive();
+        },
+        kTimeoutMs));
+    REQUIRE(view->rootObject()->property("keyboardNavigating").toBool());
+    REQUIRE(view->rootObject()->hasActiveFocus());
+    QTest::keyClick(view, Qt::Key_Escape);
+}
+
 int main(int argc, char *argv[])
 {
     QApplication application(argc, argv);

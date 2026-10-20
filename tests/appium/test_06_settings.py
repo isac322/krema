@@ -774,14 +774,9 @@ def test_set008_monitor_mode_all_monitors_from_open_settings(krema: Krema, apps:
     # dock reports the hover (its item zooms) before right-clicking.
     inp.move_path(inp.line((x, docks[1].client_y - 40), (x, y), 5), step_ms=40)
     wait_until(lambda: painted_rect(second_alpha(), second).width > second.width, timeout=5, message="second dock item hovered")
-    r = wait_stable(second_alpha, duration=0.3)
-    before = {w.internal_id for w in krema.windows()}
-    target = (r.x - 8, docks[1].client_y + r.center[1])
-    inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
-    inp.click(*target, button="right")
-    menu = wait_until(
-        lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
-        message="context menu on the second output",
+    menu = krema.open_dock_context_menu(
+        surface=Rect(*docks[1].client_geometry),
+        items=[item for item in krema.items() if Rect.of(item).x >= W],
     )
     assert menu.client_x >= W, f"menu opened on the wrong output: {menu}"
     krema.choose_context_menu_entry("Settings...", ENTRIES)

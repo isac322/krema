@@ -427,7 +427,6 @@ class Krema:
         This works with an empty dock too. The fixture must show the dock
         before calling this helper (AlwaysVisible or a reveal shortcut).
         """
-        self.move_away()
         before = {w.internal_id for w in self.windows()}
         area = wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
         settings = self.read_config().get("General", {})
@@ -450,7 +449,7 @@ class Krema:
                 target = (area.x + depth, area.y + area.height // 2)
             else:
                 target = (area.x + area.width - depth, area.y + area.height // 2)
-        inp.move_path(inp.line((env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2), target, 20), 15)
+        inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
         inp.click(*target, button="right")
         return wait_until(
             lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window), None),
@@ -459,11 +458,13 @@ class Krema:
         )
 
     def open_settings(self, via_item: str, entries: list[str] | None = None, timeout: float = 15.0) -> kwin.Window:
-        """Open Settings through item ``via_item``'s context menu and wait for
-        the "Settings — Krema" window. Pass ``entries`` when the item is not
-        an unpinned single window without notifications."""
-        self.open_context_menu(via_item)
-        self.choose_context_menu_entry("Settings...", entries or context_menu_entries(pinned=False, is_window=True))
+        """Reveal the dock via ``via_item``, then open its dock-only Settings menu.
+
+        ``entries`` is retained for callers that also use an app-menu oracle.
+        """
+        self.hover_item(via_item)
+        self.open_dock_context_menu()
+        self.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
         return wait_until(
             lambda: next((w for w in self.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
             timeout=timeout,
@@ -527,7 +528,7 @@ def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool 
         entries.append("Clear Notifications")
     if is_window:
         entries.append("Close")
-    return entries + ["Settings...", "About Krema"]
+    return entries
 
 
 DOCK_CONTEXT_MENU_ENTRIES = ["Settings...", "About Krema", "Quit Krema"]

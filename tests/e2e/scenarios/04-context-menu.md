@@ -56,19 +56,17 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 - Menu header shows app name
 - Menu items (top to bottom): AppName, [the app's .desktop actions, then a
   separator — only when the app declares visible actions, see CTX-008],
-  Pin/Unpin, New Instance, Close, separator, Settings..., About Krema
-- Neither "Quit" nor "Quit Krema" appears in an application's menu
+  Pin/Unpin, New Instance, Close
+- Settings..., About Krema, Quit, and Quit Krema never appear in an application's menu
 
 **Menu item positions** (approximate y-offsets from menu top):
 - AppName: +0px
 - Pin to Dock / Unpin: +25px
 - New Instance: +57px
 - Close: +90px
-- Settings...: +123px
-- About Krema: +158px
 
 **Verification:** screenshot only (menu visible with expected entries)
-**Automated:** tests/appium/test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item, tests/appium/test_04_context_menu.py::test_ctx001_about_krema_is_the_fifth_entry (entry order is verified by effect; QMenu is outside AT-SPI). tests/integration/test_settings_lifecycle.cpp [context-menu] also checks the native task menu contains neither quit label.
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item (QMenu is outside AT-SPI). tests/integration/test_settings_lifecycle.cpp [context-menu] checks native task menus exclude all dock-wide actions.
 
 ---
 
@@ -79,7 +77,7 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 1. Right-click empty dock padding (or the separator between pinned and running apps).
 2. Verify the native menu lists Settings..., About Krema, separator, Quit Krema.
 3. Dismiss with Escape; verify the dock resumes its normal hover/visibility behavior.
-4. Reopen and select Settings...; verify the settings window opens.
+4. Reopen and select Settings...; verify the settings window opens. Repeat with About Krema and verify the About page opens.
 5. Reopen and select Quit Krema.
 
 **Expected:**
@@ -90,7 +88,7 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 - Pointer routing works at all four edges, including after keyboard navigation.
 
 **Verification:** Native menu labels, settings window, dock exit status, remaining app windows.
-**Automated:** tests/appium/test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu (empty/running-app variants); tests/integration/test_settings_lifecycle.cpp [context-menu] (native labels, task/background pointer routing, interaction lock); tests/qml/tst_dock_main.qml::test_rightClickRoutesToTaskOrDock (four edges, keyboard selection), ::test_emptyDockRightClick. Docker E2E and visual evidence remain pending until run/captured.
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu (empty/running-app variants), ::test_ctx010_about_krema_is_the_second_dock_entry, ::test_ctx006_settings_entry_opens_the_settings_window; tests/integration/test_settings_lifecycle.cpp [context-menu] (native labels, task/background pointer routing, interaction lock); tests/qml/tst_dock_main.qml::test_rightClickRoutesToTaskOrDock (four edges, keyboard selection), ::test_emptyDockRightClick. Docker E2E and visual evidence remain pending until run/captured.
 
 ---
 
@@ -176,7 +174,7 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 
 **Precondition:** Dock visible.
 **Steps:**
-1. Right-click on any dock item (CTX-001 steps)
+1. Right-click empty dock space (CTX-010 steps)
 2. Choose "Settings..." (keyboard, or click its position on a screenshot)
 3. Wait 1500ms (settings window creation)
 4. Check the window list — a krema settings window appears
@@ -290,7 +288,7 @@ window, so it is a task with a window preview.
 2. Right-click without moving the pointer and wait for the menu.
 3. Watch the item and the preview for about 1.5 s while the menu is open.
 4. Press Escape without moving the pointer.
-5. Repeat steps 1-2, then click "Settings..." in the menu with the pointer, so
+5. Repeat steps 1-2, then click "New Instance" in the menu with the pointer, so
    the menu closes with the pointer off the dock.
 
 **Expected:**

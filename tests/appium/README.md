@@ -423,8 +423,8 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | PREV-007 | `test_03_preview.py::test_prev007_opening_preview_announces_window_count` | AT-SPI event | pass |
 | QA-PREV-01 | `test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` | AT-SPI, KWin, real input | pass (pre-fix failed at 33 ms; fixed 1/1) |
 | QA-PREV-02 | `test_03_preview.py::test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`) | AT-SPI, KWin geometry/cursor, W3C element origin | pass on arm64 Fedora 44 and Leap 16.0: both new cases failed before the webdriver patch and passed after; PREV-003/005 stayed passing |
-| CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`, `test_ctx001_about_krema_is_the_fifth_entry`; native `[context-menu]` integration test checks no quit label | KWin, native QMenu | pending after #130 |
-| CTX-010 | `test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu` (empty/running-app variants); native `[context-menu]` test; QML routing tests at all four edges | KWin, native QMenu, QML input | pending after #130 |
+| CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`; native `[context-menu]` integration test checks no dock-wide actions | KWin, native QMenu | pending after #130 |
+| CTX-010 | `test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu` (empty/running-app variants), `test_ctx010_about_krema_is_the_second_dock_entry`; native `[context-menu]` test; QML routing tests at all four edges | KWin, native QMenu, QML input | pending after #130 |
 | CTX-002 | `test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes` | AT-SPI, kremarc | pass |
 | CTX-003 | `test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app`, `test_ctx003_unpinned_running_app_stays_until_it_closes` | AT-SPI, kremarc | pass |
 | CTX-004 | `test_04_context_menu.py::test_ctx004_new_instance_launches_another_window` | KWin | pass |
@@ -789,7 +789,7 @@ Input and UI flows:
 | `open_dock_context_menu() -> kwin.Window` | Right-click visible dock padding, including an empty dock; returns its KWin popup. `DOCK_CONTEXT_MENU_ENTRIES` gives Settings..., About Krema, Quit Krema. |
 | `choose_context_menu_entry(label, entries)` | Keyboard selection (Down x position, Return) in the open menu. |
 | `context_menu_entries(pinned, is_window, has_notifications=False, desktop_actions=()) -> list[str]` (module function) | Enabled menu entries in order, mirroring `src/models/dockcontextmenu.cpp`; `desktop_actions` are the app's visible .desktop actions, listed first. |
-| `open_settings(via_item, entries=None) -> kwin.Window` | Open Settings through an item's context menu; returns the "Settings" window. |
+| `open_settings(via_item, entries=None) -> kwin.Window` | Reveal via an item, then open Settings through empty dock space; returns the "Settings" window. |
 | `screenshot(name, area=None) -> PIL.Image.Image` | RGB screen image, also saved to `artifacts/<name of krema>/<name>.png`. With `area` only that part is captured, the rest is black, and the PNG holds only the area (see "Screenshots and previews"). |
 
 ### `krema_e2e.windows` (fixture windows)

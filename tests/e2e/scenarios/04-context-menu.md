@@ -329,6 +329,9 @@ window, so it is a task with a window preview.
   its preview reopens after the normal hover delay.
 - After the menu closes with the pointer off the dock, every item returns to
   its rest size and the preview stays closed, like a normal pointer exit.
+- New Instance opens a second window of the targeted app. Its single-window
+  title becomes the grouped app name; the zoom check follows that same slot
+  under its new name after launch feedback ends. The extra window is cleaned up.
 - Variant: Krema starts while no mouse is connected (the seat has no pointer)
   and the mouse is connected afterwards. Already the first menu closed with
   Escape over a hovered item keeps its zoom, like the second one.

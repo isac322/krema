@@ -897,8 +897,10 @@ def test_set008_follow_active_shortcuts_act_on_the_shown_dock(krema: Krema, apps
 
 # ------------------------------------------------------------------- SET-009
 def _quit_via_menu(k: Krema) -> int:
-    open_menu(k)
-    k.choose_context_menu_entry("Quit", ENTRIES)
+    from krema_e2e.krema import DOCK_CONTEXT_MENU_ENTRIES
+
+    k.open_dock_context_menu()
+    k.choose_context_menu_entry("Quit Krema", DOCK_CONTEXT_MENU_ENTRIES)
     assert k.process is not None
     return k.process.wait(20)
 

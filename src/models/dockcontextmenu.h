@@ -5,6 +5,8 @@
 
 #include <QObject>
 
+class QMenu;
+
 namespace krema
 {
 
@@ -13,7 +15,7 @@ class DockActions;
 class NotificationTracker;
 
 /**
- * Context menu for dock items.
+ * Context menus for dock items and empty dock space.
  *
  * Separated from DockModel to isolate UI-level menu construction
  * and its associated signals (settings, about, visibility tracking).
@@ -33,6 +35,9 @@ public:
     /// Show the native context menu for the task at @p index.
     Q_INVOKABLE void showForTask(int index);
 
+    /// Show dock-wide actions from empty dock space, including Quit Krema.
+    Q_INVOKABLE void showForDock();
+
     [[nodiscard]] bool isOpen() const;
 
 Q_SIGNALS:
@@ -47,6 +52,8 @@ private:
     bool m_open = false;
 
     void setOpen(bool open);
+    void addSettingsActions(QMenu *menu);
+    void popup(QMenu *menu);
 };
 
 } // namespace krema

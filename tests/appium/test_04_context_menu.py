@@ -45,6 +45,7 @@ from krema_e2e import config, dbus, env, kwin
 from krema_e2e import input as inp
 from krema_e2e.krema import DOCK_CONTEXT_MENU_ENTRIES, PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state, painted_rect
 from krema_e2e.waits import KWIN_POLL_INTERVAL, wait_stable, wait_until
+from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.windows import TestWindows
 from test_02_mouse import ZOOM_KREMARC, _require_capture
 from test_06_settings import close_settings
@@ -59,6 +60,23 @@ LAUNCHER = config.launcher(APP)
 UNPINNED_WINDOW = context_menu_entries(pinned=False, is_window=True)
 PINNED_WINDOW = context_menu_entries(pinned=True, is_window=True)
 PINNED_LAUNCHER = context_menu_entries(pinned=True, is_window=False)
+
+
+@pytest.mark.parametrize("with_app", [False, True], ids=["empty", "populated"])
+def test_ctx011_keyboard_opens_dock_settings(krema: Krema, apps: TestWindows, with_app: bool) -> None:
+    if with_app:
+        apps.open("Alpha")
+        krema.wait_for_item("Alpha")
+    invoke_shortcut("focus-dock")
+    krema.wait_keyboard_focus()
+    before = {w.internal_id for w in krema.windows()}
+    inp.key("Shift", "F10")
+    wait_until(
+        lambda: any(w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar for w in krema.windows()),
+        message="keyboard-opened dock menu",
+    )
+    krema.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
+    wait_until(lambda: settings_window(krema), timeout=15, message="Settings from keyboard dock menu")
 
 
 # ------------------------------------------------------------------- oracles

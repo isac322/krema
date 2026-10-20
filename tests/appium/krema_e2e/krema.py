@@ -421,34 +421,19 @@ class Krema:
             inp.key("Down")
         inp.key("Return")
 
-    def open_dock_context_menu(self, timeout: float = 5.0) -> kwin.Window:
-        """Right-click visible padding beside the first icon, or an empty dock.
+    def open_dock_context_menu(self, timeout: float = 5.0, *, surface: Rect | None = None, items: Sequence[WebElement] | None = None) -> kwin.Window:
+        """Right-click resting dock padding, independent of hover zoom.
 
         This works with an empty dock too. The fixture must show the dock
         before calling this helper (AlwaysVisible or a reveal shortcut).
+        Pass the surface and its items when targeting another output.
         """
         before = {w.internal_id for w in self.windows()}
-        area = wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
+        area = surface or wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
         settings = self.read_config().get("General", {})
-        edge = int(settings.get("Edge", config.EDGE_BOTTOM))
-        floating = str(settings.get("Floating", "true")).lower() == "true"
-        margin = int(settings.get("FloatingMargin", 8)) if floating else 0
-        items = self.items()
-        if items:
-            first = self.screen_rect(items[0])
-            gap = int(settings.get("IconSpacing", 4)) // 2 + 4
-            target = ((first.x - gap, first.center[1]) if edge <= config.EDGE_BOTTOM
-                      else (first.center[0], first.y - gap))
-        else:
-            depth = margin + int(settings.get("IconSize", 48)) // 2 + 8
-            if edge == config.EDGE_TOP:
-                target = (area.x + area.width // 2, area.y + depth)
-            elif edge == config.EDGE_BOTTOM:
-                target = (area.x + area.width // 2, area.y + area.height - depth)
-            elif edge == config.EDGE_LEFT:
-                target = (area.x + depth, area.y + area.height // 2)
-            else:
-                target = (area.x + area.width - depth, area.y + area.height // 2)
+        dock_items = self.items() if items is None else items
+        separator = any(has_state(e, "showing") for e in self.find_all(TOOLBAR_XPATH + "/separator"))
+        target = dock_padding_target(area, len(dock_items), settings, separator)
         inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
         inp.click(*target, button="right")
         return wait_until(
@@ -532,6 +517,31 @@ def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool 
 
 
 DOCK_CONTEXT_MENU_ENTRIES = ["Settings...", "About Krema", "Quit Krema"]
+
+
+def dock_padding_target(area: Rect, count: int, settings: Mapping[str, Any], separator: bool = False) -> tuple[int, int]:
+    """A point beside the centred, unscaled row, inside the resting panel.
+
+    The Flow's rest extent is icon slots + spacing + the optional zone gap.
+    No transformed AT-SPI icon bounds enter this calculation, so retracting
+    zoom cannot move the target outside the panel's input region.
+    """
+    edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
+    icon = int(settings.get("IconSize", 48))
+    spacing = int(settings.get("IconSpacing", 4))
+    floating = str(settings.get("Floating", "true")).lower() == "true"
+    margin = int(settings.get("FloatingMargin", 8)) if floating else 0
+    extent = count * icon + max(0, count - 1) * spacing + (spacing + 1 if separator else 0)
+    # Half the ordinary icon spacing belongs to the icon's hit slot.
+    offset = extent / 2 + spacing / 2 + 4 if count else 0
+    depth = margin + icon / 2
+    if edge == kcfg.EDGE_TOP:
+        return round(area.x + area.width / 2 - offset), round(area.y + depth)
+    if edge == kcfg.EDGE_BOTTOM:
+        return round(area.x + area.width / 2 - offset), round(area.y + area.height - depth)
+    if edge == kcfg.EDGE_LEFT:
+        return round(area.x + depth), round(area.y + area.height / 2 - offset)
+    return round(area.x + area.width - depth), round(area.y + area.height / 2 - offset)
 
 
 def _xpath_str(s: str) -> str:

@@ -21,6 +21,7 @@ Item {
 
     Accessible.role: Accessible.ToolBar
     Accessible.name: i18n("Krema Dock")
+    Accessible.description: i18n("Press Menu for application actions or Shift+F10 for dock settings and actions.")
 
     // C++ singletons: DockView, DockModel, DockActions, DockContextMenu, DockVisibility, DockSettings, PreviewController
 
@@ -371,10 +372,18 @@ Item {
             event.accepted = true
             break
         case Qt.Key_Menu:
-            if (hoveredIndex >= 0) {
+            if (hoveredIndex >= 0 && !(event.modifiers & Qt.ShiftModifier)) {
                 DockContextMenu.showForTask(hoveredIndex)
+            } else {
+                DockContextMenu.showForDock()
             }
             event.accepted = true
+            break
+        case Qt.Key_F10:
+            if (event.modifiers & Qt.ShiftModifier) {
+                DockContextMenu.showForDock()
+                event.accepted = true
+            }
             break
         }
     }

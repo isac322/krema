@@ -1812,6 +1812,32 @@ Item {
 
         // --- Keyboard navigation ---
 
+        function test_keyboardMenus_data() {
+            return [
+                { tag: "populated", count: 2 },
+                { tag: "empty", count: 0 },
+            ]
+        }
+
+        function test_keyboardMenus(data) {
+            if (data.count) addTasks(["A", "B"])
+            let dock = makeDock(data.count)
+            dock.startKeyboardNavigation()
+            keyClick(Qt.Key_F10, Qt.ShiftModifier)
+            compare(DockContextMenu.callsTo("showForDock").length, 1)
+            compare(DockContextMenu.callsTo("showForTask").length, 0)
+            keyClick(Qt.Key_Menu, Qt.ShiftModifier)
+            compare(DockContextMenu.callsTo("showForDock").length, 2)
+            keyClick(Qt.Key_Menu)
+            if (data.count) {
+                compare(DockContextMenu.callsTo("showForTask").length, 1)
+                compare(DockContextMenu.callsTo("showForTask")[0].args[0], 0)
+                compare(DockContextMenu.callsTo("showForDock").length, 2)
+            } else {
+                compare(DockContextMenu.callsTo("showForDock").length, 3)
+            }
+        }
+
         function test_keyboardNavigationMovesFocusAndReturnEndsNavigation() {
             addTasks(["A", "B", "C"])
             let dock = makeDock(3)

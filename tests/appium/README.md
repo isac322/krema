@@ -425,6 +425,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | QA-PREV-02 | `test_03_preview.py::test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`) | AT-SPI, KWin geometry/cursor, W3C element origin | pass on arm64 Fedora 44 and Leap 16.0: both new cases failed before the webdriver patch and passed after; PREV-003/005 stayed passing |
 | CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`; native `[context-menu]` integration test checks no dock-wide actions | KWin, native QMenu | pending after #130 |
 | CTX-010 | `test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu` (empty/running-app variants), `test_ctx010_about_krema_is_the_second_dock_entry`; native `[context-menu]` test; QML routing tests at all four edges | KWin, native QMenu, QML input | pending after #130 |
+| CTX-011 | `test_04_context_menu.py::test_ctx011_keyboard_opens_dock_settings`; QML `test_keyboardMenus` | Real keyboard input, KWin, QML | Docker E2E pending |
 | CTX-002 | `test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes` | AT-SPI, kremarc | pass |
 | CTX-003 | `test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app`, `test_ctx003_unpinned_running_app_stays_until_it_closes` | AT-SPI, kremarc | pass |
 | CTX-004 | `test_04_context_menu.py::test_ctx004_new_instance_launches_another_window` | KWin | pass |

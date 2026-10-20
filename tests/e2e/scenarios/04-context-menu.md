@@ -13,8 +13,10 @@
 - ctx-task-zones: Pin and unpin live tasks between zones without duplicate dock items
 - ctx-desktop-actions: The app's .desktop file actions (e.g. "New Private Window") launch from the menu
 - ctx-hover-hold: Hovered item keeps its zoom and its window preview stays closed while the menu is open
+- ctx-keyboard-dock: Shift+F10 or Shift+Menu opens dock actions during keyboard navigation
 
 ## Affected Files
+- src/shell/dockshell.cpp
 - src/models/dockcontextmenu.h
 - src/models/dockcontextmenu.cpp
 - src/models/dockactions.h
@@ -89,6 +91,20 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 
 **Verification:** Native menu labels, settings window, dock exit status, remaining app windows.
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu (empty/running-app variants), ::test_ctx010_about_krema_is_the_second_dock_entry, ::test_ctx006_settings_entry_opens_the_settings_window; tests/integration/test_settings_lifecycle.cpp [context-menu] (native labels, task/background pointer routing, interaction lock); tests/qml/tst_dock_main.qml::test_rightClickRoutesToTaskOrDock (four edges, keyboard selection), ::test_emptyDockRightClick. Docker E2E and visual evidence remain pending until run/captured.
+
+---
+
+## TC CTX-011: Keyboard Access to Dock Actions
+
+**Steps:**
+1. Focus the dock with Meta+Alt+D, first with apps present, then with no icons.
+2. Press Shift+F10 (or Shift+Menu).
+3. Choose Settings... using Down, Return.
+4. Repeat and dismiss with Escape; on a populated dock, press Menu without Shift.
+
+**Expected:** The dock menu opens and Settings is reachable without a mouse, regardless of task count. Menu without Shift retains application actions for a focused task and opens dock actions when the dock is empty.
+
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx011_keyboard_opens_dock_settings; tests/qml/tst_dock_main.qml::test_keyboardMenus (empty and populated variants); tests/integration/test_settings_lifecycle.cpp [context-menu][keyboard] (idle empty dock receives compositor focus).
 
 ---
 

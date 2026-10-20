@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dock shadows no longer clipped at low light heights by their containing surfaces; when the requested gap is smaller than the outward shadow, pixels may still clip at the layer-surface/output boundary. Screen reservation and window preview placement keep the requested gap, and previews stay interactive after native surface resizes (#118)
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
+- Kept dock settings and actions accessible from keyboard navigation with Shift+F10 or Shift+Menu, including on populated docks (#130)
 - Moved the dock's quit action out of application context menus into an empty-area dock menu and renamed it "Quit Krema", preventing it from being mistaken for closing the clicked app (#130)
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Notification tracking reconnected after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.

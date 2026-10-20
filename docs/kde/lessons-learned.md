@@ -1,5 +1,15 @@
 # 교훈 (Lessons Learned)
 
+## Context menu scope and test geometry (2026-10-20)
+
+Moving global actions out of task menus must preserve a separate keyboard
+route on populated docks. Test both scopes, with and without tasks, rather
+than checking only the pointer path. For pointer QA, derive empty-space
+targets from the centred row's resting extent; transformed icon bounds move
+as zoom retracts and can put a fixed target outside the resting input mask.
+Compile-only Python checks do not catch undefined names: execute default
+configuration paths and run an undefined-name check as well.
+
 ## 1. QML 애니메이션 좌표가 C++ 로직에 영향을 주는 문제 (2026-02)
 
 **증상:** 데스크탑 전환 시 독이 번갈아가며 보이고 숨겨짐 (D1: 숨김 → D2: 보임 → D3: 숨김 → ...)

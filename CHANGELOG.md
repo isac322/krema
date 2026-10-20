@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Moved Settings and About Krema into the dock-only context menu, keeping application menus focused on the clicked app (#130)
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
 - Bounded retained inactive notification history to 100 records while preserving active notifications and their unread counts.
 

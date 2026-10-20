@@ -18,8 +18,6 @@ asserted outcome::
     0  Pin to Dock / Unpin from Dock   CTX-002 / CTX-003 (kremarc PinnedLaunchers)
     1  New Instance                    CTX-004 (KWin window count +1)
     2  Close                           CTX-005 (KWin windows of the app gone)
-    3  Settings...                     CTX-006 (Settings window, Icons page)
-    4  About Krema                     CTX-001 (Settings window, About Krema page)
 
 The empty-area dock menu has Settings..., About Krema, and Quit Krema.
 Only its final entry exits the dock (CTX-010).
@@ -176,7 +174,7 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     )
     top, bottom = changed[1], changed[3]
     assert top >= area.height * 0.08, f"highlight {changed} is on the header row (menu {area})"
-    assert bottom <= area.height * 0.34, f"highlight {changed} is not the first entry row (menu {area})"
+    assert bottom <= area.height * 0.60, f"highlight {changed} is not the first entry row (menu {area})"
 
     # Escape dismisses it.
     inp.key("Escape")
@@ -184,10 +182,10 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     assert krema.item("Alpha") is not None
 
 
-def test_ctx001_about_krema_is_the_fifth_entry(krema: Krema, apps: TestWindows) -> None:
+def test_ctx010_about_krema_is_the_second_dock_entry(krema: Krema, apps: TestWindows) -> None:
     apps.open("Alpha")
-    krema.open_context_menu("Alpha")
-    krema.choose_context_menu_entry("About Krema", UNPINNED_WINDOW)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("About Krema", DOCK_CONTEXT_MENU_ENTRIES)
 
     win = wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from About Krema")
     assert win.pid == krema.pid
@@ -614,29 +612,29 @@ def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, 
         menu = right_click_in_place(krema)
         wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
 
-        # Locate the "Settings..." row: highlight it with the keyboard and diff
+        # Locate the "New Instance" row: highlight it with the keyboard and diff
         # the menu against its unhighlighted frame (QMenu is not in AT-SPI).
         area = Rect(*menu.client_geometry)
         shot = crop(settled_capture(krema, "hold-menu-open", area), area)
-        for _ in range(PINNED_WINDOW.index("Settings...") + 1):
+        for _ in range(PINNED_WINDOW.index("New Instance") + 1):
             inp.key("Down")
         row = wait_stable(
             lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-settings", area), area)).getbbox(),
             duration=0.5,
         )
-        assert row is not None, "keyboard highlight of 'Settings...' not visible in the menu"
+        assert row is not None, "keyboard highlight of 'New Instance' not visible in the menu"
         target = (area.x + (row[0] + row[2]) // 2, area.y + (row[1] + row[3]) // 2)
         zoomed_top = dock.y + zoomed.y
-        assert target[1] < zoomed_top, f"'Settings...' row at {target} is not above the magnified icon (top {zoomed_top})"
+        assert target[1] < zoomed_top, f"'New Instance' row at {target} is not above the magnified icon (top {zoomed_top})"
 
         # Click the entry with the pointer: the menu closes with the pointer on
         # the menu's former place, off the dock.
-        inp.move(*target)
+        inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
         inp.click()
         wait_menu_closed(menu)
-        wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from the 'Settings...' entry")
+        wait_until(lambda: len(app_windows()) >= 2, timeout=15, message="New Instance launched another window")
 
-        # The Settings window adds its own task item; only the items present
+        # The launched window may change task state; only the items present
         # before the menu opened are checked.
         rest_sizes = {name: (r.width, r.height) for name, r in rest.items()}
         wait_until(

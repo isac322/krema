@@ -151,7 +151,7 @@ While Settings is open, the same application also has a settings frame
    `Qt::Popup` window, which Qt does not expose in the AT-SPI tree. Navigate it
    with the keyboard (Down/Return) or locate entries on a screenshot.
    Menu items are in fixed order: AppName, Pin/Unpin, New Instance, Close,
-   separator, Settings..., About Krema. Right-click empty dock space for
+   with no dock-wide actions. Right-click empty dock space for
    Settings..., About Krema, separator, Quit Krema.
 
 8. **Dock-to-preview mouse transition**: Moving the pointer from the dock to the

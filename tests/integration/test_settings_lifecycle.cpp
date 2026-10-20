@@ -1055,7 +1055,7 @@ TEST_CASE("Shutting down right after reopening settings", "[settings][shutdown-a
     checkSettingsTornDown(reopened);
 }
 
-TEST_CASE("Empty dock space owns Quit Krema while task menus cannot quit the dock", "[context-menu]")
+TEST_CASE("Dock-wide actions are only available from empty dock space", "[context-menu]")
 {
     resetTo(MultiDockManager::PrimaryOnly);
     QTemporaryDir directory;
@@ -1116,6 +1116,8 @@ TEST_CASE("Empty dock space owns Quit Krema while task menus cannot quit the doc
     CHECK(labels.contains(QStringLiteral("Unpin from Dock")));
     CHECK_FALSE(labels.contains(QStringLiteral("Quit")));
     CHECK_FALSE(labels.contains(QStringLiteral("Quit Krema")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Settings...")));
+    CHECK_FALSE(labels.contains(QStringLiteral("About Krema")));
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
 
     auto *panel = findItem(view->contentItem(), [](QQuickItem *candidate) {

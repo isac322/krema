@@ -110,8 +110,6 @@ void DockContextMenu::showForTask(int index)
         });
     }
 
-    menu->addSeparator();
-    addSettingsActions(menu);
     popup(menu);
 }
 
@@ -119,14 +117,6 @@ void DockContextMenu::showForDock()
 {
     auto *menu = new QMenu();
     menu->setAttribute(Qt::WA_DeleteOnClose);
-    addSettingsActions(menu);
-    menu->addSeparator();
-    menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18nc("@action:inmenu", "Quit Krema"), qApp, &QApplication::quit);
-    popup(menu);
-}
-
-void DockContextMenu::addSettingsActions(QMenu *menu)
-{
     menu->addAction(QIcon::fromTheme(QStringLiteral("configure")), i18nc("@action:inmenu", "Settings..."), this, [this]() {
         Q_EMIT settingsRequested();
     });
@@ -136,6 +126,9 @@ void DockContextMenu::addSettingsActions(QMenu *menu)
     menu->addAction(QIcon::fromTheme(QStringLiteral("help-about")), i18nc("@action:inmenu", "About Krema"), this, [this]() {
         Q_EMIT aboutRequested();
     });
+    menu->addSeparator();
+    menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18nc("@action:inmenu", "Quit Krema"), qApp, &QApplication::quit);
+    popup(menu);
 }
 
 void DockContextMenu::popup(QMenu *menu)

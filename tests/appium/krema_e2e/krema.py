@@ -421,6 +421,43 @@ class Krema:
             inp.key("Down")
         inp.key("Return")
 
+    def open_dock_context_menu(self, timeout: float = 5.0) -> kwin.Window:
+        """Right-click visible padding beside the first icon, or an empty dock.
+
+        This works with an empty dock too. The fixture must show the dock
+        before calling this helper (AlwaysVisible or a reveal shortcut).
+        """
+        self.move_away()
+        before = {w.internal_id for w in self.windows()}
+        area = wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
+        settings = self.read_config().get("General", {})
+        edge = int(settings.get("Edge", config.EDGE_BOTTOM))
+        floating = str(settings.get("Floating", "true")).lower() == "true"
+        margin = int(settings.get("FloatingMargin", 8)) if floating else 0
+        items = self.items()
+        if items:
+            first = self.screen_rect(items[0])
+            gap = int(settings.get("IconSpacing", 4)) // 2 + 4
+            target = ((first.x - gap, first.center[1]) if edge <= config.EDGE_BOTTOM
+                      else (first.center[0], first.y - gap))
+        else:
+            depth = margin + int(settings.get("IconSize", 48)) // 2 + 8
+            if edge == config.EDGE_TOP:
+                target = (area.x + area.width // 2, area.y + depth)
+            elif edge == config.EDGE_BOTTOM:
+                target = (area.x + area.width // 2, area.y + area.height - depth)
+            elif edge == config.EDGE_LEFT:
+                target = (area.x + depth, area.y + area.height // 2)
+            else:
+                target = (area.x + area.width - depth, area.y + area.height // 2)
+        inp.move_path(inp.line((env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT // 2), target, 20), 15)
+        inp.click(*target, button="right")
+        return wait_until(
+            lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window), None),
+            timeout=timeout,
+            message="dock context menu",
+        )
+
     def open_settings(self, via_item: str, entries: list[str] | None = None, timeout: float = 15.0) -> kwin.Window:
         """Open Settings through item ``via_item``'s context menu and wait for
         the "Settings — Krema" window. Pass ``entries`` when the item is not
@@ -490,7 +527,10 @@ def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool 
         entries.append("Clear Notifications")
     if is_window:
         entries.append("Close")
-    return entries + ["Settings...", "About Krema", "Quit"]
+    return entries + ["Settings...", "About Krema"]
+
+
+DOCK_CONTEXT_MENU_ENTRIES = ["Settings...", "About Krema", "Quit Krema"]
 
 
 def _xpath_str(s: str) -> str:

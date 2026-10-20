@@ -20,7 +20,9 @@ asserted outcome::
     2  Close                           CTX-005 (KWin windows of the app gone)
     3  Settings...                     CTX-006 (Settings window, Icons page)
     4  About Krema                     CTX-001 (Settings window, About Krema page)
-    5  Quit                            CTX-001 (krema exits with status 0)
+
+The empty-area dock menu has Settings..., About Krema, and Quit Krema.
+Only its final entry exits the dock (CTX-010).
 
 An app whose .desktop file declares actions lists them first, in Actions=
 order, so every position above moves down by their count (CTX-008: the
@@ -43,7 +45,7 @@ from PIL import Image, ImageChops
 
 from krema_e2e import config, dbus, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state, painted_rect
+from krema_e2e.krema import DOCK_CONTEXT_MENU_ENTRIES, PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state, painted_rect
 from krema_e2e.waits import KWIN_POLL_INTERVAL, wait_stable, wait_until
 from krema_e2e.windows import TestWindows
 from test_02_mouse import ZOOM_KREMARC, _require_capture
@@ -196,19 +198,21 @@ def test_ctx001_about_krema_is_the_fifth_entry(krema: Krema, apps: TestWindows) 
     assert checked == ["About Krema"], f"sidebar selection {checked}"
 
 
-def test_ctx001_quit_is_the_last_entry(krema: Krema, apps: TestWindows) -> None:
-    apps.open("Alpha")
+@pytest.mark.parametrize("with_app", [False, True], ids=["empty-dock", "running-app"])
+def test_ctx010_quit_krema_is_in_the_dock_menu(krema: Krema, apps: TestWindows, with_app: bool) -> None:
+    if with_app:
+        apps.open("Alpha")
     process = krema.process
     assert process is not None
-    krema.open_context_menu("Alpha")
-    krema.choose_context_menu_entry("Quit", UNPINNED_WINDOW)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("Quit Krema", DOCK_CONTEXT_MENU_ENTRIES)
 
     wait_until(lambda: process.poll() is not None, timeout=15, message="krema to quit")
     assert process.returncode == 0, f"krema exited with {process.returncode}; see {krema.log_path}"
     wait_until(lambda: not dbus.has_name("org.kde.krema"), timeout=10, message="org.kde.krema to be released")
     wait_until(lambda: not any(w.pid == process.pid for w in kwin.windows()), timeout=10, message="krema surfaces to go")
     # The fixture window is untouched.
-    assert [w.title for w in app_windows()] == ["Alpha"]
+    assert [w.title for w in app_windows()] == (["Alpha"] if with_app else [])
     krema.stop()  # expected exit: detach the fixture from the finished process
 
 

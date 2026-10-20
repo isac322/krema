@@ -890,7 +890,7 @@ Item {
             }
             if (root._hoverReconciling && !root._menuHeld)
                 root._reconcileAt(mouse.x, mouse.y)
-            else if (!root.keyboardNavigating)
+            else if (!root.keyboardNavigating || mouse.button === Qt.RightButton)
                 root.trackPointer(mouse.x, mouse.y)
             if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
                 root._dragStartX = mouse.x
@@ -929,6 +929,13 @@ Item {
         onClicked: function(mouse) {
             // Suppress clicks for the entire held-button cycle after a drag.
             if (root._dragWasActive) return
+            if (mouse.button === Qt.RightButton) {
+                if (root.hoveredIndex >= 0)
+                    DockContextMenu.showForTask(root.hoveredIndex)
+                else
+                    DockContextMenu.showForDock()
+                return
+            }
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
                 let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
@@ -950,8 +957,6 @@ Item {
                 }
             } else if (mouse.button === Qt.MiddleButton) {
                 DockActions.newInstance(root.hoveredIndex)
-            } else if (mouse.button === Qt.RightButton) {
-                DockContextMenu.showForTask(root.hoveredIndex)
             }
         }
 

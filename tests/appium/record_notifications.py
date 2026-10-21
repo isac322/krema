@@ -114,36 +114,55 @@ def _start_sni(krema: Krema):
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
     kded = None
-    if not bus.name_has_owner("org.kde.StatusNotifierWatcher"):
-        kded = subprocess.Popen(
-            ["kded6"],
-            env=krema.environment(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        wait_until(
-            lambda: bus.name_has_owner("org.kde.kded6"),
-            message="installed kded6 service",
-        )
-        kded_iface = dbus.Interface(bus.get_object("org.kde.kded6", "/kded"), "org.kde.kded6")
-        if not kded_iface.loadModule("statusnotifierwatcher"):
-            raise RuntimeError("kded6 did not load the installed statusnotifierwatcher module")
-        wait_until(
-            lambda: bus.name_has_owner("org.kde.StatusNotifierWatcher"),
-            timeout=10,
-            message="StatusNotifierWatcher service",
-        )
-    source = Path(__file__).resolve().parents[2] / "tools" / "notification-debugger.py"
-    spec = importlib.util.spec_from_file_location("krema_notification_debugger", source)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load SNI peer source {source}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    sni = module.StatusNotifierItemService(bus)
-    sni.set_property("Id", env.TEST_APP_ID)
-    sni.register_with_watcher()
-    return sni, kded
+    sni = None
+    try:
+        if not bus.name_has_owner("org.kde.StatusNotifierWatcher"):
+            kded = subprocess.Popen(
+                ["kded6"],
+                env=krema.environment(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            wait_until(
+                lambda: bus.name_has_owner("org.kde.kded6"),
+                message="installed kded6 service",
+            )
+            kded_iface = dbus.Interface(bus.get_object("org.kde.kded6", "/kded"), "org.kde.kded6")
+            if not kded_iface.loadModule("statusnotifierwatcher"):
+                raise RuntimeError("kded6 did not load the installed statusnotifierwatcher module")
+            wait_until(
+                lambda: bus.name_has_owner("org.kde.StatusNotifierWatcher"),
+                timeout=10,
+                message="StatusNotifierWatcher service",
+            )
+        source = Path(__file__).resolve().parents[2] / "tools" / "notification-debugger.py"
+        spec = importlib.util.spec_from_file_location("krema_notification_debugger", source)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"cannot load SNI peer source {source}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        sni = module.StatusNotifierItemService(bus)
+        sni.set_property("Id", env.TEST_APP_ID)
+        sni.register_with_watcher()
+        return sni, kded
+    except BaseException:
+        if sni is not None:
+            try:
+                if not sni.unregister_with_watcher():
+                    print("SNI setup cleanup failed to release the owned service name", file=sys.stderr)
+            except Exception as error:
+                print(f"SNI setup name release failed: {type(error).__name__}: {error}", file=sys.stderr)
+            try:
+                sni.remove_from_connection()
+            except Exception as error:
+                print(f"SNI setup object removal failed: {type(error).__name__}: {error}", file=sys.stderr)
+        if kded is not None:
+            try:
+                _stop_server(kded)
+            except Exception as error:
+                print(f"SNI setup cleanup failed: {type(error).__name__}: {error}", file=sys.stderr)
+        raise
 
 
 def _pump_dbus() -> None:

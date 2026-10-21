@@ -987,12 +987,15 @@ trip; no private notification signal is synthesized. The 30-day timer-arm
 old-fail/new-pass guarantee belongs to the Qt 6.8 integration gate, not to
 waiting days or merely observing active DND on a newer Qt.
 
-**Regression tier:** The throwaway `cleanup_fault.py` plugin in the merge
-evidence artifact injects real teardown failures (DND reset, kded wait,
-original scenario, and event-artifact write). It must show that later cleanup
-steps and metadata writes still run, the overall result is honestly failed,
-and an original scenario exception remains the primary exception. It is not a
-permanent repository test.
+**Regression tier:** The optional
+`tests/appium/notification_cleanup_probe.py` plugin exercises current-code
+acquisition and teardown failures: real kded module rejection during SNI
+setup, missing DND writer, kded wait timeout, original scenario failure, and
+event-artifact write failure. It must verify release of acquired resources,
+later cleanup and metadata writes, honest failed recording metadata, and
+preservation of the exact original exception. Load it explicitly with
+`-p notification_cleanup_probe`; it is not part of default collection or CI.
+Old/new source-comparison probes remain throwaway merge-evidence artifacts.
 
 **Automated:** `tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`
 uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`

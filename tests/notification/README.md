@@ -241,7 +241,7 @@ instead of producing synthetic or mock frames.
 ## Krema notification product-input gates
 
 These gates distinguish framework integration, real KWin capture, and
-throwaway recorder-regression evidence for Krema's direct notification inputs.
+optional recorder-regression evidence for Krema's direct notification inputs.
 They are separate from the wire-level Portal and JobView scenarios, which
 are transport/coverage evidence only and are not Krema notification inputs.
 
@@ -250,7 +250,7 @@ are transport/coverage evidence only and are not Krema notification inputs.
 | Application-owned DND inhibition | Tier 2 (KWin integration) | `tests/integration/test_notification_tracker.cpp` — `DND application inhibition is active without an Until deadline and clears` | Real `Inhibit/UnInhibit` drives the private notification server; `NotificationManager::Settings::notificationsInhibitedByApplication()` reads true/false with no `Until`, and `NotificationTracker::dndActive` follows |
 | Timed DND long-deadline arming and real deadline rewrite | Tier 2 (Qt/KWin integration) | `tests/integration/test_notification_tracker.cpp` — timed DND boundary, early timeout re-arm, and short-deadline rewrite coverage | The tracker safely arms a 30-day `Until` without waiting 30 days; an unchanged-clock early timeout recomputes the real deadline and remains active, then a real config rewrite to a short `Until` expires on wall-clock time |
 | Notification service atomic owner handover | Tier 3 (real Appium/KWin video) | `tests/appium/record_notifications.py` — replacement notification server capture | A non-empty old and new `org.freedesktop.Notifications` owner transition is observed; the replacement server receives one watcher registration and a real notification reaches the dock after handover |
-| Recorder teardown failure containment | Tier 3 (throwaway capture regression) | `cleanup-regression/cleanup_fault.py` in the merge-evidence artifact only; not a repository test | Real missing-writer, kded-wait timeout, original-scenario, and artifact-write failures must verify independent teardown attempts, honest failed metadata, and preservation of the exact original scenario exception |
+| Recorder acquisition and teardown failure containment | Tier 3 (opt-in real-capture regression) | `tests/appium/notification_cleanup_probe.py`, loaded explicitly with `-p`; see `tests/appium/README.md` | Real SNI setup rejection, missing-writer, kded-wait timeout, original-scenario, and artifact-write failures must verify acquired-resource release, independent teardown, honest failed metadata, and exact original exception preservation; baseline-source comparisons stay outside the repository |
 | SNI attention clears watcher unread state | Tier 2 (KWin/private D-Bus integration) | `tests/integration/test_notification_tracker.cpp` — `SNI registration, status transitions, re-registration and owner loss are observable` | Real SNI `NeedsAttention -> Active/Passive` clears only the matching canonical app's watcher unread count and changes revision; re-entering `NeedsAttention` keeps the boolean attention state without recreating a numeric badge |
 | Context-menu Clear Notifications | Tier 2 (KWin/native QMenu integration) | `tests/integration/test_launcher_entry.cpp` — `Context menu clears only watcher unread notifications` | The real `QMenu` contains `Clear Notifications` iff the selected app has watcher unread; triggering it clears only that app's watcher count and leaves another app plus a visible Unity count unchanged |
 

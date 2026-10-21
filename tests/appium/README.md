@@ -292,6 +292,48 @@ Metadata separates `scenario_outcome` from `cleanup_outcome`; any cleanup error
 makes the overall outcome `failed`, without replacing an original scenario
 exception. A failed event-file write does not prevent the metadata attempt.
 
+**Optional cleanup regression probes:** `notification_cleanup_probe.py` is an
+explicit plugin for this recorder, not a `test_*.py` module or a default
+plugin. Load it with `-p notification_cleanup_probe`; do not add it to
+`conftest.py`, normal test collection, or CI environment variables.
+
+For a local real-capture probe, the fixed wrapper can forward that explicit
+plugin selection through a one-command `PYTEST_ADDOPTS` value:
+
+```sh
+docker exec -e GITHUB_SHA="$(git rev-parse HEAD)" \
+  -e PYTEST_ADDOPTS="-p notification_cleanup_probe" \
+  -e KREMA_CLEANUP_MODE=sni-setup \
+  -e KREMA_CLEANUP_RUN_DIR=/artifacts/cleanup-probes/sni-setup-1 \
+  <capture-container> bash /src/tests/notification/record-visual-evidence.sh
+```
+
+Never set this `PYTEST_ADDOPTS` value in CI or persist it in the environment.
+Within an already externally recorded X11/KWin setup, the corresponding
+explicit entrypoint arguments are
+`record_notifications.py -q -p notification_cleanup_probe`; retain the
+wrapper's capture environment rather than bypassing real capture.
+
+Use a new absolute `KREMA_CLEANUP_RUN_DIR` for each invocation and select one
+`KREMA_CLEANUP_MODE`:
+
+| Mode | Real stimulus and required result |
+|---|---|
+| `healthy` | Complete the recording and all owned-resource cleanup normally. |
+| `dnd-reset` | Point the final reset at a nonexistent native writer; later cleanup and failed metadata must remain available. |
+| `kded-wait` | Stop the owned kded child, terminate it, and observe a real wait timeout; resume and reap that same child afterward. |
+| `original-error` | Fail the scenario and then the real writer lookup; preserve the exact original exception. |
+| `events-write` | Create a directory/file collision at `events.jsonl`; still write honest failed metadata. |
+| `sni-setup` | Ask the real newly started kded to load a nonexistent module; release the acquired child before propagating its setup failure. |
+
+`<run-dir>/verification.json` records the original recording result, metadata,
+owned process IDs and exit observations, and the probe verdict. A deliberate
+recording failure becomes a passing **probe** only when the exact expected
+failure, remaining cleanup, and artifact assertions pass; fault recording
+metadata must never be relabeled as successful. The plugin exercises current
+code only. Baseline source loading and old/new comparison scripts remain
+throwaway merge-evidence artifacts outside the repository.
+
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
 automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.

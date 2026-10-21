@@ -8,6 +8,7 @@
 #include <KService>
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <utility>
 
 #include <QDBusConnection>
@@ -72,15 +73,10 @@ static QString canonicalDesktopId(const QString &rawId)
 }
 } // namespace
 
-
 NotificationTracker::NotificationTracker(QObject *parent)
     : QAbstractListModel(parent)
-    , m_notificationServiceWatcher(QStringLiteral("org.freedesktop.Notifications"),
-                                    QDBusConnection::sessionBus(),
-                                    QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration)
-    , m_sniWatcherServiceWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"),
-                                  QDBusConnection::sessionBus(),
-                                  QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration)
+    , m_notificationServiceWatcher(QStringLiteral("org.freedesktop.Notifications"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
+    , m_sniWatcherServiceWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_sniServiceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForUnregistration)
     , m_dndExpiryTimer(this)
 {
@@ -402,7 +398,9 @@ void NotificationTracker::updateDndState()
             if (until.isValid() && until > now) {
                 active = true;
                 const qint64 msUntil = now.msecsTo(until);
-                const auto delay = std::chrono::milliseconds(std::max<qint64>(1, msUntil));
+                // QTimer uses int milliseconds on older Qt releases. A capped
+                // timeout rechecks the absolute deadline before ending DND.
+                const auto delay = std::chrono::milliseconds(std::clamp<qint64>(msUntil, 1, std::numeric_limits<int>::max()));
                 m_dndExpiryTimer.start(delay);
                 qCDebug(lcNotif) << "DND expiry scheduled in" << delay.count() << "ms";
             }
@@ -548,8 +546,7 @@ void NotificationTracker::dumpState() const
 void NotificationTracker::setupNotificationWatcher()
 {
     auto bus = QDBusConnection::sessionBus();
-    connect(&m_notificationServiceWatcher, &QDBusServiceWatcher::serviceRegistered, this, &NotificationTracker::onNotificationServiceRegistered);
-    connect(&m_notificationServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onNotificationServiceUnregistered);
+    connect(&m_notificationServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onNotificationServiceOwnerChanged);
 
     // The notification server hardcodes this object path/interface for
     // RegisterWatcher callbacks; it is not the freedesktop server path.
@@ -628,7 +625,7 @@ void NotificationTracker::registerNotificationWatcher()
     });
 }
 
-void NotificationTracker::onNotificationServiceRegistered(const QString &service)
+void NotificationTracker::onNotificationServiceOwnerChanged(const QString &service, const QString &, const QString &newOwner)
 {
     if (service != QString::fromLatin1(kNotificationService)) {
         return;
@@ -636,19 +633,10 @@ void NotificationTracker::onNotificationServiceRegistered(const QString &service
     ++m_notificationOwnerGeneration;
     m_notificationWatcherRegistered = false;
     m_notificationRegisterPending = false;
-    qCInfo(lcNotif) << "Notification server appeared; registering watcher";
-    registerNotificationWatcher();
-}
-
-void NotificationTracker::onNotificationServiceUnregistered(const QString &service)
-{
-    if (service != QString::fromLatin1(kNotificationService)) {
-        return;
+    qCInfo(lcNotif) << "Notification server owner changed; watcher registration invalidated";
+    if (!newOwner.isEmpty()) {
+        registerNotificationWatcher();
     }
-    ++m_notificationOwnerGeneration;
-    m_notificationWatcherRegistered = false;
-    m_notificationRegisterPending = false;
-    qCInfo(lcNotif) << "Notification server owner lost; watcher registration invalidated";
 }
 
 void NotificationTracker::Notify(uint id,
@@ -849,8 +837,7 @@ void NotificationTracker::setupSniWatcher()
     }
 
     connect(&m_sniServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onSniServiceUnregistered);
-    connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceRegistered, this, &NotificationTracker::onSniWatcherServiceRegistered);
-    connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onSniWatcherServiceUnregistered);
+    connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onSniWatcherServiceOwnerChanged);
 
     const auto *dbusInterface = bus.interface();
     if (dbusInterface && dbusInterface->isServiceRegistered(QString::fromLatin1(kSniWatcherService))) {
@@ -1101,24 +1088,17 @@ void NotificationTracker::onSniServiceUnregistered(const QString &service)
     }
 }
 
-void NotificationTracker::onSniWatcherServiceRegistered(const QString &service)
+void NotificationTracker::onSniWatcherServiceOwnerChanged(const QString &service, const QString &, const QString &newOwner)
 {
     if (service != QString::fromLatin1(kSniWatcherService)) {
         return;
     }
     ++m_sniWatcherGeneration;
-    qCInfo(lcNotif) << "SNI watcher appeared; re-querying registered items";
-    queryRegisteredSniItems();
-}
-
-void NotificationTracker::onSniWatcherServiceUnregistered(const QString &service)
-{
-    if (service != QString::fromLatin1(kSniWatcherService)) {
-        return;
-    }
-    ++m_sniWatcherGeneration;
-    qCInfo(lcNotif) << "SNI watcher owner lost; clearing tracked items";
+    qCInfo(lcNotif) << "SNI watcher owner changed; clearing tracked items";
     clearSniItems();
+    if (!newOwner.isEmpty()) {
+        queryRegisteredSniItems();
+    }
 }
 
 } // namespace krema

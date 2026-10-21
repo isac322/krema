@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
 #include "dbuspeers.h"
+#include <QDBusConnectionInterface>
 #include <QDBusMessage>
 
 #include <utility>
@@ -16,9 +17,9 @@ constexpr auto kSniWatcherService = "org.kde.StatusNotifierWatcher";
 constexpr auto kSniWatcherPath = "/StatusNotifierWatcher";
 }
 
-NotificationServerPeer::NotificationServerPeer(QObject *parent)
+NotificationServerPeer::NotificationServerPeer(const QDBusConnection &bus, QObject *parent)
     : QObject(parent)
-    , m_bus(QDBusConnection::sessionBus())
+    , m_bus(bus)
 {
 }
 
@@ -27,12 +28,16 @@ NotificationServerPeer::~NotificationServerPeer()
     stop();
 }
 
-bool NotificationServerPeer::start()
+bool NotificationServerPeer::start(bool replaceExisting)
 {
     if (m_serviceRegistered && m_objectRegistered) {
         return true;
     }
-    m_serviceRegistered = m_bus.registerService(QString::fromLatin1(kNotificationsService));
+    const auto registration =
+        m_bus.interface()->registerService(QString::fromLatin1(kNotificationsService),
+                                           replaceExisting ? QDBusConnectionInterface::ReplaceExistingService : QDBusConnectionInterface::DontQueueService,
+                                           QDBusConnectionInterface::AllowReplacement);
+    m_serviceRegistered = registration.isValid() && registration.value() == QDBusConnectionInterface::ServiceRegistered;
     if (!m_serviceRegistered) {
         return false;
     }
@@ -84,7 +89,7 @@ bool NotificationServerPeer::sendNotify(const QString &appName,
                                         int timeout,
                                         uint urgency) const
 {
-    if (!isRegistered()) {
+    if (!isRegistered() || m_registerWatcherCalls == 0) {
         return false;
     }
     QVariantMap hints;
@@ -137,9 +142,9 @@ void NotificationServerPeer::UnRegisterWatcher()
     ++m_unregisterWatcherCalls;
 }
 
-StatusNotifierWatcherPeer::StatusNotifierWatcherPeer(QObject *parent)
+StatusNotifierWatcherPeer::StatusNotifierWatcherPeer(const QDBusConnection &bus, QObject *parent)
     : QObject(parent)
-    , m_bus(QDBusConnection::sessionBus())
+    , m_bus(bus)
 {
 }
 
@@ -148,12 +153,16 @@ StatusNotifierWatcherPeer::~StatusNotifierWatcherPeer()
     stop();
 }
 
-bool StatusNotifierWatcherPeer::start()
+bool StatusNotifierWatcherPeer::start(bool replaceExisting)
 {
     if (m_serviceRegistered && m_objectRegistered) {
         return true;
     }
-    m_serviceRegistered = m_bus.registerService(QString::fromLatin1(kSniWatcherService));
+    const auto registration =
+        m_bus.interface()->registerService(QString::fromLatin1(kSniWatcherService),
+                                           replaceExisting ? QDBusConnectionInterface::ReplaceExistingService : QDBusConnectionInterface::DontQueueService,
+                                           QDBusConnectionInterface::AllowReplacement);
+    m_serviceRegistered = registration.isValid() && registration.value() == QDBusConnectionInterface::ServiceRegistered;
     if (!m_serviceRegistered) {
         return false;
     }

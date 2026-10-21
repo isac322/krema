@@ -36,18 +36,43 @@ from krema_e2e.waits import wait_until
 from krema_e2e.windows import TestWindows
 from test_06_settings import SIDEBAR
 from test_12_notifications import (
+    STIMULUS,
     _card_xpath,
     _close,
     _notify,
-    _start_server,
     _stop_server,
     _visible_state,
 )
 
-def _fresh_server(tmp_path: Path, generation: str):
+CONFIG_WRITER = Path("/build/bin/krema_notification_config_writer")
+
+def _fresh_server(tmp_path: Path, generation: str, *, replace_existing: bool = False):
     directory = tmp_path / generation
     directory.mkdir()
-    return _start_server(directory)
+    ready_file = directory / "notification-server.ready"
+    watcher_ready_file = directory / "notification-watcher.ready"
+    command = [
+        sys.executable,
+        str(STIMULUS),
+        "serve",
+        "--ready-file",
+        str(ready_file),
+        "--watcher-ready-file",
+        str(watcher_ready_file),
+        "--allow-replacement",
+    ]
+    if replace_existing:
+        command.append("--replace-existing")
+    server = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+    try:
+        wait_until(
+            lambda: server.poll() is None and ready_file.exists() and watcher_ready_file.exists(),
+            message="Krema to register with the new notification server",
+        )
+    except BaseException:
+        _stop_server(server)
+        raise
+    return server
 
 
 def _ease_path(start: tuple[int, int], end: tuple[int, int], steps: int = 12) -> list[tuple[int, int]]:
@@ -128,25 +153,11 @@ def _pump_dbus() -> None:
 
 
 def _set_dnd_until(krema: Krema, until: datetime | None) -> None:
-    args = [
-        "kwriteconfig6",
-        "--notify",
-        "--file",
-        "plasmanotifyrc",
-        "--group",
-        "DoNotDisturb",
-        "--key",
-        "Until",
-    ]
+    args = [str(CONFIG_WRITER)]
     if until is None:
-        args.append("--delete")
+        args.append("--clear")
     else:
-        utc = until.astimezone(timezone.utc)
-        # KConfig's typed QDateTime format, verified with writeEntry/readEntry.
-        serialized = ",".join(
-            str(value) for value in (utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, "UTC")
-        )
-        args.extend(["--type", "string", serialized])
+        args.extend(["--until", until.astimezone(timezone.utc).isoformat(timespec="milliseconds")])
     environment = krema.environment()
     config_path = Path(environment["XDG_CONFIG_HOME"]) / "plasmanotifyrc"
     trace = env.artifact_path("visual-evidence/notifications/dnd-config.jsonl")
@@ -184,7 +195,13 @@ def _set_dnd_until(krema: Krema, until: datetime | None) -> None:
         "before": config_path.read_text() if config_path.exists() else None,
     }
     try:
-        result = subprocess.run(args, env=environment, check=True, capture_output=True, text=True)
+        try:
+            result = subprocess.run(args, env=environment, check=True, capture_output=True, text=True)
+        except FileNotFoundError as error:
+            raise FileNotFoundError(
+                f"Notification QA config writer is missing: {CONFIG_WRITER}; "
+                "build the krema_notification_config_writer target"
+            ) from error
         _pump_dbus()
         before.update(
             {
@@ -282,6 +299,7 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
     evidence.mkdir(parents=True, exist_ok=True)
     events: list[dict[str, Any]] = []
     server = None
+    servers = []
     token = uuid.uuid4().hex[:10]
     tracked: list[int] = []
     scenario_completed = False
@@ -291,10 +309,11 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
     def mark(stage: str, **details: Any) -> None:
         events.append({"stage": stage, "timestamp_ns": time.monotonic_ns(), **details})
 
-    apps.open("Alpha")
-    krema.wait_for_item("Alpha")
     try:
+        apps.open("Alpha")
+        krema.wait_for_item("Alpha")
         server = _fresh_server(tmp_path, "server-1")
+        servers.append(server)
         mark("ready", capture="x11grab")
 
         first = _notify(token, "first")
@@ -316,6 +335,7 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
 
         _stop_server(server)
         server = _fresh_server(tmp_path, "server-2")
+        servers.append(server)
         mark("notification-server-reconnected")
         reconnect_id = _notify(token, "reconnected")
         tracked.append(reconnect_id)
@@ -325,6 +345,45 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
         _close(reconnect_id)
         wait_until(lambda: "notifications" not in _description(krema), message="reconnected badge closed")
         mark("reconnected-badge-0")
+
+        DBusGMainLoop(set_as_default=True)
+        bus = dbus.SessionBus()
+        owner_before = str(bus.get_name_owner("org.freedesktop.Notifications"))
+        owner_changes: list[tuple[str, str]] = []
+
+        def owner_changed(name, old_owner, new_owner):
+            if str(name) == "org.freedesktop.Notifications":
+                owner_changes.append((str(old_owner), str(new_owner)))
+
+        owner_receiver = bus.add_signal_receiver(
+            owner_changed,
+            signal_name="NameOwnerChanged",
+            dbus_interface="org.freedesktop.DBus",
+        )
+        try:
+            server = _fresh_server(tmp_path, "server-3", replace_existing=True)
+            servers.append(server)
+            owner_after = str(bus.get_name_owner("org.freedesktop.Notifications"))
+            wait_until(
+                lambda: (_pump_dbus(), (owner_before, owner_after) in owner_changes)[1],
+                message="atomic notification owner handover with both owners nonempty",
+            )
+            assert owner_before and owner_after and owner_before != owner_after
+            registrations = (tmp_path / "server-3" / "notification-watcher.ready").read_text().splitlines()
+            assert len(registrations) == 1, registrations
+            mark("notification-server-owner-handover", old_owner=owner_before, new_owner=owner_after)
+        finally:
+            owner_receiver.remove()
+        handover_id = _notify(token, "handover")
+        tracked.append(handover_id)
+        wait_until(lambda: "1 notifications" in _description(krema), message="badge after atomic owner handover")
+        mark("handover-badge-1")
+        time.sleep(2.0)
+        _close(handover_id)
+        wait_until(lambda: "notifications" not in _description(krema), message="handover badge closed")
+        registrations = (tmp_path / "server-3" / "notification-watcher.ready").read_text().splitlines()
+        assert len(registrations) == 1, registrations
+        mark("handover-badge-0", watcher_registrations=len(registrations))
 
         sni, kded = _start_sni(krema)
         sni.set_status("NeedsAttention")
@@ -350,14 +409,19 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
         mark("dnd-pre-attention")
         time.sleep(1.0)
         log_offset = krema.log_path.stat().st_size
-        _set_dnd_until(krema, datetime.now(timezone.utc) + timedelta(seconds=3))
-        mark("dnd-until-set", limitation="DND suppression/expiry requires visual review; no AT-SPI DND field")
+        _set_dnd_until(krema, datetime.now(timezone.utc) + timedelta(days=30))
+        mark("dnd-long-until-set", limitation="safe timer arming is asserted separately by the Qt test")
         wait_until(
             lambda: "DND state changed: true" in krema.log_path.read_text()[log_offset:],
             timeout=2.0,
-            message="tracker to observe timed DND before the deadline",
+            message="tracker to observe a 30-day DND deadline",
         )
         mark("dnd-active-observed")
+        time.sleep(2.0)
+        assert "DND state changed: false" not in krema.log_path.read_text()[log_offset:]
+        mark("dnd-long-active-observed")
+        _set_dnd_until(krema, datetime.now(timezone.utc) + timedelta(seconds=3))
+        mark("dnd-short-until-rewritten", clock="unchanged real wall clock")
         wait_until(
             lambda: "DND state changed: false" in krema.log_path.read_text()[log_offset:],
             timeout=5.0,
@@ -397,36 +461,75 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
         time.sleep(2.0)
         scenario_completed = True
     finally:
-        _set_dnd_until(krema, None)
+        scenario_error = sys.exc_info()[1]
+        cleanup_errors: list[dict[str, str]] = []
+
+        def cleanup_error(stage: str, error: Exception) -> None:
+            details = {"stage": stage, "error": f"{type(error).__name__}: {error}"}
+            cleanup_errors.append(details)
+            mark("cleanup-error", step=stage, error=details["error"])
+            print(f"Notification recording cleanup failed ({stage}): {details['error']}", file=sys.stderr)
+
+        try:
+            _set_dnd_until(krema, None)
+        except Exception as error:
+            cleanup_error("dnd-reset", error)
         if sni is not None:
-            sni.unregister_with_watcher()
+            try:
+                sni.unregister_with_watcher()
+            except Exception as error:
+                cleanup_error("sni-release", error)
         if kded is not None:
-            kded.terminate()
-            kded.wait(timeout=5)
+            try:
+                kded.terminate()
+            except Exception as error:
+                cleanup_error("kded-terminate", error)
+            try:
+                kded.wait(timeout=5)
+            except Exception as error:
+                cleanup_error("kded-wait", error)
         for notification_id in tracked:
             try:
                 _close(notification_id)
-            except (OSError, RuntimeError):
-                pass
-        if server is not None:
-            _stop_server(server)
-        evidence.joinpath("events.jsonl").write_text(
-            "".join(json.dumps(event, sort_keys=True) + "\n" for event in events), encoding="utf-8"
-        )
-        evidence.joinpath("metadata.json").write_text(
-            json.dumps(
-                {
-                    "scenario": "record_notifications",
-                    "outcome": "passed" if scenario_completed else "failed",
-                    "capture": "x11grab",
-                    "pointer": "continuous eased fake-input path; x11grab uses -draw_mouse 1",
-                    "git_revision": os.environ.get("GITHUB_SHA"),
-                    "unverified": ["DND suppression and timed expiry require visual review of the captured animation"],
-                },
-                indent=2,
-                sort_keys=True,
+            except Exception as error:
+                cleanup_error(f"close-notification-{notification_id}", error)
+        for owned_server in servers:
+            try:
+                _stop_server(owned_server)
+            except Exception as error:
+                cleanup_error("notification-server-stop", error)
+        try:
+            krema.move_away()
+        except Exception as error:
+            cleanup_error("move-away", error)
+        try:
+            evidence.joinpath("events.jsonl").write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in events), encoding="utf-8"
             )
-            + "\n",
-            encoding="utf-8",
-        )
-        krema.move_away()
+        except Exception as error:
+            cleanup_error("events-write", error)
+        try:
+            evidence.joinpath("metadata.json").write_text(
+                json.dumps(
+                    {
+                        "scenario": "record_notifications",
+                        "outcome": "passed" if scenario_completed and not cleanup_errors else "failed",
+                        "scenario_outcome": "passed" if scenario_completed else "failed",
+                        "scenario_error": None if scenario_error is None else f"{type(scenario_error).__name__}: {scenario_error}",
+                        "cleanup_outcome": "failed" if cleanup_errors else "passed",
+                        "cleanup_errors": cleanup_errors,
+                        "capture": "x11grab",
+                        "pointer": "continuous eased fake-input path; x11grab uses -draw_mouse 1",
+                        "git_revision": os.environ.get("GITHUB_SHA"),
+                        "unverified": ["DND suppression and timed expiry require visual review of the captured animation"],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        except Exception as error:
+            cleanup_error("metadata-write", error)
+        if cleanup_errors and scenario_error is None:
+            raise RuntimeError(f"Notification recording cleanup failed: {cleanup_errors}")

@@ -51,6 +51,16 @@ target_link_libraries(krema_notification_tracker_tests PRIVATE
     krema_lib
 )
 
+add_executable(krema_notification_config_writer
+    ../notification/config-writer.cpp
+)
+
+target_link_libraries(krema_notification_config_writer PRIVATE
+    Qt6::Core
+    Qt6::DBus
+    KF6::ConfigCore
+)
+
 if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
     add_test(NAME krema_integration_tests
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_integration_tests>

@@ -467,3 +467,49 @@ the required order is `[W0, L1, L2]`; launching B must produce
 `[W0, W1, L2]` with the launcher list unchanged. Failure to observe the
 startup task is a fixture failure, not a passing test. Ordinary window
 insertion alone does not exercise this transition.
+
+## 23. Bound QTimer arms and observe direct D-Bus owner replacement (2026-10, PR #128)
+
+**Symptoms:** On Qt 6.8.2, a 30-day DND deadline left the expiry timer inactive
+after a negative-interval warning. Direct notification-server replacement
+did not register Krema with the new server. Direct StatusNotifierWatcher
+replacement left old attention state visible and missed the new snapshot.
+Both handover regressions also failed on Qt 6.10.3; its long-DND control passed.
+
+**Causes:** A chrono duration did not remove QTimer's int-millisecond limit
+on older Qt. The tracker passed a value above `INT_MAX` without bounding it.
+The lifecycle callbacks watched only appearance and disappearance; a
+nonempty-to-nonempty owner change crossed neither boundary. Tests covered a
+short deadline and service stop/start, not these two boundary conditions.
+Some SNI loss checks already started false, so they could pass without a reset.
+
+**Fix:** Clamp every existing DND expiry arm to `[1, INT_MAX]` milliseconds.
+Keep the absolute Until deadline authoritative: a timeout rereads it and
+rearms when necessary. Use one `serviceOwnerChanged` handler per watched
+notification/SNI-watcher service, invalidating pending generations before
+registering or querying the new owner. Clear the old SNI snapshot on every
+owner change without changing retained notification history or unread state.
+
+**Regression oracles:** Require an active `INT_MAX` arm for a 30-day deadline;
+an early emitted timeout must keep DND active without advancing the clock.
+A short rewritten deadline must expire on the real clock, and cancellation
+must stop its arm. Prove handovers with different, nonempty old/new unique
+bus names; require exactly one new notification registration and an observable
+new notification, plus replacement of old SNI attention by the new snapshot.
+For ordinary SNI owner loss, establish true before loss and observe false
+before restarting the watcher.
+
+**Timer oracle detail:** Qt 6.8's Unix dispatcher rounds long coarse timers to
+seconds. A valid `INT_MAX` arm can therefore have slightly more than `INT_MAX`
+milliseconds remaining. Its legacy `QTimer::remainingTime()` result can overflow;
+`remainingTimeAsDuration()` wraps that same narrowed result. The native Qt 6.8.2
+probe reported an active timer with 2147484190 ms remaining in the dispatcher
+but -2147483105 through the legacy getter. Use the public chrono overload
+`QAbstractEventDispatcher::remainingTime(timer->id())` to assert the actual
+scheduled duration is positive, alongside the active and exact-interval checks.
+Its `Qt::TimerId` overload was verified in the installed Qt 6.8 header and
+Qt 6.8.2 source; do not change production timing to accommodate an int getter.
+
+**Key lesson:** Test the platform boundary that failed, not a nearby healthy
+case. A timeout signal does not advance time, a stop/start is not a gapless
+handover, and false-to-false cannot prove that owner loss cleared state.

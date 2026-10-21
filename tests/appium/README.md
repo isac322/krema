@@ -252,16 +252,25 @@ notification server and stimulus helpers and records this observable
 sequence:
 
 1. dock badge `2 → 1 → 0`;
-2. notification-server stop/start and a post-reconnect badge;
+2. notification-server stop/start, then a direct owner-to-owner handover with
+   exactly one watcher registration and a badge from the replacement server;
 3. the debugger's real SNI `NeedsAttention → Active` transitions;
-4. attention before a timed DND deadline, suppression, and expiry; and
+4. a 30-day DND deadline, rewritten to a short deadline that expires on the
+   real wall clock, with suppressed and resumed attention; and
 5. Krema's local inbox `Unread → Read → Dismissed` states.
 
 The wrapper uses a real KWin Wayland session nested on Xvfb, so it does not need
 a DRM render node. Run it in an isolated Appium container with `Xvfb`,
 `xdotool`, `ffmpeg` (including the OpenH264 encoder), and `ffprobe` installed.
 Mount the source at `/src`, a writable artifact directory at `/artifacts`, and
-the built revision at `/build/bin/krema`:
+the built binaries at `/build/bin/krema` and
+`/build/bin/krema_notification_config_writer`. Build the latter with the
+`krema_notification_config_writer` test target. It writes a typed KConfig
+`QDateTime` with `KConfig::Notify`, syncs, then makes a blocking session-bus
+`org.freedesktop.DBus.GetId` call before exit so the framework notification
+cannot be lost with a short-lived CLI sender. The recorder uses the isolated
+Krema environment and fails if this helper is missing; it does not synthesize
+KConfig signals or fall back to another writer:
 
 ```sh
 docker exec -e GITHUB_SHA="$(git rev-parse HEAD)" <capture-container> \
@@ -275,6 +284,13 @@ and video probe data. The scenario writes
 SNI state is checked through the real dock description. DND requires observed
 tracker transitions and visual review of suppressed and resumed animation;
 elapsed time or a written `Until` value alone cannot pass.
+The capture does not advance the clock or prove the timer's internal interval;
+the Qt tracker tests cover safe long-deadline arming and early-timeout rearming.
+Cleanup attempts DND reset, SNI release, kded termination and wait, notification
+closure, server shutdown, pointer movement, and both artifact writes independently.
+Metadata separates `scenario_outcome` from `cleanup_outcome`; any cleanup error
+makes the overall outcome `failed`, without replacing an original scenario
+exception. A failed event-file write does not prevent the metadata attempt.
 
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`

@@ -940,21 +940,36 @@ test-owned `tests/notification/notify.py serve` process, which owns
 4. Close the first ID through the external stimulus and verify the
    description reports `1 notifications`; close the second ID and verify the
    notification count is absent.
-5. Send two more persistent notifications, open Settings → Notifications,
-   and verify the inbox shows both cards as `Unread`.
-6. Click `Mark read` on the first card. Verify it becomes `Read`, its local
-   unread contribution is removed, and the card remains active with `Dismiss`
-   available.
-7. Click `Dismiss` on the second card. Verify it becomes `Dismissed`, its
-   local unread contribution is removed, and the card remains active until an
+5. Stop and restart the test-owned notification server. Verify a new
+   notification reaches the `Alpha` dock item, then close it.
+6. While that restarted server is still running with D-Bus name replacement
+   allowed, start a replacement server with `--replace-existing`. Verify the
+   real `org.freedesktop.Notifications` `NameOwnerChanged` transition has
+   non-empty old and new owners, the replacement receives exactly one watcher
+   registration, and its notification reaches the `Alpha` dock item. Close it.
+7. With real SNI `NeedsAttention` active, use the native QA config writer to
+   set DND `Until` 30 days ahead. Observe tracker activation, then rewrite to a
+   short deadline and observe real wall-clock expiry and resumed attention.
+   Do not advance or fake the clock. Return the SNI item to `Active`.
+8. Send two persistent notifications, open Settings → Notifications, and
+   verify both cards are `Unread`. Click `Mark read` on the first card. Verify
+   it becomes `Read`, its local unread contribution is removed, and the card
+   remains active with `Dismiss` available.
+9. Click `Dismiss` on the second card. Verify it becomes `Dismissed`, its local
+   unread contribution is removed, and the card remains active until an
    external `CloseNotification`.
-8. Verify the inbox notice states: “Read and dismissed state is local to Krema;
-   it is not synchronized with the app's server.” Close all remaining IDs.
+10. Verify the inbox notice states: “Read and dismissed state is local to Krema;
+    it is not synchronized with the app's server.” Close all remaining IDs.
 
 **Expected Result:**
 - A real external `Notify` reaches the running Krema watcher and increments
   the matching dock item's notification count.
 - External `CloseNotification` decrements and then clears that count.
+- The owner handover has one non-empty old owner and one non-empty new owner;
+  the replacement server re-registers once, and its notification is visible.
+- A 30-day DND deadline is accepted and safely armed by the Qt integration
+  path; the capture demonstrates only the subsequent real short-deadline
+  rewrite and expiry, not 30 days of elapsed time.
 - `Mark read` and `Dismiss` are distinct local Settings inbox states; neither
   is presented as an application/server read acknowledgement.
 - Animation pixels are not part of this deterministic gate.
@@ -962,7 +977,22 @@ test-owned `tests/notification/notify.py serve` process, which owns
   see `tests/notification/scenarios.json` for their explicit limitations.
 
 **Verification:** AT-SPI dock description and Settings inbox state labels,
-real session D-Bus notification IDs, and the visible local-sync notice.
+real session D-Bus notification IDs, owner-transition and watcher-registration
+records, DND tracker log transitions, and the visible local-sync notice.
+The real-video owner-handover and DND rewrite evidence is produced by
+`tests/appium/record_notifications.py`. Its native
+`krema_notification_config_writer` uses typed `QDateTime` writes with
+`KConfig::Notify`, sync, and a blocking same-connection D-Bus daemon round
+trip; no private notification signal is synthesized. The 30-day timer-arm
+old-fail/new-pass guarantee belongs to the Qt 6.8 integration gate, not to
+waiting days or merely observing active DND on a newer Qt.
+
+**Regression tier:** The throwaway `cleanup_fault.py` plugin in the merge
+evidence artifact injects real teardown failures (DND reset, kded wait,
+original scenario, and event-artifact write). It must show that later cleanup
+steps and metadata writes still run, the overall result is honestly failed,
+and an original scenario exception remains the primary exception. It is not a
+permanent repository test.
 
 **Automated:** `tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`
 uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`

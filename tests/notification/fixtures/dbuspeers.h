@@ -17,10 +17,10 @@ class NotificationServerPeer : public QObject
     Q_CLASSINFO("D-Bus Interface", "org.kde.NotificationManager")
 
 public:
-    explicit NotificationServerPeer(QObject *parent = nullptr);
+    explicit NotificationServerPeer(const QDBusConnection &bus = QDBusConnection::sessionBus(), QObject *parent = nullptr);
     ~NotificationServerPeer() override;
 
-    bool start();
+    bool start(bool replaceExisting = false);
     void stop();
     bool isRegistered() const;
     int registerWatcherCalls() const;
@@ -57,10 +57,10 @@ class StatusNotifierWatcherPeer : public QObject
     Q_PROPERTY(QStringList RegisteredStatusNotifierItems READ registeredItems NOTIFY registeredItemsChanged)
 
 public:
-    explicit StatusNotifierWatcherPeer(QObject *parent = nullptr);
+    explicit StatusNotifierWatcherPeer(const QDBusConnection &bus = QDBusConnection::sessionBus(), QObject *parent = nullptr);
     ~StatusNotifierWatcherPeer() override;
 
-    bool start();
+    bool start(bool replaceExisting = false);
     void stop();
     bool isRegistered() const;
     void setRegisteredItems(const QStringList &items);

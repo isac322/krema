@@ -174,6 +174,22 @@ connect(watcher.data(), &KConfigWatcher::configChanged,
 
 Requires `WriteConfigFlag::Notify` on the writing side for D-Bus notification.
 
+### D-Bus notification flushes
+
+`WriteConfigFlag::Notify` schedules KConfig's client notification through an
+asynchronous D-Bus send. `KConfig::sync()` persists the write, but it does not
+make a short-lived external writer wait for that notification to be delivered.
+The installed KF6 sources show this split in `kconfig.cpp` (`notifyClients`)
+and `kwriteconfig.cpp` (write/delete, `sync()`, then return). A helper that
+exits immediately after a valid typed write can therefore leave a watcher
+without the expected `configChanged` event.
+
+For deterministic integration QA, keep the writer on a `KSharedConfig` opened
+with `NoGlobals`, write or delete with `KConfig::Notify`, call `sync()`, then
+issue a blocking D-Bus `GetId` round trip on the same `QDBusConnection`.
+That round trip flushes the connection before the helper exits; it does not
+change KConfig's notification semantics or the product runtime path.
+
 ---
 
 ## KConfigBase (Abstract Base)

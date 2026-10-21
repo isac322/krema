@@ -124,15 +124,13 @@ public Q_SLOTS:
     Q_SCRIPTABLE void NotificationClosed(uint id, uint reason);
 
 private Q_SLOTS:
-    void onNotificationServiceRegistered(const QString &service);
-    void onNotificationServiceUnregistered(const QString &service);
+    void onNotificationServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
     // SNI signal handlers
     void onSniRegistered(const QString &item);
     void onSniUnregistered(const QString &item);
     void onSniNewStatus(const QString &status, const QDBusMessage &message);
     void onSniServiceUnregistered(const QString &service);
-    void onSniWatcherServiceRegistered(const QString &service);
-    void onSniWatcherServiceUnregistered(const QString &service);
+    void onSniWatcherServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
 
 private:
     struct NotificationRecord;

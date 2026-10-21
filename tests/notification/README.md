@@ -240,14 +240,17 @@ instead of producing synthetic or mock frames.
 
 ## Krema notification product-input gates
 
-These deterministic integration gates cover Krema's direct notification
-inputs. They are separate from the wire-level Portal and JobView scenarios,
-which are transport/coverage evidence only and are not Krema notification
-inputs.
+These gates distinguish framework integration, real KWin capture, and
+throwaway recorder-regression evidence for Krema's direct notification inputs.
+They are separate from the wire-level Portal and JobView scenarios, which
+are transport/coverage evidence only and are not Krema notification inputs.
 
-| Gate | Tier | Permanent test | Observable oracle |
+| Gate | Tier | Test or evidence producer | Required observable oracle |
 |---|---|---|---|
 | Application-owned DND inhibition | Tier 2 (KWin integration) | `tests/integration/test_notification_tracker.cpp` — `DND application inhibition is active without an Until deadline and clears` | Real `Inhibit/UnInhibit` drives the private notification server; `NotificationManager::Settings::notificationsInhibitedByApplication()` reads true/false with no `Until`, and `NotificationTracker::dndActive` follows |
+| Timed DND long-deadline arming and real deadline rewrite | Tier 2 (Qt/KWin integration) | `tests/integration/test_notification_tracker.cpp` — timed DND boundary, early timeout re-arm, and short-deadline rewrite coverage | The tracker safely arms a 30-day `Until` without waiting 30 days; an unchanged-clock early timeout recomputes the real deadline and remains active, then a real config rewrite to a short `Until` expires on wall-clock time |
+| Notification service atomic owner handover | Tier 3 (real Appium/KWin video) | `tests/appium/record_notifications.py` — replacement notification server capture | A non-empty old and new `org.freedesktop.Notifications` owner transition is observed; the replacement server receives one watcher registration and a real notification reaches the dock after handover |
+| Recorder teardown failure containment | Tier 3 (throwaway capture regression) | `cleanup-regression/cleanup_fault.py` in the merge-evidence artifact only; not a repository test | Real missing-writer, kded-wait timeout, original-scenario, and artifact-write failures must verify independent teardown attempts, honest failed metadata, and preservation of the exact original scenario exception |
 | SNI attention clears watcher unread state | Tier 2 (KWin/private D-Bus integration) | `tests/integration/test_notification_tracker.cpp` — `SNI registration, status transitions, re-registration and owner loss are observable` | Real SNI `NeedsAttention -> Active/Passive` clears only the matching canonical app's watcher unread count and changes revision; re-entering `NeedsAttention` keeps the boolean attention state without recreating a numeric badge |
 | Context-menu Clear Notifications | Tier 2 (KWin/native QMenu integration) | `tests/integration/test_launcher_entry.cpp` — `Context menu clears only watcher unread notifications` | The real `QMenu` contains `Clear Notifications` iff the selected app has watcher unread; triggering it clears only that app's watcher count and leaves another app plus a visible Unity count unchanged |
 
@@ -255,6 +258,22 @@ The tests use the private notification/SNI peers and installed pinned
 launchers from the integration harness. They do not assert Portal forwarding,
 JobView synchronization, application-server read cursors, or
 `ActionInvoked`/`NotificationReplied` as product inputs.
+
+For the long-deadline old-fail/new-pass proof, run the Qt integration gate on
+Qt 6.8. Newer Qt versions can saturate an oversized timer interval, so a
+30-day DND state remaining active there alone does not prove the regression
+is caught. No test waits 30 days or advances the clock; timer-arm inspection
+and unchanged-clock early-timeout rearming supply the boundary proof.
+
+The real capture uses `/build/bin/krema_notification_config_writer`, built
+from `tests/notification/config-writer.cpp`. Its CLI is `--until <ISO8601
+datetime>` or `--clear`; it uses the recorder's isolated `XDG_CONFIG_HOME` and
+session bus. The helper writes a typed `QDateTime` through KConfig with
+`KConfig::Notify`, syncs, then performs a blocking
+`org.freedesktop.DBus.GetId` call on that same connection before exit. This
+drains the framework's queued notification without manual `ConfigChanged`
+signals, retries, or a fallback writer. Missing helpers and failed writes or
+bus barriers fail the recording.
 
 ## Stage 2 QML model surface
 

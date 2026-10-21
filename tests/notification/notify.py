@@ -50,15 +50,29 @@ def close(args: argparse.Namespace) -> None:
 class NotificationServer(dbus.service.Object):
     """Minimal fd.o server plus KDE watcher registration for a private session."""
 
-    def __init__(self, bus: dbus.Bus, ready_file: Path, watcher_ready_file: Path) -> None:
+    def __init__(
+        self,
+        bus: dbus.Bus,
+        ready_file: Path,
+        watcher_ready_file: Path,
+        *,
+        allow_replacement: bool = False,
+        replace_existing: bool = False,
+    ) -> None:
         self._bus = bus
         self._next_id = 1
         self._watchers: set[str] = set()
         self._watcher_ready_file = watcher_ready_file
         self._notifications: set[int] = set()
         self._loop = GLib.MainLoop()
-        self._bus_name = dbus.service.BusName(NOTIFICATION_SERVICE, bus=bus)
-        self._manager_name = dbus.service.BusName("org.kde.NotificationManager", bus=bus)
+        name_options = {
+            "bus": bus,
+            "allow_replacement": allow_replacement,
+            "replace_existing": replace_existing,
+            "do_not_queue": True,
+        }
+        self._bus_name = dbus.service.BusName(NOTIFICATION_SERVICE, **name_options)
+        self._manager_name = dbus.service.BusName("org.kde.NotificationManager", **name_options)
         super().__init__(self._bus_name, NOTIFICATION_PATH)
         ready_file.parent.mkdir(parents=True, exist_ok=True)
         ready_file.write_text(f"{os.getpid()}\n", encoding="utf-8")
@@ -136,7 +150,8 @@ class NotificationServer(dbus.service.Object):
         if sender:
             self._watchers.add(str(sender))
             self._watcher_ready_file.parent.mkdir(parents=True, exist_ok=True)
-            self._watcher_ready_file.write_text(f"{sender}\n", encoding="utf-8")
+            with self._watcher_ready_file.open("a", encoding="utf-8") as stream:
+                stream.write(f"{sender}\n")
 
     @dbus.service.method(
         MANAGER_INTERFACE,
@@ -150,7 +165,13 @@ class NotificationServer(dbus.service.Object):
 def serve(args: argparse.Namespace) -> None:
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
-    server = NotificationServer(bus, Path(args.ready_file), Path(args.watcher_ready_file))
+    server = NotificationServer(
+        bus,
+        Path(args.ready_file),
+        Path(args.watcher_ready_file),
+        allow_replacement=args.allow_replacement,
+        replace_existing=args.replace_existing,
+    )
     try:
         server.run()
     finally:
@@ -178,6 +199,8 @@ def parser() -> argparse.ArgumentParser:
     server = commands.add_parser("serve", help="own fd.o notifications for a private E2E session")
     server.add_argument("--ready-file", required=True)
     server.add_argument("--watcher-ready-file", required=True)
+    server.add_argument("--allow-replacement", action="store_true")
+    server.add_argument("--replace-existing", action="store_true")
     server.set_defaults(handler=serve)
     return root
 

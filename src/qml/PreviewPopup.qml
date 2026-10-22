@@ -52,6 +52,48 @@ Item {
     // Kept as a direct QVariantList from the model (like Plasma's approach).
     property var parentWinIds: []
 
+    // Keep a small number of last-seen thumbnail frames so a minimized window
+    // can still show its content after its PipeWire stream stops. ItemGrabResult
+    // objects are retained because their URLs remain valid while the result lives.
+    property var thumbnailFrames: ({})
+    property var thumbnailFrameKeys: []
+    readonly property int maxThumbnailFrames: 8
+    readonly property int maxConcurrentPipeWireStreams: 4
+
+    // MPRIS state is associated with the application represented by this
+    // preview. The service follows its own play/pause and track changes.
+    readonly property var _mediaPlayer: {
+        let _rev = MediaController.revision
+        if (!PreviewController.visible || PreviewController.parentIndex < 0)
+            return ({})
+        const taskIndex = DockModel.tasksModel.index(PreviewController.parentIndex, 0)
+        const appPid = DockModel.tasksModel.data(taskIndex, TaskManager.AbstractTasksModel.AppPid) || 0
+        return MediaController.playerForApp(
+            DockModel.appId(PreviewController.parentIndex), Number(appPid))
+    }
+
+    function rememberThumbnailFrame(winId, result) {
+        if (winId === undefined || winId === null || !result || !result.url
+                || result.url.toString() === "") {
+            return
+        }
+
+        let key = String(winId)
+        let frames = Object.assign({}, thumbnailFrames)
+        let keys = thumbnailFrameKeys.filter(function(existingKey) {
+            return existingKey !== key
+        })
+        frames[key] = result
+        keys.push(key)
+
+        while (keys.length > maxThumbnailFrames) {
+            delete frames[keys.shift()]
+        }
+
+        thumbnailFrames = frames
+        thumbnailFrameKeys = keys
+    }
+
     // Child window model for grouped preview.
     // Uses ListModel instead of JS array so Repeater preserves delegates
     // on incremental updates — critical for keeping PipeWire streams alive.
@@ -214,15 +256,45 @@ Item {
             if (DockView.edge === 1) return parent.height - height       // Bottom → bottom edge
             return PreviewController.contentY                            // Left/Right → centered
         }
-        radius: Kirigami.Units.cornerRadius
-        color: Kirigami.Theme.backgroundColor
+        readonly property bool acrylicBackground: DockView.backgroundStyleType === 3
+        radius: acrylicBackground ? DockSettings.cornerRadius : Kirigami.Units.cornerRadius
+        color: acrylicBackground ? "transparent" : Kirigami.Theme.backgroundColor
 
         Kirigami.Theme.colorSet: Kirigami.Theme.Window
         Kirigami.Theme.inherit: false
 
         // Shadow-like border (guard against undefined during theme init)
-        border.color: Kirigami.Theme.separatorColor ?? "transparent"
-        border.width: 1
+        border.color: "#808080"
+        border.width: acrylicBackground ? 0 : 2
+
+        // Match the dock's Acrylic treatment: when KWin blur-behind is
+        // available, it blurs this popup region; the shared shader adds tint
+        // and grain either way.
+        ShaderEffect {
+            anchors.fill: parent
+            z: 0
+            visible: popup.acrylicBackground
+            property real tintR: DockView.backgroundColor.r
+            property real tintG: DockView.backgroundColor.g
+            property real tintB: DockView.backgroundColor.b
+            property real tintOpacity: DockView.backgroundColor.a
+            property real noiseStrength: 0.02
+            property real resX: width
+            property real resY: height
+            property real cornerRadius: popup.radius
+            fragmentShader: "qrc:/qml/shaders/acrylic_overlay.frag.qsb"
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            z: 2
+            visible: popup.acrylicBackground
+            radius: popup.radius
+            color: "transparent"
+            border.color: "#808080"
+            border.width: 2
+            Accessible.ignored: true
+        }
 
         // Report size to controller for input region + positioning
         onWidthChanged: PreviewController.setContentSize(width, height)
@@ -230,6 +302,7 @@ Item {
 
         ColumnLayout {
             id: popupContent
+            z: 1
             anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.smallSpacing
@@ -267,11 +340,146 @@ Item {
                         title: model.title
                         isMinimized: model.isMinimized
                         isActive: model.isActive
+                        liveCaptureEnabled: index < root.maxConcurrentPipeWireStreams
                         parentIndex: PreviewController.parentIndex
                         childIndex: model.childIndex
+                        frameCacheOwner: root
                         // Focus ring driven by C++ PreviewController state
                         isKeyboardFocused: PreviewController.previewKeyboardActive
                             && PreviewController.focusedThumbnailIndex === index
+                    }
+                }
+            }
+
+            Kirigami.Separator {
+                Layout.fillWidth: true
+                visible: mediaControls.visible
+            }
+
+            ColumnLayout {
+                id: mediaControls
+                Layout.fillWidth: true
+                Layout.maximumWidth: groupedRow.implicitWidth
+                spacing: Kirigami.Units.smallSpacing
+                visible: root._mediaPlayer.available === true
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: root._mediaPlayer.title || root._mediaPlayer.identity || ""
+                    font.weight: Font.Medium
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: (root._mediaPlayer.artist || "").length > 0
+                    text: root._mediaPlayer.artist || ""
+                    opacity: 0.75
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 2
+
+                    QQC2.ToolButton {
+                        visible: root._mediaPlayer.canSeek === true
+                        width: 28
+                        height: 28
+                        padding: 1
+                        contentItem: Item {
+                            Kirigami.Icon {
+                                anchors.centerIn: parent
+                                width: 18
+                                height: 18
+                                source: "media-seek-backward"
+                            }
+                            QQC2.Label {
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                text: "10"
+                                font.pixelSize: 8
+                                font.bold: true
+                                color: Kirigami.Theme.textColor
+                            }
+                        }
+                        Accessible.name: i18n("Rewind 10 seconds")
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: i18n("Rewind 10 seconds")
+                        onClicked: MediaController.seekBackward(root._mediaPlayer.service)
+                    }
+
+                    QQC2.ToolButton {
+                        visible: root._mediaPlayer.canGoPrevious === true
+                        width: 28
+                        height: 28
+                        padding: 1
+                        icon.name: "media-skip-backward"
+                        icon.width: 16
+                        icon.height: 16
+                        Accessible.name: i18n("Previous track")
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: i18n("Previous track")
+                        onClicked: MediaController.previous(root._mediaPlayer.service)
+                    }
+
+                    QQC2.ToolButton {
+                        visible: root._mediaPlayer.canPlay === true || root._mediaPlayer.canPause === true
+                        width: 32
+                        height: 32
+                        padding: 1
+                        icon.name: root._mediaPlayer.playbackStatus === "Playing"
+                            ? "media-playback-pause" : "media-playback-start"
+                        icon.width: 18
+                        icon.height: 18
+                        Accessible.name: root._mediaPlayer.playbackStatus === "Playing"
+                            ? i18n("Pause") : i18n("Play")
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: Accessible.name
+                        onClicked: MediaController.playPause(root._mediaPlayer.service)
+                    }
+
+                    QQC2.ToolButton {
+                        visible: root._mediaPlayer.canGoNext === true
+                        width: 28
+                        height: 28
+                        padding: 1
+                        icon.name: "media-skip-forward"
+                        icon.width: 16
+                        icon.height: 16
+                        Accessible.name: i18n("Next track")
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: i18n("Next track")
+                        onClicked: MediaController.next(root._mediaPlayer.service)
+                    }
+
+                    QQC2.ToolButton {
+                        visible: root._mediaPlayer.canSeek === true
+                        width: 28
+                        height: 28
+                        padding: 1
+                        contentItem: Item {
+                            Kirigami.Icon {
+                                anchors.centerIn: parent
+                                width: 18
+                                height: 18
+                                source: "media-seek-forward"
+                            }
+                            QQC2.Label {
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                text: "10"
+                                font.pixelSize: 8
+                                font.bold: true
+                                color: Kirigami.Theme.textColor
+                            }
+                        }
+                        Accessible.name: i18n("Forward 10 seconds")
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: i18n("Forward 10 seconds")
+                        onClicked: MediaController.seekForward(root._mediaPlayer.service)
                     }
                 }
             }

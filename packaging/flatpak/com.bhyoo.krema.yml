@@ -97,6 +97,9 @@ modules:
     config-opts:
       - -DBUILD_TESTING=OFF
       - -DKREMA_E2E_TESTS=OFF
+      # The KWin effect must be installed into the host compositor's plugin
+      # directory, which a Flatpak build cannot modify.
+      - -DKREMA_BUILD_KWIN_EFFECT=OFF
       - -DKDE_INSTALL_USE_QT_SYS_PATHS=OFF
       - -DKDE_INSTALL_AUTOSTARTDIR=etc/xdg/autostart
     post-install:

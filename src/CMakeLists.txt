@@ -60,6 +60,8 @@ add_library(krema_lib STATIC
     models/notificationtracker.cpp
     models/launcherentrytracker.h
     models/launcherentrytracker.cpp
+    models/mediacontroller.h
+    models/mediacontroller.cpp
 
     utils/zoomcalculator.h
     utils/zoomlayoutvariant.h

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Bundled the experimental minimized-window KWin effect with native Krema installs and enabled it by default for new KWin setups, allowing live previews to continue when KWin can render minimized windows.
+- Added a rounded 2 px gray outline to the window-preview popup.
+- Applied KWin blur-behind and the dock's Acrylic tint to the window-preview popup when Acrylic is selected and blur-behind is available.
+- Added per-app speaker badges on dock icons with click-to-mute and click-to-unmute controls for active audio streams.
+- Added MPRIS player details and supported play/pause, 10-second seek, previous-track, and next-track controls below window-preview thumbnails.
 - Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
 - Added a QML-facing notification model backed by the existing KDE watcher. It exposes notification metadata, actions, urgency, timeout, replacement and close lifecycle, local read/dismiss state, active-only and per-app queries, and official KDE action invocation. The UI labels read and dismissed state as local to Krema; it does not claim to synchronize an application's server-side read cursor.
 - Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
@@ -17,11 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Moved the audio mute badge to the upper-right corner of each dock icon.
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
 - Bounded retained inactive notification history to 100 records while preserving active notifications and their unread counts.
 
 ### Fixed
 
+- Discovered MPRIS players launched after Krema and matched application IDs, player names, and task processes so controls stay associated with their dock apps.
+- Made the window-preview close glyph visible independently of the system icon theme.
+- Kept up to four window-preview PipeWire streams active while the popup is open and retained the last captured frame when KWin stops sending frames for a minimized window.
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Notification badges now react immediately when notifications are cleared locally, use canonical case-insensitive desktop identities without fuzzy last-segment matching, and retain watcher metadata and close reasons while distinguishing directed closes from broadcast reasons
 - Local notification clearing now removes only the dock's unread contribution while keeping the server-active lifecycle until KDE reports a close.

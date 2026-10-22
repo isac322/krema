@@ -212,3 +212,4 @@ onVisibleChanged: {
 4. **Resource management**: Set `nodeId = 0` or `resetFd()` to stop the stream and free resources
 5. **Screencast permission**: KWin's screencast may require portal permission on Flatpak
 6. **Frame timing**: `presentationTimestamp` allows frame-accurate presentation
+7. **Minimized windows**: Keep the source item visible while its preview popup is open; minimized state alone should not disable the stream. Limit the popup to four live sources. Native Krema builds also include an experimental KWin effect that holds an offscreen-rendering reference for minimized windows, which can keep new frames flowing. KWin may still stop producing frames, so retain the last valid frame as a fallback. The preview's parent visibility should still hide the item when the popup closes so GPU resources are released.

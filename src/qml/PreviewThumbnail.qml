@@ -25,6 +25,10 @@ Item {
     property int parentIndex: -1
     property int childIndex: 0
     property bool isKeyboardFocused: false
+    property var frameCacheOwner
+    property bool snapshotPending: false
+    property int snapshotCaptureSerial: 0
+    property bool liveCaptureEnabled: true
 
     Accessible.role: Accessible.Button
     Accessible.name: {
@@ -39,6 +43,12 @@ Item {
 
     readonly property real thumbnailWidth: DockSettings.previewThumbnailSize
     readonly property real thumbnailHeight: thumbnailWidth * 0.7
+    readonly property url cachedFrameUrl: {
+        if (!frameCacheOwner) return ""
+        if (winId === undefined || winId === null) return ""
+        let frame = frameCacheOwner.thumbnailFrames[String(winId)]
+        return frame ? frame.url : ""
+    }
 
     implicitWidth: thumbnailWidth + 2 * Kirigami.Units.smallSpacing
     implicitHeight: thumbnailHeight + titleLabel.implicitHeight + Kirigami.Units.smallSpacing * 3
@@ -47,7 +57,7 @@ Item {
     // Match Plasma's pattern: pass winId directly, let QML engine handle QVariant→QString
     TaskManager.ScreencastingRequest {
         id: screencastRequest
-        uuid: root.winId ?? ""
+        uuid: root.liveCaptureEnabled ? (root.winId ?? "") : ""
         onNodeIdChanged: function() {
             console.log("[krema.preview] nodeId:", screencastRequest.nodeId,
                 "for uuid:", screencastRequest.uuid)
@@ -57,10 +67,51 @@ Item {
     // Retry screencast when nodeId is 0 (KWin hadn't registered the window yet).
     // Called from PreviewPopup.rebuildChildModel() on each KDE model event.
     function retryScreencast() {
-        if (screencastRequest.nodeId === 0 && root.winId) {
+        if (root.liveCaptureEnabled && screencastRequest.nodeId === 0 && root.winId) {
             screencastRequest.uuid = ""
             screencastRequest.uuid = root.winId ?? ""
         }
+    }
+
+    function captureSnapshot(force) {
+        if (!root.winId || !PreviewController.visible
+                || !pipeWireItem.ready || root.snapshotPending) return
+        if (!force && root.cachedFrameUrl.toString() !== "") return
+
+        root.snapshotPending = true
+        let serial = ++root.snapshotCaptureSerial
+        let capturedWinId = String(root.winId)
+
+        // Let Qt Quick render the latest PipeWire frame before grabbing it.
+        Qt.callLater(function() {
+            if (serial !== root.snapshotCaptureSerial
+                    || capturedWinId !== String(root.winId)) {
+                return
+            }
+
+            let started = pipeWireItem.grabToImage(function(result) {
+                if (serial === root.snapshotCaptureSerial) {
+                    root.snapshotPending = false
+                }
+                if (capturedWinId === String(root.winId) && root.frameCacheOwner) {
+                    root.frameCacheOwner.rememberThumbnailFrame(capturedWinId, result)
+                }
+            }, Qt.size(root.thumbnailWidth, root.thumbnailHeight))
+
+            if (!started && serial === root.snapshotCaptureSerial) {
+                root.snapshotPending = false
+            }
+        })
+    }
+
+    onWinIdChanged: {
+        // An in-flight grab belongs to the previous window delegate identity.
+        snapshotCaptureSerial++
+        snapshotPending = false
+    }
+
+    onIsMinimizedChanged: {
+        if (isMinimized && PreviewController.visible) captureSnapshot(true)
     }
 
     // Keyboard focus ring for preview thumbnail
@@ -102,9 +153,19 @@ Item {
             id: pipeWireItem
             anchors.fill: parent
             anchors.margins: parent.border.width > 0 ? 2 : 0
-            nodeId: screencastRequest.nodeId
+            nodeId: root.liveCaptureEnabled ? screencastRequest.nodeId : 0
             allowDmaBuf: true
-            visible: !root.isMinimized
+            // Keep the window stream active for as long as the preview popup
+            // is visible, including while the window is minimized. The parent
+            // preview row hides this item when the popup closes, releasing the
+            // PipeWire/GPU resources through the normal visibility cascade.
+            visible: true
+
+            onReadyChanged: {
+                if (ready && PreviewController.visible) {
+                    root.captureSnapshot(false)
+                }
+            }
             Accessible.ignored: true
 
             onStateChanged: function() {
@@ -113,7 +174,20 @@ Item {
             }
         }
 
-        // Fallback: icon (when PipeWire not ready or minimized)
+        // Keep the last captured frame as a fallback if a minimized window's
+        // PipeWire source cannot provide a frame. The image is bounded to the
+        // thumbnail size; a ready stream takes precedence so it can keep updating.
+        Image {
+            id: cachedThumbnail
+            anchors.fill: parent
+            source: root.cachedFrameUrl
+            sourceSize: Qt.size(root.thumbnailWidth, root.thumbnailHeight)
+            smooth: true
+            visible: root.isMinimized && !pipeWireItem.ready && status === Image.Ready
+            Accessible.ignored: true
+        }
+
+        // Fallback: icon when neither a PipeWire frame nor a saved frame is available.
         Item {
             id: fallbackIcon
             anchors.centerIn: parent
@@ -125,7 +199,7 @@ Item {
                 return DockModel.iconName(root.parentIndex) || "application-x-executable"
             }
             readonly property bool isRawIcon: iconName.startsWith("raw:")
-            visible: !pipeWireItem.ready || root.isMinimized
+            visible: !pipeWireItem.ready && !cachedThumbnail.visible
 
             Kirigami.Icon {
                 anchors.fill: parent
@@ -149,7 +223,7 @@ Item {
             anchors.fill: parent
             color: Kirigami.Theme.backgroundColor
             opacity: 0.5
-            visible: root.isMinimized
+            visible: root.isMinimized && !pipeWireItem.ready && !cachedThumbnail.visible
         }
 
         // Hover highlight
@@ -173,10 +247,34 @@ Item {
             anchors.margins: Kirigami.Units.smallSpacing
             width: Kirigami.Units.iconSizes.smallMedium
             height: Kirigami.Units.iconSizes.smallMedium
-            icon.name: "window-close"
-            icon.width: Kirigami.Units.iconSizes.small
-            icon.height: Kirigami.Units.iconSizes.small
             z: 10
+
+            // Draw the close glyph locally: the system icon theme may not
+            // provide window-close, leaving a working button visually empty.
+            contentItem: Item {
+                implicitWidth: Kirigami.Units.iconSizes.small
+                implicitHeight: Kirigami.Units.iconSizes.small
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Kirigami.Units.iconSizes.small * 0.78
+                    height: Math.max(2, Kirigami.Units.smallSpacing / 2)
+                    radius: height / 2
+                    color: Kirigami.Theme.textColor
+                    rotation: 45
+                    antialiasing: true
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Kirigami.Units.iconSizes.small * 0.78
+                    height: Math.max(2, Kirigami.Units.smallSpacing / 2)
+                    radius: height / 2
+                    color: Kirigami.Theme.textColor
+                    rotation: -45
+                    antialiasing: true
+                }
+            }
 
             Accessible.name: i18n("Close %1", root.title)
 

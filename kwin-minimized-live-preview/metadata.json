@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Krema Contributors"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Keeps minimized windows rendering so live dock previews can continue",
+        "EnabledByDefault": true,
+        "Id": "kwin4_effect_minimized_live_preview",
+        "License": "GPL-3.0-or-later",
+        "Name": "Minimized Live Previews"
+    }
+}

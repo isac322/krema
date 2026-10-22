@@ -35,6 +35,8 @@ Item {
         if (_isDemandingAttention) parts.push(i18n("Attention requested"))
         if (_badgeCount > 0)
             parts.push(i18n("%1 notifications", _badgeCount))
+        if (_audioState.hasAudio)
+            parts.push(_audioState.muted ? i18n("Audio muted") : i18n("Playing audio"))
         return parts.join(", ")
     }
 
@@ -79,6 +81,22 @@ Item {
         return DockModel.appId(index)
     }
 
+    readonly property var _audioState: {
+        let _rev = MediaController.revision  // reactive dependency on stream and mute changes
+        return MediaController.audioState(_appId, model.AppPid ?? 0)
+    }
+
+    function audioButtonContainsPoint(sourceItem, sourceX, sourceY) {
+        if (!audioButton.visible)
+            return false
+        let point = audioButton.mapFromItem(sourceItem, sourceX, sourceY)
+        return point.x >= 0 && point.y >= 0 && point.x <= audioButton.width && point.y <= audioButton.height
+    }
+
+    function toggleAppAudioMute() {
+        MediaController.toggleAudioMute(_appId, model.AppPid ?? 0)
+    }
+
     // === Inbox (persistent badge) ===
     // Sources: LauncherEntry count (1st, app-managed), fd.o watcher unreadCount (2nd, dock-managed)
     // Clear: focus → fd.o auto-clear, context menu → manual clear, SNI→Active → fd.o clear
@@ -96,7 +114,9 @@ Item {
         return 0
     }
 
-    readonly property bool _badgeOnLeft: DockSettings.badgePosition === 1
+    // Keep the notification count away from the upper-right audio control.
+    readonly property bool _badgeOnLeft: _audioState.hasAudio
+        || DockSettings.badgePosition === 1
         || (DockSettings.badgePosition === 2 && DockView.edge === 2)
     readonly property color _badgeBgColor: {
         if (DockSettings.badgeUseAccentColor) {
@@ -743,6 +763,41 @@ Item {
             verticalAlignment: Text.AlignVCenter
             width: parent.width - 2
             height: parent.height - 2
+        }
+    }
+
+    // Small speaker badge for apps that currently have an active audio stream.
+    // DockItem click routing lives in main.qml so the icon remains passive here;
+    // this also keeps zoom and drag hit testing consistent with the dock.
+    Item {
+        id: audioButton
+        objectName: "audioMuteButton"
+        z: 3
+        visible: dockItem._audioState.hasAudio
+        width: Math.max(20, Math.round(iconSize * 0.42))
+        height: width
+        x: iconImage.x + iconImage.width - width * 0.8
+        y: iconImage.y - height * 0.2
+        Accessible.role: Accessible.Button
+        Accessible.name: dockItem._audioState.muted ? i18n("Unmute %1", dockItem.displayName) : i18n("Mute %1", dockItem.displayName)
+        Accessible.description: dockItem._audioState.muted ? i18n("Audio is muted") : i18n("Audio is playing")
+        Accessible.onPressAction: dockItem.toggleAppAudioMute()
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.94)
+            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.25)
+            border.width: 1
+        }
+
+        Kirigami.Icon {
+            anchors.centerIn: parent
+            width: parent.width * 0.62
+            height: width
+            source: dockItem._audioState.muted ? "audio-volume-muted" : "audio-volume-high"
+            color: Kirigami.Theme.textColor
+            Accessible.ignored: true
         }
     }
 

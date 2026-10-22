@@ -7,8 +7,10 @@
 #include "dockvisibilitycontroller.h"
 #include "krema.h"
 #include "models/dockmodel.h"
+#include "style/backgroundstyle.h"
 #include "utils/inputregion.h"
 
+#include <KWindowEffects>
 #include <LayerShellQt/Window>
 
 #include <taskmanager/abstracttasksmodel.h>
@@ -20,6 +22,7 @@
 
 #include <QGuiApplication>
 #include <QLoggingCategory>
+#include <QPainterPath>
 #include <QQmlEngine>
 #include <QQuickView>
 #include <QScreen>
@@ -57,6 +60,9 @@ void PreviewController::initialize()
     m_previewView = std::make_unique<QQuickView>(m_dockView->engine(), nullptr);
     m_previewView->setColor(Qt::transparent);
     m_previewView->setResizeMode(QQuickView::SizeRootObjectToView);
+
+    connect(m_dockView, &DockView::backgroundColorChanged, this, &PreviewController::updatePreviewBackground);
+    connect(m_dockView, &DockView::backgroundStyleTypeChanged, this, &PreviewController::updatePreviewBackground);
 
     // Layer-shell configuration: overlay above the dock
     auto *layerWindow = LayerShellQt::Window::get(m_previewView.get());
@@ -121,6 +127,7 @@ void PreviewController::initialize()
     // Pre-show the surface so compositor has it mapped and ready for input routing.
     // The 1x1 mask above prevents it from intercepting any meaningful input.
     m_previewView->show();
+    updatePreviewBackground();
 
     qCDebug(lcPreview) << "Preview controller initialized (surface pre-shown)";
 }
@@ -497,6 +504,11 @@ void PreviewController::updateEdge()
         return;
     }
     applyEdgeLayout();
+    if (m_visible) {
+        updateInputRegion();
+    } else {
+        updatePreviewBackground();
+    }
     if (m_previewView->isVisible()) {
         m_previewView->update();
     }
@@ -677,13 +689,59 @@ void PreviewController::updateInputRegion()
         inputRegion = computePreviewInputRegion(params);
     }
 
-    if (inputRegion == m_inputRegion) {
+    if (inputRegion != m_inputRegion) {
+        m_previewView->setMask(inputRegion);
+        m_inputRegion = inputRegion;
+        commitInputRegion();
+    }
+
+    updatePreviewBackground();
+}
+
+void PreviewController::updatePreviewBackground()
+{
+    if (!m_previewView) {
         return;
     }
 
-    m_previewView->setMask(inputRegion);
-    m_inputRegion = inputRegion;
-    commitInputRegion();
+    const QColor dockBackground = m_dockView->backgroundColor();
+    const bool acrylic = m_visible
+        && m_dockView->backgroundStyleType() == static_cast<int>(BackgroundStyleType::Acrylic)
+        && dockBackground.alpha() > 0
+        && KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind);
+    if (!acrylic || m_inputRegion.isEmpty()) {
+        if (m_previewBlurEnabled) {
+            removeBackgroundFromWindow(m_previewView.get());
+            m_previewBlurEnabled = false;
+            m_previewBlurRegion = {};
+        }
+        return;
+    }
+
+    const QRect popupRect = m_inputRegion.boundingRect();
+    if (popupRect.isEmpty()) {
+        return;
+    }
+
+    // Match the Acrylic tint's rounded mask, and never blur the full-screen
+    // layer surface behind the popup.
+    const qreal radius = qBound(0.0,
+                                static_cast<qreal>(m_settings->cornerRadius()),
+                                qMin(popupRect.width(), popupRect.height()) / 2.0);
+    QRegion blurRegion(popupRect);
+    if (radius > 0) {
+        QPainterPath roundedPopup;
+        roundedPopup.addRoundedRect(QRectF(popupRect), radius, radius);
+        blurRegion = QRegion(roundedPopup.toFillPolygon().toPolygon());
+    }
+
+    if (m_previewBlurEnabled && blurRegion == m_previewBlurRegion) {
+        return;
+    }
+
+    applyBackgroundToWindow(m_previewView.get(), BackgroundStyleType::Acrylic, blurRegion);
+    m_previewBlurRegion = blurRegion;
+    m_previewBlurEnabled = true;
 }
 
 } // namespace krema

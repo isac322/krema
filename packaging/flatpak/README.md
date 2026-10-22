@@ -6,6 +6,11 @@ Flathub's [generative AI policy](https://docs.flathub.org/docs/for-app-authors/r
 
 ## Sources and dependency boundaries
 
+The Flatpak build explicitly disables Krema's minimized-preview KWin effect.
+The effect must be installed in the host compositor's plugin directory, which
+is outside the Flatpak sandbox. Native Krema packages build and install the
+effect with the application.
+
 The application source is `https://github.com/isac322/krema/archive/v0.9.0.tar.gz`, release commit `7599715af204b8658ed79acc9ca2a118d5e6dc91`. Its downloaded bytes hash to `6dbb0de97339119371e6cb403b0d1e9dca525cdaaf3b78792865ee94c91fa6f3`.
 
 The manifest uses `org.kde.Platform` and `org.kde.Sdk` branch `6.10`. Both `aarch64` and `x86_64` SDK refs were observed on the live Flathub remote. KDE's [qt6.10 SDK recipe](https://invent.kde.org/packaging/flatpak-kde-runtime/-/blob/qt6.10/org.kde.Sdk.json.in) currently specifies the Freedesktop 25.08 base, Qt 6.10.3, Frameworks 6.29.0, PlasmaActivities 6.7.4, KWayland 6.7.4, PlasmaWaylandProtocols 1.21.0, Canberra 0.30, and Kirigami Addons 1.13.1. This is recipe evidence, not proof of the installed SDK's contents. Inspect the actual SDK before building: the bundled Plasma 6.7.5 sources require Qt >= 6.10, Frameworks >= 6.26, Wayland >= 1.24, and wayland-protocols >= 1.46.

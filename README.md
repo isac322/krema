@@ -32,6 +32,9 @@ The following settings are part of the current unreleased development work and a
 
 - **Reserve screen space** — The Behavior switch is enabled by default and applies to **Always visible** mode. When enabled, maximized windows avoid the dock; Auto hide and Dodge windows keep their existing platform behavior. The switch is saved for the next start and can be changed while the dock is running.
 - **Separate pinned and running apps** — The Behavior switch is disabled by default. When enabled, pinned apps, including pinned apps that are running, stay in the first section; unpinned running apps follow after the divider. Dragging across that boundary stays within the source section and does not pin or unpin an app. With the switch off, dock items keep the existing free-reorder behavior.
+- **Audio and media controls** — Apps with active audio streams can be muted from a speaker badge on their dock icon. MPRIS-capable players expose their supported playback controls in the window preview. The mute badge requires `pactl`.
+- **Minimized window previews** — Native Krema packages include an experimental KWin effect that asks KWin to keep minimized windows renderable, so live PipeWire previews can continue. Flatpak builds omit the host effect. App and driver behavior still varies, and rendering minimized windows can use more power.
+- **Acrylic preview popup** — When the dock uses Acrylic, its window-preview popup uses the same blur and tint treatment.
 
 These entries describe unreleased behavior; they are not claims about the latest published release.
 
@@ -67,7 +70,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Pin/Unpin** — Keep favorite apps in the dock
 - **Context Menu** — Right-click for pin, close, new instance, and the app's own actions like "New Private Window" (KDE Breeze native)
 - **Mouse Wheel Cycling** — Scroll to switch between windows of the same app
-- **Single-Window Click Action** — Activate by default; optionally minimize the active window with a left click, while clicking a minimized or background window still restores or focuses it
+- **Single-Window Click Action** — Activate by default, or choose **Minimize active window** to minimize it on a repeat click; clicking a minimized or background window restores or focuses it
 - **Grouped-Window Click Action** — Cycle through windows by default, or independently choose previews of all windows or minimize only the currently active window; with no active group window, the minimize choice restores or focuses the most recently used window
 
 ### Visual Styles
@@ -78,9 +81,17 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 
 ### Window Previews
 - **PipeWire Thumbnails** — Live GPU-efficient window previews on hover
+- **Minimized Windows** — Keep up to four capture streams active while the popup is open and show the latest saved frame if KWin stops updating a minimized window. Native Krema packages also install an experimental KWin effect that requests offscreen rendering for minimized windows; it is enabled by default for new KWin setups and can be switched off in Desktop Effects. The Flatpak cannot install an effect into the host KWin session.
 - **Multi-Window List** — All windows of grouped apps shown together; the optional grouped click action opens this list even with hover previews off
 - **Click-to-Activate** — Click a preview to switch to that window
-- **Preview Close Button** — Close windows directly from the preview popup
+- **Preview Close Button** — Close windows directly from the preview popup; the close glyph is drawn by Krema and does not depend on the icon theme
+- **Popup Outline** — Rounded 2 px gray outline around window-preview popups
+- **Acrylic Preview Popup** — Match the dock's blur and tint when Acrylic is selected; KWin blur-behind must be available for the blur layer
+
+### Audio & Media
+- **Per-App Mute** — A speaker badge appears on dock icons for apps with active audio. Click it to mute or unmute that app's audio streams.
+- **Player Controls** — MPRIS-capable players show their available play/pause, 10-second seek, previous-track, and next-track controls below the window thumbnail.
+- **Player Matching** — Media players launched after Krema starts are discovered automatically; application IDs and process relationships associate their controls with the correct dock item.
 
 ### Notifications & Attention
 - **Notification Badges** — Badge count on dock icons via D-Bus and SmartLauncher Unity API
@@ -216,7 +227,7 @@ sudo pacman -S --needed \
     qt6-base qt6-declarative qt6-wayland qt6-shadertools \
     kwindowsystem kconfig kcoreaddons ki18n \
     kglobalaccel kcolorscheme kiconthemes kcrash kxmlgui kservice kio kjobwidgets \
-    kirigami layer-shell-qt wayland kpipewire plasma-workspace \
+    kirigami layer-shell-qt wayland kpipewire plasma-workspace kwin \
     catch2
 ```
 
@@ -224,6 +235,18 @@ The build also uses Qt GUI private headers (`Qt6::GuiPrivate`). Arch's
 `qt6-base` includes them. On distributions that package them separately,
 install `qt6-base-private-dev` (Debian/Ubuntu), `qt6-qtbase-private-devel`
 (Fedora), or `qt6-gui-private-devel` (openSUSE).
+
+The minimized-preview KWin effect is built and installed by default. Its build
+needs the development files matching the running Plasma/KWin version: `kwin`
+on Arch, `kwin-dev` on Debian/Ubuntu, `kwin-devel` on Fedora, or
+`kwin6-devel` on openSUSE. To build Krema without the effect, configure with
+`-DKREMA_BUILD_KWIN_EFFECT=OFF`. Flatpak builds set this option off because a
+sandboxed app cannot install a plugin into the host compositor.
+
+At runtime, `pactl` is needed for per-app mute badges and mute/unmute actions.
+It is supplied by PulseAudio utilities or a PulseAudio-compatible audio
+server package such as PipeWire's PulseAudio compatibility layer. Without
+`pactl`, the mute badge is omitted; MPRIS player controls do not depend on it.
 
 ### Minimum Versions
 

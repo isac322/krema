@@ -140,6 +140,7 @@ Q_SIGNALS:
 
 private:
     void updateInputRegion();
+    void updatePreviewBackground();
     void commitInputRegion();
     void applyEdgeLayout();
 
@@ -155,6 +156,8 @@ private:
     KremaSettings *m_settings;
     std::unique_ptr<QQuickView> m_previewView;
     QRegion m_inputRegion;
+    QRegion m_previewBlurRegion;
+    bool m_previewBlurEnabled = false;
 
     bool m_visible = false;
     bool m_previewHovered = false;

@@ -50,6 +50,7 @@ Verified API documentation from actual KDE headers (`/usr/include/`).
 | Document | Description |
 |----------|-------------|
 | [notification-badges.md](notification-badges.md) | Multi-source badge architecture — RegisterWatcher, SNI, Unity API, EWMH; all apps coverage |
+| [media-integration.md](media-integration.md) | MPRIS player discovery and controls, plus per-app mute state from PulseAudio/PipeWire sink inputs |
 
 ### M7: Visual Effects
 

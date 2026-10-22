@@ -7,6 +7,7 @@
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
+#include "models/mediacontroller.h"
 #include "models/notificationtracker.h"
 #include "models/taskiconprovider.h"
 #include "shell/dockshell.h"
@@ -199,6 +200,7 @@ int Application::run(const KAboutData &aboutData)
     // Create notification trackers (before QML loading)
     m_notificationTracker = std::make_unique<NotificationTracker>();
     m_launcherEntryTracker = std::make_unique<LauncherEntryTracker>();
+    m_mediaController = std::make_unique<MediaController>();
 
     // Register global QML singletons (must be before any QML loading)
     // Use qmlRegisterSingletonType (not qmlRegisterSingletonInstance) so multiple
@@ -222,6 +224,11 @@ int Application::run(const KAboutData &aboutData)
     qmlRegisterSingletonType<LauncherEntryTracker>("com.bhyoo.krema", 1, 0, "LauncherEntryTracker", [launcherEntries](QQmlEngine *, QJSEngine *) -> QObject * {
         QQmlEngine::setObjectOwnership(launcherEntries, QQmlEngine::CppOwnership);
         return launcherEntries;
+    });
+    auto *mediaController = m_mediaController.get();
+    qmlRegisterSingletonType<MediaController>("com.bhyoo.krema", 1, 0, "MediaController", [mediaController](QQmlEngine *, QJSEngine *) -> QObject * {
+        QQmlEngine::setObjectOwnership(mediaController, QQmlEngine::CppOwnership);
+        return mediaController;
     });
 
     // Create and initialize the multi-dock manager (creates DockShell(s) based on monitor mode).

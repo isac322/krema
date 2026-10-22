@@ -94,6 +94,11 @@ endif()
 
 add_subdirectory(src)
 
+option(KREMA_BUILD_KWIN_EFFECT "Build and install the minimized-window KWin effect" ON)
+if(KREMA_BUILD_KWIN_EFFECT)
+    add_subdirectory(kwin-minimized-live-preview)
+endif()
+
 option(KREMA_E2E_TESTS "Register the Docker-based AT-SPI E2E suite (tests/appium/run-e2e.sh) with CTest" OFF)
 
 if(BUILD_TESTING)

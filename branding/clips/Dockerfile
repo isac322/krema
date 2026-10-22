@@ -37,6 +37,7 @@ COPY --from=krema-src packaging/obs/krema.spec /src/packaging/obs/krema.spec
 RUN dnf -y builddep /src/packaging/obs/krema.spec
 COPY --from=krema-src CMakeLists.txt /src/CMakeLists.txt
 COPY --from=krema-src src /src/src
+COPY --from=krema-src kwin-minimized-live-preview /src/kwin-minimized-live-preview
 RUN cmake -S /src -B /build -G Ninja -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && \
     cmake --build /build && \
     DESTDIR=/stage cmake --install /build

@@ -18,6 +18,11 @@ BuildRequires:  ninja-build
 %endif
 BuildRequires:  gcc-c++ >= 13
 BuildRequires:  extra-cmake-modules >= 6.0.0
+%if 0%{?suse_version}
+BuildRequires:  kwin6-devel
+%else
+BuildRequires:  kwin-devel
+%endif
 
 # Qt 6
 BuildRequires:  cmake(Qt6Core) >= 6.8.0
@@ -108,6 +113,7 @@ previews via PipeWire, and deep integration with KDE Plasma desktop.
 %license LICENSES/MIT-CMU.txt
 %{_bindir}/krema
 %{_datadir}/applications/com.bhyoo.krema.desktop
+%{_libdir}/qt6/plugins/kwin/effects/plugins/kwin4_effect_minimized_live_preview.so
 %if 0%{?suse_version}
 %{_prefix}/etc/xdg/autostart/com.bhyoo.krema.autostart.desktop
 %else

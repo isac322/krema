@@ -821,7 +821,10 @@ Item {
                 root._reconcileAt(mouse.x, mouse.y)
             else if (!root.keyboardNavigating)
                 root.trackPointer(mouse.x, mouse.y)
-            if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
+            let pressedItem = root.hoveredIndex >= 0 ? dockRepeater.itemAt(root.hoveredIndex) : null
+            let pressedAudioButton = mouse.button === Qt.LeftButton && pressedItem
+                && pressedItem.audioButtonContainsPoint(dockMouseArea, mouse.x, mouse.y)
+            if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0 && !pressedAudioButton) {
                 root._dragStartX = mouse.x
                 root._dragStartY = mouse.y
                 dragHoldTimer.restart()
@@ -860,6 +863,11 @@ Item {
             if (root._dragWasActive) return
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
+                let item = dockRepeater.itemAt(root.hoveredIndex)
+                if (item && item.audioButtonContainsPoint(dockMouseArea, mouse.x, mouse.y)) {
+                    item.toggleAppAudioMute()
+                    return
+                }
                 let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
                 let isWindow = DockModel.tasksModel.data(
                     idx, TaskManager.AbstractTasksModel.IsWindow)

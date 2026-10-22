@@ -33,6 +33,7 @@ Build-Depends: debhelper-compat (= 13),
                kirigami-addons-dev,
                liblayershellqtinterface-dev (>= 6.0.0),
                plasma-workspace-dev,
+               kwin-dev,
                libkpipewire-dev,
                libwayland-dev (>= 1.22)
 DEBTRANSFORM-TAR: krema-0.12.0.tar.gz

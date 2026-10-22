@@ -16,6 +16,7 @@ namespace krema
 
 class DockModel;
 class LauncherEntryTracker;
+class MediaController;
 class MultiDockManager;
 class NotificationTracker;
 
@@ -53,6 +54,7 @@ private:
     std::unique_ptr<DockModel> m_dockModel;
     std::unique_ptr<NotificationTracker> m_notificationTracker;
     std::unique_ptr<LauncherEntryTracker> m_launcherEntryTracker;
+    std::unique_ptr<MediaController> m_mediaController;
     std::unique_ptr<MultiDockManager> m_dockManager;
     KActionCollection *m_actionCollection = nullptr;
 };

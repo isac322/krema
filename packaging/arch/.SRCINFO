@@ -12,6 +12,7 @@ pkgbase = krema
 	makedepends = extra-cmake-modules>=6.0
 	makedepends = gcc>=14
 	makedepends = qt6-shadertools
+	makedepends = kwin
 	depends = qt6-base>=6.8
 	depends = qt6-declarative>=6.8
 	depends = qt6-wayland
@@ -33,6 +34,7 @@ pkgbase = krema
 	depends = kirigami-addons
 	depends = layer-shell-qt>=6.0
 	depends = plasma-workspace
+	depends = kwin
 	depends = kpipewire
 	depends = pipewire
 	depends = wayland>=1.22

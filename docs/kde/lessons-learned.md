@@ -467,3 +467,75 @@ the required order is `[W0, L1, L2]`; launching B must produce
 `[W0, W1, L2]` with the launcher list unchanged. Failure to observe the
 startup task is a fixture failure, not a passing test. Ordinary window
 insertion alone does not exercise this transition.
+
+## 23. Keep the window-preview close glyph visible without a theme icon (2026-10)
+
+**Symptom:** The window-preview close button had a working hit target, but
+the close glyph was missing under the user's icon theme.
+
+**Cause:** The button depended on a themed `window-close` image. A missing
+icon left the control actionable but visually blank.
+
+**Fix:** Draw the small cross directly in the button's content item so the
+close affordance does not depend on global icon-theme lookup.
+
+**Key lesson:** Critical controls need a visible fallback when their action
+is present but an optional themed image cannot be loaded.
+
+## 24. Keep minimized window preview streams visible while the popup is open (2026-10)
+
+**Symptom:** A minimized window's preview fell back to a frozen thumbnail even
+when KWin could still provide new PipeWire frames.
+
+**Cause:** The thumbnail explicitly hid its `PipeWireSourceItem` whenever the
+window model reported `IsMinimized`, which prevented any further frames from
+reaching the preview.
+
+**Fix:** Keep the source item visible under the preview popup while the window
+is minimized, prefer its live frame over the cached still, and retain the
+last captured frame only as a fallback. Cap active sources at four, and let
+the popup's visibility cascade release them when previews close.
+
+**Key lesson:** Use popup visibility to scope screencast resources; do not use
+minimized state alone to disable capture. KWin can still produce frames for
+some minimized windows, but the fallback is necessary when it does not.
+Do not unminimize a window just to force more frames: KWin may restore or raise
+the actual app window in response to the state change.
+
+## 25. Watch MPRIS services that start after the dock (2026-10)
+
+**Symptom:** Media controls appeared for players already running when Krema
+started, but vanished after a new login when a player was launched later.
+
+**Cause:** `QDBusServiceWatcher` only reports registrations for service names
+already added to its watch list. Krema could enumerate and watch current MPRIS
+players, but it had no wildcard watch for future `org.mpris.MediaPlayer2.*`
+services.
+
+**Fix:** Subscribe to the session bus's `org.freedesktop.DBus.NameOwnerChanged`
+signal before enumerating current names, filter it to the MPRIS prefix, and
+follow service ownership changes through the existing per-player property
+watchers.
+
+**Key lesson:** For a dynamic family of D-Bus service names, listen to the bus
+name-owner signal and filter by prefix; a service watcher needs concrete names
+before it can observe their registration.
+
+## 26. Match MPRIS and audio services to generated desktop IDs (2026-10)
+
+**Symptom:** A media player published MPRIS and an audio stream, but the dock
+task preview did not associate either with its app after login.
+
+**Cause:** Desktop IDs generated for Snap apps can include both the snap and
+app names, while the MPRIS service uses a dynamic instance suffix and the audio
+stream reports only the executable/app name. Browser media can also run in a
+child process whose ID differs from the task's.
+
+**Fix:** Compare the app portion of an MPRIS service name, ignore its instance
+token, use the task PID as a fallback, and follow a bounded audio-process
+ancestry chain. Treat generated underscore-delimited Snap names as aliases and
+keep exact `DesktopEntry` matches highest priority.
+
+**Key lesson:** Match application identifiers to stable app-name components
+and process ownership; do not compare a dynamic instance token or require a
+generated desktop ID to equal the executable name byte for byte.

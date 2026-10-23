@@ -42,7 +42,7 @@ family_runtime() {
         fonts-noto-core fonts-dejavu-core \
         kwrite kfind \
         ruby \
-        python3 python3-pip python3-flask python3-lxml python3-gi python3-numpy \
+        python3 python3-pip python3-flask python3-lxml python3-gi python3-dbus python3-numpy \
         python3-pytest python3-pil gir1.2-gtk-3.0 \
         procps findutils gawk libcap2-bin psmisc ca-certificates
     rm -rf /var/lib/apt/lists/*

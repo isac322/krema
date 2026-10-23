@@ -16,13 +16,15 @@ from pathlib import Path
 
 import pytest
 from PIL import Image
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.remote.command import Command
 
 from krema_e2e import config, env, kwin
 from krema_e2e import input as inp
 from krema_e2e import preview as pv
 from krema_e2e.krema import Krema, Rect, has_state
 from krema_e2e.shortcuts import invoke_shortcut
-from krema_e2e.waits import wait_until
+from krema_e2e.waits import wait_stable, wait_until
 from krema_e2e.windows import TestWindow, TestWindows
 
 APP = env.TEST_APP_NAME
@@ -606,3 +608,73 @@ def test_icon008_minimized_preview_fallback_preserves_raw_artwork(
             "icon008-preview-fallback.png and icon008-preview-fallback-crop.png"
         ),
     )
+
+
+# ---------------------------------------------------------------- QA-PREV-02
+
+
+#: Offset into the popup for the element-origin pointer move, from its top-left corner.
+ORIGIN_OFFSET = 10
+#: W3C WebDriver web element reference key.
+W3C_ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf"
+
+
+@pytest.mark.parametrize("consumer", ["rect", "element-origin"])
+def test_qa_prev02_popup_geometry_after_a_hidden_first_read(krema: Krema, apps: TestWindows, consumer: str) -> None:
+    """QA-PREV-02: the shown popup reports geometry after an earlier read while hidden.
+
+    Qt can omit the Component interface from the hidden 0x0 popup. A first
+    geometry read in that state can leave the webdriver's libatspi object with
+    an interface list that lacks Component; once shown, the same element must
+    still serve GET rect and act as a W3C pointer origin
+    (tools/component-interface-cache.patch)."""
+    _open_group(apps, ["Alpha", "Beta"])
+    krema.wait_for_item(APP)
+    krema.move_away()
+    popup = krema.preview_popup()
+    assert popup is not None, "popup element must exist before its first show"
+    assert not has_state(popup, "showing")
+    # Setup, not an oracle: the first geometry read of the hidden popup. The
+    # provider may answer with empty bounds or an error (no Component).
+    try:
+        Rect.of(popup)
+    except WebDriverException:
+        pass
+
+    krema.hover_item(APP)
+    wait_until(lambda: has_state(popup, "showing"), timeout=8, message="preview popup to show on hover")
+    wait_until(lambda: len(krema.thumbnails()) == 2, timeout=8, message="two thumbnails")
+    surface = wait_stable(lambda: krema.surface_rect("preview"), duration=0.3)
+    assert surface is not None, f"preview surface in KWin: {krema.windows()}"
+
+    if consumer == "element-origin":
+        # The W3C Actions call that Selenium's ActionBuilder.perform() makes.
+        # On Wayland the webdriver resolves an element origin to the popup's
+        # surface-local position; the offset adds the surface's screen origin.
+        move = {
+            "type": "pointerMove",
+            "duration": 0,
+            "origin": {W3C_ELEMENT_KEY: popup.id},
+            "x": surface.x + ORIGIN_OFFSET,
+            "y": surface.y + ORIGIN_OFFSET,
+        }
+        pointer = {"type": "pointer", "id": "element-origin", "parameters": {"pointerType": "mouse"}, "actions": [move]}
+        krema.driver.execute(Command.W3C_ACTIONS, {"actions": [pointer]})
+
+    local = Rect.of(popup)
+    shown = Rect(surface.x + local.x, surface.y + local.y, local.width, local.height)
+    assert local.width > 0 and local.height > 0, f"shown popup rect {local}"
+    assert (
+        local.x >= 0 and local.y >= 0
+        and local.x + local.width <= surface.width and local.y + local.height <= surface.height
+    ), f"popup {shown} outside the preview surface {surface}"
+    if consumer == "element-origin":
+        target = (shown.x + ORIGIN_OFFSET, shown.y + ORIGIN_OFFSET)
+        assert shown.contains(*target), f"origin offset {ORIGIN_OFFSET} outside popup {shown}"
+        wait_until(lambda: kwin.cursor_pos() == target, timeout=5,
+                   message=lambda: f"pointer at {target} in popup {shown} (cursor {kwin.cursor_pos()})")
+    krema.screenshot(f"qa-prev02-{consumer}-shown")
+
+    krema.move_away()
+    assert Rect.of(popup)[2:] == (0, 0)
+    assert not has_state(popup, "showing")

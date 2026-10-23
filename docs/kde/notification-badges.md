@@ -20,6 +20,62 @@ Krema combines four badge sources:
 Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux, so
 sources 2–4 cover the rest.
 
+## Input boundaries and service lifecycle
+
+Krema consumes the KDE watcher, Unity LauncherEntry, SNI `NeedsAttention`,
+task-manager attention, and `NotificationManager::Settings`. The notification
+tracker re-registers with the Freedesktop notification service after a late
+startup, restart, or direct owner-to-owner replacement. Both that service and
+the StatusNotifierWatcher use `QDBusServiceWatcher::WatchForOwnerChange` and
+one `serviceOwnerChanged(service, oldOwner, newOwner)` handler each. Registration
+and unregistration signals alone miss a replacement with no unowned interval.
+
+Every notification-server owner change invalidates pending registration
+replies and the registered flag before registering with a nonempty new owner.
+It leaves retained notifications and unread counts intact. Every SNI-watcher
+owner change invalidates pending snapshot replies and clears the old items
+before querying a nonempty new owner's snapshot. Per-item generations reject
+stale asynchronous `Id` and `Status` replies. Do not also connect registration
+and unregistration handlers: one owner change must trigger one lifecycle reset.
+
+### DND deadlines and QTimer bounds
+
+`NotificationManager::Settings` supplies application inhibition and the
+absolute `notificationsInhibitedUntil()` deadline. The existing single-shot
+expiry timer clamps `now.msecsTo(until)` to `[1, INT_MAX]` milliseconds before
+passing a chrono duration to `QTimer::start()`. Each timeout calls
+`updateDndState()`, which reads the current settings and wall clock again.
+A capped timeout therefore rearms while the deadline remains in the future;
+it does not end DND early or substitute an elapsed-time counter for the deadline.
+Settings changes stop and recompute the arm; application inhibition remains
+independent of the Until deadline.
+
+The tracker regression reproduced an invalid negative timer interval on
+Qt 6.8.2 with an Until deadline 30 days ahead. The same pre-fix test on
+Qt 6.10.3 stayed active at `INT_MAX`; newer Qt's saturation does not establish
+compatibility with older supported versions. Tests also emit an early timeout
+without advancing the clock, rewrite Until to a short real deadline, and
+cancel Until. Emitting a timeout alone is not evidence that the deadline passed.
+
+The test peers use `QDBusConnectionInterface::registerService()` with
+`AllowReplacement` and, for the replacement owner, `ReplaceExistingService`.
+They check the typed reply for `ServiceRegistered` and use separate bus
+connections to prove a nonempty old owner changes directly to a different,
+nonempty new owner. The enums and reply were verified in the installed
+Qt 6.10.3 `QtDBus/qdbusconnectioninterface.h`; the owner watcher API is also
+declared in Qt 6.8's `qdbusservicewatcher.h`.
+
+### Transport boundaries
+
+The desktop portal is a transport, not a second badge source. When the KDE
+portal forwards a notification to Plasma's Freedesktop server, Krema receives
+the resulting watcher `Notify` call. If the portal does not forward it, Krema
+does not receive the notification directly.
+
+`org.kde.kuiserver` and `JobViewV2` report file-operation progress. They are not
+Krema notification inputs and do not create inbox rows or unread badges.
+
+
 ---
 
 ## Approach 1: RegisterWatcher (Notification Watcher)

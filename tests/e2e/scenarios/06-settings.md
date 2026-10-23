@@ -64,6 +64,12 @@
 - src/config/krema.kcfg
 - src/config/krema.kcfgc
 
+- src/models/notificationtracker.h
+- src/models/notificationtracker.cpp
+- tests/appium/test_12_notifications.py
+- tests/notification/notify.py
+- tests/notification/scenarios.json
+- tests/notification/README.md
 **Tier:** Tier 2 (Appium) for real settings controls, persistence, and KWin
 effects. Tier 1 QML does not replace these FormCard and multi-dock checks.
 Tier 3 reuses the Appium cases against installed packages.
@@ -915,3 +921,93 @@ not reveal it, the outer screen edge does, both panel clicks reach the
 panel, and the dock stays shown after the move onto it; with "Dock
 position" the screen edge does not reveal it and the inner-edge strip does.
 The 0 ms "Hide delay" crossing and step 8 remain manual checks.
+
+---
+
+## TC SET-024: External notification watcher and local Settings inbox lifecycle
+
+**Preconditions:** A fresh configuration, a running test window titled
+`Alpha`, and the private Appium session D-Bus. The E2E test launches the
+test-owned `tests/notification/notify.py serve` process, which owns
+`org.freedesktop.Notifications` and forwards watcher calls to Krema's
+`/NotificationWatcher`; no Plasma notification server is required.
+
+**Steps:**
+1. Start Krema and wait for the `Alpha` dock item.
+2. Use the external stimulus to send two persistent notifications with the
+   test window's desktop entry and unique run markers.
+3. Verify the `Alpha` dock item's AT-SPI description reports `2 notifications`.
+4. Close the first ID through the external stimulus and verify the
+   description reports `1 notifications`; close the second ID and verify the
+   notification count is absent.
+5. Stop and restart the test-owned notification server. Verify a new
+   notification reaches the `Alpha` dock item, then close it.
+6. While that restarted server is still running with D-Bus name replacement
+   allowed, start a replacement server with `--replace-existing`. Verify the
+   real `org.freedesktop.Notifications` `NameOwnerChanged` transition has
+   non-empty old and new owners, the replacement receives exactly one watcher
+   registration, and its notification reaches the `Alpha` dock item. Close it.
+7. With real SNI `NeedsAttention` active, use the native QA config writer to
+   set DND `Until` 30 days ahead. Observe tracker activation, then rewrite to a
+   short deadline and observe real wall-clock expiry and resumed attention.
+   Do not advance or fake the clock. Return the SNI item to `Active`.
+8. Send two persistent notifications, open Settings → Notifications, and
+   verify both cards are `Unread`. Click `Mark read` on the first card. Verify
+   it becomes `Read`, its local unread contribution is removed, and the card
+   remains active with `Dismiss` available.
+9. Click `Dismiss` on the second card. Verify it becomes `Dismissed`, its local
+   unread contribution is removed, and the card remains active until an
+   external `CloseNotification`.
+10. Verify the inbox notice states: “Read and dismissed state is local to Krema;
+    it is not synchronized with the app's server.” Close all remaining IDs.
+
+**Expected Result:**
+- A real external `Notify` reaches the running Krema watcher and increments
+  the matching dock item's notification count.
+- External `CloseNotification` decrements and then clears that count.
+- The owner handover has one non-empty old owner and one non-empty new owner;
+  the replacement server re-registers once, and its notification is visible.
+- A 30-day DND deadline is accepted and safely armed by the Qt integration
+  path; the capture demonstrates only the subsequent real short-deadline
+  rewrite and expiry, not 30 days of elapsed time.
+- `Mark read` and `Dismiss` are distinct local Settings inbox states; neither
+  is presented as an application/server read acknowledgement.
+- Animation pixels are not part of this deterministic gate.
+- Portal forwarding and Jobs consumption are not inferred by this scenario;
+  see `tests/notification/scenarios.json` for their explicit limitations.
+
+**Verification:** AT-SPI dock description and Settings inbox state labels,
+real session D-Bus notification IDs, owner-transition and watcher-registration
+records, DND tracker log transitions, and the visible local-sync notice.
+The real-video owner-handover and DND rewrite evidence is produced by
+`tests/appium/record_notifications.py`. Its native
+`krema_notification_config_writer` uses typed `QDateTime` writes with
+`KConfig::Notify`, sync, and a blocking same-connection D-Bus daemon round
+trip; no private notification signal is synthesized. The 30-day timer-arm
+old-fail/new-pass guarantee belongs to the Qt 6.8 integration gate, not to
+waiting days or merely observing active DND on a newer Qt.
+
+**Regression tier:** The optional
+`tests/appium/notification_cleanup_probe.py` plugin exercises current-code
+acquisition and teardown failures: real kded module rejection during SNI
+setup, missing DND writer, invalid diagnostic config bytes, kded wait timeout,
+original scenario failure, and event-artifact write failure. It must verify
+resource release, later cleanup and metadata writes, honest failed recording
+metadata, and preservation of the exact original exception. Load it explicitly with
+`-p notification_cleanup_probe`; it is not part of default collection or CI.
+Old/new source-comparison probes remain throwaway merge-evidence artifacts.
+
+`tests/appium/notification_inbox_cleanup_probe.py` separately checks the
+NOT-001 test's own cleanup. An unregistered session ID makes the real
+WebDriver server reject the Settings cleanup lookup. The test must still
+stop its notification server and preserve an earlier scenario exception;
+without an earlier exception, it must raise the cleanup error. The probe
+saves its server-exit and exception checks before any rescue, and requires
+fixture teardown to pass. Load it only with
+`-p notification_inbox_cleanup_probe`; it is not a default test or CI plugin.
+
+**Automated:** `tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`
+uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`
+and real pointer/AT-SPI interaction with the Notifications settings page.
+SNI, Unity, DND, portal, and Jobs protocol coverage remains in the wire-level
+notification catalog; no animation pixel assertion is required here.

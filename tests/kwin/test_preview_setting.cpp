@@ -19,6 +19,7 @@
 #include "models/notificationtracker.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
+#include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
 #include "shell/outputordermonitor.h"
 #include "shell/previewcontroller.h"
@@ -27,6 +28,7 @@
 #include <taskmanager/tasksmodel.h>
 
 #include <KAboutData>
+#include <LayerShellQt/Window>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -36,6 +38,7 @@
 #include <QProcess>
 #include <QQuickItem>
 #include <QQuickStyle>
+#include <QQuickView>
 #include <QScopeGuard>
 #include <QSignalSpy>
 #include <QStandardPaths>
@@ -43,6 +46,8 @@
 #include <QWidget>
 #include <QtQml>
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 
 static void initResources()
@@ -166,7 +171,10 @@ int windowRow(const QString &title)
 
 } // namespace
 
-TEST_CASE("A task row appearing while a window is hovered respects the preview setting", "[preview]")
+TEST_CASE(
+    "A task row appearing while a window is hovered respects the preview "
+    "setting",
+    "[preview]")
 {
     const bool previewEnabled = GENERATE(false, true);
     INFO("previewEnabled " << previewEnabled);
@@ -266,6 +274,292 @@ TEST_CASE("A task row appearing while a window is hovered respects the preview s
         CHECK_FALSE(preview->isVisible());
         CHECK(shown.isEmpty());
     }
+}
+
+TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[preview][shadow]")
+{
+    const int edge = GENERATE(0, 1, 2, 3);
+    auto *settings = app().settings.get();
+    const auto restore = qScopeGuard([settings,
+                                      oldEdge = settings->edge(),
+                                      visibility = settings->visibilityMode(),
+                                      reserve = settings->reserveScreenSpace(),
+                                      floating = settings->floating(),
+                                      shadow = settings->shadowEnabled(),
+                                      lightX = settings->shadowLightX(),
+                                      lightY = settings->shadowLightY(),
+                                      lightZ = settings->shadowLightZ(),
+                                      elevation = settings->shadowElevation(),
+                                      radius = settings->shadowLightRadius()] {
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(visibility);
+        settings->setReserveScreenSpace(reserve);
+        settings->setFloating(floating);
+        settings->setShadowEnabled(shadow);
+        settings->setShadowLightX(lightX);
+        settings->setShadowLightY(lightY);
+        settings->setShadowLightZ(lightZ);
+        settings->setShadowElevation(elevation);
+        settings->setShadowLightRadius(radius);
+    });
+    settings->setEdge(edge);
+    settings->setVisibilityMode(0);
+    settings->setReserveScreenSpace(false);
+    settings->setFloating(false);
+    settings->setShadowEnabled(false);
+    settings->setShadowLightX(-150);
+    settings->setShadowLightY(-150);
+    settings->setShadowLightZ(100);
+    settings->setShadowElevation(15);
+    settings->setShadowLightRadius(5.0);
+
+    auto *outputOrder = krema::OutputOrderMonitor::instance();
+    REQUIRE(QTest::qWaitFor(
+        [outputOrder] {
+            return outputOrder->orderReady();
+        },
+        kTimeoutMs));
+    krema::MultiDockManager manager(settings, app().model.get(), app().tracker.get());
+    manager.initialize();
+    auto *shell = manager.primaryShell();
+    REQUIRE(shell);
+    auto *dock = shell->view();
+    REQUIRE(QTest::qWaitFor(
+        [dock] {
+            return dock->isExposed() && dock->rootObject();
+        },
+        kTimeoutMs));
+
+    QQuickView *preview = nullptr;
+    for (auto *window : QGuiApplication::topLevelWindows()) {
+        auto *view = qobject_cast<QQuickView *>(window);
+        if (view && view->source() == QUrl(QStringLiteral("qrc:/qml/PreviewPopup.qml"))) {
+            preview = view;
+            break;
+        }
+    }
+    REQUIRE(preview);
+    auto *layer = LayerShellQt::Window::get(preview);
+    REQUIRE(layer);
+    const auto margin = [&] {
+        const auto margins = layer->margins();
+        switch (edge) {
+        case 0:
+            return margins.top();
+        case 1:
+            return margins.bottom();
+        case 2:
+            return margins.left();
+        default:
+            return margins.right();
+        }
+    };
+    // The preview must meet the actual resting panel plus animation extent,
+    // both initially and when a shadow setting moves an already-open surface.
+    for (const bool shadow : {false, true, false}) {
+        settings->setShadowEnabled(shadow);
+        int depth = 0;
+        int gap = 0;
+        const bool followsPanel = QTest::qWaitFor(
+            [&] {
+                const QRect panel = dock->visibilityController()->panelRect();
+                if (panel.isEmpty()) {
+                    return false;
+                }
+                switch (edge) {
+                case 0:
+                    depth = panel.y() + panel.height();
+                    gap = panel.y();
+                    break;
+                case 1:
+                    depth = dock->height() - panel.y();
+                    gap = dock->height() - panel.y() - panel.height();
+                    break;
+                case 2:
+                    depth = panel.x() + panel.width();
+                    gap = panel.x();
+                    break;
+                default:
+                    depth = dock->width() - panel.x();
+                    gap = dock->width() - panel.x() - panel.width();
+                    break;
+                }
+                // QML publishes its panel rectangle asynchronously. Do not accept
+                // the previous rectangle and margin immediately after a toggle.
+                if (std::abs(gap - std::max(dock->floatingPadding(), dock->shadowOverflow())) > 4) {
+                    return false;
+                }
+                // QML's visible background omits the 4 px indicator gap.
+                return margin() >= depth + dock->animationOverflowHeight() && margin() <= depth + dock->animationOverflowHeight() + 4;
+            },
+            kTimeoutMs);
+        CAPTURE(edge, shadow, depth, gap, margin(), dock->shadowOverflow(), dock->animationOverflowHeight());
+        REQUIRE(followsPanel);
+    }
+}
+
+TEST_CASE("Visible preview input follows shadow and native surface resizes", "[preview][shadow-input]")
+{
+    const int edge = GENERATE(1, 3);
+    auto *settings = app().settings.get();
+    const auto restore = qScopeGuard([settings,
+                                      oldEdge = settings->edge(),
+                                      visibility = settings->visibilityMode(),
+                                      reserve = settings->reserveScreenSpace(),
+                                      floating = settings->floating(),
+                                      shadow = settings->shadowEnabled(),
+                                      lightX = settings->shadowLightX(),
+                                      lightY = settings->shadowLightY(),
+                                      lightZ = settings->shadowLightZ(),
+                                      elevation = settings->shadowElevation(),
+                                      radius = settings->shadowLightRadius(),
+                                      iconSize = settings->iconSize(),
+                                      zoom = settings->maxZoomFactor(),
+                                      hoverDelay = settings->previewHoverDelay()] {
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(visibility);
+        settings->setReserveScreenSpace(reserve);
+        settings->setFloating(floating);
+        settings->setShadowEnabled(shadow);
+        settings->setShadowLightX(lightX);
+        settings->setShadowLightY(lightY);
+        settings->setShadowLightZ(lightZ);
+        settings->setShadowElevation(elevation);
+        settings->setShadowLightRadius(radius);
+        settings->setIconSize(iconSize);
+        settings->setMaxZoomFactor(zoom);
+        settings->setPreviewHoverDelay(hoverDelay);
+    });
+    settings->setEdge(edge);
+    settings->setVisibilityMode(0);
+    settings->setReserveScreenSpace(false);
+    settings->setFloating(false);
+    settings->setShadowEnabled(true);
+    settings->setShadowLightX(200);
+    settings->setShadowLightY(200);
+    settings->setShadowLightZ(100);
+    settings->setShadowElevation(50);
+    // Keep a fixed-size popup smaller than the remaining depth on the
+    // wrapper's 1024x768 output, while both edges exercise a depth clamp.
+    settings->setIconSize(edge == 1 ? 48 : 96);
+    settings->setMaxZoomFactor(edge == 1 ? 1.6 : 2.0);
+    settings->setShadowLightRadius(edge == 1 ? 5.0 : 20.0);
+    settings->setPreviewHoverDelay(10 * kTimeoutMs);
+    auto *outputOrder = krema::OutputOrderMonitor::instance();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return outputOrder->orderReady();
+        },
+        kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            return windowRow(kHoveredTitle) < 0;
+        },
+        kTimeoutMs));
+    krema::MultiDockManager manager(settings, app().model.get(), app().tracker.get());
+    manager.initialize();
+    auto *shell = manager.primaryShell();
+    REQUIRE(shell);
+    auto *dock = shell->view();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return dock->isExposed() && dock->rootObject();
+        },
+        kTimeoutMs));
+    QProcess child;
+    const auto stopChild = startChild(child, QStringLiteral("--child"));
+    REQUIRE(child.waitForStarted(kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            return windowRow(kHoveredTitle) >= 0;
+        },
+        kTimeoutMs));
+    auto *controller = shell->previewController();
+    controller->showPreview(windowRow(kHoveredTitle), edge == 1 ? dock->x() + dock->width() / 2 : dock->y() + dock->height() / 2, 48);
+    controller->setPreviewHovered(true);
+    REQUIRE(controller->isVisible());
+    QQuickView *preview = nullptr;
+    for (auto *window : QGuiApplication::topLevelWindows()) {
+        auto *view = qobject_cast<QQuickView *>(window);
+        if (view && view->source() == QUrl(QStringLiteral("qrc:/qml/PreviewPopup.qml"))) {
+            preview = view;
+            break;
+        }
+    }
+    REQUIRE(preview);
+    QQuickItem *popup = nullptr;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            for (auto *item : preview->rootObject()->childItems()) {
+                if (item->isVisible() && item->width() == controller->contentWidth() && item->height() == controller->contentHeight()) {
+                    popup = item;
+                    return true;
+                }
+            }
+            return false;
+        },
+        kTimeoutMs));
+    const auto popupRegion = [&] {
+        return QRegion(popup->mapRectToScene(QRectF(0, 0, popup->width(), popup->height())).toAlignedRect().intersected(QRect(QPoint(0, 0), preview->size())));
+    };
+    QSizeF observedSize;
+    int stablePolls = 0;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            const QSizeF size(popup->width(), popup->height());
+            if (size != observedSize || size.width() < 100 || size.height() < 100) {
+                observedSize = size;
+                stablePolls = 0;
+                return false;
+            }
+            return ++stablePolls > 20 && preview->mask() == popupRegion();
+        },
+        kTimeoutMs));
+    const QSizeF contentSize(popup->width(), popup->height());
+    const QRegion oldMask = preview->mask();
+    const int oldDepth = edge == 1 ? preview->height() : preview->width();
+    if (edge == 1) {
+        settings->setShadowLightY(250);
+    } else {
+        settings->setShadowLightX(250);
+    }
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return (edge == 1 ? preview->height() : preview->width()) < oldDepth;
+        },
+        kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return preview->mask() == popupRegion();
+        },
+        kTimeoutMs));
+    REQUIRE(controller->isVisible());
+    REQUIRE(QSizeF(popup->width(), popup->height()) == contentSize);
+    REQUIRE_FALSE((preview->mask() - oldMask).isEmpty());
+
+    // A layer-shell configure can change size without calling updateEdge.
+    // The mask must follow that native event too, with content unchanged.
+    const QSize oldSize = preview->size();
+    const QSize nativeSize = oldSize - (edge == 1 ? QSize(0, 20) : QSize(20, 0));
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_DESIRED_SIZE
+    preview->resize(nativeSize);
+#else
+    LayerShellQt::Window::get(preview)->setDesiredSize(nativeSize);
+    preview->update();
+#endif
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return preview->size() == nativeSize;
+        },
+        kTimeoutMs));
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return preview->mask() == popupRegion();
+        },
+        kTimeoutMs));
+    REQUIRE(QSizeF(popup->width(), popup->height()) == contentSize);
+    controller->hidePreview();
+    REQUIRE(preview->mask() == QRegion(0, 0, 1, 1));
 }
 
 int main(int argc, char *argv[])

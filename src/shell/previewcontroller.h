@@ -142,6 +142,7 @@ private:
     void updateInputRegion();
     void commitInputRegion();
     void applyEdgeLayout();
+    void refreshPopupGeometry();
 
     void recalcContentPosition();
     void doShow();

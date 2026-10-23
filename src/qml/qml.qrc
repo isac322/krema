@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/qml">
         <file>main.qml</file>
+        <file>shadowgeometry.js</file>
         <file>DockItem.qml</file>
         <file>ZoomAnimationProfile.qml</file>
         <file>SettingsDialog.qml</file>

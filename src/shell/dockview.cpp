@@ -166,6 +166,20 @@ int DockView::floatingPadding() const
     return m_panelInset.total + (m_settings->floating() ? m_settings->floatingMargin() : 0);
 }
 
+int DockView::shadowOverflow() const
+{
+    if (!m_settings->shadowEnabled()) {
+        return 0;
+    }
+
+    const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
+    return krema::shadowOverflowHeight(iconSize + s_padding * 2,
+                                       isVertical() ? m_settings->shadowLightX() : m_settings->shadowLightY(),
+                                       m_settings->shadowLightZ(),
+                                       m_settings->shadowElevation(),
+                                       m_settings->shadowLightRadius());
+}
+
 int DockView::reservedPanelInset() const
 {
     return m_panelInset.reserved;
@@ -285,7 +299,7 @@ void DockView::setScreenSettings(ScreenSettings *screenSettings)
 int DockView::panelBarHeight() const
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
-    return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
+    return krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), shadowOverflow(), 0);
 }
 
 DockPlatform *DockView::platform() const
@@ -336,7 +350,8 @@ void DockView::updateSize()
     // Horizontal docks open the tooltip above/below the panel (fits s_tooltipReserve);
     // vertical docks open it beside the panel, so the reserve must fit its full width.
     const int tooltipReserve = isVertical() ? std::max(s_tooltipReserve, m_sideTooltipReserve) : s_tooltipReserve;
-    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding());
+    const int shadowOverflow = this->shadowOverflow();
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding(), shadowOverflow);
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {
@@ -353,15 +368,18 @@ void DockView::updateSize()
         m_platform->setSize(QSize(0, h));
     }
 
-    // Reserve the panel bar only when screen-space reservation is enabled.
-    // While measuring from panels the reservation starts past theirs.
-    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? panelBarHeight() - m_panelInset.reserved : 0);
+    // Reserve the panel bar and any extra inward shadow offset when
+    // screen-space reservation is enabled. While measuring from panels the
+    // reservation starts past theirs.
+    const int exclusiveZone = krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), shadowOverflow, m_panelInset.reserved);
+    m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? exclusiveZone : 0);
 
     if (m_visibilityController) {
         // The input mask must cover the same animated extent as the surface;
         // launch and attention bounces can extend beyond zoom-only growth.
         m_visibilityController->setZoomOverflowHeight(animationOverflowHeight());
     }
+    Q_EMIT shadowOverflowChanged();
 }
 
 int DockView::animationOverflowHeight() const

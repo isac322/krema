@@ -118,6 +118,12 @@ void PreviewController::initialize()
     m_previewView->setMask(hiddenInputRegion);
     m_inputRegion = hiddenInputRegion;
 
+    // The compositor can change the native size after a layer-shell configure.
+    // Bottom/right popup placement depends on that size even when its content
+    // dimensions stay fixed.
+    connect(m_previewView.get(), &QWindow::widthChanged, this, &PreviewController::refreshPopupGeometry);
+    connect(m_previewView.get(), &QWindow::heightChanged, this, &PreviewController::refreshPopupGeometry);
+
     // Pre-show the surface so compositor has it mapped and ready for input routing.
     // The 1x1 mask above prevents it from intercepting any meaningful input.
     m_previewView->show();
@@ -497,9 +503,19 @@ void PreviewController::updateEdge()
         return;
     }
     applyEdgeLayout();
+    refreshPopupGeometry();
     if (m_previewView->isVisible()) {
         m_previewView->update();
     }
+}
+
+void PreviewController::refreshPopupGeometry()
+{
+    if (m_visible && m_parentIndex >= 0) {
+        recalcContentPosition();
+        Q_EMIT positionChanged();
+    }
+    updateInputRegion();
 }
 
 void PreviewController::applyEdgeLayout()

@@ -246,6 +246,28 @@ Item {
             verify(DockVisibility.panelRect.y > stage.height / 2, "bottom dock panel must sit in the lower half")
         }
 
+        function test_shadowReserveKeepsOutwardEdgeInsideSurface_data() {
+            return dockEdges()
+        }
+
+        function test_shadowReserveKeepsOutwardEdgeInsideSurface(data) {
+            DockView.edge = data.edge
+            DockView.floatingPadding = 0
+            DockView.shadowOverflow = 60
+            addTasks(["A", "B"])
+            makeDock(2)
+            const panel = DockVisibility.panelRect
+            const outwardGap = data.edge === 0
+                ? panel.y
+                : data.edge === 1
+                    ? stage.height - panel.y - panel.height
+                    : data.edge === 2
+                        ? panel.x
+                        : stage.width - panel.x - panel.width
+            verify(outwardGap >= DockView.shadowOverflow,
+                   data.tag + " outward gap was " + outwardGap)
+        }
+
         function test_verticalDockStacksItems() {
             DockView.edge = 2
             addTasks(["A", "B", "C"])

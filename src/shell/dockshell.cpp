@@ -122,8 +122,9 @@ void DockShell::connectSettingsSignals()
     // Per-screen overrideable: iconSize, maxZoomFactor, floating → use ScreenSettings signals
     connect(ss, &ScreenSettings::iconSizeChanged, m_view.get(), &DockView::updateSize);
     connect(ss, &ScreenSettings::maxZoomFactorChanged, m_view.get(), &DockView::updateSize);
-    // The preview popup is anchored past panelBarHeight(), which includes the gap.
+    // The preview popup follows the panel's floating gap and shadow inset.
     connect(m_view.get(), &DockView::floatingPaddingChanged, m_previewController.get(), &PreviewController::updateEdge);
+    connect(m_view.get(), &DockView::shadowOverflowChanged, m_previewController.get(), &PreviewController::updateEdge);
     connect(ss, &ScreenSettings::floatingChanged, m_view.get(), &DockView::refreshFloatingPadding);
     // Floating margin is global-only; it resizes the gap exactly like toggling floating.
     connect(s, &KremaSettings::FloatingMarginChanged, m_view.get(), &DockView::refreshFloatingPadding);
@@ -137,8 +138,14 @@ void DockShell::connectSettingsSignals()
         m_previewController->updateEdge();
     });
 
-    // Shadow: no surface resize needed — shadow renders within available space
-    // and naturally clips at surface boundaries (QML ShaderEffect computes its own margin)
+    // Shadow overflow is part of the surface's interior reserve so low light
+    // heights do not clip the projected shadow at the QQuickWindow boundary.
+    connect(s, &KremaSettings::ShadowEnabledChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightXChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightYChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightZChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowLightRadiusChanged, m_view.get(), &DockView::updateSize);
+    connect(s, &KremaSettings::ShadowElevationChanged, m_view.get(), &DockView::updateSize);
 
     // Background style changes — per-screen overrideable: backgroundOpacity, backgroundStyle, cornerRadius
     connect(ss, &ScreenSettings::backgroundOpacityChanged, m_view.get(), &DockView::applyBackgroundStyle);

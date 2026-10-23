@@ -192,6 +192,9 @@ TEST_CASE("Preview input region matches the visible popup", "[input-region][prev
         p.edge = 1;
 
         REQUIRE(krema::computePreviewInputRegion(p) == QRegion(800, 220, 300, 180));
+
+        p.surfaceHeight = 350;
+        REQUIRE(krema::computePreviewInputRegion(p) == QRegion(800, 170, 300, 180));
     }
 
     SECTION("Left edge: popup flush with the left, nothing to its right")
@@ -212,6 +215,9 @@ TEST_CASE("Preview input region matches the visible popup", "[input-region][prev
         p.edge = 3;
 
         REQUIRE(krema::computePreviewInputRegion(p) == QRegion(100, 450, 300, 180));
+
+        p.surfaceWidth = 350;
+        REQUIRE(krema::computePreviewInputRegion(p) == QRegion(50, 450, 300, 180));
     }
 
     SECTION("Fractional popup geometry is fully covered")

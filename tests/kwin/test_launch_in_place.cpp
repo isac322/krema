@@ -381,18 +381,16 @@ public:
         if (!g_launcherSurface || !g_launcherSurface->windowHandle()) {
             return failStart(QStringLiteral("requesting-surface"));
         }
-        // When another app is active, use real input to focus this layer.
-        // Changing keyboard interactivity alone does not acknowledge activation.
-        if (!g_launcherSurface->windowHandle()->isActive()) {
-            if (!pointer().isValid()) {
-                return failStart(QStringLiteral("fake-input-device"));
-            }
-            if (g_launcherClickRect.isEmpty()) {
-                return failStart(QStringLiteral("requesting-surface-click-rect"));
-            }
-            pointer().moveTo(g_launcherClickRect.center());
-            pointer().click();
+        // QWindow::isActive() is cached client state, not proof that the
+        // compositor granted focus; use real input for every launch.
+        if (!pointer().isValid()) {
+            return failStart(QStringLiteral("fake-input-device"));
         }
+        if (g_launcherClickRect.isEmpty()) {
+            return failStart(QStringLiteral("requesting-surface-click-rect"));
+        }
+        pointer().moveTo(g_launcherClickRect.center());
+        pointer().click();
         if (!QTest::qWaitFor(
                 [] {
                     return g_launcherSurface->windowHandle()->isActive();

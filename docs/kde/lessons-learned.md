@@ -478,10 +478,12 @@ as guaranteed activation. Layer-shell state is double-buffered, so a
 `None` to `OnDemand` flip may coalesce before a commit. The historical CI
 job's exact failure branch is unknown.
 
-**Fixture change:** Set `OnDemand` before showing the layer, send real
-pointer input, and await `QWindow::isActive()` before requesting a launch.
-For an inactive-layer case, activate an existing task and await a
-nonblocking `wl_display_sync` callback on Qt's same Wayland connection,
+**Fixture change:** Set `OnDemand` before showing the layer, send one real
+pointer gesture for every launch, and await `QWindow::isActive()` before
+requesting a launch. This deliberately removes the cached-active fast path:
+the gesture is a test-fixture synchronization/activation step, not a product
+behavior claim. For an inactive-layer case, activate an existing task and
+await a nonblocking `wl_display_sync` callback on Qt's same Wayland connection,
 alongside the task's active state and the layer's inactive state.
 
 **Regression setup ordering:** The added setup had a separate race:

@@ -188,7 +188,11 @@ def pytest_runtest_makereport(item, call):
         _write("teardown.json", {"outcome": report.outcome,
                                  "longrepr": str(report.longrepr) if report.longrepr else None})
         path = RUN_DIR / "verification.json"
-        result = json.loads(path.read_text(encoding="utf-8"))
+        if path.exists():
+            result = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            result = {"mode": MODE, "verification_outcome": "failed",
+                      "failures": ["No call-phase verification snapshot was written; see pytest reports"]}
         result["teardown_outcome"] = report.outcome
         if report.outcome != "passed":
             result["verification_outcome"] = "failed"

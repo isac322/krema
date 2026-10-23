@@ -382,6 +382,47 @@ scenario passed, the first cleanup error must still be raised. Any later
 probe-only kill and reap is recorded separately in `probe-rescue.json` and
 cannot justify a pass; `teardown.json` records the fixture result.
 
+If fixture setup fails, the probe records a failed verification when no
+call-phase snapshot is available. It leaves the pytest reports unchanged;
+a setup error must not cause another INTERNALERROR in the probe.
+Exercise this boundary in the E2E container with an executable that cannot
+start Krema. The command below expects the setup error and validates its
+failed probe result; it does not claim that Krema started successfully.
+
+```sh
+(
+  run_dir=/artifacts/inbox-cleanup-probe/setup-failure-1
+  set +e
+  PYTEST_ADDOPTS="-p notification_inbox_cleanup_probe" \
+  KREMA_E2E_BINARY=/usr/bin/true \
+  KREMA_INBOX_CLEANUP_MODE=healthy \
+  KREMA_INBOX_CLEANUP_RUN_DIR="$run_dir" \
+  tests/appium/entrypoint.sh \
+    test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle -rs
+  result=$?
+  set -e
+  test "$result" -eq 1
+  python3 - "$run_dir/verification.json" /artifacts/junit.xml <<'PY'
+import json
+import sys
+import xml.etree.ElementTree as ET
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    verification = json.load(stream)
+assert verification["verification_outcome"] == "failed"
+cases = list(ET.parse(sys.argv[2]).getroot().iter("testcase"))
+assert len(cases) == 1
+assert cases[0].get("name") == "test_not001_external_watcher_badge_close_and_local_inbox_lifecycle"
+assert len(cases[0].findall("error")) == 1
+PY
+)
+```
+
+The session wrapper can collapse different pytest failure codes to exit 1.
+The failed JSON result is therefore essential: the unfixed probe also exited
+1 through the wrapper, but raised an INTERNALERROR and wrote no verification.
+Use a new run directory for this check, as for the other probe invocations.
+
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
 automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.

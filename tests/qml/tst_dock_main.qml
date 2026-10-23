@@ -941,6 +941,57 @@ Item {
             verify(!tooltip.visible, "re-entering while preview hide is pending must not overlap text")
         }
 
+        function test_previewTransferIsNotItemHover_data() { return dockEdges() }
+
+        function test_previewTransferIsNotItemHover(data) {
+            DockView.edge = data.edge
+            DockSettings.maxZoomFactor = 1.6
+            let depth = DockView.surfaceHeight(DockSettings.iconSize, 8, 1.6, 36, 8)
+            root.width = DockView.isVertical ? depth : 800
+            root.height = DockView.isVertical ? 800 : depth
+            addTasks(["Window"])
+            let dock = makeDock(1)
+            let item = items(dock)[0]
+            let c = hoverItem(item)
+            tryCompare(PreviewController, "visible", true)
+            tryVerify(() => item.currentScale > 1.5)
+            PreviewController.contentX = c.x - 100
+            PreviewController.contentY = c.y - 100
+            PreviewController.contentWidth = 200
+            PreviewController.contentHeight = 200
+            let transfer = { x: c.x, y: c.y }
+            if (data.edge === 0) transfer.y = root.height - 1
+            if (data.edge === 1) transfer.y = 1
+            if (data.edge === 2) transfer.x = root.width - 1
+            if (data.edge === 3) transfer.x = 1
+            mouseMove(stage, transfer.x, transfer.y)
+            tryCompare(dock, "hoveredIndex", -1)
+            verify(item.currentScale > 1.5, "transfer must keep the zoom anchor")
+
+            let activations = DockActions.callsTo("activate").length
+            let minimizes = DockActions.callsTo("activateOrMinimize").length
+            mouseClick(stage, transfer.x, transfer.y, Qt.LeftButton)
+            compare(DockActions.callsTo("activate").length, activations)
+            compare(DockActions.callsTo("activateOrMinimize").length, minimizes)
+
+            // Leave sideways within the dock surface, where hover is already -1.
+            if (DockView.isVertical) transfer.y = root.height - 1
+            else transfer.x = root.width - 1
+            mouseMove(stage, transfer.x, transfer.y)
+            tryCompare(item, "currentScale", 1.0)
+
+            // A model/keyboard close while resting in the reserve also
+            // releases mouse zoom without needing another motion event.
+            mouseMove(stage, c.x, c.y)
+            tryVerify(() => item.currentScale > 1.5)
+            if (DockView.isVertical) transfer.y = c.y
+            else transfer.x = c.x
+            mouseMove(stage, transfer.x, transfer.y)
+            compare(dock.hoveredIndex, -1)
+            PreviewController.hidePreview()
+            tryCompare(item, "currentScale", 1.0)
+        }
+
         function test_previewCloseWhilePointerOverItemRestartsTextTooltip() {
             DockSettings.previewEnabled = false
             DockSettings.groupedWindowClickAction = 1

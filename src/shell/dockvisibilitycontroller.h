@@ -9,10 +9,10 @@
 #include <QRect>
 #include <memory>
 
-#include <QObject>
 #include <QModelIndex>
-#include <QVariantList>
+#include <QObject>
 #include <QTimer>
+#include <QVariantList>
 
 namespace TaskManager
 {
@@ -79,8 +79,8 @@ public:
     /// Set the delay before the dock hides when the mouse leaves the dock area.
     void setHideDelay(int ms);
 
-    /// Set the zoom overflow height so the hovered input region excludes
-    /// non-interactive space above the zoom area (e.g. tooltip reserve).
+    /// Set the animated outward extent so the hovered input region follows
+    /// zoomed and bouncing icons without including unrelated surface space.
     void setZoomOverflowHeight(int height);
 
     /// Depth of the band of other panels along the screen edge that the dock
@@ -196,8 +196,8 @@ private:
     // This value persists even while m_panelY moves off-screen during hide animation.
     int m_panelRefY = 0;
 
-    // Zoom overflow height (pixels above the panel that zoomed icons occupy).
-    // Used to restrict hovered input region to only the interactive area.
+    // Animated outward extent (pixels beyond the panel that transformed icons
+    // occupy). Used to restrict hovered input to the interactive area.
     int m_zoomOverflowHeight = 0;
 
     // Band of other panels next to the screen edge (kept click-through).

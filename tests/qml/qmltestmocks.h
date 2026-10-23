@@ -160,6 +160,7 @@ class ZoomLayoutEngine : public QObject
     Q_OBJECT
 public:
     using QObject::QObject;
+    Q_INVOKABLE int surfaceHeight(int iconSize, int padding, qreal maxZoomFactor, int tooltipReserve, int floatingPadding) const;
     Q_INVOKABLE QVariantMap zoomLayout(int count,
                                        qreal restStart,
                                        qreal iconSize,

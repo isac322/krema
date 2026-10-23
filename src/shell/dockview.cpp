@@ -16,9 +16,9 @@
 #include <QLoggingCategory>
 #include <QPainterPath>
 
-#include <taskmanager/tasksmodel.h>
 #include <KIconLoader>
 #include <KLocalizedQmlContext>
+#include <taskmanager/tasksmodel.h>
 
 #include <QQmlEngine>
 #include <QScreen>
@@ -358,15 +358,17 @@ void DockView::updateSize()
     m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? panelBarHeight() - m_panelInset.reserved : 0);
 
     if (m_visibilityController) {
-        m_visibilityController->setZoomOverflowHeight(zoomOverflowHeight());
+        // The input mask must cover the same animated extent as the surface;
+        // launch and attention bounces can extend beyond zoom-only growth.
+        m_visibilityController->setZoomOverflowHeight(animationOverflowHeight());
     }
 }
 
-int DockView::zoomOverflowHeight() const
+int DockView::animationOverflowHeight() const
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
     const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
-    return krema::zoomOverflowHeight(iconSize, maxZoom);
+    return krema::animationOverflowHeight(iconSize, s_padding, maxZoom);
 }
 
 void DockView::handleScreenChanged(QScreen *newScreen)

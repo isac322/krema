@@ -655,19 +655,31 @@ def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindow
     wait_until(lambda: config_value(krema, "Edge") == str(kcfg.EDGE_TOP), message="kremarc Edge=0")
     def top_dock():
         r = krema.surface_rect("dock")
-        return r if r is not None and r.y == 0 else None
+        return (r, krema.screen_rect(krema.item("Alpha"))) if r is not None else None
 
-    top = wait_until(
+    def top_ready(observation):
+        if observation is None:
+            return False
+        surface, icon = observation
+        # No panel is present: the final surface has the original thickness.
+        # The panel probe can briefly report the dock's old reservation while
+        # the edge change commits. Sample surface and item readiness together.
+        return (
+            surface == Rect(0, 0, W, dock.height)
+            and 0 <= icon.y and icon.y + icon.height <= surface.height
+            and icon.width == 48
+        )
+
+    top, ir = wait_stable(
         top_dock,
         timeout=5,
-        message="dock surface anchored to the top edge",
+        accept=top_ready,
     )
     assert (top.x, top.width) == (0, W)
     assert not [w for w in krema.windows() if w.skip_taskbar and w.client_y + w.client_height == H], "a dock surface is left at the bottom"
 
     item = krema.item("Alpha")
     assert has_state(item, "showing")
-    ir = wait_stable(lambda: krema.screen_rect(krema.item("Alpha")))
     assert 0 <= ir.y and ir.y + ir.height <= top.height and ir.width == 48
     img = krema.screenshot("dock-top", ir)
     colors = img.crop((ir.x, ir.y, ir.x + ir.width, ir.y + ir.height)).getcolors(4096)

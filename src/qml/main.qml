@@ -134,6 +134,7 @@ Item {
     }
 
     function startKeyboardNavigation() {
+        _previewTransferActive = false
         keyboardNavigating = true
         _hoverReconciling = false
         // Suppress tooltip and preview auto-triggers during keyboard nav
@@ -524,13 +525,47 @@ Item {
         return { near: restNear, far: restNear + extent * scale }
     }
 
-    // Map a pointer position (root coordinates) onto the zoom/hover state and
-    // re-run the hit test. dockPanel.mouseX = primary axis (along the dock),
-    // dockPanel.mouseY = secondary axis (depth), so all zoom/hover logic works
-    // identically regardless of orientation; -1 = outside the dock zone.
+    property bool _previewTransferActive: false
+
+    // Keep the existing preview alive while crossing the transparent reserve.
+    // This is separate from item hover: blank space must never activate a task.
+    function _inPreviewTransfer(x, y) {
+        if (!PreviewController.visible || keyboardNavigating || _dragPending || _dragActive
+                || x < 0 || x >= width || y < 0 || y >= height)
+            return false
+        let owner = dockRepeater.itemAt(PreviewController.parentIndex)
+        if (!owner) return false
+        let primary = DockView.isVertical ? y : x
+        let center = (DockView.isVertical ? dockPanel.y : dockPanel.x)
+            + owner.itemCenterX + owner.currentOffset
+        let half = DockSettings.iconSize * owner.currentScale / 2 + DockSettings.iconSpacing / 2
+        let popupStart = DockView.isVertical ? PreviewController.contentY : PreviewController.contentX
+        let popupExtent = DockView.isVertical ? PreviewController.contentHeight : PreviewController.contentWidth
+        if (primary < Math.min(center - half, popupStart)
+                || primary > Math.max(center + half, popupStart + popupExtent))
+            return false
+        let secondary = DockView.isVertical ? x - dockPanel.x : y - dockPanel.y
+        let restSpan = _secondarySpan(owner, 1)
+        let panelExtent = DockView.isVertical ? dockPanel.width : dockPanel.height
+        let overflow = DockView.animationOverflowHeight()
+        // A diagonal approach can leave the shrinking primary slot before
+        // the rough depth gate. Beyond the resting cell, retain the preview
+        // on a real hit-test miss while leaving every actual item clickable.
+        return DockView.edge === 1 || DockView.edge === 3
+            ? secondary < restSpan.near && secondary >= -overflow
+            : secondary > restSpan.far && secondary <= panelExtent + overflow
+    }
+
+    // Map root coordinates onto primary (along dock) and secondary (depth)
+    // coordinates for the shared hover/zoom hit test; -1 is outside its zone.
     function trackPointer(x, y) {
         // The context menu holds the zoom anchor (see _hoverHeld).
         if (_hoverHeld) return
+        let anchorX = dockPanel.mouseX
+        let anchorY = dockPanel.mouseY
+        let zoomActive = _zoomActive
+        let wasTransfer = _previewTransferActive
+        _previewTransferActive = false
         let zoomExtension = DockSettings.iconSize * (DockSettings.maxZoomFactor - 1.0)
 
         if (DockView.isVertical) {
@@ -563,11 +598,23 @@ Item {
             }
         }
         updateHoveredItem()
+        if (hoveredIndex < 0 && _inPreviewTransfer(x, y)) {
+            _previewTransferActive = true
+            dockPanel.mouseX = anchorX
+            dockPanel.mouseY = anchorY
+            _zoomActive = zoomActive
+            PreviewController.cancelHide()
+            return
+        }
+        if (wasTransfer)
+            PreviewController.hidePreviewDelayed()
+        if (PreviewController.visible && hoveredIndex === PreviewController.parentIndex)
+            PreviewController.cancelHide()
     }
 
     function updateHoveredItem() {
         // Geometry/scale callbacks must not move the held hover.
-        if (_hoverHeld) return
+        if (_hoverHeld || _previewTransferActive) return
         if (dockPanel.mouseX < 0) {
             hoveredIndex = -1
             hoveredName = ""
@@ -698,6 +745,7 @@ Item {
     // Pointer left the dock: release zoom and hover unless the preview keeps
     // them (dock→preview transition), and end a drag as a drag-out.
     function _pointerLeft() {
+        _previewTransferActive = false
         _pointerOnDock = false
         _hoverReconciling = false
         // Keep zoom state when preview is visible (dock→preview mouse transition)
@@ -1584,8 +1632,16 @@ Item {
     Connections {
         target: PreviewController
         function onVisibleChanged() {
+            let transferEnded = !PreviewController.visible && root._previewTransferActive
+            if (!PreviewController.visible)
+                root._previewTransferActive = false
             // The menu hold hides the preview; hover is reconciled on close.
             if (root._hoverHeld) return
+            if (transferEnded && !root.keyboardNavigating) {
+                dockPanel.mouseX = -1
+                dockPanel.mouseY = -1
+                root._zoomActive = false
+            }
             if (!PreviewController.visible && !root._pointerOnDock) {
                 // Preview closed and mouse not on dock → release zoom smoothly
                 dockPanel.mouseX = -1

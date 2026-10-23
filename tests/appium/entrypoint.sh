@@ -81,8 +81,11 @@ if [ -n "${KREMA_E2E_BINARY:-}" ]; then
 else
     mkdir -p /work
     t0=$(stamp)
+    # Ignore generated indexes and artifacts, including custom capture dirs:
+    # their active files can disappear during rsync and are not build inputs.
     rsync -a --delete \
-        --exclude '/.git/' --exclude '/build/' --exclude '/tests/appium/artifacts/' \
+        --exclude '/.git/' --exclude '/.codegraph/' --exclude '/build/' \
+        --exclude '/tests/appium/artifacts*/' \
         --exclude '__pycache__/' --exclude '.pytest_cache/' \
         /src/ /work/
     echo "[e2e] source sync: $(elapsed "$t0")s"

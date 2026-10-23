@@ -197,13 +197,6 @@ def _set_dnd_until(krema: Krema, until: datetime | None) -> None:
                 + "\n"
             )
 
-    receiver = bus.add_signal_receiver(
-        signal_received,
-        path_keyword="path",
-        interface_keyword="interface",
-        member_keyword="member",
-        sender_keyword="sender",
-    )
     before = {
         "event": "config-write",
         "timestamp_ns": time.monotonic_ns(),
@@ -213,6 +206,13 @@ def _set_dnd_until(krema: Krema, until: datetime | None) -> None:
         "config_path": str(config_path),
         "before": config_path.read_text() if config_path.exists() else None,
     }
+    receiver = bus.add_signal_receiver(
+        signal_received,
+        path_keyword="path",
+        interface_keyword="interface",
+        member_keyword="member",
+        sender_keyword="sender",
+    )
     try:
         try:
             result = subprocess.run(args, env=environment, check=True, capture_output=True, text=True)

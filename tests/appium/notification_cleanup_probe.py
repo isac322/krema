@@ -11,11 +11,16 @@ from __future__ import annotations
 
 import inspect
 import json
+import locale
 import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
+import uuid
+
+import dbus
+import dbus.lowlevel
 
 import pytest
 
@@ -26,6 +31,10 @@ class ScenarioFailure(AssertionError):
 
 MODE = os.environ.get("KREMA_CLEANUP_MODE", "healthy")
 RUN_DIR = Path(os.environ.get("KREMA_CLEANUP_RUN_DIR", ""))
+MALFORMED_CONFIG = b"\xff\xfe[DoNotDisturb]\n"
+PROBE_PATH = "/org/krema/CleanupProbe"
+PROBE_INTERFACE = "org.krema.CleanupProbe"
+PROBE_MEMBER = "LateReceiverToken"
 STATE = {
     "cleanup": False,
     "servers": [],
@@ -45,11 +54,16 @@ STATE = {
     "scenario_error": None,
     "module_reply": None,
     "item": None,
+    "fault_error": None,
+    "preferred_encoding": None,
+    "config_path": None,
+    "config_original": None,
+    "snapshot_oracles": [],
 }
 
 
 def pytest_collection_modifyitems(items):
-    if MODE not in {"healthy", "dnd-reset", "kded-wait", "original-error", "events-write", "sni-setup"}:
+    if MODE not in {"healthy", "dnd-reset", "kded-wait", "original-error", "events-write", "sni-setup", "dnd-snapshot"}:
         raise pytest.UsageError(f"Unknown KREMA_CLEANUP_MODE: {MODE}")
     if not RUN_DIR.is_absolute():
         raise pytest.UsageError("KREMA_CLEANUP_RUN_DIR must be a NEW absolute directory")
@@ -184,6 +198,8 @@ def _instrument(recorder):
             return real_dnd(krema, until)
         STATE["cleanup"] = True
         STATE["live_server_pids"] = [process.pid for process in STATE["servers"] if process.poll() is None]
+        if MODE == "dnd-snapshot":
+            return _malformed_snapshot(recorder, real_dnd, krema, until)
         if MODE == "events-write":
             path = STATE["evidence"] / "events.jsonl"
             path.mkdir()
@@ -202,6 +218,75 @@ def _instrument(recorder):
 
     recorder._fresh_server, recorder._stop_server, recorder._close = fresh, stop, close
     recorder._start_sni, recorder._set_dnd_until = start_sni, set_dnd
+
+
+def _malformed_snapshot(recorder, real_dnd, krema, until):
+    """Fail the real helper on its diagnostic snapshot, then oracle late DBus traces."""
+    config_path = Path(krema.environment()["XDG_CONFIG_HOME"]) / "plasmanotifyrc"
+    STATE["config_path"] = config_path
+    STATE["config_original"] = config_path.read_bytes() if config_path.exists() else None
+    STATE["preferred_encoding"] = locale.getpreferredencoding(False)
+    config_path.write_bytes(MALFORMED_CONFIG)
+    try:
+        return real_dnd(krema, until)
+    except UnicodeDecodeError as error:
+        STATE["fault_error"] = error
+        STATE["fault"] = f"{type(error).__name__}: {error}"
+        STATE["snapshot_oracles"].append(_late_receiver_oracle(recorder, "after-failed-helper"))
+        raise
+
+
+def _late_receiver_oracle(recorder, label):
+    """Emit a probe-only signal on the recorder's shared bus and count its dnd-config trace lines."""
+    token = f"{label}-{uuid.uuid4().hex}"
+    oracle = {"label": label, "token": token, "control_received": False}
+    trace = STATE["evidence"] / "dnd-config.jsonl"
+    seen = []
+    control = None
+    try:
+        bus = dbus.SessionBus()
+        control = bus.add_signal_receiver(
+            lambda value: seen.append(str(value)),
+            signal_name=PROBE_MEMBER,
+            dbus_interface=PROBE_INTERFACE,
+            path=PROBE_PATH,
+        )
+        message = dbus.lowlevel.SignalMessage(PROBE_PATH, PROBE_INTERFACE, PROBE_MEMBER)
+        message.append(token, signature="s")
+        bus.send_message(message)
+        bus.call_blocking("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetId", "", ())
+        recorder._pump_dbus()
+        oracle["control_received"] = token in seen
+    except Exception as error:
+        oracle["error"] = f"{type(error).__name__}: {error}"
+    finally:
+        if control is not None:
+            try:
+                control.remove()
+            except Exception as error:
+                oracle["control_remove_error"] = f"{type(error).__name__}: {error}"
+    try:
+        lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
+        oracle["leaked_trace_lines"] = [line for line in lines if token in line]
+        oracle["config_still_malformed"] = STATE["config_path"].read_bytes() == MALFORMED_CONFIG
+    except Exception as error:
+        oracle["read_error"] = f"{type(error).__name__}: {error}"
+    return oracle
+
+
+def _restore_config():
+    """Probe-only isolation after both oracles; restores the pre-fault plasmanotifyrc bytes."""
+    path, original = STATE["config_path"], STATE["config_original"]
+    if path is None:
+        return None
+    try:
+        if original is None:
+            path.unlink(missing_ok=True)
+        else:
+            path.write_bytes(original)
+        return {"path": str(path), "restored": "removed" if original is None else len(original)}
+    except Exception as error:
+        return {"path": str(path), "error": f"{type(error).__name__}: {error}"}
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -227,6 +312,8 @@ def _verify(call):
             failures.append(message)
 
     error = call.excinfo.value if call.excinfo else None
+    if MODE == "dnd-snapshot" and STATE["config_path"] is not None:
+        STATE["snapshot_oracles"].append(_late_receiver_oracle(STATE["item"].module, "before-verify"))
     try:
         metadata = json.loads((STATE["evidence"] / "metadata.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as artifact_error:
@@ -292,11 +379,34 @@ def _verify(call):
             "original-error": ("dnd-reset", "FileNotFoundError"),
             "kded-wait": ("kded-wait", "TimeoutExpired"),
             "events-write": ("events-write", "IsADirectoryError"),
+            "dnd-snapshot": ("dnd-reset", "UnicodeDecodeError"),
         }[MODE]
         check(any(entry.get("stage") == stage and kind in entry.get("error", "")
                   for entry in metadata.get("cleanup_errors", [])), f"metadata lacks {stage}/{kind}")
     else:
         check(metadata.get("cleanup_errors") == [], "unexpected cleanup errors")
+    config_restore = None
+    if MODE == "dnd-snapshot":
+        fault = STATE["fault_error"]
+        check(isinstance(fault, UnicodeDecodeError), "malformed snapshot did not raise UnicodeDecodeError "
+              f"(preferred encoding {STATE['preferred_encoding']})")
+        check(metadata.get("cleanup_errors") == [{"stage": "dnd-reset", "error": STATE["fault"]}],
+              "metadata must record exactly the original dnd-reset UnicodeDecodeError")
+        check(isinstance(error, RuntimeError) and repr(STATE["fault"]) in str(error),
+              "recorder error lost the original snapshot exception")
+        oracles = STATE["snapshot_oracles"]
+        check([oracle["label"] for oracle in oracles] == ["after-failed-helper", "before-verify"],
+              "late-receiver oracle did not run after the failed helper and before verification")
+        for oracle in oracles:
+            check(not any(key in oracle for key in ("error", "control_remove_error", "read_error")),
+                  f"late-receiver oracle {oracle['label']} errored")
+            check(oracle["control_received"], f"positive control missed token {oracle['label']}")
+            check(oracle.get("config_still_malformed") is True,
+                  f"config writer ran despite failed snapshot ({oracle['label']})")
+            check(oracle.get("leaked_trace_lines") == [],
+                  f"leaked DBus receiver traced late signal after failed helper ({oracle['label']})")
+        config_restore = _restore_config()
+        check(config_restore is not None and "error" not in config_restore, "probe could not restore plasmanotifyrc")
     return {
         "mode": MODE,
         "recording_call_outcome": "failed" if error else "passed",
@@ -322,6 +432,9 @@ def _verify(call):
         "move_away_calls": STATE["move_calls"],
         "verification_outcome": "failed" if failures else "passed",
         "failures": failures,
+        "preferred_encoding": STATE["preferred_encoding"],
+        "snapshot_oracles": STATE["snapshot_oracles"],
+        "config_restore": config_restore,
     }
 
 

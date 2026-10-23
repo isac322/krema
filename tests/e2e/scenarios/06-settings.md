@@ -990,10 +990,10 @@ waiting days or merely observing active DND on a newer Qt.
 **Regression tier:** The optional
 `tests/appium/notification_cleanup_probe.py` plugin exercises current-code
 acquisition and teardown failures: real kded module rejection during SNI
-setup, missing DND writer, kded wait timeout, original scenario failure, and
-event-artifact write failure. It must verify release of acquired resources,
-later cleanup and metadata writes, honest failed recording metadata, and
-preservation of the exact original exception. Load it explicitly with
+setup, missing DND writer, invalid diagnostic config bytes, kded wait timeout,
+original scenario failure, and event-artifact write failure. It must verify
+resource release, later cleanup and metadata writes, honest failed recording
+metadata, and preservation of the exact original exception. Load it explicitly with
 `-p notification_cleanup_probe`; it is not part of default collection or CI.
 Old/new source-comparison probes remain throwaway merge-evidence artifacts.
 

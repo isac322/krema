@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Bounded retained inactive notification history to 100 records while preserving active notifications and their unread counts.
 
 ### Fixed
-
+- Fixed a crash when dragging a .desktop file that is not an installed application (for example from the desktop or Downloads) onto the dock. Krema now ignores such files instead of closing. Launchers dragged from the application menu that point to a symlinked file, such as LibreOffice, are now pinned correctly
+- Fixed a crash when dragging a .desktop file from outside the application folders (for example from the desktop or Downloads) onto the dock. Krema now ignores such files instead of closing
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)

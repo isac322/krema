@@ -67,4 +67,12 @@ while [ ! -S "$XDG_RUNTIME_DIR/$socket" ]; do
     sleep 0.1
 done
 
-WAYLAND_DISPLAY="$socket" QT_QPA_PLATFORM=wayland "$@"
+test_status=0
+WAYLAND_DISPLAY="$socket" QT_QPA_PLATFORM=wayland "$@" || test_status=$?
+if [ "$test_status" -ne 0 ]; then
+    {
+        printf 'Test failed (exit %s); last 200 lines of kwin_wayland log:\n' "$test_status"
+        tail -n 200 "$KREMA_TEST_KWIN_LOG"
+    } >&2 || true
+fi
+exit "$test_status"

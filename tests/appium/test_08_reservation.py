@@ -80,7 +80,7 @@ def _observe(krema: Krema, win: TestWindow, with_icon: bool) -> dict:
         " output: w.output.name});"
     )
     if with_icon:
-        icon = wait_stable(lambda: krema.screen_rect(krema.wait_for_item(win.title)), duration=0.3)
+        icon = krema.screen_rect(krema.wait_for_item(win.title))
         observation["icon"] = list(icon)
         observation["icon_center"] = list(icon.center)
         observation["surface"] = list(krema.surface_rect("dock"))
@@ -114,14 +114,35 @@ def _record(krema: Krema, stage: str, observation: dict) -> None:
 def _geometry(krema: Krema, win: TestWindow, edge: int, reserved: bool, stage: str) -> dict:
     last = {}
 
-    def ready():
+    def observe():
         nonlocal last
-        last = _observe(krema, win, with_icon=False)
-        return last if _matches(last, edge, reserved) else None
+        last = _observe(krema, win, with_icon=reserved)
+        return last
+
+    def ready(observation):
+        if not _matches(observation, edge, reserved):
+            return False
+        if not reserved:
+            return True
+        frame, icon = Rect(*observation["frame"]), Rect(*observation["icon"])
+        surface = Rect(*observation["surface"])
+        inside = (
+            surface.x <= icon.x and icon.x + icon.width <= surface.x + surface.width
+            and surface.y <= icon.y and icon.y + icon.height <= surface.y + surface.height
+        )
+        clear = {
+            config.EDGE_TOP: frame.y >= icon.y + icon.height,
+            config.EDGE_BOTTOM: frame.y + frame.height <= icon.y,
+            config.EDGE_LEFT: frame.x >= icon.x + icon.width,
+            config.EDGE_RIGHT: frame.x + frame.width <= icon.x,
+        }[edge]
+        return inside and clear
 
     try:
-        wait_until(ready, timeout=8, message=lambda: f"{stage}: consumer frame/workarea reservation={reserved}, last={last}")
-        observation = wait_stable(lambda: _observe(krema, win, with_icon=False), duration=0.3)
+        # KWin's consumer frame, work area, surface and the slower AT-SPI item
+        # query must agree in every stable sample. A second unconstrained
+        # observation can otherwise land in the panel-probe handoff.
+        observation = wait_stable(observe, duration=0.3, timeout=8, accept=ready)
     except WaitTimeout:
         _record(krema, stage + "-failed", last)
         raise
@@ -129,7 +150,6 @@ def _geometry(krema: Krema, win: TestWindow, edge: int, reserved: bool, stage: s
     # Only ON needs an item comparison. In particular the OFF baseline fails
     # on actual consumer geometry, not because old code lacks the new UI row.
     if reserved:
-        observation = _observe(krema, win, with_icon=True)
         _record(krema, stage, observation)
         assert _matches(observation, edge, True), observation
         frame, icon = Rect(*observation["frame"]), Rect(*observation["icon"])
@@ -614,7 +634,7 @@ def test_prev_reservation_hover_popup_stays_inward_of_resting_dock_item(
     win = apps.open("Alpha", width=400, height=300)
     krema.wait_for_item("Alpha")
     _park()
-    rest = _observe(krema, win, with_icon=True)
+    rest = wait_stable(lambda: _observe(krema, win, with_icon=True), duration=0.3)
     icon = Rect(*rest["icon"])
     popup = pv.open_by_hover(krema, "Alpha")
     wait_until(

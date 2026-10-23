@@ -468,7 +468,40 @@ the required order is `[W0, L1, L2]`; launching B must produce
 startup task is a fixture failure, not a passing test. Ordinary window
 insertion alone does not exercise this transition.
 
-## 23. Bound QTimer arms and observe direct D-Bus owner replacement (2026-10, PR #128)
+## 23. Configure layer focus, then activate it through input (2026-10, native launch-order fixture)
+
+**Symptom:** Scratch phase traces twice showed the test layer remaining
+inactive for 15 seconds before `requestNewInstance()`.
+
+**Cause:** The fixture treated an `OnDemand` keyboard-interactivity setting
+as guaranteed activation. Layer-shell state is double-buffered, so a
+`None` to `OnDemand` flip may coalesce before a commit. The historical CI
+job's exact failure branch is unknown.
+
+**Fixture change:** Set `OnDemand` before showing the layer, send one real
+pointer gesture for every launch, and await `QWindow::isActive()` before
+requesting a launch. This deliberately removes the cached-active fast path:
+the gesture is a test-fixture synchronization/activation step, not a product
+behavior claim. For an inactive-layer case, activate an existing task and
+await a nonblocking `wl_display_sync` callback on Qt's same Wayland connection,
+alongside the task's active state and the layer's inactive state.
+
+**Regression setup ordering:** The added setup had a separate race:
+`IsActive` could already be true when `requestActivate()` queued its
+Wayland request. `QTest::qWaitFor()` could then return immediately without
+pumping events or flushing the request. Pointer input on another connection
+could reach KWin first; the delayed activation could then steal focus back.
+Enqueue the sync after the activation request and let Qt dispatch its
+callback on the GUI thread's default queue. The callback acknowledges that
+the server processed the preceding requests even when the cached state
+never changed. Require both that acknowledgement and the focus predicates
+within the existing deadline, without a blocking round trip.
+
+**Key lesson:** Focus configuration and compositor-acknowledged activation
+are separate prerequisites. A fixture activation failure does not establish
+a product defect.
+
+## 24. Bound QTimer arms and observe direct D-Bus owner replacement (2026-10, PR #128)
 
 **Symptoms:** On Qt 6.8.2, a 30-day DND deadline left the expiry timer inactive
 after a negative-interval warning. Direct notification-server replacement

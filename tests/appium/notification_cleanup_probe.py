@@ -36,7 +36,11 @@ STATE = {
     "move_calls": 0,
     "kded": None,
     "terminate_calls": 0,
+    "kill_calls": 0,
     "wait_calls": 0,
+    "wait_log": [],
+    "kill_log": [],
+    "kded_real": None,
     "fault": None,
     "scenario_error": None,
     "module_reply": None,
@@ -72,32 +76,40 @@ def _instrument(recorder):
         STATE["kded"] = process
         if process is None:
             return
-        real_terminate, real_wait = process.terminate, process.wait
+        real_terminate, real_kill, real_wait = process.terminate, process.kill, process.wait
+        STATE["kded_real"] = (real_kill, real_wait)
 
         def terminate():
             STATE["terminate_calls"] += 1
-            if MODE == "kded-wait":
+            if MODE == "kded-wait" and process.poll() is None:
                 os.kill(process.pid, signal.SIGSTOP)
                 pid, status = os.waitpid(process.pid, os.WUNTRACED)
                 if pid != process.pid or not os.WIFSTOPPED(status):
                     raise RuntimeError("owned kded did not enter SIGSTOP")
             return real_terminate()
 
+        def kill():
+            STATE["kill_calls"] += 1
+            STATE["kill_log"].append({"pid": process.pid, "returncode_before": process.returncode})
+            return real_kill()
+
         def wait(timeout=None):
             STATE["wait_calls"] += 1
-            if MODE != "kded-wait":
-                return real_wait(timeout=timeout)
+            induce = MODE == "kded-wait" and STATE["wait_calls"] == 1
+            entry = {"requested_timeout": timeout, "used_timeout": 0.05 if induce else timeout}
+            STATE["wait_log"].append(entry)
             try:
-                return real_wait(timeout=0.05)
-            except subprocess.TimeoutExpired as error:
-                STATE["fault"] = f"{type(error).__name__}: {error}"
+                entry["returncode"] = real_wait(timeout=entry["used_timeout"])
+            except Exception as error:
+                entry["error"] = f"{type(error).__name__}: {error}"
+                if induce and isinstance(error, subprocess.TimeoutExpired):
+                    STATE["fault"] = entry["error"]
+                    entry["alive_at_timeout"] = process.poll() is None
+                    entry["proc_state_at_timeout"] = _proc_state(process.pid)
                 raise
-            finally:
-                if process.poll() is None:
-                    os.kill(process.pid, signal.SIGCONT)
-                real_wait(timeout=5)
+            return entry["returncode"]
 
-        process.terminate, process.wait = terminate, wait
+        process.terminate, process.kill, process.wait = terminate, kill, wait
 
     def fresh(*args, **kwargs):
         process = real_fresh(*args, **kwargs)
@@ -227,16 +239,34 @@ def _verify(call):
     check(STATE["close_calls"] > 0, "tracked notification cleanup was skipped")
     check(STATE["move_calls"] == 1, "pointer cleanup was skipped or duplicated")
     processes = STATE["servers"]
+    server_returncodes = [process.poll() for process in processes]
     check(bool(processes), "no real notification servers were observed")
-    check(all(process.poll() is not None for process in processes), "owned notification server remains alive")
+    check(all(code is not None for code in server_returncodes), "owned notification server remains alive")
     check(set(STATE["live_server_pids"]) <= set(STATE["stopped_server_pids"]), "server cleanup was skipped")
     kded = STATE["kded"]
+    kded_returncode = kded.poll() if kded is not None else None
     if MODE in {"kded-wait", "sni-setup"}:
         check(kded is not None, "probe requires a real recorder-owned kded child")
     if kded is not None:
+        recorder_kill = MODE == "kded-wait"
         check(STATE["terminate_calls"] == 1, "kded termination was skipped or duplicated")
-        check(STATE["wait_calls"] == 1, "kded wait was skipped or duplicated")
-        check(kded.poll() is not None, "owned kded remains alive")
+        check(STATE["kill_calls"] == (1 if recorder_kill else 0), "recorder kded KILL was skipped, duplicated, or unexpected")
+        check(STATE["wait_calls"] == (2 if recorder_kill else 1), "kded wait was skipped or duplicated")
+        check(kded_returncode is not None, "owned kded remains alive")
+        if recorder_kill:
+            log = STATE["wait_log"]
+            first = log[0] if log else {}
+            check("TimeoutExpired" in first.get("error", "") and first.get("alive_at_timeout") is True
+                  and first.get("proc_state_at_timeout") == "T", "first kded wait did not time out on a stopped live child")
+            check([entry["pid"] for entry in STATE["kill_log"]] == [kded.pid]
+                  and STATE["kill_log"][0]["returncode_before"] is None, "recorder KILL did not target its live kded")
+            check(len(log) == 2 and log[1].get("returncode") == -signal.SIGKILL
+                  and log[1]["used_timeout"] == log[1]["requested_timeout"], "recorder did not reap its killed kded")
+            check(kded_returncode == -signal.SIGKILL, "owned kded did not exit by recorder SIGKILL")
+            check([entry.get("stage") for entry in metadata.get("cleanup_errors", [])] == ["kded-wait"],
+                  "kded-wait metadata must record exactly the initial kded-wait failure")
+    check(not any(entry.get("stage") in {"kded-kill", "kded-reap"} for entry in metadata.get("cleanup_errors", [])),
+          "unexpected kded kill/reap cleanup failure")
     failed_scenario = MODE in {"original-error", "sni-setup"}
     failed_cleanup = MODE not in {"healthy", "sni-setup"}
     check(metadata.get("outcome") == ("passed" if MODE == "healthy" else "failed"), "dishonest overall outcome")
@@ -275,18 +305,51 @@ def _verify(call):
         "fault_observed": STATE["fault"],
         "sni_module_reply": STATE["module_reply"],
         "notification_server_pids": [process.pid for process in processes],
-        "notification_servers_stopped": [process.poll() is not None for process in processes],
+        "notification_server_returncodes": server_returncodes,
+        "notification_servers_stopped": [code is not None for code in server_returncodes],
         "kded_pid": kded.pid if kded is not None else None,
-        "kded_stopped": kded.poll() is not None if kded is not None else None,
+        "kded_returncode": kded_returncode,
+        "kded_stopped": kded_returncode is not None if kded is not None else None,
+        "liveness_snapshot": "frozen before probe-only rescue; see probe-rescue.json",
         "recording_metadata": metadata,
         "sni_release_calls": STATE["release_calls"],
         "notification_close_calls": STATE["close_calls"],
         "kded_terminate_calls": STATE["terminate_calls"],
+        "kded_kill_calls": STATE["kill_calls"],
         "kded_wait_calls": STATE["wait_calls"],
+        "kded_wait_log": STATE["wait_log"],
+        "kded_kill_log": STATE["kill_log"],
         "move_away_calls": STATE["move_calls"],
         "verification_outcome": "failed" if failures else "passed",
         "failures": failures,
     }
+
+
+def _proc_state(pid):
+    try:
+        return Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0]
+    except (OSError, IndexError) as error:
+        return f"unavailable: {type(error).__name__}: {error}"
+
+
+def _rescue_owned():
+    """Probe-only isolation after the frozen oracle; never counted as recorder cleanup."""
+    owned = []
+    if STATE["kded"] is not None:
+        owned.append(("kded", STATE["kded"], *STATE["kded_real"]))
+    owned += [("notification-server", process, process.kill, process.wait) for process in STATE["servers"]]
+    actions = []
+    for role, process, kill, wait in owned:
+        if process.poll() is not None:
+            continue
+        action = {"role": role, "pid": process.pid, "action": "probe SIGKILL+reap"}
+        try:
+            kill()
+            action["returncode"] = wait(timeout=5)
+        except Exception as error:
+            action["error"] = f"{type(error).__name__}: {error}"
+        actions.append(action)
+    return {"scope": "probe isolation only; not recorder cleanup", "actions": actions}
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -300,7 +363,15 @@ def pytest_runtest_makereport(item, call):
     except Exception as error:
         result = {"mode": MODE, "verification_outcome": "failed", "failures": [f"verification failed: {error}"]}
     path = RUN_DIR / "verification.json"
-    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    finally:
+        rescue = _rescue_owned()
+        (RUN_DIR / "probe-rescue.json").write_text(json.dumps(rescue, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if rescue["actions"] and result["verification_outcome"] == "passed":
+        result["verification_outcome"] = "failed"
+        result["failures"].append("probe rescue found a live owned child after a passing oracle")
+        path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if result["verification_outcome"] == "passed":
         report.outcome, report.longrepr = "passed", None
         report.sections.append(("cleanup probe", f"Expected recorder outcome verified: {path}"))

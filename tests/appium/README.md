@@ -321,7 +321,7 @@ Use a new absolute `KREMA_CLEANUP_RUN_DIR` for each invocation and select one
 |---|---|
 | `healthy` | Complete the recording and all owned-resource cleanup normally. |
 | `dnd-reset` | Point the final reset at a nonexistent native writer; later cleanup and failed metadata must remain available. |
-| `kded-wait` | Stop the owned kded child, terminate it, and observe a real wait timeout; resume and reap that same child afterward. |
+| `kded-wait` | Stop the owned kded child, terminate it, and observe a real initial wait timeout while it is still alive and stopped; that timeout stays recorded as the only `kded-wait` cleanup error with failed metadata. The recorder itself must then send one SIGKILL to that same child and reap it with its own second wait, which returns `-SIGKILL` (two waits, one kill). |
 | `original-error` | Fail the scenario and then the real writer lookup; preserve the exact original exception. |
 | `events-write` | Create a directory/file collision at `events.jsonl`; still write honest failed metadata. |
 | `sni-setup` | Ask the real newly started kded to load a nonexistent module; release the acquired child before propagating its setup failure. |
@@ -333,6 +333,22 @@ failure, remaining cleanup, and artifact assertions pass; fault recording
 metadata must never be relabeled as successful. The plugin exercises current
 code only. Baseline source loading and old/new comparison scripts remain
 throwaway merge-evidence artifacts outside the repository.
+
+The probe saves the ownership and liveness snapshot in `verification.json`
+after the recorder's cleanup attempt and before any probe-rescue action.
+The `kded-wait` injection deliberately stops the owned child earlier.
+Any probe-only kill and reap of a child still alive afterwards is written
+separately to `<run-dir>/probe-rescue.json`; it is never counted as recorder
+cleanup and fails a run whose snapshot had passed.
+An earlier probe resumed and reaped kded inside its own wait wrapper, which
+hid a recorder that left its child alive after the timeout. With the corrected
+probe, the recorder before the KILL/reap fix failed `kded-wait`: one wait, no
+kill, kded still alive and stopped. After the fix, all six modes passed with
+no probe-rescue actions; `kded-wait` showed two waits, one recorder kill, and
+a `-SIGKILL` reap. A passing probe is not a passing recording: every fault-mode
+recording stays `failed`, and only `healthy` records `passed`. The
+`kded-kill`/`kded-reap` stages, including the reap still attempted after a kill
+error, are checked by source review only; no live mode injects those failures.
 
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`

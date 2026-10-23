@@ -507,6 +507,14 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
                 kded.wait(timeout=5)
             except Exception as error:
                 cleanup_error("kded-wait", error)
+                try:
+                    kded.kill()
+                except Exception as kill_error:
+                    cleanup_error("kded-kill", kill_error)
+                try:
+                    kded.wait(timeout=5)
+                except Exception as reap_error:
+                    cleanup_error("kded-reap", reap_error)
         for notification_id in tracked:
             try:
                 _close(notification_id)

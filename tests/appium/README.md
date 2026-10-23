@@ -244,6 +244,186 @@ tool bar is exposed and bottom-anchored, windows group into one dock item,
 a click activates a window, hover zooms, the Focus Dock shortcut focuses a
 dock button, and ScreenShot2 captures the rendered dock.
 
+### Notification video evidence
+
+`record_notifications.py` is an explicit recorder (it is not collected by the
+normal `test_*.py` suite). It reuses `test_12_notifications.py`'s real
+notification server and stimulus helpers and records this observable
+sequence:
+
+1. dock badge `2 → 1 → 0`;
+2. notification-server stop/start, then a direct owner-to-owner handover with
+   exactly one watcher registration and a badge from the replacement server;
+3. the debugger's real SNI `NeedsAttention → Active` transitions;
+4. a 30-day DND deadline, rewritten to a short deadline that expires on the
+   real wall clock, with suppressed and resumed attention; and
+5. Krema's local inbox `Unread → Read → Dismissed` states.
+
+The wrapper uses a real KWin Wayland session nested on Xvfb, so it does not need
+a DRM render node. Run it in an isolated Appium container with `Xvfb`,
+`xdotool`, `ffmpeg` (including the OpenH264 encoder), and `ffprobe` installed.
+Mount the source at `/src`, a writable artifact directory at `/artifacts`, and
+the built binaries at `/build/bin/krema` and
+`/build/bin/krema_notification_config_writer`. Build the latter with the
+`krema_notification_config_writer` test target. It writes a typed KConfig
+`QDateTime` with `KConfig::Notify`, syncs, then makes a blocking session-bus
+`org.freedesktop.DBus.GetId` call before exit so the framework notification
+cannot be lost with a short-lived CLI sender. The recorder uses the isolated
+Krema environment and fails if this helper is missing; it does not synthesize
+KConfig signals or fall back to another writer:
+
+```sh
+docker exec -e GITHUB_SHA="$(git rev-parse HEAD)" <capture-container> \
+  bash /src/tests/notification/record-visual-evidence.sh
+```
+
+The wrapper records live X11 frames with a visible cursor at real speed, then
+writes `notifications.mp4`, recording timestamps, binary checksum, revision,
+and video probe data. The scenario writes
+`visual-evidence/notifications/{events.jsonl,metadata.json,dnd-config.jsonl}`.
+SNI state is checked through the real dock description. DND requires observed
+tracker transitions and visual review of suppressed and resumed animation;
+elapsed time or a written `Until` value alone cannot pass.
+The capture does not advance the clock or prove the timer's internal interval;
+the Qt tracker tests cover safe long-deadline arming and early-timeout rearming.
+Cleanup attempts DND reset, SNI release, kded termination and wait, notification
+closure, server shutdown, pointer movement, and both artifact writes independently.
+Metadata separates `scenario_outcome` from `cleanup_outcome`; any cleanup error
+makes the overall outcome `failed`, without replacing an original scenario
+exception. A failed event-file write does not prevent the metadata attempt.
+
+**Optional cleanup regression probes:** `notification_cleanup_probe.py` is an
+explicit plugin for this recorder, not a `test_*.py` module or a default
+plugin. Load it with `-p notification_cleanup_probe`; do not add it to
+`conftest.py`, normal test collection, or CI environment variables.
+
+For a local real-capture probe, the fixed wrapper can forward that explicit
+plugin selection through a one-command `PYTEST_ADDOPTS` value:
+
+```sh
+docker exec -e GITHUB_SHA="$(git rev-parse HEAD)" \
+  -e PYTEST_ADDOPTS="-p notification_cleanup_probe" \
+  -e KREMA_CLEANUP_MODE=sni-setup \
+  -e KREMA_CLEANUP_RUN_DIR=/artifacts/cleanup-probes/sni-setup-1 \
+  <capture-container> bash /src/tests/notification/record-visual-evidence.sh
+```
+
+Never set this `PYTEST_ADDOPTS` value in CI or persist it in the environment.
+Within an already externally recorded X11/KWin setup, the corresponding
+explicit entrypoint arguments are
+`record_notifications.py -q -p notification_cleanup_probe`; retain the
+wrapper's capture environment rather than bypassing real capture.
+
+Use a new absolute `KREMA_CLEANUP_RUN_DIR` for each invocation and select one
+`KREMA_CLEANUP_MODE`:
+
+| Mode | Real stimulus and required result |
+|---|---|
+| `healthy` | Complete the recording and all owned-resource cleanup normally. |
+| `dnd-reset` | Point the final reset at a nonexistent native writer; later cleanup and failed metadata must remain available. |
+| `dnd-snapshot` | Put invalid UTF-8 in the final reset's diagnostic config snapshot; require a real `UnicodeDecodeError` and no late token traces while a control receiver confirms both signals arrived. Keep failed metadata and restore the original bytes only after the saved checks. |
+| `kded-wait` | Stop the owned kded child, terminate it, and observe a real initial wait timeout while it is still alive and stopped; that timeout stays recorded as the only `kded-wait` cleanup error with failed metadata. The recorder itself must then send one SIGKILL to that same child and reap it with its own second wait, which returns `-SIGKILL` (two waits, one kill). |
+| `original-error` | Fail the scenario and then the real writer lookup; preserve the exact original exception. |
+| `events-write` | Create a directory/file collision at `events.jsonl`; still write honest failed metadata. |
+| `sni-setup` | Ask the real newly started kded to load a nonexistent module; release the acquired child before propagating its setup failure. |
+
+`<run-dir>/verification.json` records the original recording result, metadata,
+owned process IDs and exit observations, and the probe verdict. A deliberate
+recording failure becomes a passing **probe** only when the exact expected
+failure, remaining cleanup, and artifact assertions pass; fault recording
+metadata must never be relabeled as successful. The plugin exercises current
+code only. Baseline source loading and old/new comparison scripts remain
+throwaway merge-evidence artifacts outside the repository.
+
+The probe saves the ownership and liveness snapshot in `verification.json`
+after the recorder's cleanup attempt and before any probe-rescue action.
+The `kded-wait` injection deliberately stops the owned child earlier.
+Any probe-only kill and reap of a child still alive afterwards is written
+separately to `<run-dir>/probe-rescue.json`; it is never counted as recorder
+cleanup and fails a run whose snapshot had passed.
+An earlier probe resumed and reaped kded inside its own wait wrapper, which
+hid a recorder that left its child alive after the timeout. With the corrected
+probe, the recorder before the KILL/reap fix failed `kded-wait`: one wait, no
+kill, kded still alive and stopped. After the fix, all six then-existing modes passed with
+no probe-rescue actions; `kded-wait` showed two waits, one recorder kill, and
+a `-SIGKILL` reap. A passing probe is not a passing recording: every fault-mode
+recording stays `failed`, and only `healthy` records `passed`. The
+`kded-kill`/`kded-reap` stages, including the reap still attempted after a kill
+error, are checked by source review only; no live mode injects those failures.
+
+**Optional Settings inbox cleanup probe:** `notification_inbox_cleanup_probe.py`
+targets only
+`test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`.
+Load it explicitly with `-p notification_inbox_cleanup_probe`; do not add it to
+default collection, `conftest.py`, or CI environment variables.
+Use a new absolute `KREMA_INBOX_CLEANUP_RUN_DIR` for each invocation.
+
+| `KREMA_INBOX_CLEANUP_MODE` | Stimulus |
+|---|---|
+| `healthy` | Complete the external-notification and local-inbox scenario normally. |
+| `cleanup-fault` | Send the Settings cleanup lookup under an unregistered WebDriver session ID, then restore the real ID. |
+| `original-error` | Fail after opening the Notifications page, then inject the same Settings cleanup lookup failure. |
+
+Inside the usual E2E container, run only the target test:
+
+```sh
+PYTEST_ADDOPTS="-p notification_inbox_cleanup_probe" \
+KREMA_INBOX_CLEANUP_MODE=cleanup-fault \
+KREMA_INBOX_CLEANUP_RUN_DIR=/artifacts/inbox-cleanup-probe/cleanup-fault-1 \
+tests/appium/entrypoint.sh \
+  test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle -rs
+```
+
+The probe records the original test result and server exit state in
+`verification.json` before any probe-only rescue. A pass requires the
+test-owned notification server to have exited by SIGTERM, preservation of
+the exact expected exception, and successful fixture teardown. When the
+scenario passed, the first cleanup error must still be raised. Any later
+probe-only kill and reap is recorded separately in `probe-rescue.json` and
+cannot justify a pass; `teardown.json` records the fixture result.
+
+If fixture setup fails, the probe records a failed verification when no
+call-phase snapshot is available. It leaves the pytest reports unchanged;
+a setup error must not cause another INTERNALERROR in the probe.
+Exercise this boundary in the E2E container with an executable that cannot
+start Krema. The command below expects the setup error and validates its
+failed probe result; it does not claim that Krema started successfully.
+
+```sh
+(
+  run_dir=/artifacts/inbox-cleanup-probe/setup-failure-1
+  set +e
+  PYTEST_ADDOPTS="-p notification_inbox_cleanup_probe" \
+  KREMA_E2E_BINARY=/usr/bin/true \
+  KREMA_INBOX_CLEANUP_MODE=healthy \
+  KREMA_INBOX_CLEANUP_RUN_DIR="$run_dir" \
+  tests/appium/entrypoint.sh \
+    test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle -rs
+  result=$?
+  set -e
+  test "$result" -eq 1
+  python3 - "$run_dir/verification.json" /artifacts/junit.xml <<'PY'
+import json
+import sys
+import xml.etree.ElementTree as ET
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    verification = json.load(stream)
+assert verification["verification_outcome"] == "failed"
+cases = list(ET.parse(sys.argv[2]).getroot().iter("testcase"))
+assert len(cases) == 1
+assert cases[0].get("name") == "test_not001_external_watcher_badge_close_and_local_inbox_lifecycle"
+assert len(cases[0].findall("error")) == 1
+PY
+)
+```
+
+The session wrapper can collapse different pytest failure codes to exit 1.
+The failed JSON result is therefore essential: the unfixed probe also exited
+1 through the wrapper, but raised an INTERNALERROR and wrote no verification.
+Use a new run directory for this check, as for the other probe invocations.
+
+
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
 automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.
 `test_08_reservation.py` adds the real maximized-window geometry checks.
@@ -314,6 +494,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | PREV-006 | `test_03_preview.py::test_prev006_single_window_preview` | screenshot, AT-SPI | pass |
 | PREV-007 | `test_03_preview.py::test_prev007_opening_preview_announces_window_count` | AT-SPI event | pass |
 | QA-PREV-01 | `test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` | AT-SPI, KWin, real input | pass (pre-fix failed at 33 ms; fixed 1/1) |
+| QA-PREV-02 | `test_03_preview.py::test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`) | AT-SPI, KWin geometry/cursor, W3C element origin | pass on arm64 Fedora 44 and Leap 16.0: both new cases failed before the webdriver patch and passed after; PREV-003/005 stayed passing |
 | CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`, `test_ctx001_about_krema_is_the_fifth_entry`, `test_ctx001_quit_is_the_last_entry` | KWin | pass |
 | CTX-002 | `test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes` | AT-SPI, kremarc | pass |
 | CTX-003 | `test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app`, `test_ctx003_unpinned_running_app_stays_until_it_closes` | AT-SPI, kremarc | pass |
@@ -647,6 +828,16 @@ a match is dropped only when its object has left the tree.
 Geometry. On Wayland, AT-SPI rects (`element.rect`, `Rect.of(element)`) are
 relative to the element's surface. The surface's screen position comes from
 KWin: the krema window whose client size equals the surface's AT-SPI frame.
+
+libatspi can retain an interface list read while a Qt popup was hidden.
+If that list lacks Component, geometry reads can keep failing after the
+popup opens. The webdriver patch (`tools/component-interface-cache.patch`)
+refreshes that one object's cache only on a negative Component lookup,
+before an element rect or an element pointer origin is read.
+It uses `clear_cache_single` (at-spi2-core 2.50 or later). Positive
+Component entries are kept: their calls still read live geometry, including
+the existing hidden-popup 0x0 result. If the refreshed lookup still lacks
+Component, the original error propagates.
 
 | Member | Description |
 |---|---|

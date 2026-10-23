@@ -33,7 +33,7 @@ family_runtime() {
         noto-fonts ttf-dejavu \
         kwrite kfind \
         ruby \
-        python python-pip python-flask python-lxml python-gobject python-numpy \
+        python python-pip python-flask python-lxml python-gobject python-dbus python-numpy \
         python-pytest python-pillow gtk3 \
         procps-ng findutils gawk libcap psmisc
     rm -rf /var/cache/pacman/pkg/*

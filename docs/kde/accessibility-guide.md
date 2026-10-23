@@ -61,6 +61,12 @@ Layer-shell surfaces do **not** participate in the system Tab chain. They cannot
 - Manage internal focus chain manually with `Keys.onPressed`
 - Exit focus mode returns to the previous application
 
+After focusing Krema, Menu opens the selected app's actions; Shift+F10 or
+Shift+Menu opens dock settings and actions even with a task selected. On an
+empty dock, Menu also opens dock actions. The toolbar's accessible description
+announces these keys. `Qt::Key_Menu`, `Qt::Key_F10`, and `Qt::ShiftModifier`
+were verified in `/usr/include/qt6/QtCore/qnamespace.h`.
+
 ## AT-SPI2 Architecture
 
 ```

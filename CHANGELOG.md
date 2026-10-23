@@ -17,11 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Moved Settings and About Krema into the dock-only context menu, keeping application menus focused on the clicked app (#130)
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
 - Bounded retained inactive notification history to 100 records while preserving active notifications and their unread counts.
 
 ### Fixed
 
+- Kept dock settings and actions accessible from keyboard navigation with Shift+F10 or Shift+Menu, including on populated docks (#130)
+- Moved the dock's quit action out of application context menus into an empty-area dock menu and renamed it "Quit Krema", preventing it from being mistaken for closing the clicked app (#130)
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Notification badges now react immediately when notifications are cleared locally, use canonical case-insensitive desktop identities without fuzzy last-segment matching, and retain watcher metadata and close reasons while distinguishing directed closes from broadcast reasons
 - Local notification clearing now removes only the dock's unread contribution while keeping the server-active lifecycle until KDE reports a close.

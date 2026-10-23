@@ -78,7 +78,7 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Dock visible.
 **Steps:**
-1. Right-click a dock item → context menu appears
+1. Right-click empty dock space → dock context menu appears
 2. Choose "Settings..."
 3. Wait 1500ms (settings window creation)
 4. Check the window list — krema window count increased
@@ -262,8 +262,8 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Dock visible. Run on Debian 13 or Ubuntu 25.04 as well (Qt 6.8, KF 6.13).
 **Steps:**
-1. Right-click the dock → "Settings...", then immediately right-click the dock → "Quit"
-2. Start Krema again, open "Settings...", wait until the window is drawn, then right-click the dock → "Quit"
+1. Right-click empty dock space → "Settings...", then immediately right-click empty dock space → "Quit Krema"
+2. Start Krema again, open "Settings...", wait until the window is drawn, then right-click empty dock space → "Quit Krema"
 
 **Expected:**
 - Krema exits normally both times (exit status 0, no crash report)

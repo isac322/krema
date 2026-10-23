@@ -5,13 +5,15 @@
 - ctx-new-instance: Launch new instance from menu
 - ctx-close: Close all windows of the app
 - ctx-settings: Open settings dialog from menu
-- ctx-quit: Quit Krema from menu
+- ctx-quit: Quit Krema from the empty-area dock menu only
 - ctx-app-name: App name shown as header in menu
 - ctx-task-zones: Pin and unpin live tasks between zones without duplicate dock items
 - ctx-desktop-actions: The app's .desktop file actions (e.g. "New Private Window") launch from the menu
 - ctx-hover-hold: Hovered item keeps its zoom and its window preview stays closed while the menu is open
+- ctx-keyboard-dock: Shift+F10 or Shift+Menu opens dock actions during keyboard navigation
 
 ## Affected Files
+- src/shell/dockshell.cpp
 - src/models/dockcontextmenu.h
 - src/models/dockcontextmenu.cpp
 - src/models/dockactions.h
@@ -53,19 +55,66 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 - Menu header shows app name
 - Menu items (top to bottom): AppName, [the app's .desktop actions, then a
   separator — only when the app declares visible actions, see CTX-008],
-  Pin/Unpin, New Instance, Close, separator, Settings..., About Krema, Quit
+  Pin/Unpin, New Instance, Close
+- Settings..., About Krema, Quit, and Quit Krema never appear in an application's menu
 
 **Menu item positions** (approximate y-offsets from menu top):
 - AppName: +0px
 - Pin to Dock / Unpin: +25px
 - New Instance: +57px
 - Close: +90px
-- Settings...: +123px
-- About Krema: +158px
-- Quit: +180px
 
 **Verification:** screenshot only (menu visible with expected entries)
-**Automated:** tests/appium/test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item, tests/appium/test_04_context_menu.py::test_ctx001_about_krema_is_the_fifth_entry, tests/appium/test_04_context_menu.py::test_ctx001_quit_is_the_last_entry (entry order is verified by effect for every enabled position; the header label text itself is not read since QMenu is not in AT-SPI — its presence as a disabled row is verified by the keyboard highlight skipping it)
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item (QMenu is outside AT-SPI). tests/integration/test_settings_lifecycle.cpp [context-menu] checks native task menus exclude all dock-wide actions.
+
+---
+
+## TC CTX-010: Empty Dock Space Opens Dock Actions
+
+**Precondition:** Dock visible; repeat with a running app and an empty dock.
+**Steps:**
+1. Right-click empty dock padding (or the separator between pinned and running apps).
+2. Verify the native menu lists Settings..., About Krema, separator, Quit Krema.
+3. Dismiss with Escape; verify the dock resumes its normal hover/visibility behavior.
+4. Reopen and select Settings...; verify the settings window opens. Repeat with About Krema and verify the About page opens.
+5. Reopen and select Quit Krema.
+
+**Expected:**
+- Empty space opens dock actions, even without any app icons.
+- The menu keeps the dock visible until dismissed, just like a task menu.
+- Quit Krema exits the dock cleanly and leaves application windows untouched.
+- App icons still open their own menus, with no quit action.
+- Pointer routing works at all four edges, including after keyboard navigation.
+
+**Verification:** Native menu labels, settings window, dock exit status, remaining app windows.
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu (empty/running-app variants), ::test_ctx010_about_krema_is_the_second_dock_entry, ::test_ctx006_settings_entry_opens_the_settings_window; tests/integration/test_settings_lifecycle.cpp [context-menu] (native labels, task/background pointer routing, interaction lock); tests/qml/tst_dock_main.qml::test_rightClickRoutesToTaskOrDock (four edges, keyboard selection), ::test_emptyDockRightClick. Docker E2E and visual evidence remain pending until run/captured.
+
+---
+
+## TC CTX-011: Keyboard Access to Dock Actions
+
+**Steps:**
+1. Focus the dock with Meta+Alt+D, first with apps present, then with no icons.
+2. Press Shift+F10 (or Shift+Menu).
+3. Choose Settings... using Down, Return.
+4. Repeat and dismiss with Escape; on a populated dock, press Menu without Shift.
+
+**Expected:** The dock menu opens and Settings is reachable without a mouse, regardless of task count. Menu without Shift retains application actions for a focused task and opens dock actions when the dock is empty.
+
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx011_keyboard_opens_dock_settings; tests/qml/tst_dock_main.qml::test_keyboardMenus (empty and populated variants); tests/integration/test_settings_lifecycle.cpp [context-menu][keyboard] (idle empty dock receives compositor focus).
+
+## TC CTX-012: Dock Menu After Hover Zoom
+
+**Steps:**
+1. Show two pinned launchers and hover the leading launcher until it magnifies.
+2. Leave the entire dock surface and wait for hover zoom to retract.
+3. Approach the leading inner padding from the desktop side and right-click.
+4. Select Settings..., then check both the settings window and saved pins.
+5. Repeat for Parabolic and In place zoom, spacing 0/4/64, and all four edges.
+
+**Expected:** The dock menu opens and Settings appears; application pinning is unchanged. The click remains inside the panel but outside delegate hit spans, including the secondary span when wide spacing expands a primary hit slot. If clearing hover auto-hides the dock, restore visibility without keyboard-selecting an icon before approaching the padding.
+
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx012_padding_after_zoom_opens_dock_settings (24 pointer-interaction cases); tests/appium/test_context_menu_geometry.py (inner padding and neutral-point constraints).
 
 ---
 
@@ -151,7 +200,7 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 
 **Precondition:** Dock visible.
 **Steps:**
-1. Right-click on any dock item (CTX-001 steps)
+1. Right-click empty dock space (CTX-010 steps)
 2. Choose "Settings..." (keyboard, or click its position on a screenshot)
 3. Wait 1500ms (settings window creation)
 4. Check the window list — a krema settings window appears
@@ -238,7 +287,7 @@ window, so it is a task with a window preview.
 2. Right-click without moving the pointer and wait for the menu.
 3. Watch the item and the preview for about 1.5 s while the menu is open.
 4. Press Escape without moving the pointer.
-5. Repeat steps 1-2, then click "Settings..." in the menu with the pointer, so
+5. Repeat steps 1-2, then click "New Instance" in the menu with the pointer, so
    the menu closes with the pointer off the dock.
 
 **Expected:**
@@ -250,6 +299,9 @@ window, so it is a task with a window preview.
   its preview reopens after the normal hover delay.
 - After the menu closes with the pointer off the dock, every item returns to
   its rest size and the preview stays closed, like a normal pointer exit.
+- New Instance opens a second window of the targeted app. Its single-window
+  title becomes the grouped app name; the zoom check follows that same slot
+  under its new name after launch feedback ends. The extra window is cleaned up.
 - Variant: Krema starts while no mouse is connected (the seat has no pointer)
   and the mouse is connected afterwards. Already the first menu closed with
   Escape over a hovered item keeps its zoom, like the second one.

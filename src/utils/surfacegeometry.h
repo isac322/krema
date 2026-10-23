@@ -47,12 +47,7 @@ inline int animationOverflowHeight(int iconSize, int padding, double maxZoomFact
 
 /// Total surface height including dock, inward animation / tooltip / shadow reserve,
 /// outward shadow / floating reserve, and the dock content.
-inline int surfaceHeight(int iconSize,
-                         int padding,
-                         double maxZoomFactor,
-                         int tooltipReserve,
-                         int floatingPadding,
-                         int shadowOverflow = 0)
+inline int surfaceHeight(int iconSize, int padding, double maxZoomFactor, int tooltipReserve, int floatingPadding, int shadowOverflow = 0)
 {
     const int dockHeight = iconSize + padding * 2;
     const int overflow = animationOverflowHeight(iconSize, padding, maxZoomFactor);

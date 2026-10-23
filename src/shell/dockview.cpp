@@ -299,7 +299,7 @@ void DockView::setScreenSettings(ScreenSettings *screenSettings)
 int DockView::panelBarHeight() const
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
-    return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
+    return krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), shadowOverflow(), 0);
 }
 
 DockPlatform *DockView::platform() const
@@ -371,11 +371,7 @@ void DockView::updateSize()
     // Reserve the panel bar and any extra inward shadow offset when
     // screen-space reservation is enabled. While measuring from panels the
     // reservation starts past theirs.
-    const int exclusiveZone = krema::screenReserveDepth(iconSize,
-                                                         s_padding,
-                                                         floatingPadding(),
-                                                         shadowOverflow,
-                                                         m_panelInset.reserved);
+    const int exclusiveZone = krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), shadowOverflow, m_panelInset.reserved);
     m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? exclusiveZone : 0);
 
     if (m_visibilityController) {

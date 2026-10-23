@@ -83,7 +83,7 @@ public:
     /// Update the dock edge and recalculate surface size.
     void setEdge(DockPlatform::Edge edge);
 
-    /// Height of the visible panel bar + floating padding (excludes zoom overflow),
+    /// Height of the visible panel bar + floating/shadow offset (excludes zoom overflow),
     /// measured from the screen edge, so it includes the panel inset.
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;

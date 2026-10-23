@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Dock shadows no longer clipped at low light heights, and window previews followed the panel's shadow inset on every dock edge (#118)
+- Dock shadows no longer clipped at low light heights, and window previews followed the panel's shadow inset on every dock edge and stayed interactive after live shadow changes (#118)
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)

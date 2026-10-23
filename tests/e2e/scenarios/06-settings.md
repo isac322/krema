@@ -31,6 +31,7 @@
 - src/qml/settings/LayoutPage.qml
 - src/qml/settings/PanelStylePage.qml
 - src/qml/settings/ShadowPage.qml
+- src/qml/shadowgeometry.js
 - src/qml/settings/AnimationsPage.qml
 - src/qml/settings/MonitorsPage.qml
 - src/qml/settings/BehaviorPage.qml
@@ -49,6 +50,7 @@
 - src/shell/settingswindow.h
 - src/shell/settingswindow.cpp
 - src/shell/dockshell.cpp
+- src/shell/previewcontroller.cpp
 - src/shell/dockview.h
 - src/shell/dockview.cpp
 - src/platform/kwinpanelwatcher.h
@@ -606,6 +608,15 @@ on, dock visible.
    the Shadow group above the expander.
 7. Turn "Enable shadow" off. Verify the 3D scene and the controls below the
    switch are hidden and the dock shadow disappears.
+8. Enable shadow with Light X=0, Light Y=-150, Light height=100, Panel
+   elevation=15, and Light radius=5. Verify the dock and Result inset have
+   continuous shadow edges. Repeat with high light height as a control.
+9. On bottom and right docks, open a window preview with screen reservation
+   and floating disabled. Increase the shadow inset while keeping the pointer
+   in the preview's overlapping area. Verify the preview follows the panel;
+   its newly exposed edge receives input and its transparent surroundings do
+   not. Repeat with settings that constrain the preview surface depth, then
+   hide the preview and verify its surface stops intercepting pointer input.
 
 **Expected:**
 - Scene drags, wheel input, advanced sliders, the "Result" inset, and the
@@ -613,11 +624,19 @@ on, dock visible.
 - Values persist in `kremarc` (`ShadowLightX`, `ShadowLightY`,
   `ShadowLightZ`, `ShadowLightRadius`, `ShadowElevation`,
   `ShadowIntensity`).
+- Low light heights retain projected shadow edges on every dock edge.
+- Preview positioning and input regions follow live shadow settings and
+  native surface resizes, even when popup content dimensions stay unchanged.
 
 **Verification:** AT-SPI (slider values, "Light position" description,
 expander description), screenshot (3D scene, "Result" inset, dock shadow),
 `kremarc`.
-**Automated:** none (manual).
+**Automated:** `qml_tst_shadow_geometry` covers low-height, extreme valid,
+and high-height control projection; `qml_tst_dock_main` covers panel placement
+on all edges; `krema_preview_tests` cases "Preview margins follow the
+shadow-inset panel on every edge" and "Visible preview input follows shadow
+and native surface resizes" cover live preview geometry and input masks.
+Scene gestures and advanced-control persistence remain manual checks.
 
 ---
 

@@ -498,6 +498,10 @@ void PreviewController::updateEdge()
     }
     applyEdgeLayout();
     if (m_previewView->isVisible()) {
+        // Shadow and edge changes can resize the native surface without
+        // changing the popup content. Rebuild the mask so the popup's new
+        // position remains interactive after that resize.
+        updateInputRegion();
         m_previewView->update();
     }
 }

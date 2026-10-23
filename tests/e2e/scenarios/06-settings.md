@@ -997,6 +997,15 @@ preservation of the exact original exception. Load it explicitly with
 `-p notification_cleanup_probe`; it is not part of default collection or CI.
 Old/new source-comparison probes remain throwaway merge-evidence artifacts.
 
+`tests/appium/notification_inbox_cleanup_probe.py` separately checks the
+NOT-001 test's own cleanup. An unregistered session ID makes the real
+WebDriver server reject the Settings cleanup lookup. The test must still
+stop its notification server and preserve an earlier scenario exception;
+without an earlier exception, it must raise the cleanup error. The probe
+saves its server-exit and exception checks before any rescue, and requires
+fixture teardown to pass. Load it only with
+`-p notification_inbox_cleanup_probe`; it is not a default test or CI plugin.
+
 **Automated:** `tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`
 uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`
 and real pointer/AT-SPI interaction with the Notifications settings page.

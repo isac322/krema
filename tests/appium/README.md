@@ -350,6 +350,37 @@ recording stays `failed`, and only `healthy` records `passed`. The
 `kded-kill`/`kded-reap` stages, including the reap still attempted after a kill
 error, are checked by source review only; no live mode injects those failures.
 
+**Optional Settings inbox cleanup probe:** `notification_inbox_cleanup_probe.py`
+targets only
+`test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`.
+Load it explicitly with `-p notification_inbox_cleanup_probe`; do not add it to
+default collection, `conftest.py`, or CI environment variables.
+Use a new absolute `KREMA_INBOX_CLEANUP_RUN_DIR` for each invocation.
+
+| `KREMA_INBOX_CLEANUP_MODE` | Stimulus |
+|---|---|
+| `healthy` | Complete the external-notification and local-inbox scenario normally. |
+| `cleanup-fault` | Send the Settings cleanup lookup under an unregistered WebDriver session ID, then restore the real ID. |
+| `original-error` | Fail after opening the Notifications page, then inject the same Settings cleanup lookup failure. |
+
+Inside the usual E2E container, run only the target test:
+
+```sh
+PYTEST_ADDOPTS="-p notification_inbox_cleanup_probe" \
+KREMA_INBOX_CLEANUP_MODE=cleanup-fault \
+KREMA_INBOX_CLEANUP_RUN_DIR=/artifacts/inbox-cleanup-probe/cleanup-fault-1 \
+tests/appium/entrypoint.sh \
+  test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle -rs
+```
+
+The probe records the original test result and server exit state in
+`verification.json` before any probe-only rescue. A pass requires the
+test-owned notification server to have exited by SIGTERM, preservation of
+the exact expected exception, and successful fixture teardown. When the
+scenario passed, the first cleanup error must still be raised. Any later
+probe-only kill and reap is recorded separately in `probe-rescue.json` and
+cannot justify a pass; `teardown.json` records the fixture result.
+
 
 The scenario suites `test_01_keyboard_nav.py` … `test_07_visibility.py`
 automate the manual checklists in `tests/e2e/scenarios/0[1-7]-*.md`.

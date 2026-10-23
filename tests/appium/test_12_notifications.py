@@ -217,12 +217,27 @@ def test_not001_external_watcher_badge_close_and_local_inbox_lifecycle(
             "a dismissed notification remains active until the server closes it"
         )
     finally:
+        scenario_error = sys.exc_info()[1]
+        cleanup_errors: list[Exception] = []
+
+        def cleanup_failed(stage: str, error: Exception) -> None:
+            cleanup_errors.append(error)
+            print(f"NOT-001 cleanup failed ({stage}): {type(error).__name__}: {error}", file=sys.stderr)
+
         for notification_id in tracked_ids:
             try:
                 _close(notification_id)
             except (OSError, subprocess.CalledProcessError):
                 pass
-        if krema.settings() is not None:
-            close_settings(krema)
+        try:
+            if krema.settings() is not None:
+                close_settings(krema)
+        except Exception as error:
+            cleanup_failed("settings-close", error)
         if server is not None:
-            _stop_server(server)
+            try:
+                _stop_server(server)
+            except Exception as error:
+                cleanup_failed("notification-server-stop", error)
+        if cleanup_errors and scenario_error is None:
+            raise cleanup_errors[0]

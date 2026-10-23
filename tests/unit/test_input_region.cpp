@@ -7,6 +7,34 @@
 
 TEST_CASE("Dock input region computation", "[input-region]")
 {
+    SECTION("Visible hovered region includes animated bounce reserve")
+    {
+        krema::InputRegionParams p{};
+        p.surfaceWidth = 1920;
+        p.surfaceHeight = 128;
+        p.panelX = 800;
+        p.panelY = 80;
+        p.panelWidth = 320;
+        p.panelHeight = 40;
+        p.zoomOverflowHeight = 48; // animationOverflowHeight(48, 8, 1.6)
+        p.visible = true;
+        p.hovered = true;
+
+        p.edge = 1;
+        QRegion bottom = krema::computeDockInputRegion(p);
+        REQUIRE(bottom.contains(QPoint(960, 29))); // 48 px reserve + margin
+
+        p.surfaceWidth = 128;
+        p.surfaceHeight = 1080;
+        p.panelX = 80;
+        p.panelY = 400;
+        p.panelWidth = 40;
+        p.panelHeight = 320;
+        p.edge = 3;
+        QRegion right = krema::computeDockInputRegion(p);
+        REQUIRE(right.contains(QPoint(29, 500))); // 48 px reserve + margin
+    }
+
     SECTION("Hidden: only trigger strip")
     {
         krema::InputRegionParams p{};

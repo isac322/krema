@@ -8,6 +8,8 @@
 // surface as the session-bus callbacks without depending on a particular
 // notification server implementation or its transient notification state.
 
+#include "../notification/fixtures/dbuspeers.h"
+
 #include "models/notificationtracker.h"
 
 #include <catch2/catch_session.hpp>
@@ -15,16 +17,26 @@
 
 #include <KConfigGroup>
 #include <KSharedConfig>
+#include <settings.h>
+#include <server.h>
 
+#include <QAbstractEventDispatcher>
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusInterface>
+#include <QDBusMessage>
+#include <QDBusReply>
+#include <QDBusServiceWatcher>
 #include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTest>
+#include <QTimer>
 #include <QVariant>
 #include <QVariantMap>
 #include <functional>
+#include <limits>
 
 namespace
 {
@@ -469,6 +481,420 @@ TEST_CASE("Notification model retains broadcast close reason", "[notification][m
     CHECK(tracker.notifications(QStringLiteral("org.example.closer")).size() == 1);
     CHECK(roleValue(&tracker, 0, "broadcastReason").toUInt() == 2);
     CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("broadcast-dismissed"));
+}
+
+TEST_CASE("Notification watcher receives real D-Bus transport and lifecycle signals", "[notification][dbus][transport]")
+{
+    krema::test::NotificationServerPeer server;
+    REQUIRE(server.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return server.registerWatcherCalls() >= 1;
+    }));
+
+    REQUIRE(server.sendNotify(QStringLiteral("Fixture Mail"),
+                              900,
+                              0,
+                              QStringLiteral("org.example.fixture"),
+                              QStringLiteral("Initial"),
+                              QStringLiteral("Initial body"),
+                              {QStringLiteral("open"), QStringLiteral("Open")},
+                              5000,
+                              1));
+    REQUIRE(waitFor([&] {
+        return tracker.rowCount() == 1 && tracker.unreadCount(QStringLiteral("org.example.fixture")) == 1;
+    }));
+    CHECK(roleValue(&tracker, 0, "summary").toString() == QStringLiteral("Initial"));
+
+    REQUIRE(server.sendNotify(QStringLiteral("Fixture Mail"),
+                              901,
+                              900,
+                              QStringLiteral("org.example.fixture"),
+                              QStringLiteral("Replacement"),
+                              QStringLiteral("Replacement body")));
+    REQUIRE(waitFor([&] {
+        return tracker.rowCount() == 2 && tracker.unreadCount(QStringLiteral("org.example.fixture")) == 1;
+    }));
+    CHECK(roleValue(&tracker, 0, "closeReason").toString() == QStringLiteral("replaced"));
+    CHECK(roleValue(&tracker, 1, "id").toUInt() == 901);
+
+    REQUIRE(server.sendClose(901));
+    REQUIRE(waitFor([&] {
+        return tracker.notifications(QStringLiteral("org.example.fixture"), true).isEmpty();
+    }));
+    CHECK(roleValue(&tracker, 1, "closeReason").toString() == QStringLiteral("directed"));
+
+    REQUIRE(server.sendNotify(QStringLiteral("Fixture Mail"), 902, 0, QStringLiteral("org.example.fixture")));
+    REQUIRE(waitFor([&] {
+        return tracker.unreadCount(QStringLiteral("org.example.fixture")) == 1;
+    }));
+    REQUIRE(server.broadcastClose(902, 1));
+    REQUIRE(waitFor([&] {
+        return tracker.notifications(QStringLiteral("org.example.fixture"), true).isEmpty();
+    }));
+    CHECK(roleValue(&tracker, 2, "broadcastReason").toUInt() == 1);
+    CHECK(roleValue(&tracker, 2, "closeReason").toString() == QStringLiteral("broadcast-expired"));
+}
+
+TEST_CASE("Notification watcher re-registers after notification service owner loss", "[notification][dbus][lifecycle]")
+{
+    krema::test::NotificationServerPeer server;
+    REQUIRE(server.start());
+
+    ScopedTracker scoped;
+    REQUIRE(waitFor([&] {
+        return server.registerWatcherCalls() >= 1;
+    }));
+
+    server.stop();
+    REQUIRE(waitFor([&] {
+        return !server.isRegistered();
+    }));
+    REQUIRE(server.start());
+    REQUIRE(waitFor([&] {
+        return server.registerWatcherCalls() >= 2;
+    }));
+}
+
+TEST_CASE("Notification watcher re-registers once after gapless service owner replacement", "[notification][dbus][lifecycle][owner-handover]")
+{
+    krema::test::NotificationServerPeer original;
+    REQUIRE(original.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return original.registerWatcherCalls() == 1;
+    }));
+    REQUIRE(original.sendNotify(QStringLiteral("Original"), 950, 0, QStringLiteral("org.example.handover")));
+    REQUIRE(waitFor([&] {
+        return tracker.unreadCount(QStringLiteral("org.example.handover")) == 1;
+    }));
+
+    auto bus = QDBusConnection::sessionBus();
+    const QString service = QStringLiteral("org.freedesktop.Notifications");
+    const QString oldOwner = bus.interface()->serviceOwner(service).value();
+    REQUIRE_FALSE(oldOwner.isEmpty());
+    QDBusServiceWatcher owners(service, bus, QDBusServiceWatcher::WatchForOwnerChange);
+    QSignalSpy ownerChanges(&owners, &QDBusServiceWatcher::serviceOwnerChanged);
+    const QString connectionName = QStringLiteral("notification-owner-replacement");
+    const auto replacementBus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, connectionName);
+    const auto disconnect = qScopeGuard([&] {
+        QDBusConnection::disconnectFromBus(connectionName);
+    });
+    REQUIRE(replacementBus.isConnected());
+    krema::test::NotificationServerPeer replacement(replacementBus);
+    REQUIRE(replacement.start(true));
+    const QString newOwner = bus.interface()->serviceOwner(service).value();
+    REQUIRE_FALSE(newOwner.isEmpty());
+    REQUIRE(newOwner != oldOwner);
+    REQUIRE(waitFor([&] {
+        return ownerChanges.count() == 1;
+    }));
+    CHECK(ownerChanges.at(0).at(1).toString() == oldOwner);
+    CHECK(ownerChanges.at(0).at(2).toString() == newOwner);
+    REQUIRE(waitFor([&] {
+        return replacement.registerWatcherCalls() >= 1;
+    }));
+    REQUIRE(replacement.sendNotify(QStringLiteral("Replacement"), 951, 0, QStringLiteral("org.example.handover")));
+    REQUIRE(waitFor([&] {
+        return tracker.unreadCount(QStringLiteral("org.example.handover")) == 2;
+    }));
+    CHECK(replacement.registerWatcherCalls() == 1);
+    CHECK(original.registerWatcherCalls() == 1);
+    REQUIRE(tracker.notifications(QStringLiteral("org.example.handover"), true).size() == 2);
+    CHECK(roleValue(&tracker, 1, "id").toUInt() == 951);
+}
+
+TEST_CASE("SNI watcher replaces its snapshot after gapless service owner replacement", "[notification][sni][dbus][owner-handover]")
+{
+    krema::test::StatusNotifierItemPeer oldItem(QStringLiteral("org.example.fixture.OldSni"), QStringLiteral("/OldItem"));
+    oldItem.setId(QStringLiteral("org.example.old-sni"));
+    oldItem.setStatus(QStringLiteral("NeedsAttention"));
+    REQUIRE(oldItem.start());
+    krema::test::StatusNotifierItemPeer newItem(QStringLiteral("org.example.fixture.NewSni"), QStringLiteral("/NewItem"));
+    newItem.setId(QStringLiteral("org.example.new-sni"));
+    newItem.setStatus(QStringLiteral("NeedsAttention"));
+    REQUIRE(newItem.start());
+    krema::test::StatusNotifierWatcherPeer original;
+    original.setRegisteredItems({oldItem.itemAddress()});
+    REQUIRE(original.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.old-sni"));
+    }));
+    REQUIRE_FALSE(tracker.sniNeedsAttention(QStringLiteral("org.example.new-sni")));
+
+    auto bus = QDBusConnection::sessionBus();
+    const QString service = QStringLiteral("org.kde.StatusNotifierWatcher");
+    const QString oldOwner = bus.interface()->serviceOwner(service).value();
+    REQUIRE_FALSE(oldOwner.isEmpty());
+    QDBusServiceWatcher owners(service, bus, QDBusServiceWatcher::WatchForOwnerChange);
+    QSignalSpy ownerChanges(&owners, &QDBusServiceWatcher::serviceOwnerChanged);
+    const QString connectionName = QStringLiteral("sni-watcher-owner-replacement");
+    const auto replacementBus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, connectionName);
+    const auto disconnect = qScopeGuard([&] {
+        QDBusConnection::disconnectFromBus(connectionName);
+    });
+    REQUIRE(replacementBus.isConnected());
+    krema::test::StatusNotifierWatcherPeer replacement(replacementBus);
+    replacement.setRegisteredItems({newItem.itemAddress()});
+    REQUIRE(replacement.start(true));
+    const QString newOwner = bus.interface()->serviceOwner(service).value();
+    REQUIRE_FALSE(newOwner.isEmpty());
+    REQUIRE(newOwner != oldOwner);
+    REQUIRE(waitFor([&] {
+        return ownerChanges.count() == 1;
+    }));
+    CHECK(ownerChanges.at(0).at(1).toString() == oldOwner);
+    CHECK(ownerChanges.at(0).at(2).toString() == newOwner);
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.old-sni")) && tracker.sniNeedsAttention(QStringLiteral("org.example.new-sni"));
+    }));
+}
+
+TEST_CASE("SNI registration, status transitions, re-registration and owner loss are observable", "[notification][sni][dbus]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.Sni"));
+    // The tracker issues Id and Status property calls independently; publish
+    // the status first so either reply order must still converge.
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    item.setId(QStringLiteral("org.example.sni"));
+    REQUIRE(item.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    notify(tracker, 500, QStringLiteral("SNI App"), QStringLiteral("org.example.sni.desktop"));
+    notify(tracker, 501, QStringLiteral("Other App"), QStringLiteral("org.example.other.desktop"));
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.sni")) == 1);
+    REQUIRE(tracker.unreadCount(QStringLiteral("org.example.other")) == 1);
+
+    const int revisionBeforeAttention = tracker.revision();
+    item.setStatus(QStringLiteral("Active"));
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni")) && tracker.unreadCount(QStringLiteral("org.example.sni")) == 0
+            && tracker.revision() != revisionBeforeAttention;
+    }));
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.other")) == 1);
+
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+    // Re-entering attention is a boolean state transition; it does not
+    // synthesize a numeric badge after the watcher unread state was cleared.
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.sni")) == 0);
+    CHECK(tracker.unreadCount(QStringLiteral("org.example.other")) == 1);
+
+    item.setStatus(QStringLiteral("Passive"));
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    item.stop();
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    REQUIRE(item.start());
+    watcher.removeItem(item.itemAddress());
+    watcher.addItem(item.itemAddress());
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+
+    watcher.stop();
+    REQUIRE(waitFor([&] {
+        return !tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+}
+
+TEST_CASE("DND application inhibition is active without an Until deadline and clears", "[notification][dnd][settings]")
+{
+    auto &notificationServer = NotificationManager::Server::self();
+    notificationServer.clearInhibitions();
+    REQUIRE(notificationServer.init());
+
+    NotificationManager::Settings settings;
+    settings.load();
+    REQUIRE_FALSE(settings.notificationsInhibitedByApplication());
+
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup dnd = config->group(QStringLiteral("DoNotDisturb"));
+    const bool hadUntil = dnd.hasKey(QStringLiteral("Until"));
+    const QVariant previousUntil = dnd.readEntry(QStringLiteral("Until"), QVariant());
+    uint cookie = 0;
+    QDBusInterface notifications(QStringLiteral("org.freedesktop.Notifications"),
+                                 QStringLiteral("/org/freedesktop/Notifications"),
+                                 QStringLiteral("org.freedesktop.Notifications"),
+                                 QDBusConnection::sessionBus());
+    const auto restore = qScopeGuard([&] {
+        if (cookie != 0) {
+            notifications.call(QStringLiteral("UnInhibit"), cookie);
+        }
+        if (hadUntil) {
+            dnd.writeEntry(QStringLiteral("Until"), previousUntil, KConfig::Notify);
+        } else {
+            dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+        }
+        config->sync();
+        notificationServer.clearInhibitions();
+        auto bus = QDBusConnection::sessionBus();
+        bus.unregisterObject(QStringLiteral("/org/freedesktop/Notifications"));
+        bus.unregisterService(QStringLiteral("org.freedesktop.Notifications"));
+    });
+
+    // Remove the expiry source so this gate exercises the application-owned
+    // inhibition path, not the separate Until path.
+    dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+    config->sync();
+    settings.load();
+    REQUIRE_FALSE(settings.notificationsInhibitedUntil().isValid());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return !tracker.dndActive();
+    }));
+
+    const QDBusReply<uint> inhibition = notifications.call(QStringLiteral("Inhibit"),
+                                                           QStringLiteral("org.krema.test"),
+                                                           QStringLiteral("deterministic DND gate"),
+                                                           QVariantMap());
+    REQUIRE(inhibition.isValid());
+    cookie = inhibition.value();
+    REQUIRE(cookie != 0);
+    CHECK(settings.notificationsInhibitedByApplication());
+    CHECK_FALSE(settings.notificationsInhibitedUntil().isValid());
+    REQUIRE(waitFor([&] {
+        return tracker.dndActive();
+    }));
+
+    const QDBusMessage release = notifications.call(QStringLiteral("UnInhibit"), cookie);
+    REQUIRE(release.type() == QDBusMessage::ReplyMessage);
+    cookie = 0;
+    CHECK_FALSE(settings.notificationsInhibitedByApplication());
+    REQUIRE(waitFor([&] {
+        return !tracker.dndActive();
+    }));
+}
+
+TEST_CASE("DND Until is active before its boundary and clears after expiry", "[notification][dnd][settings]")
+{
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup dnd = config->group(QStringLiteral("DoNotDisturb"));
+    const bool hadUntil = dnd.hasKey(QStringLiteral("Until"));
+    const QVariant previousUntil = dnd.readEntry(QStringLiteral("Until"), QVariant());
+    const auto restore = qScopeGuard([&] {
+        if (hadUntil) {
+            dnd.writeEntry(QStringLiteral("Until"), previousUntil, KConfig::Notify);
+        } else {
+            dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+        }
+        config->sync();
+    });
+
+    dnd.writeEntry(QStringLiteral("Until"), QDateTime::currentDateTime().addMSecs(350), KConfig::Notify);
+    config->sync();
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.dndActive();
+    }));
+    REQUIRE(waitFor([&] {
+        return !tracker.dndActive();
+    }));
+}
+
+TEST_CASE("DND thirty-day deadline arms safely and rechecks the real deadline", "[notification][dnd][settings][long-dnd]")
+{
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup dnd = config->group(QStringLiteral("DoNotDisturb"));
+    const bool hadUntil = dnd.hasKey(QStringLiteral("Until"));
+    const QVariant previousUntil = dnd.readEntry(QStringLiteral("Until"), QVariant());
+    const auto restore = qScopeGuard([&] {
+        if (hadUntil) {
+            dnd.writeEntry(QStringLiteral("Until"), previousUntil, KConfig::Notify);
+        } else {
+            dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+        }
+        config->sync();
+    });
+    const QDateTime until = QDateTime::currentDateTime().addDays(30);
+    dnd.writeEntry(QStringLiteral("Until"), until, KConfig::Notify);
+    config->sync();
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(tracker.dndActive());
+    const auto timers = tracker.findChildren<QTimer *>(QString(), Qt::FindDirectChildrenOnly);
+    REQUIRE(timers.size() == 1);
+    auto *timer = timers.constFirst();
+    REQUIRE(timer->isActive());
+    REQUIRE(timer->interval() == std::numeric_limits<int>::max());
+    auto *dispatcher = QAbstractEventDispatcher::instance();
+    REQUIRE(dispatcher != nullptr);
+    REQUIRE(dispatcher->remainingTime(timer->id()) > QAbstractEventDispatcher::Duration::zero());
+    QSignalSpy changes(&tracker, &krema::NotificationTracker::dndActiveChanged);
+
+    SECTION("an early timeout keeps DND active and rearms without advancing the clock")
+    {
+        REQUIRE(QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection));
+        CHECK(QDateTime::currentDateTime() < until);
+        CHECK(tracker.dndActive());
+        CHECK(changes.count() == 0);
+        CHECK(timer->isActive());
+        CHECK(timer->interval() == std::numeric_limits<int>::max());
+        CHECK(dispatcher->remainingTime(timer->id()) > QAbstractEventDispatcher::Duration::zero());
+    }
+    SECTION("a rewritten short deadline expires on the real clock")
+    {
+        const auto shortUntil = QDateTime::currentDateTime().addMSecs(350);
+        dnd.writeEntry(QStringLiteral("Until"), shortUntil, KConfig::Notify);
+        config->sync();
+        REQUIRE(waitFor([&] {
+            return timer->isActive() && timer->interval() <= 350;
+        }));
+        REQUIRE(tracker.dndActive());
+        REQUIRE(waitFor([&] {
+            return !tracker.dndActive();
+        }));
+        CHECK(QDateTime::currentDateTime() >= shortUntil);
+        CHECK_FALSE(timer->isActive());
+        CHECK(changes.count() == 1);
+    }
+    SECTION("cancelling the deadline stops its timer")
+    {
+        dnd.deleteEntry(QStringLiteral("Until"), KConfig::Notify);
+        config->sync();
+        REQUIRE(waitFor([&] {
+            return !tracker.dndActive();
+        }));
+        CHECK_FALSE(timer->isActive());
+        CHECK(changes.count() == 1);
+    }
 }
 
 int main(int argc, char *argv[])

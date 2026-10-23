@@ -35,3 +35,12 @@ add_test(NAME krema_catch2_cleanup
     COMMAND krema_unit_tests "[catch2-cleanup]" --order lex --rng-seed 1564808301
 )
 set_tests_properties(krema_catch2_cleanup PROPERTIES TIMEOUT 30)
+
+# The E2E wait contracts need neither a compositor nor the AT-SPI packages.
+find_program(KREMA_TEST_PYTHON_EXECUTABLE python3)
+if(KREMA_TEST_PYTHON_EXECUTABLE)
+    add_test(NAME krema_e2e_waits
+        COMMAND ${KREMA_TEST_PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_waits.py
+    )
+    set_tests_properties(krema_e2e_waits PROPERTIES TIMEOUT 30)
+endif()

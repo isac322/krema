@@ -12,6 +12,7 @@
 - preview-mouse-leave-close: Preview closes when mouse leaves
 - preview-live-thumbnail: PipeWire-based live window thumbnails
 - preview-fast-pointer-entry: Pointer entering a popup reported visible by AT-SPI keeps it open past the hide delay
+- preview-slow-pointer-transfer: The animation reserve keeps continuous dock-to-preview and return movement alive at the default hide delay
 - preview-task-index: Preview thumbnails keep their initial displayed order and exact native targets after pinned/running partitioning
 
 ## Affected Files
@@ -37,6 +38,8 @@ scenarios 01 and 04; this file adds only the explicit mouse-preview path.
 | Case | Path covered | Automated test |
 |---|---|---|
 | QA-PREV-01 | Fast entry at AT-SPI visibility, current popup/KWin coordinates, visibility past the existing hide delay | `test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` |
+| QA-PREV-02 | Shown-popup geometry and element-origin pointer input after a first geometry read while hidden; existing hidden 0x0 preserved | `test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`) |
+| QA-PREV-03 | Slow continuous transfer and return through the zoom/bounce reserve at zoom 1.6/2.0, Bottom/Right, with the default 200 ms hide delay; departure still dismisses | `test_02_mouse.py::test_mouse017_slow_pointer_transfer_between_zoomed_dock_and_preview` |
 | PREV-003 / PREV-004 | Thumbnail activation and precise close-button input after layout/paint stability | `test_prev003_clicking_a_thumbnail_activates_that_window`, `test_prev004_close_button_closes_that_window` |
 | PREV-004 | Keyboard Delete closes the focused window | `test_prev004_delete_key_closes_focused_thumbnail_window` |
 | PREV-005 | Pointer leave closes outside the popup; configured hide delay is respected | `test_prev005_preview_closes_when_pointer_leaves`, `test_prev005_close_on_leave_is_delayed` |
@@ -50,6 +53,29 @@ and PREV-011 surface containment is in `tests/appium/test_11_preview_surface.py`
 QA-PREV-01 records both sides: the pre-fix run failed after a 33 ms entry,
 while the fixed run passed three fresh opens. Its fast path complements,
 rather than replaces, the existing pixel/layout waits.
+
+---
+
+## QA-PREV-03: Slow Transfer Through the Animation Reserve
+
+**Precondition:** A grouped running app; Bottom or Right dock, 48 px icons,
+zoom 1.6 or 2.0, 8 px floating margin, and the default 200 ms preview hide delay.
+
+**Steps:**
+1. Hover the app until its preview is visible.
+2. Move continuously outward at 100 px/s into the near edge of the preview.
+3. Keep the pointer there for 500 ms, then return continuously at the same speed
+   to the source item and dwell for another 500 ms.
+4. Repeat the outward movement diagonally toward another thumbnail and dwell.
+5. Move outside both dock and preview.
+
+**Expected:** The dock and preview input regions meet across the animation
+reserve. The preview stays visible during both transfers and both dwells.
+Blank reserve space does not activate an app. Leaving the corridor starts
+the configured hide delay and dismisses the preview.
+
+**Automated (Tier 2):** `tests/appium/test_02_mouse.py::test_mouse017_slow_pointer_transfer_between_zoomed_dock_and_preview`
+**Automated (blank-space input, Tier 1):** `tests/qml/tst_dock_main.qml::test_previewTransferIsNotItemHover`
 
 ---
 
@@ -208,6 +234,40 @@ stationary-pointer recovery or that every timing race is eliminated.
 outside-close tests retain that wait for layout and painted-pixel stability.
 
 **Automated:** tests/appium/test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry
+
+---
+
+## QA-PREV-02: Popup geometry after a first hidden read
+
+**Precondition:** A fresh Krema session with two windows grouped under one
+running app. The pointer is outside the dock and the preview starts hidden.
+
+**Steps:**
+1. Find the hidden preview popup and read its geometry once. Qt may return
+   empty bounds or reject the lookup; this step primes the interface cache
+   without requiring either provider-specific result.
+2. Hover the app and wait for the popup's `showing` state, two thumbnails,
+   and a stable preview surface. Read the surface's separate AT-SPI frame
+   and KWin geometry, not the shown popup's rect.
+3. Run each consumer in a fresh session: read the same popup element's rect,
+   or send a W3C pointer move with that element as its origin.
+4. Check that the shown popup has positive bounds wholly inside its KWin
+   surface. For the element-origin case, verify KWin's cursor is at the
+   requested point inside the popup.
+5. Move away. The same popup element must report 0x0 and no `showing` state,
+   preserving the existing hidden-after-shown behavior.
+
+**Expected:** An earlier hidden lookup cannot leave the shown popup stuck
+with a cached missing Component. Neither shown operation is caught or
+retried by the test. A genuinely missing interface still uses the normal
+webdriver error path.
+
+**Verification:** Real Qt/AT-SPI and public WebDriver calls, KWin surface
+geometry and cursor position. On arm64 Fedora 44 and Leap 16.0, both cases
+failed at their shown operation with the original webdriver and passed
+with `component-interface-cache.patch`; PREV-003 and PREV-005 remained passing.
+
+**Automated:** `tests/appium/test_03_preview.py::test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`)
 
 ---
 

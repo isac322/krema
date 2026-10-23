@@ -61,6 +61,8 @@ def wait_stable(
     duration: float = 0.5,
     timeout: float = 10.0,
     interval: float = 0.05,
+    *,
+    accept: Callable[[T], bool] | None = None,
 ) -> T:
     """Wait until ``getter()`` returns the same value for ``duration`` seconds.
 
@@ -68,14 +70,23 @@ def wait_stable(
     Samples are at most ``interval`` apart (plus the getter's own time); the
     last pause is shortened so the sample that completes ``duration`` is
     taken as soon as the window has elapsed.
+
+    With ``accept``, only accepted observations count toward stability. A
+    rejected sample restarts the interval, even if its value is unchanged.
+    This keeps a temporarily stable but incomplete layout from being ready.
     """
     deadline = time.monotonic() + timeout
     value = getter()
-    since = time.monotonic()
+    since = time.monotonic() if accept is None or accept(value) else None
     while time.monotonic() < deadline:
-        time.sleep(min(interval, max(0.0, duration - (time.monotonic() - since))))
+        remaining = duration - (time.monotonic() - since) if since is not None else duration
+        time.sleep(min(interval, max(0.0, remaining)))
         current = getter()
-        if current != value:
+        accepted = accept is None or accept(current)
+        if not accepted:
+            value = current
+            since = None
+        elif current != value or since is None:
             value = current
             since = time.monotonic()
         elif time.monotonic() - since >= duration:

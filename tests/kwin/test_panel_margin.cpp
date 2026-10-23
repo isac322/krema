@@ -31,6 +31,7 @@
 // Must run under run-with-kwin.sh, which provides WAYLAND_DISPLAY, a private
 // session bus and throwaway XDG directories.
 
+#include "fakepointer.h"
 #include "krema.h"
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
@@ -70,10 +71,7 @@
 #include <QTest>
 #include <QtQml>
 
-#include <wayland-client.h>
-
 #include <cmath>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -743,103 +741,6 @@ bool maximizedFitsOneReservation(const Placement &p, qint64 pid, int margin)
 // Real pointer input
 // ---------------------------------------------------------------------------
 
-// org_kde_kwin_fake_input (plasma-wayland-protocols fake-input.xml), declared
-// here by hand: only requests up to pointer_motion_absolute (since 3) are sent.
-const wl_interface *kNoTypes[] = {nullptr, nullptr, nullptr};
-const wl_message kFakeInputRequests[] = {
-    {"authenticate", "ss", kNoTypes},
-    {"pointer_motion", "ff", kNoTypes},
-    {"button", "uu", kNoTypes},
-    {"axis", "uf", kNoTypes},
-    {"touch_down", "2uff", kNoTypes},
-    {"touch_motion", "2uff", kNoTypes},
-    {"touch_up", "2u", kNoTypes},
-    {"touch_cancel", "2", kNoTypes},
-    {"touch_frame", "2", kNoTypes},
-    {"pointer_motion_absolute", "3ff", kNoTypes},
-};
-constexpr int kFakeInputVersion = 3;
-const wl_interface kFakeInputInterface =
-    {"org_kde_kwin_fake_input", kFakeInputVersion, static_cast<int>(std::size(kFakeInputRequests)), kFakeInputRequests, 0, nullptr};
-constexpr uint32_t kFakeInputAuthenticate = 0;
-constexpr uint32_t kFakeInputButton = 2;
-constexpr uint32_t kFakeInputPointerMotionAbsolute = 9;
-constexpr uint32_t kBtnLeft = 0x110; // BTN_LEFT, linux/input-event-codes.h
-
-/// Real pointer motion and clicks through KWin's normal input pipeline
-/// (pointer focus, enter/leave, cursorPosChanged for KWin scripts), on a
-/// Wayland connection of its own. run-with-kwin.sh disables KWin's permission
-/// checks, so the restricted fake-input global is bindable. The device lives
-/// as long as this object; the seat has a pointer only while some device does.
-class FakePointer
-{
-public:
-    FakePointer()
-    {
-        m_display = wl_display_connect(nullptr);
-        if (!m_display) {
-            return;
-        }
-        wl_registry *registry = wl_display_get_registry(m_display);
-        static const wl_registry_listener listener{&FakePointer::global, &FakePointer::globalRemove};
-        wl_registry_add_listener(registry, &listener, this);
-        wl_display_roundtrip(m_display);
-        wl_registry_destroy(registry);
-        send(kFakeInputAuthenticate, "krema_panel_margin_tests", "reveal trigger test");
-    }
-    ~FakePointer()
-    {
-        if (m_fakeInput) {
-            wl_proxy_destroy(m_fakeInput);
-        }
-        if (m_display) {
-            wl_display_disconnect(m_display);
-        }
-    }
-    FakePointer(const FakePointer &) = delete;
-    FakePointer &operator=(const FakePointer &) = delete;
-
-    [[nodiscard]] bool isValid() const
-    {
-        return m_fakeInput != nullptr;
-    }
-    /// Absolute move in global (compositor) coordinates.
-    void moveTo(const QPoint &pos)
-    {
-        send(kFakeInputPointerMotionAbsolute, wl_fixed_from_int(pos.x()), wl_fixed_from_int(pos.y()));
-    }
-    void click()
-    {
-        send(kFakeInputButton, kBtnLeft, uint32_t(WL_POINTER_BUTTON_STATE_PRESSED));
-        send(kFakeInputButton, kBtnLeft, uint32_t(WL_POINTER_BUTTON_STATE_RELEASED));
-    }
-
-private:
-    /// Sends one request and waits until KWin has handled it.
-    template<typename... Args>
-    void send(uint32_t opcode, Args... args)
-    {
-        if (!m_fakeInput) {
-            return;
-        }
-        wl_proxy_marshal_flags(m_fakeInput, opcode, nullptr, wl_proxy_get_version(m_fakeInput), 0, args...);
-        wl_display_roundtrip(m_display);
-    }
-    static void global(void *data, wl_registry *registry, uint32_t name, const char *interface, uint32_t version)
-    {
-        auto *self = static_cast<FakePointer *>(data);
-        if (!self->m_fakeInput && qstrcmp(interface, kFakeInputInterface.name) == 0 && version >= uint32_t(kFakeInputVersion)) {
-            self->m_fakeInput = static_cast<wl_proxy *>(wl_registry_bind(registry, name, &kFakeInputInterface, kFakeInputVersion));
-        }
-    }
-    static void globalRemove(void *, wl_registry *, uint32_t)
-    {
-    }
-
-    wl_display *m_display = nullptr;
-    wl_proxy *m_fakeInput = nullptr;
-};
-
 /// Mouse button presses the stand-in panel logged to @p path.
 int clickCount(const QString &path)
 {
@@ -1081,7 +982,7 @@ TEST_CASE("Auto-hide dock beside a panel reveals from the screen edge without st
 {
     // Needs KWin's fake-input protocol to move the pointer and click. Keep one
     // device for the life of the process so the seat's pointer capability stays up.
-    static FakePointer pointer;
+    static krema::test::FakePointer pointer("krema_panel_margin_tests", "reveal trigger test");
     REQUIRE(pointer.isValid());
 
     auto *s = app().settings.get();

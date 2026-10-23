@@ -3,6 +3,7 @@
 
 #include "qmltestmocks.h"
 
+#include "utils/surfacegeometry.h"
 #include "utils/zoomlayoutvariant.h"
 
 #include <QMetaEnum>
@@ -204,6 +205,11 @@ QVariantMap ZoomLayoutEngine::zoomLayout(int count,
                                     cursor,
                                     minEdge,
                                     maxEdge);
+}
+
+int ZoomLayoutEngine::surfaceHeight(int iconSize, int padding, qreal maxZoomFactor, int tooltipReserve, int floatingPadding) const
+{
+    return krema::surfaceHeight(iconSize, padding, maxZoomFactor, tooltipReserve, floatingPadding);
 }
 
 void registerMockTypes()

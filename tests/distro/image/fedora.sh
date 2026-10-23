@@ -27,7 +27,7 @@ family_runtime() {
         google-noto-sans-fonts dejavu-sans-fonts dejavu-sans-mono-fonts \
         kwrite kfind \
         ruby rubygems 'rubygem(logger)' \
-        python3 python3-pip python3-flask python3-lxml python3-gobject python3-numpy \
+        python3 python3-pip python3-flask python3-lxml python3-gobject python3-dbus python3-numpy \
         python3-pytest python3-pillow gtk3 gobject-introspection \
         procps-ng findutils gawk libcap psmisc
     dnf clean all

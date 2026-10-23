@@ -142,12 +142,12 @@
 **오해:** `classBegin()` + `componentComplete()` 수동 호출로 해결된다고 생각했으나 무관.
 **진짜 문제:** 소스 모델 타입이 잘못됨 (`NotificationsModel` vs `WatchedNotificationsModel`).
 
-**올바른 해결책:**
 - **방법 1 (권장)**: 커스텀 D-Bus 감시자 직접 구현
-  - `/org/freedesktop/Notifications` 경로에 D-Bus 객체 등록 (`registerObject`)
+  - `/NotificationWatcher` 경로에 `org.kde.NotificationWatcher` 객체 등록
+    (`ExportScriptableSlots`)
   - `org.kde.NotificationManager.RegisterWatcher()` 호출
-  - plasmashell이 `Notify()` 슬롯을 직접 호출해 줌
-  - `hints["desktop-entry"]`로 앱 식별
+  - plasmashell이 `Notify()`와 `CloseNotification()` 슬롯을 호출
+  - `NotificationClosed`는 Freedesktop 서비스의 broadcast signal로 구독
 - **방법 2**: QML 엔진에서 `WatchedNotificationsModel` 인스턴스 생성
 
 **상세 분석:** `docs/kde/notification-badges.md` 섹션 "CRITICAL BUG" 참조
@@ -467,3 +467,82 @@ the required order is `[W0, L1, L2]`; launching B must produce
 `[W0, W1, L2]` with the launcher list unchanged. Failure to observe the
 startup task is a fixture failure, not a passing test. Ordinary window
 insertion alone does not exercise this transition.
+
+## 23. Configure layer focus, then activate it through input (2026-10, native launch-order fixture)
+
+**Symptom:** Scratch phase traces twice showed the test layer remaining
+inactive for 15 seconds before `requestNewInstance()`.
+
+**Cause:** The fixture treated an `OnDemand` keyboard-interactivity setting
+as guaranteed activation. Layer-shell state is double-buffered, so a
+`None` to `OnDemand` flip may coalesce before a commit. The historical CI
+job's exact failure branch is unknown.
+
+**Fixture change:** Set `OnDemand` before showing the layer, send one real
+pointer gesture for every launch, and await `QWindow::isActive()` before
+requesting a launch. This deliberately removes the cached-active fast path:
+the gesture is a test-fixture synchronization/activation step, not a product
+behavior claim. For an inactive-layer case, activate an existing task and
+await a nonblocking `wl_display_sync` callback on Qt's same Wayland connection,
+alongside the task's active state and the layer's inactive state.
+
+**Regression setup ordering:** The added setup had a separate race:
+`IsActive` could already be true when `requestActivate()` queued its
+Wayland request. `QTest::qWaitFor()` could then return immediately without
+pumping events or flushing the request. Pointer input on another connection
+could reach KWin first; the delayed activation could then steal focus back.
+Enqueue the sync after the activation request and let Qt dispatch its
+callback on the GUI thread's default queue. The callback acknowledges that
+the server processed the preceding requests even when the cached state
+never changed. Require both that acknowledgement and the focus predicates
+within the existing deadline, without a blocking round trip.
+
+**Key lesson:** Focus configuration and compositor-acknowledged activation
+are separate prerequisites. A fixture activation failure does not establish
+a product defect.
+
+## 24. Bound QTimer arms and observe direct D-Bus owner replacement (2026-10, PR #128)
+
+**Symptoms:** On Qt 6.8.2, a 30-day DND deadline left the expiry timer inactive
+after a negative-interval warning. Direct notification-server replacement
+did not register Krema with the new server. Direct StatusNotifierWatcher
+replacement left old attention state visible and missed the new snapshot.
+Both handover regressions also failed on Qt 6.10.3; its long-DND control passed.
+
+**Causes:** A chrono duration did not remove QTimer's int-millisecond limit
+on older Qt. The tracker passed a value above `INT_MAX` without bounding it.
+The lifecycle callbacks watched only appearance and disappearance; a
+nonempty-to-nonempty owner change crossed neither boundary. Tests covered a
+short deadline and service stop/start, not these two boundary conditions.
+Some SNI loss checks already started false, so they could pass without a reset.
+
+**Fix:** Clamp every existing DND expiry arm to `[1, INT_MAX]` milliseconds.
+Keep the absolute Until deadline authoritative: a timeout rereads it and
+rearms when necessary. Use one `serviceOwnerChanged` handler per watched
+notification/SNI-watcher service, invalidating pending generations before
+registering or querying the new owner. Clear the old SNI snapshot on every
+owner change without changing retained notification history or unread state.
+
+**Regression oracles:** Require an active `INT_MAX` arm for a 30-day deadline;
+an early emitted timeout must keep DND active without advancing the clock.
+A short rewritten deadline must expire on the real clock, and cancellation
+must stop its arm. Prove handovers with different, nonempty old/new unique
+bus names; require exactly one new notification registration and an observable
+new notification, plus replacement of old SNI attention by the new snapshot.
+For ordinary SNI owner loss, establish true before loss and observe false
+before restarting the watcher.
+
+**Timer oracle detail:** Qt 6.8's Unix dispatcher rounds long coarse timers to
+seconds. A valid `INT_MAX` arm can therefore have slightly more than `INT_MAX`
+milliseconds remaining. Its legacy `QTimer::remainingTime()` result can overflow;
+`remainingTimeAsDuration()` wraps that same narrowed result. The native Qt 6.8.2
+probe reported an active timer with 2147484190 ms remaining in the dispatcher
+but -2147483105 through the legacy getter. Use the public chrono overload
+`QAbstractEventDispatcher::remainingTime(timer->id())` to assert the actual
+scheduled duration is positive, alongside the active and exact-interval checks.
+Its `Qt::TimerId` overload was verified in the installed Qt 6.8 header and
+Qt 6.8.2 source; do not change production timing to accommodate an int getter.
+
+**Key lesson:** Test the platform boundary that failed, not a nearby healthy
+case. A timeout signal does not advance time, a stop/start is not a gapless
+handover, and false-to-false cannot prove that owner loss cleared state.

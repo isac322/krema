@@ -36,7 +36,7 @@ In particular:
 
 ## Prerequisites
 
-Run this on a real Plasma 6 Wayland session with:
+Run the manual wire scenarios on a real Plasma 6 Wayland session with:
 
 - a working user/session D-Bus;
 - `python3`, PyQt6, `dbus-python`, and PyGObject;
@@ -46,6 +46,9 @@ Run this on a real Plasma 6 Wayland session with:
 - `selenium-webdriver-at-spi-screenshotter` and `ffmpeg` when container video
   capture is requested; and
 - `wf-recorder` when host `run-qa.sh --capture` is requested.
+
+The Appium lifecycle case uses `notify.py serve` as a test-owned notification
+server and does not require Plasma's notification server.
 
 ScreenShot2 capture requires KWin to have OpenGL/DRM capture support. In the
 container, provide a DRM render node (for example, `vgem`); QPainter-only KWin
@@ -77,6 +80,22 @@ tests/notification/run-qa.sh \
   --jsonl "$PWD/sni.jsonl" \
   --capture "$PWD/sni.wcap"
 ```
+
+
+For the Appium notification lifecycle case, the test launches a test-owned
+server without relying on Plasma's notification daemon:
+
+```sh
+python3 tests/notification/notify.py serve \
+  --ready-file /tmp/krema-notify.ready \
+  --watcher-ready-file /tmp/krema-notify.watcher.ready
+```
+
+The server owns `org.freedesktop.Notifications`, accepts the standard
+`Notify` and `CloseNotification` calls, accepts KDE
+`RegisterWatcher`/`UnRegisterWatcher`, forwards notifications to Krema's
+`/NotificationWatcher`, and emits `NotificationClosed`. The Appium test uses
+ready files before sending stimuli; it terminates the process during cleanup.
 
 `--scenario ID` is passed to the app and selects the scenario shown to the
 operator. `--jsonl PATH` selects the event file. If omitted, the app uses its
@@ -218,6 +237,44 @@ observed live KWin frames and their timing; JSONL proves wire-level events.
 Do not treat an unverified or empty artifact as a passing capture. ScreenShot2
 requires OpenGL/DRM capture support; QPainter-only sessions fail honestly
 instead of producing synthetic or mock frames.
+
+## Krema notification product-input gates
+
+These gates distinguish framework integration, real KWin capture, and
+optional recorder-regression evidence for Krema's direct notification inputs.
+They are separate from the wire-level Portal and JobView scenarios, which
+are transport/coverage evidence only and are not Krema notification inputs.
+
+| Gate | Tier | Test or evidence producer | Required observable oracle |
+|---|---|---|---|
+| Application-owned DND inhibition | Tier 2 (KWin integration) | `tests/integration/test_notification_tracker.cpp` — `DND application inhibition is active without an Until deadline and clears` | Real `Inhibit/UnInhibit` drives the private notification server; `NotificationManager::Settings::notificationsInhibitedByApplication()` reads true/false with no `Until`, and `NotificationTracker::dndActive` follows |
+| Timed DND long-deadline arming and real deadline rewrite | Tier 2 (Qt/KWin integration) | `tests/integration/test_notification_tracker.cpp` — timed DND boundary, early timeout re-arm, and short-deadline rewrite coverage | The tracker safely arms a 30-day `Until` without waiting 30 days; an unchanged-clock early timeout recomputes the real deadline and remains active, then a real config rewrite to a short `Until` expires on wall-clock time |
+| Notification service atomic owner handover | Tier 3 (real Appium/KWin video) | `tests/appium/record_notifications.py` — replacement notification server capture | A non-empty old and new `org.freedesktop.Notifications` owner transition is observed; the replacement server receives one watcher registration and a real notification reaches the dock after handover |
+| Recorder acquisition and teardown failure containment | Tier 3 (opt-in real-capture regression) | `tests/appium/notification_cleanup_probe.py`, loaded explicitly with `-p`; see `tests/appium/README.md` | Real SNI setup rejection, missing-writer, malformed-snapshot, kded-wait timeout, original-scenario, and artifact-write failures must verify acquired-resource release, independent teardown, honest failed metadata, and exact original exception preservation. A failed snapshot read must leave no receiver that records later probe signals, whose delivery is independently confirmed. After a kded-wait timeout the recorder itself must KILL and reap its child (`kded-kill`/`kded-reap` stages on failure, source-reviewed only); probe-only cleanup after the saved verdict is recorded separately and never justifies a pass. Baseline-source comparisons stay outside the repository |
+| Settings inbox cleanup failure containment | Tier 3 (opt-in real-session regression) | `tests/appium/notification_inbox_cleanup_probe.py`, loaded explicitly with `-p`; see `tests/appium/README.md` | A rejected Settings cleanup lookup must not skip SIGTERM shutdown of the test-owned notification server or replace an earlier scenario exception; if the scenario passed, the first cleanup error is raised |
+| SNI attention clears watcher unread state | Tier 2 (KWin/private D-Bus integration) | `tests/integration/test_notification_tracker.cpp` — `SNI registration, status transitions, re-registration and owner loss are observable` | Real SNI `NeedsAttention -> Active/Passive` clears only the matching canonical app's watcher unread count and changes revision; re-entering `NeedsAttention` keeps the boolean attention state without recreating a numeric badge |
+| Context-menu Clear Notifications | Tier 2 (KWin/native QMenu integration) | `tests/integration/test_launcher_entry.cpp` — `Context menu clears only watcher unread notifications` | The real `QMenu` contains `Clear Notifications` iff the selected app has watcher unread; triggering it clears only that app's watcher count and leaves another app plus a visible Unity count unchanged |
+
+The tests use the private notification/SNI peers and installed pinned
+launchers from the integration harness. They do not assert Portal forwarding,
+JobView synchronization, application-server read cursors, or
+`ActionInvoked`/`NotificationReplied` as product inputs.
+
+For the long-deadline old-fail/new-pass proof, run the Qt integration gate on
+Qt 6.8. Newer Qt versions can saturate an oversized timer interval, so a
+30-day DND state remaining active there alone does not prove the regression
+is caught. No test waits 30 days or advances the clock; timer-arm inspection
+and unchanged-clock early-timeout rearming supply the boundary proof.
+
+The real capture uses `/build/bin/krema_notification_config_writer`, built
+from `tests/notification/config-writer.cpp`. Its CLI is `--until <ISO8601
+datetime>` or `--clear`; it uses the recorder's isolated `XDG_CONFIG_HOME` and
+session bus. The helper writes a typed `QDateTime` through KConfig with
+`KConfig::Notify`, syncs, then performs a blocking
+`org.freedesktop.DBus.GetId` call on that same connection before exit. This
+drains the framework's queued notification without manual `ConfigChanged`
+signals, retries, or a fallback writer. Missing helpers and failed writes or
+bus barriers fail the recording.
 
 ## Stage 2 QML model surface
 

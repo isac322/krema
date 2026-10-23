@@ -32,6 +32,7 @@ target_link_libraries(krema_qml_tests PRIVATE
 
 set(KREMA_QML_TEST_FILES
     tst_dockitem_zoom
+    tst_dockitem_surface_geometry
     tst_dockitem_geometry
     tst_dockitem_indicators
     tst_dock_main

@@ -10,6 +10,7 @@
 - ctx-task-zones: Pin and unpin live tasks between zones without duplicate dock items
 - ctx-desktop-actions: The app's .desktop file actions (e.g. "New Private Window") launch from the menu
 - ctx-hover-hold: Hovered item keeps its zoom and its window preview stays closed while the menu is open
+- ctx-trash: Open Trash and empty it through the native Trash action
 
 ## Affected Files
 - src/models/dockcontextmenu.h
@@ -26,7 +27,10 @@
 - src/models/dockmodel.h
 - src/models/dockmodel.cpp
 - src/shell/previewcontroller.h
-- src/shell/previewcontroller.cpp
+- src/models/dockitemsmodel.h
+- src/models/dockitemsmodel.cpp
+- src/models/trashmanager.h
+- src/models/trashmanager.cpp
 - src/platform/pointerfocustracker.h
 - src/platform/pointerfocustracker.cpp
 
@@ -258,3 +262,32 @@ window, so it is a task with a window preview.
 widths through `painted_rect`), screenshot (menu entry highlight), krema's
 `WAYLAND_DEBUG` log (`wl_seat.capabilities` without pointer at start)
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open, tests/appium/test_04_context_menu.py::test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock (skip without ScreenShot2 capture; the tooltip is not asserted), tests/appium/test_04_context_menu.py::test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse (variant)
+
+---
+
+## TC CTX-010: Trash Opens and Empty Confirmation Is Safe
+
+**Precondition:** The dock contains the Trash item. Place at least one test
+file in Trash so the item reports a non-empty state.
+**Steps:**
+1. Move the pointer to the Trash item and click it.
+2. Wait for the file manager to open `trash:/`; verify the test file is
+   visible.
+3. Return to Krema, right-click Trash, and choose the native `Empty Trash`
+   action.
+4. Cancel the confirmation dialog; verify the test file remains in Trash.
+5. Repeat the action and confirm it; wait for the Trash view and dock state to
+   settle.
+
+**Expected:**
+- Clicking Trash opens the `trash:/` location through KDE's normal URL handler.
+- The empty action always asks for confirmation before deleting anything.
+- Cancel leaves the Trash contents and the Trash icon state unchanged.
+- Confirm removes the contents through KIO and the dock returns to its empty
+  Trash icon policy.
+
+**Verification:** file-manager window showing `trash:/`, native confirmation
+dialog result, Trash item accessible name/icon, and the final item count/state.
+**Automated:** Not currently covered. The KIO open, confirmation dialog, and
+delete operation require a real desktop session and are manual pending coverage
+in the existing Appium fixture set.

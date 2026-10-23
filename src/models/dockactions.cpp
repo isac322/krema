@@ -23,20 +23,25 @@ DockActions::DockActions(DockModel *model, QObject *parent)
 {
 }
 
+namespace
+{
+// DockActions is called with visual DockItemsModel rows from QML. Convert
+// exactly once before using the task-only TasksModel API.
+QModelIndex sourceIndexForVisual(DockModel *model, int visualIndex);
+int entryChild(TaskManager::TasksModel *tasksModel, int sourceIndex, int childCount);
+}
+
 void DockActions::activate(int index)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (!idx.isValid()) {
+        if (m_model->isTrash(index)) {
+            m_model->trashManager()->openTrash();
+        }
         return;
     }
 
-    // TaskGroupingProxyModel::requestActivate() ignores group parents, so a
-    // click on a grouped app would do nothing. Cycle like the wheel does,
-    // which matches Plasma's default grouped-click action ("cycle through
-    // grouped tasks"): while a window of the group is active, each click
-    // activates the next one in model order, wrapping around. When none is
-    // active, the most recently used window of the group is activated.
     if (idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
         cycleWindows(index, true);
         return;
@@ -56,7 +61,7 @@ void DockActions::activate(int index)
 void DockActions::newInstance(int index)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (idx.isValid()) {
         tasksModel->requestNewInstance(idx);
         Q_EMIT taskLaunching(index);
@@ -66,7 +71,7 @@ void DockActions::newInstance(int index)
 void DockActions::closeTask(int index)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (idx.isValid()) {
         tasksModel->requestClose(idx);
     }
@@ -75,7 +80,7 @@ void DockActions::closeTask(int index)
 void DockActions::togglePinned(int index)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (!idx.isValid()) {
         return;
     }
@@ -91,19 +96,24 @@ void DockActions::togglePinned(int index)
     }
 }
 
+
 namespace
 {
 
-// Child of the group at @p index to enter when none of its windows is active,
-// following Plasma's task manager (TaskTools.js groupTopTask): the most
-// recently activated window, else the topmost in the stacking order, else the
-// first child.
-int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
+QModelIndex sourceIndexForVisual(DockModel *model, int visualIndex)
+{
+    const int sourceIndex = model->taskIndex(visualIndex);
+    return sourceIndex >= 0 ? model->tasksModel()->index(sourceIndex, 0) : QModelIndex{};
+}
+
+// Child of the source task at @p sourceIndex to enter when none of its
+// windows is active, following Plasma's task manager ordering.
+int entryChild(TaskManager::TasksModel *tasksModel, int sourceIndex, int childCount)
 {
     int best = -1;
     QDateTime bestActivated;
     for (int i = 0; i < childCount; ++i) {
-        const QDateTime activated = tasksModel->makeModelIndex(index, i).data(TaskManager::AbstractTasksModel::LastActivated).toDateTime();
+        const QDateTime activated = tasksModel->makeModelIndex(sourceIndex, i).data(TaskManager::AbstractTasksModel::LastActivated).toDateTime();
         if (activated.isValid() && (!bestActivated.isValid() || activated > bestActivated)) {
             bestActivated = activated;
             best = i;
@@ -116,7 +126,7 @@ int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
     int bestStacking = -1;
     for (int i = 0; i < childCount; ++i) {
         bool ok = false;
-        const int stacking = tasksModel->makeModelIndex(index, i).data(TaskManager::AbstractTasksModel::StackingOrder).toInt(&ok);
+        const int stacking = tasksModel->makeModelIndex(sourceIndex, i).data(TaskManager::AbstractTasksModel::StackingOrder).toInt(&ok);
         if (ok && stacking > bestStacking) {
             bestStacking = stacking;
             best = i;
@@ -130,7 +140,8 @@ int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
 void DockActions::activateOrMinimize(int index)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const int sourceIndex = m_model->taskIndex(index);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (!idx.isValid()) {
         return;
     }
@@ -160,7 +171,7 @@ void DockActions::activateOrMinimize(int index)
 
     int activeChild = -1;
     for (int i = 0; i < childCount; ++i) {
-        const QModelIndex child = tasksModel->makeModelIndex(index, i);
+        const QModelIndex child = tasksModel->makeModelIndex(sourceIndex, i);
         if (child.isValid() && child.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
             && !child.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool() && child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
             activeChild = i;
@@ -169,11 +180,11 @@ void DockActions::activateOrMinimize(int index)
     }
 
     if (activeChild < 0) {
-        const int target = entryChild(tasksModel, index, childCount);
+        const int target = entryChild(tasksModel, sourceIndex, childCount);
         if (target < 0 || target >= childCount) {
             return;
         }
-        const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
+        const QModelIndex targetIdx = tasksModel->makeModelIndex(sourceIndex, target);
         if (targetIdx.isValid() && targetIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
             && !targetIdx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
             tasksModel->requestActivate(targetIdx);
@@ -181,7 +192,7 @@ void DockActions::activateOrMinimize(int index)
         return;
     }
 
-    const QModelIndex activeIdx = tasksModel->makeModelIndex(index, activeChild);
+    const QModelIndex activeIdx = tasksModel->makeModelIndex(sourceIndex, activeChild);
     if (!activeIdx.isValid() || !activeIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
         || activeIdx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
         return;
@@ -199,44 +210,30 @@ void DockActions::activateOrMinimize(int index)
 void DockActions::cycleWindows(int index, bool forward)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
-    if (!idx.isValid()) {
-        return;
-    }
-
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
-    if (!isWindow) {
+    const int sourceIndex = m_model->taskIndex(index);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
+    if (!idx.isValid() || !idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()) {
         return;
     }
 
     const int childCount = tasksModel->rowCount(idx);
     if (childCount <= 1) {
-        // Single window or non-grouped: just activate/focus it
         tasksModel->requestActivate(idx);
         return;
     }
 
-    // Find the currently active child window
     int activeChild = -1;
     for (int i = 0; i < childCount; ++i) {
-        const QModelIndex child = tasksModel->makeModelIndex(index, i);
+        const QModelIndex child = tasksModel->makeModelIndex(sourceIndex, i);
         if (child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
             activeChild = i;
             break;
         }
     }
 
-    // Cycle to next/previous child. Entering a group whose windows are all
-    // inactive lands on the window the user left, in either wheel direction;
-    // only moves within the group follow the direction.
-    int target;
-    if (activeChild < 0) {
-        target = entryChild(tasksModel, index, childCount);
-    } else {
-        target = forward ? (activeChild + 1) % childCount : (activeChild - 1 + childCount) % childCount;
-    }
-
-    const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
+    const int target = activeChild < 0 ? entryChild(tasksModel, sourceIndex, childCount)
+                                      : (forward ? (activeChild + 1) % childCount : (activeChild - 1 + childCount) % childCount);
+    const QModelIndex targetIdx = tasksModel->makeModelIndex(sourceIndex, target);
     if (targetIdx.isValid()) {
         tasksModel->requestActivate(targetIdx);
     }
@@ -245,31 +242,30 @@ void DockActions::cycleWindows(int index, bool forward)
 bool DockActions::moveTask(int fromIndex, int toIndex)
 {
     auto *tasksModel = m_model->tasksModel();
-    if (fromIndex == toIndex) {
-        return false;
-    }
-    if (fromIndex < 0 || fromIndex >= tasksModel->rowCount()) {
-        return false;
-    }
-    if (toIndex < 0 || toIndex >= tasksModel->rowCount()) {
+    const int fromSource = m_model->taskIndex(fromIndex);
+    const int toSource = m_model->taskIndex(toIndex);
+    if (fromSource < 0 || toSource < 0 || fromSource == toSource) {
         return false;
     }
 
+    int targetSource = toSource;
     if (m_model->separateLaunchers()) {
-        // Clamp a cross-zone drop to the nearest task in the source zone.
-        // Query membership rather than a cached boundary so a pending
-        // pin/unpin reconciliation cannot accidentally cross the boundary.
-        const bool pinned = m_model->isPinned(fromIndex);
-        const int step = toIndex > fromIndex ? -1 : 1;
-        while (toIndex != fromIndex && m_model->isPinned(toIndex) != pinned) {
-            toIndex += step;
+        const auto pinnedAt = [tasksModel](int sourceIndex) {
+            const QModelIndex idx = tasksModel->index(sourceIndex, 0);
+            const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+            return url.isValid() && tasksModel->launcherPosition(url) != -1;
+        };
+        const bool pinned = pinnedAt(fromSource);
+        const int step = targetSource > fromSource ? -1 : 1;
+        while (targetSource != fromSource && pinnedAt(targetSource) != pinned) {
+            targetSource += step;
         }
-        if (fromIndex == toIndex) {
+        if (fromSource == targetSource) {
             return false;
         }
     }
 
-    const bool ok = m_model->moveTask(fromIndex, toIndex);
+    const bool ok = m_model->moveTask(fromSource, targetSource);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();
     }
@@ -300,7 +296,7 @@ bool DockActions::addLauncher(const QUrl &url)
 bool DockActions::removeLauncher(int index)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (!idx.isValid()) {
         return false;
     }
@@ -320,7 +316,14 @@ bool DockActions::removeLauncher(int index)
 void DockActions::openUrlsWithTask(int index, const QList<QUrl> &urls)
 {
     auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    if (m_model->isTrash(index)) {
+        if (!urls.isEmpty()) {
+            m_model->trashManager()->trashUrls(urls);
+        }
+        return;
+    }
+
+    const QModelIndex idx = sourceIndexForVisual(m_model, index);
     if (!idx.isValid() || urls.isEmpty()) {
         return;
     }

@@ -46,7 +46,17 @@ PreviewController::PreviewController(DockModel *model, DockView *dockView, Krema
     });
 }
 
-PreviewController::~PreviewController() = default;
+PreviewController::~PreviewController()
+{
+    // Unload the preview QML while the shared engine's context properties
+    // (DockView, PreviewController, ...) are still valid. Relying on
+    // m_previewView's unique_ptr destruction alone leaves PreviewPopup.qml
+    // bound to properties that the shell clears before this controller dies.
+    if (m_previewView) {
+        m_previewView->hide();
+        m_previewView->setSource(QUrl());
+    }
+}
 
 void PreviewController::initialize()
 {
@@ -148,7 +158,8 @@ bool PreviewController::isGrouped() const
     if (m_parentIndex < 0) {
         return false;
     }
-    return m_model->childCount(m_parentIndex) > 1;
+    const QModelIndex idx = m_model->taskModelIndex(m_parentIndex);
+    return idx.isValid() && m_model->tasksModel()->rowCount(idx) > 1;
 }
 
 QVariantList PreviewController::windowIds() const
@@ -156,7 +167,8 @@ QVariantList PreviewController::windowIds() const
     if (m_parentIndex < 0) {
         return {};
     }
-    return m_model->windowIds(m_parentIndex);
+    const QModelIndex idx = m_model->taskModelIndex(m_parentIndex);
+    return idx.isValid() ? idx.data(TaskManager::AbstractTasksModel::WinIdList).toList() : QVariantList{};
 }
 
 QString PreviewController::appName() const
@@ -164,7 +176,7 @@ QString PreviewController::appName() const
     if (m_parentIndex < 0) {
         return {};
     }
-    const QModelIndex idx = m_model->tasksModel()->index(m_parentIndex, 0);
+    const QModelIndex idx = m_model->taskModelIndex(m_parentIndex);
     return idx.data(TaskManager::AbstractTasksModel::AppName).toString();
 }
 
@@ -190,6 +202,11 @@ qreal PreviewController::contentHeight() const
 
 void PreviewController::showPreview(int index, qreal itemGlobalPos, qreal itemExtent)
 {
+    if (m_model->isTrash(index)) {
+        hidePreview();
+        return;
+    }
+
     if (m_held) {
         // The preview is an Overlay surface and would cover the context menu.
         qCDebug(lcPreview) << "showPreview ignored: held by context menu";
@@ -432,12 +449,16 @@ int PreviewController::previewThumbnailCount() const
     if (m_parentIndex < 0) {
         return 0;
     }
-    // Single window (no children) counts as 1 thumbnail
-    int childCount = m_model->childCount(m_parentIndex);
+
+    const QModelIndex parentIdx = m_model->taskModelIndex(m_parentIndex);
+    if (!parentIdx.isValid()) {
+        return 0;
+    }
+
+    const int childCount = m_model->tasksModel()->rowCount(parentIdx);
     if (childCount == 0) {
-        // Check if it's a window (not just a launcher)
-        const QModelIndex parentIdx = m_model->tasksModel()->index(m_parentIndex, 0);
-        bool isWindow = parentIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+        // Single window (no children) counts as 1 thumbnail.
+        const bool isWindow = parentIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
         return isWindow ? 1 : 0;
     }
     return childCount;
@@ -475,15 +496,21 @@ QModelIndex PreviewController::focusedThumbnailModelIndex() const
     if (m_parentIndex < 0 || m_focusedThumbnailIndex < 0) {
         return {};
     }
-    int childCount = m_model->childCount(m_parentIndex);
+
+    const QModelIndex parentIdx = m_model->taskModelIndex(m_parentIndex);
+    if (!parentIdx.isValid()) {
+        return {};
+    }
+
+    const int childCount = m_model->tasksModel()->rowCount(parentIdx);
     if (childCount == 0) {
-        // Single window: use parent row directly
-        return m_model->tasksModel()->index(m_parentIndex, 0);
+        // Single window: use the parent row directly.
+        return parentIdx;
     }
     if (m_focusedThumbnailIndex >= childCount) {
         return {};
     }
-    return m_model->tasksModel()->makeModelIndex(m_parentIndex, m_focusedThumbnailIndex);
+    return m_model->tasksModel()->index(m_focusedThumbnailIndex, 0, parentIdx);
 }
 
 void PreviewController::setHideDelay(int ms)

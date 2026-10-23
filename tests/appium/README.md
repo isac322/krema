@@ -405,6 +405,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | PREV-006 | `test_03_preview.py::test_prev006_single_window_preview` | screenshot, AT-SPI | pass |
 | PREV-007 | `test_03_preview.py::test_prev007_opening_preview_announces_window_count` | AT-SPI event | pass |
 | QA-PREV-01 | `test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` | AT-SPI, KWin, real input | pass (pre-fix failed at 33 ms; fixed 1/1) |
+| QA-PREV-02 | `test_03_preview.py::test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`) | AT-SPI, KWin geometry/cursor, W3C element origin | pass on arm64 Fedora 44 and Leap 16.0: both new cases failed before the webdriver patch and passed after; PREV-003/005 stayed passing |
 | CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`, `test_ctx001_about_krema_is_the_fifth_entry`, `test_ctx001_quit_is_the_last_entry` | KWin | pass |
 | CTX-002 | `test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes` | AT-SPI, kremarc | pass |
 | CTX-003 | `test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app`, `test_ctx003_unpinned_running_app_stays_until_it_closes` | AT-SPI, kremarc | pass |
@@ -738,6 +739,16 @@ a match is dropped only when its object has left the tree.
 Geometry. On Wayland, AT-SPI rects (`element.rect`, `Rect.of(element)`) are
 relative to the element's surface. The surface's screen position comes from
 KWin: the krema window whose client size equals the surface's AT-SPI frame.
+
+libatspi can retain an interface list read while a Qt popup was hidden.
+If that list lacks Component, geometry reads can keep failing after the
+popup opens. The webdriver patch (`tools/component-interface-cache.patch`)
+refreshes that one object's cache only on a negative Component lookup,
+before an element rect or an element pointer origin is read.
+It uses `clear_cache_single` (at-spi2-core 2.50 or later). Positive
+Component entries are kept: their calls still read live geometry, including
+the existing hidden-popup 0x0 result. If the refreshed lookup still lacks
+Component, the original error propagates.
 
 | Member | Description |
 |---|---|

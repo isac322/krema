@@ -230,7 +230,7 @@ app with a distinct window title.
 (pinned membership), AT-SPI (item name and window count), screenshot (labels and icons)
 **Automated:** tests/appium/test_04_context_menu.py::test_ctx008_pinned_launcher_launches_the_chosen_desktop_action, tests/appium/test_04_context_menu.py::test_ctx008_grouped_windows_launch_the_chosen_desktop_action (order and NoDisplay are verified by effect: a wrong position launches a window with another title; labels, icons and the launch-error notification are screenshot/manual only). Resolution (Actions= order, NoDisplay, separators, localized names, applications:/local/absolute-path desktop files) is unit-tested in tests/unit/test_desktop_actions.cpp.
 
-## TC CTX-010: Clear Notifications Is App-Scoped
+## TC CTX-013: Clear Notifications Is App-Scoped
 
 **Precondition:** The real integration harness has pinned Konsole and Dolphin
 launchers. Seed one watcher-unread notification for each app and a visible

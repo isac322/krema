@@ -468,38 +468,49 @@ the required order is `[W0, L1, L2]`; launching B must produce
 startup task is a fixture failure, not a passing test. Ordinary window
 insertion alone does not exercise this transition.
 
-## 23. Configure layer focus, then activate it through input (2026-10, native launch-order fixture)
+## 23. Deliver native pointer input before requesting a launch (2026-10, native launch-order fixture)
 
-**Symptom:** Scratch phase traces twice showed the test layer remaining
-inactive for 15 seconds before `requestNewInstance()`.
+**Symptom:** Scratch traces showed the test layer remaining inactive for
+15 seconds before `requestNewInstance()`. A protocol trace of the late-device
+probe showed KWin processing the injected press and release before Qt's first
+`wl_seat.get_pointer`. Qt received neither button event, and no launch was
+requested. Creating the same persistent device before `QApplication` let Qt
+bind its pointer before the gesture and receive the paired events. This
+identifies the probe's input loss; the historical CI job's exact failure
+branch remains unknown.
 
-**Cause:** The fixture treated an `OnDemand` keyboard-interactivity setting
-as guaranteed activation. Layer-shell state is double-buffered, so a
-`None` to `OnDemand` flip may coalesce before a commit. The historical CI
-job's exact failure branch is unknown.
+**Cause:** The fixture created its first fake pointer after Qt initialized a
+keyboard-only seat. The injector's `wl_display_roundtrip()` acknowledged
+requests on its own connection; it did not wait for Qt to receive the new seat
+capability, bind `wl_pointer`, or dispatch input. The fixture also coupled an
+ordinary mouse launch to `QWindow::isActive()`. Krema's dock uses
+`KeyboardInteractivityNone` for this action. On the traced Qt/KIO stack, the
+native pointer press supplies the seat and serial needed for a launch token
+without keyboard focus.
 
-**Fixture change:** Set `OnDemand` before showing the layer, send one real
-pointer gesture for every launch, and await `QWindow::isActive()` before
-requesting a launch. This deliberately removes the cached-active fast path:
-the gesture is a test-fixture synchronization/activation step, not a product
-behavior claim. For an inactive-layer case, activate an existing task and
-await a nonblocking `wl_display_sync` callback on Qt's same Wayland connection,
-alongside the task's active state and the layer's inactive state.
+**Fixture change:** Create one persistent fake pointer before the parent's
+`QApplication`, and configure the layer as `KeyboardInteractivityNone` before
+showing it. Arm one launcher position and an input deadline before injecting
+the gesture. Request the launch only from the target window's actual
+spontaneous left-button release after a matching press inside its input
+rectangle, rejecting cancelled or dragged gestures. Resolve the model index
+at delivery and start the launch clock immediately before
+`requestNewInstance()`. Keep child IPC waits outside the input callback.
+Missing input or a missing launcher index fails the fixture without a direct
+or delayed fallback. The existing 15-second deadline and 5-second
+startup-feedback lifetime remain unchanged.
 
-**Regression setup ordering:** The added setup had a separate race:
-`IsActive` could already be true when `requestActivate()` queued its
-Wayland request. `QTest::qWaitFor()` could then return immediately without
-pumping events or flushing the request. Pointer input on another connection
-could reach KWin first; the delayed activation could then steal focus back.
-Enqueue the sync after the activation request and let Qt dispatch its
-callback on the GUI thread's default queue. The callback acknowledges that
-the server processed the preceding requests even when the cached state
-never changed. Require both that acknowledgement and the focus predicates
-within the existing deadline, without a blocking round trip.
+**Regression setup ordering:** `IsActive` can already be true when
+`requestActivate()` queues its Wayland request. After activating the foreign
+task, enqueue a nonblocking `wl_display_sync` on Qt's connection and let Qt
+dispatch its callback. Require that acknowledgement and the existing focus
+predicates before the gesture. Keep the foreign task's active-role snapshot
+before releasing the startup child; it does not assert continuous seat focus
+after the child maps.
 
-**Key lesson:** Focus configuration and compositor-acknowledged activation
-are separate prerequisites. A fixture activation failure does not establish
-a product defect.
+**Key lesson:** Observe input delivery in the receiving client and trigger the
+action from that event. An injector acknowledgement or cached keyboard-focus
+state does not establish that Qt received a mouse click.
 
 ## 24. Bound QTimer arms and observe direct D-Bus owner replacement (2026-10, PR #128)
 

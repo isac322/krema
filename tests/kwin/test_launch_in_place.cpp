@@ -29,6 +29,7 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QMainWindow>
+#include <QMouseEvent>
 #include <QProcess>
 #include <QRect>
 #include <QRegion>
@@ -64,6 +65,7 @@ constexpr int kTimeoutMs = 15000;
 constexpr int kStartupFeedbackLifetimeMs = 5000;
 QMainWindow *g_launcherSurface = nullptr;
 QRect g_launcherClickRect;
+krema::test::FakePointer *g_pointer = nullptr;
 const QStringList kAppIds{QStringLiteral("krema-inplace-a"), QStringLiteral("krema-inplace-b"), QStringLiteral("krema-inplace-c")};
 
 krema::DockModel &model()
@@ -76,9 +78,8 @@ krema::DockModel &model()
 
 krema::test::FakePointer &pointer()
 {
-    // Keep the compositor's input device alive for every case in this process.
-    static krema::test::FakePointer instance("krema-launch-in-place-test", "Activate the launcher surface before requesting a real startup token");
-    return instance;
+    Q_ASSERT(g_pointer);
+    return *g_pointer;
 }
 
 QString launcher(const QString &appId)
@@ -313,12 +314,13 @@ QString execArgument(QString argument)
     return QLatin1Char('"') + argument + QLatin1Char('"');
 }
 
-class StartupChildren
+class StartupChildren : public QObject
 {
 public:
     StartupChildren()
         : m_path(startupSocketPath())
     {
+        qApp->installEventFilter(this);
         const QByteArray path = QFile::encodeName(m_path);
         sockaddr_un address{};
         address.sun_family = AF_UNIX;
@@ -341,6 +343,7 @@ public:
 
     ~StartupChildren()
     {
+        qApp->removeEventFilter(this);
         // KIO owns these processes. SO_PEERCRED identifies the actual child,
         // not an intermediate launcher PID. POLLHUP marks an exited peer.
         for (const Peer &peer : m_peers) {
@@ -381,38 +384,30 @@ public:
         if (!g_launcherSurface || !g_launcherSurface->windowHandle()) {
             return failStart(QStringLiteral("requesting-surface"));
         }
-        // QWindow::isActive() is cached client state, not proof that the
-        // compositor granted focus; use real input for every launch.
         if (!pointer().isValid()) {
             return failStart(QStringLiteral("fake-input-device"));
         }
         if (g_launcherClickRect.isEmpty()) {
             return failStart(QStringLiteral("requesting-surface-click-rect"));
         }
+        m_pendingPosition = launcherPosition;
+        m_pressed = false;
+        m_requestIssued = false;
+        m_inputTimer.start();
+        m_startupObserved.invalidate();
         pointer().moveTo(g_launcherClickRect.center());
         pointer().click();
         if (!QTest::qWaitFor(
-                [] {
-                    return g_launcherSurface->windowHandle()->isActive();
+                [this] {
+                    return m_pendingPosition < 0;
                 },
                 kTimeoutMs)) {
-            return failStart(QStringLiteral("requesting-surface-active"));
+            m_pendingPosition = -1;
+            return failStart(QStringLiteral("actual-spontaneous-input"));
         }
-        auto *tasks = model().tasksModel();
-        QModelIndex launchIndex;
-        for (int row = 0; row < tasks->rowCount(); ++row) {
-            const QModelIndex index = tasks->index(row, 0);
-            if (tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) == launcherPosition) {
-                launchIndex = index;
-                break;
-            }
+        if (!m_requestIssued) {
+            return false;
         }
-        if (!launchIndex.isValid()) {
-            return failStart(QStringLiteral("launcher-index"));
-        }
-        m_launchTime.start();
-        m_startupObserved.invalidate();
-        tasks->requestNewInstance(launchIndex);
         if (!QTest::qWaitFor(
                 [this] {
                     pollfd descriptor{m_server, POLLIN, 0};
@@ -483,6 +478,72 @@ public:
         return mapped == QByteArray("MAPPED ") + QByteArray::number(peer.pid);
     }
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (m_pendingPosition < 0) {
+            return false;
+        }
+        const bool target = g_launcherSurface && watched == g_launcherSurface->windowHandle();
+        const auto cancel = [this](const QString &stage) {
+            m_pendingPosition = -1;
+            m_pressed = false;
+            failStart(stage);
+        };
+        if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::MouseMove) {
+            if (!event->spontaneous()) {
+                return false;
+            }
+            const auto *mouse = static_cast<QMouseEvent *>(event);
+            const bool hit = target && g_launcherClickRect.contains(mouse->globalPosition().toPoint());
+            if (event->type() == QEvent::MouseButtonPress) {
+                if (!hit || mouse->button() != Qt::LeftButton || mouse->buttons() != Qt::LeftButton || m_pressed) {
+                    cancel(QStringLiteral("actual-left-press-target"));
+                    return false;
+                }
+                m_pressed = true;
+                m_pressPosition = mouse->globalPosition().toPoint();
+                return true;
+            }
+            if (event->type() == QEvent::MouseMove) {
+                if (m_pressed && (!hit || (mouse->globalPosition().toPoint() - m_pressPosition).manhattanLength() >= QApplication::startDragDistance())) {
+                    cancel(QStringLiteral("actual-click-drag"));
+                }
+                return false;
+            }
+            if (!hit || !m_pressed || mouse->button() != Qt::LeftButton || mouse->buttons() != Qt::NoButton
+                || (mouse->globalPosition().toPoint() - m_pressPosition).manhattanLength() >= QApplication::startDragDistance()) {
+                cancel(QStringLiteral("actual-paired-release-target"));
+                return false;
+            }
+            const int position = m_pendingPosition;
+            m_pendingPosition = -1;
+            m_pressed = false;
+            if (m_inputTimer.elapsed() >= kTimeoutMs) {
+                failStart(QStringLiteral("actual-input-deadline"));
+                return true;
+            }
+            // Resolve the current row at delivery, then request from the real
+            // release callback while Qt still has this native input context.
+            auto *tasks = model().tasksModel();
+            for (int row = 0; row < tasks->rowCount(); ++row) {
+                const QModelIndex index = tasks->index(row, 0);
+                if (tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) == position) {
+                    m_requestIssued = true;
+                    m_launchTime.start();
+                    tasks->requestNewInstance(index);
+                    return true;
+                }
+            }
+            failStart(QStringLiteral("launcher-index"));
+            return true;
+        }
+        if (target && m_pressed && (event->type() == QEvent::Leave || event->type() == QEvent::Hide || event->type() == QEvent::UngrabMouse)) {
+            cancel(QStringLiteral("actual-click-cancelled"));
+        }
+        return false;
+    }
+
 private:
     bool failStart(const QString &stage, int systemError = 0)
     {
@@ -503,6 +564,11 @@ private:
     bool m_bound = false;
     bool m_listening = false;
     std::vector<Peer> m_peers;
+    int m_pendingPosition = -1;
+    bool m_pressed = false;
+    bool m_requestIssued = false;
+    QPoint m_pressPosition;
+    QElapsedTimer m_inputTimer;
     QElapsedTimer m_launchTime;
     QElapsedTimer m_startupObserved;
 };
@@ -1067,7 +1133,8 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         REQUIRE(mixedPrepared);
         REQUIRE(settleEvents());
         REQUIRE(mixedLayout() == before);
-        // Start from a real window's focus so the launcher must reacquire it.
+        // Prepare V's acknowledged activation before clicking the dock-like
+        // layer, whose KeyboardInteractivityNone does not request focus.
         auto *tasks = model().tasksModel();
         tasks->requestActivate(tasks->index(3, 0));
         auto *waylandApp = qGuiApp ? qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>() : nullptr;
@@ -1092,8 +1159,8 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
                     sync.callback = nullptr;
                 },
         };
-        // V may already be active, but its forced activation request must be
-        // processed before real input can safely give the launcher focus.
+        // V may already be active, but acknowledge its forced activation
+        // before the launch gesture to keep setup requests out of that action.
         // This callback inherits Qt's display default queue; Qt flushes and
         // dispatches it on the GUI thread while qWaitFor waits for the ack.
         activationSync.callback = wl_display_sync(display);
@@ -1129,6 +1196,10 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         started.noteStartupObserved();
         REQUIRE(settleEvents());
         REQUIRE(startupInPlace());
+        // IsActive is the TaskManager snapshot before RELEASE, not a claim
+        // that V keeps seat focus after the new child maps.
+        CHECK(tasks->index(3, 0).data(AbstractTasksModel::IsActive).toBool());
+        CHECK_FALSE(g_launcherSurface->windowHandle()->isActive());
         REQUIRE(started.release(true));
         const QStringList after{QStringLiteral("L0"), QStringLiteral("U"), QStringLiteral("W1"), QStringLiteral("V")};
         REQUIRE(QTest::qWaitFor(
@@ -1166,6 +1237,15 @@ int main(int argc, char *argv[])
         return startupChildMain(argc, argv);
     }
 
+    // Advertise the persistent pointer before Qt initializes its Wayland seat.
+    // Injector roundtrips cannot make a later Qt get_pointer precede a click.
+    krema::test::FakePointer input("krema-launch-in-place-test", "Click the launcher surface to request a real startup token");
+    if (!input.isValid()) {
+        qCritical("Startup fixture prerequisite failed: fake-input device unavailable");
+        return 2;
+    }
+    g_pointer = &input;
+
     // KIO requests a real Wayland token from the launcher's QWindow. A layer
     // surface models the dock without adding a task to the expected order.
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
@@ -1196,7 +1276,7 @@ int main(int argc, char *argv[])
 #else
     layer->setScreen(screen);
 #endif
-    layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
+    layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     launcherSurface.setMask(QRegion(launcherSurface.rect()));
     launcherSurface.show();
     // The shell integration is initialized in this process. Child launches

@@ -42,6 +42,10 @@ inline constexpr uint32_t kBtnLeft = 0x110; // BTN_LEFT, linux/input-event-codes
 /// Wayland connection of its own. run-with-kwin.sh disables KWin's permission
 /// checks, so the restricted fake-input global is bindable. The device lives
 /// as long as this object; the seat has a pointer only while some device does.
+/// Create it before the receiving Qt application initializes its Wayland seat
+/// when the compositor otherwise has no pointer device. A roundtrip on this
+/// injector connection does not wait for Qt to bind its own wl_pointer or
+/// dispatch mouse events; the receiving client must observe the actual input.
 class FakePointer
 {
 public:
@@ -86,7 +90,7 @@ public:
     }
 
 private:
-    /// Sends one request and waits until KWin has handled it.
+    /// Waits for KWin on this connection, not for another client's event delivery.
     template<typename... Args>
     void send(uint32_t opcode, Args... args)
     {

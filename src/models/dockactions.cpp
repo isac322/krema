@@ -9,7 +9,11 @@
 #include <taskmanager/tasksmodel.h>
 #include <taskmanager/tasktools.h>
 
+#include <KApplicationTrader>
+#include <KService>
+
 #include <QDateTime>
+#include <QFileInfo>
 #include <QLoggingCategory>
 
 Q_DECLARE_LOGGING_CATEGORY(lcModel)
@@ -276,6 +280,30 @@ bool DockActions::moveTask(int fromIndex, int toIndex)
     return ok;
 }
 
+namespace
+{
+
+// Storage id of the installed application behind a local .desktop file, or an
+// empty string when none matches. Menus hand out the symlink target (e.g.
+// /usr/lib/libreoffice/share/xdg/writer.desktop) instead of the entry in the
+// application directories (libreoffice-writer.desktop), so compare resolved paths.
+QString storageIdForDesktopFile(const QUrl &url)
+{
+    if (!url.isLocalFile()) {
+        return {};
+    }
+    const QString target = QFileInfo(url.toLocalFile()).canonicalFilePath();
+    if (target.isEmpty()) {
+        return {};
+    }
+    const auto services = KApplicationTrader::query([&target](const KService::Ptr &service) {
+        return QFileInfo(service->entryPath()).canonicalFilePath() == target;
+    });
+    return services.isEmpty() ? QString() : services.constFirst()->storageId();
+}
+
+}
+
 bool DockActions::addLauncher(const QUrl &url)
 {
     if (!url.isValid()) {
@@ -288,8 +316,20 @@ bool DockActions::addLauncher(const QUrl &url)
         return false;
     }
 
-    // Use the resolved URL (handles preferred:// and other special schemes)
-    const QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
+    // appDataFromUrl() derives an id from any .desktop path, even one outside
+    // the application directories (e.g. a file dragged from ~/Desktop). Such
+    // entries are unknown to KSycoca, and libtaskmanager dereferences the null
+    // service in requestAddLauncher() and crashes the dock.
+    QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
+    if (!KService::serviceByStorageId(appData.id)) {
+        const QString storageId = storageIdForDesktopFile(url);
+        if (storageId.isEmpty()) {
+            qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
+            return false;
+        }
+        resolvedUrl = QUrl(QStringLiteral("applications:") + storageId);
+    }
+
     const bool ok = m_model->tasksModel()->requestAddLauncher(resolvedUrl);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();

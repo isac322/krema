@@ -9,12 +9,15 @@
 //
 // Must run under run-with-kwin.sh.
 
+#include "fakepointer.h"
 #include "models/dockmodel.h"
 
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
 #include <LayerShellQt/Window>
+
+#include <wayland-client.h>
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -24,15 +27,19 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QMainWindow>
 #include <QProcess>
+#include <QRect>
 #include <QRegion>
 #include <QScopeGuard>
+#include <QScreen>
 #include <QSocketNotifier>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTest>
 #include <QWindow>
+#include <QtGui/qguiapplication_platform.h>
 
 #include <cerrno>
 #include <cstring>
@@ -56,6 +63,7 @@ constexpr int kTimeoutMs = 15000;
 // WaylandStartupTasksModel's unchanged default startup-feedback lifetime.
 constexpr int kStartupFeedbackLifetimeMs = 5000;
 QMainWindow *g_launcherSurface = nullptr;
+QRect g_launcherClickRect;
 const QStringList kAppIds{QStringLiteral("krema-inplace-a"), QStringLiteral("krema-inplace-b"), QStringLiteral("krema-inplace-c")};
 
 krema::DockModel &model()
@@ -64,6 +72,13 @@ krema::DockModel &model()
     // objects whose teardown order is not useful to this integration test.
     static auto *instance = new krema::DockModel;
     return *instance;
+}
+
+krema::test::FakePointer &pointer()
+{
+    // Keep the compositor's input device alive for every case in this process.
+    static krema::test::FakePointer instance("krema-launch-in-place-test", "Activate the launcher surface before requesting a real startup token");
+    return instance;
 }
 
 QString launcher(const QString &appId)
@@ -362,27 +377,28 @@ public:
 
     bool start(int launcherPosition)
     {
-        if (!g_launcherSurface) {
-            return false;
+        m_startFailure.clear();
+        if (!g_launcherSurface || !g_launcherSurface->windowHandle()) {
+            return failStart(QStringLiteral("requesting-surface"));
         }
-        auto *layer = LayerShellQt::Window::get(g_launcherSurface->windowHandle());
-        // KWin grants an unprivileged token to the active requesting surface.
-        // Toggling this Top layer's input mode activates it without a task row.
-        // Keyboard interactivity is double-buffered: commit both states so
-        // None -> OnDemand remains an actual compositor-side transition.
-        layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
-        g_launcherSurface->repaint();
-        QGuiApplication::sync();
-        layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-        g_launcherSurface->repaint();
-        QGuiApplication::sync();
+        // When another app is active, use real input to focus this layer.
+        // Changing keyboard interactivity alone does not acknowledge activation.
+        if (!g_launcherSurface->windowHandle()->isActive()) {
+            if (!pointer().isValid()) {
+                return failStart(QStringLiteral("fake-input-device"));
+            }
+            if (g_launcherClickRect.isEmpty()) {
+                return failStart(QStringLiteral("requesting-surface-click-rect"));
+            }
+            pointer().moveTo(g_launcherClickRect.center());
+            pointer().click();
+        }
         if (!QTest::qWaitFor(
                 [] {
                     return g_launcherSurface->windowHandle()->isActive();
                 },
                 kTimeoutMs)) {
-            UNSCOPED_INFO("startup fixture prerequisite failed: requesting layer surface was not active");
-            return false;
+            return failStart(QStringLiteral("requesting-surface-active"));
         }
         auto *tasks = model().tasksModel();
         QModelIndex launchIndex;
@@ -394,7 +410,7 @@ public:
             }
         }
         if (!launchIndex.isValid()) {
-            return false;
+            return failStart(QStringLiteral("launcher-index"));
         }
         m_launchTime.start();
         m_startupObserved.invalidate();
@@ -405,23 +421,36 @@ public:
                     return ::poll(&descriptor, 1, 0) > 0 && (descriptor.revents & POLLIN);
                 },
                 kTimeoutMs)) {
-            return false;
+            return failStart(QStringLiteral("child-connection-wait"));
         }
         const int fd = ::accept4(m_server, nullptr, nullptr, SOCK_CLOEXEC);
         if (fd < 0) {
-            return false;
+            const int error = errno;
+            return failStart(QStringLiteral("child-accept"), error);
         }
         ucred credentials{};
         socklen_t length = sizeof(credentials);
-        if (::getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0 || credentials.uid != ::getuid() || credentials.pid <= 0
-            || credentials.pid == ::getpid()) {
+        if (::getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0) {
+            const int error = errno;
             ::close(fd);
-            return false;
+            return failStart(QStringLiteral("child-peer-credentials"), error);
+        }
+        if (credentials.uid != ::getuid() || credentials.pid <= 0 || credentials.pid == ::getpid()) {
+            ::close(fd);
+            return failStart(QStringLiteral("child-peer-identity"));
         }
         m_peers.push_back({fd, credentials.pid});
         const QByteArray ready = receiveLine(fd);
-        UNSCOPED_INFO("startup fixture child ready (token presence only): " << ready.toStdString());
-        return ready == QByteArray("READY ") + QByteArray::number(credentials.pid) + " TOKEN 1";
+        const bool tokenPresent = ready.endsWith(" TOKEN 1");
+        if (ready != QByteArray("READY ") + QByteArray::number(credentials.pid) + " TOKEN 1") {
+            return failStart(QStringLiteral("child-ready-handshake (token present=%1)").arg(tokenPresent));
+        }
+        return true;
+    }
+
+    const QString &startFailure() const
+    {
+        return m_startFailure;
     }
 
     void noteStartupObserved()
@@ -457,11 +486,21 @@ public:
     }
 
 private:
+    bool failStart(const QString &stage, int systemError = 0)
+    {
+        m_startFailure = stage;
+        if (systemError != 0) {
+            m_startFailure += QStringLiteral(" errno=%1 (%2)").arg(systemError).arg(QString::fromLocal8Bit(std::strerror(systemError)));
+        }
+        return false;
+    }
+
     struct Peer {
         int fd;
         pid_t pid;
     };
     QString m_path;
+    QString m_startFailure;
     int m_server = -1;
     bool m_bound = false;
     bool m_listening = false;
@@ -472,8 +511,8 @@ private:
 
 int startupChildMain(int argc, char **argv)
 {
-    // QtWayland consumes the activation token when QApplication is created.
-    // Report only its presence: the opaque token is a bearer capability.
+    // QtWayland uses the token when the child window requests activation.
+    // Report only its presence, never its value: it is a bearer capability.
     const bool tokenPresent = !qgetenv("XDG_ACTIVATION_TOKEN").isEmpty();
     QGuiApplication::setDesktopFileName(QString::fromLocal8Bit(argv[2]));
     QApplication application(argc, argv);
@@ -668,6 +707,7 @@ void requireStartupChild(StartupChildren &children, int launcherPosition, Transi
     const bool started = children.start(launcherPosition);
     const QString rows = trace.currentRows();
     INFO("startup fixture prerequisite: launched child connected with an activation token present");
+    INFO("startup fixture failure stage: " << children.startFailure().toStdString());
     INFO("current rows: " << rows.toStdString() << "\nstartup trace:\n" << trace.describe().toStdString());
     REQUIRE(started);
 }
@@ -1029,6 +1069,48 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         REQUIRE(mixedPrepared);
         REQUIRE(settleEvents());
         REQUIRE(mixedLayout() == before);
+        // Start from a real window's focus so the launcher must reacquire it.
+        auto *tasks = model().tasksModel();
+        tasks->requestActivate(tasks->index(3, 0));
+        auto *waylandApp = qGuiApp ? qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>() : nullptr;
+        REQUIRE(waylandApp);
+        wl_display *display = waylandApp->display();
+        REQUIRE(display);
+        struct ActivationSync {
+            wl_callback *callback = nullptr;
+            bool done = false;
+        } activationSync;
+        const auto destroyActivationSync = qScopeGuard([&] {
+            if (activationSync.callback) {
+                wl_callback_destroy(activationSync.callback);
+            }
+        });
+        static const wl_callback_listener activationSyncListener = {
+            .done =
+                [](void *data, wl_callback *callback, uint32_t) {
+                    auto &sync = *static_cast<ActivationSync *>(data);
+                    sync.done = true;
+                    wl_callback_destroy(callback);
+                    sync.callback = nullptr;
+                },
+        };
+        // V may already be active, but its forced activation request must be
+        // processed before real input can safely give the launcher focus.
+        // This callback inherits Qt's display default queue; Qt flushes and
+        // dispatches it on the GUI thread while qWaitFor waits for the ack.
+        activationSync.callback = wl_display_sync(display);
+        REQUIRE(activationSync.callback);
+        REQUIRE(wl_callback_add_listener(activationSync.callback, &activationSyncListener, &activationSync) == 0);
+        const bool foreignFocusReady = QTest::qWaitFor(
+            [&] {
+                return activationSync.done && mixedLayout() == before && tasks->index(3, 0).data(AbstractTasksModel::IsActive).toBool()
+                    && !g_launcherSurface->windowHandle()->isActive();
+            },
+            kTimeoutMs);
+        INFO("foreign-focus prerequisite: activation acknowledged=" << activationSync.done
+                                                                    << ", V active=" << tasks->index(3, 0).data(AbstractTasksModel::IsActive).toBool()
+                                                                    << ", launcher active=" << g_launcherSurface->windowHandle()->isActive());
+        REQUIRE(foreignFocusReady);
         requireStartupChild(started, 1, trace);
         const auto startupInPlace = [&] {
             auto *tasks = model().tasksModel();
@@ -1090,10 +1172,17 @@ int main(int argc, char *argv[])
     // surface models the dock without adding a task to the expected order.
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell");
     QApplication application(argc, argv);
+    QScreen *screen = QGuiApplication::primaryScreen();
+    if (!screen) {
+        qCritical("Startup fixture prerequisite failed: no screen for parent layer-shell surface");
+        return 2;
+    }
+    g_launcherClickRect = QRect(screen->geometry().topLeft(), QSize(8, 8));
     QMainWindow launcherSurface;
     launcherSurface.setWindowFlags(Qt::FramelessWindowHint);
-    launcherSurface.resize(8, 8);
+    launcherSurface.resize(g_launcherClickRect.size());
     launcherSurface.winId();
+    launcherSurface.windowHandle()->setScreen(screen);
     g_launcherSurface = &launcherSurface;
     auto *layer = LayerShellQt::Window::get(launcherSurface.windowHandle());
     if (!layer) {
@@ -1104,7 +1193,12 @@ int main(int argc, char *argv[])
     layer->setAnchors(LayerShellQt::Window::Anchors{LayerShellQt::Window::AnchorTop} | LayerShellQt::Window::AnchorLeft);
     layer->setLayer(LayerShellQt::Window::LayerTop);
     layer->setExclusiveZone(0);
-    layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+#ifdef KREMA_COMPAT_NO_LAYERSHELL_SCREEN
+    layer->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
+#else
+    layer->setScreen(screen);
+#endif
+    layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
     launcherSurface.setMask(QRegion(launcherSurface.rect()));
     launcherSurface.show();
     // The shell integration is initialized in this process. Child launches

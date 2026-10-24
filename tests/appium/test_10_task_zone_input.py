@@ -83,8 +83,12 @@ def _start(krema: Krema, edge: int, *, separate: bool = True, zoom: float = 1.0,
     _record(krema, "configuration", requested=settings, actual=krema.read_config()["General"])
 
 
-def _expect_order(krema: Krema, names: tuple[str, ...]) -> None:
-    wait_until(lambda: krema.item_names() == list(names), message=f"native dock task order {names}")
+def _expect_order(krema: Krema, expected: tuple[str, ...]) -> None:
+    wait_until(
+        lambda: tuple(krema.item_names()) == expected,
+        timeout=10.0,
+        message=lambda: f"native dock task order {expected} within 10.0s (have {krema.item_names()})",
+    )
 
 
 def _park(krema: Krema) -> tuple[int, int]:

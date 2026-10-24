@@ -47,7 +47,6 @@ def park_pointer() -> None:
 def open_items(krema: Krema, apps: TestWindows, titles: list[str]) -> None:
     for title, app_id in zip(titles, APP_IDS):
         apps.open(title, app_id=app_id)
-    for title in titles:
         krema.wait_for_item(title)
     wait_until(lambda: krema.item_names() == titles, message=lambda: f"dock items {titles} in order (have {krema.item_names()})")
 

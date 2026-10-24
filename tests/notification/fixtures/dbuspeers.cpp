@@ -283,7 +283,12 @@ StatusNotifierItemPeer::~StatusNotifierItemPeer()
 
 bool StatusNotifierItemPeer::start(bool replaceExisting)
 {
-    if (m_serviceRegistered && m_objectRegistered) {
+    return claimServiceWithoutObject(replaceExisting) && exportObjectAndEmitReady();
+}
+
+bool StatusNotifierItemPeer::claimServiceWithoutObject(bool replaceExisting)
+{
+    if (m_serviceRegistered) {
         return true;
     }
     const auto registration = m_bus.interface()->registerService(
@@ -291,17 +296,28 @@ bool StatusNotifierItemPeer::start(bool replaceExisting)
         replaceExisting ? QDBusConnectionInterface::ReplaceExistingService : QDBusConnectionInterface::DontQueueService,
         QDBusConnectionInterface::AllowReplacement);
     m_serviceRegistered = registration.isValid() && registration.value() == QDBusConnectionInterface::ServiceRegistered;
+    return m_serviceRegistered;
+}
+
+bool StatusNotifierItemPeer::exportObjectAndEmitReady()
+{
     if (!m_serviceRegistered) {
         return false;
     }
-    m_objectRegistered = m_bus.registerObject(m_objectPath,
-                                              this,
-                                              QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
     if (!m_objectRegistered) {
-        m_bus.unregisterService(m_serviceName);
-        m_serviceRegistered = false;
+        m_objectRegistered = m_bus.registerObject(m_objectPath,
+                                                  this,
+                                                  QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
     }
-    return m_objectRegistered;
+    if (!m_objectRegistered) {
+        return false;
+    }
+    Q_EMIT NewStatus(m_status);
+    Q_EMIT NewTitle();
+    Q_EMIT NewAttentionIcon();
+    Q_EMIT NewOverlayIcon();
+    Q_EMIT NewToolTip();
+    return true;
 }
 
 void StatusNotifierItemPeer::stop()

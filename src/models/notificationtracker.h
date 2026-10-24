@@ -138,6 +138,10 @@ private Q_SLOTS:
     void onSniNewAttentionIcon(const QDBusMessage &message);
     void onSniNewOverlayIcon(const QDBusMessage &message);
     void onSniNewToolTip(const QDBusMessage &message);
+    void onSniPropertiesChanged(const QString &interfaceName,
+                                const QVariantMap &changedProperties,
+                                const QStringList &invalidatedProperties,
+                                const QDBusMessage &message);
     void onSniServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
     void onSniWatcherServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
 
@@ -158,7 +162,9 @@ private:
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
     QString sniKeyForMessage(const QDBusMessage &message) const;
+    void queryAllSniProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath);
     void querySniProperty(const QString &key, quint64 generation, const QString &service, const QString &objectPath, const QString &property);
+    void ensureSniMetadataQueried(const QString &key, SniEntry &entry);
     void clearSniItems();
     [[nodiscard]] const SniEntry *sniEntryForApp(const QString &appId) const;
 
@@ -216,6 +222,7 @@ private:
         QString overlayIconName;
         QString toolTipTitle;
         QString toolTipSubTitle;
+        bool initialQueryFailed = false;
         quint64 generation = 0;
     };
     QHash<QString, SniEntry> m_sniItems;
@@ -239,6 +246,7 @@ private:
     bool m_sniAttentionIconMatchConnected = false;
     bool m_sniOverlayIconMatchConnected = false;
     bool m_sniToolTipMatchConnected = false;
+    bool m_sniPropertiesChangedMatchConnected = false;
     int m_revision = 0;
     bool m_dndActive = false;
 };

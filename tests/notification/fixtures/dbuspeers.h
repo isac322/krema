@@ -115,8 +115,9 @@ public:
     explicit StatusNotifierItemPeer(QString serviceName, QString objectPath = QStringLiteral("/StatusNotifierItem"), QObject *parent = nullptr);
     StatusNotifierItemPeer(QString serviceName, QString objectPath, const QDBusConnection &bus, QObject *parent = nullptr);
     ~StatusNotifierItemPeer() override;
-
     bool start(bool replaceExisting = false);
+    bool claimServiceWithoutObject(bool replaceExisting = false);
+    bool exportObjectAndEmitReady();
     void stop();
     bool isRegistered() const;
     QString serviceName() const;

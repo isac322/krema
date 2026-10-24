@@ -840,12 +840,21 @@ TEST_CASE("SNI item metadata refreshes after gapless service owner replacement",
     replacement.setTitle(QStringLiteral("New title"));
     replacement.setAttentionIconName(QStringLiteral("new-attention"));
     replacement.setOverlayIconName(QStringLiteral("new-overlay"));
-    REQUIRE(replacement.start(true));
+    replacement.setToolTip(QVariant::fromValue(krema::test::ToolTipData{QStringLiteral("new-icon"),
+                                                                          {},
+                                                                          QStringLiteral("New tooltip"),
+                                                                          QStringLiteral("New subtitle")}));
+    REQUIRE(replacement.claimServiceWithoutObject(true));
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    REQUIRE(replacement.exportObjectAndEmitReady());
 
     REQUIRE(waitFor([&] {
         return tracker.sniTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New title")
             && tracker.sniAttentionIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-attention")
-            && tracker.sniOverlayIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-overlay");
+            && tracker.sniOverlayIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-overlay")
+            && tracker.sniToolTipTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New tooltip")
+            && tracker.sniToolTipSubTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New subtitle")
+            && tracker.sniNeedsAttention(QStringLiteral("org.example.gapless"));
     }));
 }
 

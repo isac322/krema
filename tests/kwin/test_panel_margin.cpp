@@ -31,7 +31,20 @@
 // Must run under run-with-kwin.sh, which provides WAYLAND_DISPLAY, a private
 // session bus and throwaway XDG directories.
 
+// Test-only access to the platform's private handoff state. Include all
+// headers pulled by the platform header before redefining private.
 #include "fakepointer.h"
+#include <QMargins>
+#include <QPointer>
+#include <QRegion>
+#include <QScreen>
+#include <QSize>
+#include <QWindow>
+#include <memory>
+#include <sstream>
+#define private public
+#include "platform/waylanddockplatform.h"
+#undef private
 #include "krema.h"
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
@@ -54,6 +67,8 @@
 #include <QDBusReply>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QExposeEvent>
+#include <QPlatformSurfaceEvent>
 #include <QFile>
 #include <QHash>
 #include <QJsonArray>
@@ -845,6 +860,121 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     requireSettles(*manager, pids, "non-reserving panel, Panels, margin 8", [](const Placement &p) {
         return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - 8 && reservationCoversDock(p);
     });
+}
+
+TEST_CASE("Panel probe ownership survives transient exposure loss during edge switches", "[panel-margin][issue-135]")
+{
+    configure(1, 8);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const QString outputName = view->screen()->name();
+    StandInPanel panel(kPanelZone, outputName);
+    REQUIRE(panel.waitForStarted());
+
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    const auto probeOwnsReservation = [&] {
+        return platform->m_probe && platform->m_probeLayerWindow && platform->m_probeLayerWindow->exclusionZone() > 0
+            && platform->m_layerWindow && platform->m_layerWindow->exclusionZone() == -1;
+    };
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    // A real empty expose event is delivered while the native surface remains
+    // visible. Force the resulting transient state deterministically so this
+    // test also exercises the exact owner-loss branch from the bug report.
+    QExposeEvent transient{QRegion()};
+    QCoreApplication::sendEvent(platform->m_probe.get(), &transient);
+    platform->m_probeMapped = false;
+    platform->setExclusiveZone(platform->m_exclusiveZone);
+    REQUIRE(probeOwnsReservation());
+
+    const krema::DockPlatform::Edge edges[] = {
+        krema::DockPlatform::Edge::Top,
+        krema::DockPlatform::Edge::Left,
+        krema::DockPlatform::Edge::Right,
+        krema::DockPlatform::Edge::Bottom,
+    };
+    for (const auto edge : edges) {
+        platform->setEdge(edge);
+        view->setEdge(edge);
+        QExposeEvent edgeTransient{QRegion()};
+        QCoreApplication::sendEvent(platform->m_probe.get(), &edgeTransient);
+        platform->m_probeMapped = false;
+        platform->setExclusiveZone(platform->m_exclusiveZone);
+        INFO("edge switch retained a single positive reservation");
+        REQUIRE(probeOwnsReservation());
+    }
+}
+
+TEST_CASE("Panel probe teardown returns ownership before remapping", "[panel-margin][issue-135]")
+{
+    configure(1, 8);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const QString outputName = view->screen()->name();
+    StandInPanel panel(kPanelZone, outputName);
+    REQUIRE(panel.waitForStarted());
+
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    const auto probeOwnsReservation = [&] {
+        return platform->m_probe && platform->m_probeLayerWindow && platform->m_probeLayerWindow->exclusionZone() > 0
+            && platform->m_layerWindow && platform->m_layerWindow->exclusionZone() == -1;
+    };
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    platform->m_probe->hide();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return platform->m_probe && !platform->m_probeMapped && platform->m_layerWindow->exclusionZone() > 0;
+        },
+        kTimeoutMs));
+
+    platform->showProbe();
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    // Disable Panels while exposure is transiently lost. The probe must be
+    // cleared and destroyed before the dock receives the positive zone.
+    QExposeEvent transient{QRegion()};
+    QCoreApplication::sendEvent(platform->m_probe.get(), &transient);
+    platform->m_probeMapped = false;
+    platform->setPanelRelative(false);
+    REQUIRE(platform->m_probe == nullptr);
+    REQUIRE(platform->m_probeLayerWindow == nullptr);
+    REQUIRE(platform->m_layerWindow->exclusionZone() > 0);
+
+    platform->setPanelRelative(true);
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    // SurfaceAboutToBeDestroyed is a real teardown boundary, even when the
+    // QWindow itself still reports visible.
+    QPlatformSurfaceEvent surfaceDestroyed{QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed};
+    QCoreApplication::sendEvent(platform->m_probe.get(), &surfaceDestroyed);
+    REQUIRE(!platform->m_probeMapped);
+    REQUIRE(platform->m_layerWindow->exclusionZone() > 0);
+
+    platform->showProbe();
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
 }
 
 TEST_CASE("Panels mode measures the gap from a panel started before Krema", "[panel-margin]")

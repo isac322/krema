@@ -1276,6 +1276,9 @@ Item {
                 right = Math.min(root.width, right)
             }
             DockVisibility.setPanelRect(left, top, right - left, bottom - top)
+            // Visible rest position, independent of the hide slide: the overlap
+            // check needs it when the dock starts hidden.
+            DockVisibility.setPanelRestPosition(Math.floor(restX + dockBackground.x), Math.floor(restY + dockBackground.y))
         }
         onXChanged: {
             reportPanelRect()

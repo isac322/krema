@@ -355,3 +355,36 @@ fake-input protocol. `tests/unit/test_input_region.cpp` checks the input
 regions with and without the external edge trigger. Dodge windows, step 5,
 and the fallback without KWin scripting remain manual checks; SET-023 maps
 the settings control.
+
+---
+
+## TC VIS-011: Panel-relative edge switches retain one compositor reservation
+
+**Precondition:** A real KWin session with a maximized consumer window and
+the dock in `Always visible` mode with screen-space reservation enabled.
+
+**Steps:**
+1. Record the consumer's initial KWin `MaximizeArea` and frame geometry.
+2. Switch the dock from Bottom to Top while the probe is mapped.
+3. During the anchor/configure transition, exercise the transient probe
+   expose-loss state and sample the consumer's KWin geometry on every
+   event-loop turn.
+4. Wait for the Top edge to settle and record the final consumer geometry.
+
+**Expected:**
+- The probe and dock never commit two positive exclusive zones.
+- The maximized consumer's top inset never exceeds the single reservation
+  bound (`<= 72 px` in the 1024×768 regression session); it never reaches the
+  doubled `144 px` displacement.
+- The final consumer geometry settles at one reservation.
+
+**Verification:** The primary oracle is the native KWin CTest
+`tests/kwin/test_panel_margin.cpp` `[issue-135]` coverage, which samples the
+committed maximized-consumer top inset and asserts `<= 72 px`, never `144 px`.
+The Appium SET-006 oracle is separate: it drives the real Settings Top-edge
+picker and samples the Settings frame, asserting `y < 140`.
+**Automated:** `tests/kwin/test_panel_margin.cpp` `[issue-135]`; the real
+Settings control is covered by
+`tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top`.
+
+---

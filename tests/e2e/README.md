@@ -186,7 +186,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/settings/BehaviorPage.qml` | 06, 07 |
 | `src/qml/settings/PanelStylePage.qml`, `ShadowPage.qml`, `AnimationsPage.qml`, `MonitorsPage.qml`, `PreviewPage.qml` | 06 |
 | `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
-| `src/platform/waylanddockplatform.*` | 01, 07 |
+| `src/platform/waylanddockplatform.*` | 01, 06, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
 | `src/platform/kwinpanelwatcher.*` | 06, 07 |
 | `src/utils/panelinset.h` | 06, 07 |

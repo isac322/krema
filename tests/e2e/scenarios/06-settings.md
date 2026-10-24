@@ -198,21 +198,23 @@ and task-section rows check their real controls and consumer effects.
 
 ## TC SET-006: Dock Position Change
 
-**Precondition:** Settings dialog open, Layout & Position page. Dock currently at Bottom.
+**Precondition:** Settings dialog open, Layout & Position page. Dock currently at Bottom, `Measure gap from: Panels`, with an always-visible panel reserving space on the selected edge.
 **Steps:**
 1. Click the top edge of the desktop preview in the "Screen edge" group (AT-SPI: radio button "Top"; also selectable with Tab + Space/Return)
-2. Wait 500ms
-3. Screenshot — verify dock moved to top of screen
+2. During the edge transition, sample the Settings window's KWin frame geometry on every event-loop turn
+3. Wait 500ms
+4. Screenshot — verify dock moved to top of screen
 
 **Expected:**
 - Dock repositions to top edge of screen
 - Layer-shell anchor updates correctly
+- The panel probe and dock never commit two positive reservations at once
+- The Settings window's top inset never reaches the doubled reservation bound (`y < 140` in the 1024×768 regression session) and settles at the single reservation
 - All items render correctly in new position
 - The desktop preview shows the miniature dock on the top edge and only the "Top" radio is checked
 
-**Verification:** screenshot (dock at top), AT-SPI (radio checked state)
-**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top ("Screen edge" picker on the Layout & Position page)
-
+**Verification:** screenshot (dock at top), AT-SPI (radio checked state), and the separate Appium Settings-frame geometry oracle.
+**Automated:** tests/appium/test_06_settings.py::test_set006_screen_edge_top_moves_dock_to_top drives the real Settings Top-edge switch and asserts `y < 140`; the primary transient probe expose-loss and maximized-consumer top-inset oracle is native `tests/kwin/test_panel_margin.cpp` `[issue-135]`, asserting `<= 72 px` and never `144 px`.
 ---
 
 ## TC SET-007: Tint Color Selection

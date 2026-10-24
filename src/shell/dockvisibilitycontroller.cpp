@@ -300,6 +300,8 @@ void DockVisibilityController::setPanelRect(qreal x, qreal y, qreal width, qreal
     // so we must use the last visible-state Y.
     if (m_visible) {
         m_panelRefY = m_panelY;
+        m_panelRefX = m_panelX;
+        m_haveVisibleRef = true;
     }
 
     qCDebug(lcVisibility) << "setPanelRect: y=" << m_panelY << "refY=" << m_panelRefY << "visible=" << m_visible;
@@ -311,6 +313,24 @@ void DockVisibilityController::setPanelRect(qreal x, qreal y, qreal width, qreal
     updateRegionGeometry();
 
     Q_EMIT panelRectChanged();
+}
+
+void DockVisibilityController::setPanelRestPosition(qreal x, qreal y)
+{
+    // A visible-state position is more exact (it includes zoom growth); the rest
+    // position only stands in until the dock has been visible once.
+    if (m_haveVisibleRef) {
+        return;
+    }
+    const int restX = static_cast<int>(x);
+    const int restY = static_cast<int>(y);
+    if (restX == m_panelRefX && restY == m_panelRefY) {
+        return;
+    }
+    m_panelRefX = restX;
+    m_panelRefY = restY;
+    updateRegionGeometry();
+    requestEvaluate();
 }
 
 void DockVisibilityController::setShowDelay(int ms)
@@ -348,6 +368,9 @@ void DockVisibilityController::setEdgeInset(int inset)
     // relative to the surface, which grows with the inset.
     if (!m_visible && m_platform->edge() == DockPlatform::Edge::Top) {
         m_panelRefY += delta;
+    }
+    if (!m_visible && m_platform->edge() == DockPlatform::Edge::Left) {
+        m_panelRefX += delta;
     }
     // Arms or disarms the screen-edge watcher and reapplies the input region.
     updateEdgeTriggerWatcher();
@@ -642,7 +665,11 @@ QRect DockVisibilityController::dockScreenRect() const
     params.screenHeight = screenGeo.height();
     params.surfaceWidth = m_dockWindow->width();
     params.surfaceHeight = m_dockWindow->height();
-    params.panelX = m_panelX;
+    // On Left/Right the dock hides sideways, so its live X slides off-screen
+    // and the overlap region would follow it: Dodge would then see no window,
+    // show the dock, see the window again and flicker. Use the visible-state X.
+    const bool sideEdge = m_platform->edge() == DockPlatform::Edge::Left || m_platform->edge() == DockPlatform::Edge::Right;
+    params.panelX = sideEdge ? m_panelRefX : m_panelX;
     params.panelRefY = m_panelRefY;
     params.panelWidth = m_panelWidth;
     params.panelHeight = m_panelHeight;

@@ -72,6 +72,10 @@ public:
     /// Called from QML when the panel geometry changes.
     /// Used to restrict the input region to the visible panel area.
     Q_INVOKABLE void setPanelRect(qreal x, qreal y, qreal width, qreal height);
+    /// Top-left of the panel at its visible rest position, reported by QML even
+    /// while the dock is slid off-screen. Used when the dock has not been
+    /// visible yet (e.g. it starts hidden behind a window under Dodge Windows).
+    Q_INVOKABLE void setPanelRestPosition(qreal x, qreal y);
 
     /// Set the delay before the dock appears when the mouse enters the trigger area.
     void setShowDelay(int ms);
@@ -195,6 +199,10 @@ private:
     // Panel Y coordinate when the dock is visible (for overlap detection).
     // This value persists even while m_panelY moves off-screen during hide animation.
     int m_panelRefY = 0;
+    // Same for X on the Left/Right edges, where the dock hides sideways.
+    int m_panelRefX = 0;
+    // True once m_panelRef* hold a position recorded while the dock was visible.
+    bool m_haveVisibleRef = false;
 
     // Animated outward extent (pixels beyond the panel that transformed icons
     // occupy). Used to restrict hovered input to the interactive area.

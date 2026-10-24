@@ -253,6 +253,10 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
         applyExclusiveZone();
     };
     probe->surfaceUnmapped = [this] {
+        if (!m_probeResetting && m_probeLayerWindow) {
+            m_probeLayerWindow->setExclusiveZone(0);
+            commitMappedSurface(m_probe.get());
+        }
         m_probeMapped = false;
         m_probeOwnsReservation = false;
         if (!m_probeResetting) {

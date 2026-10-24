@@ -68,7 +68,6 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QExposeEvent>
-#include <QPlatformSurfaceEvent>
 #include <QFile>
 #include <QHash>
 #include <QJsonArray>
@@ -76,6 +75,7 @@
 #include <QJsonObject>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPlatformSurfaceEvent>
 #include <QProcess>
 #include <QQuickStyle>
 #include <QRasterWindow>

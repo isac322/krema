@@ -279,6 +279,29 @@ Item {
             }
         }
 
+        function test_sniMetadataBadgeAndAccessibleDescription() {
+            let item = makeItem({ IsWindow: true })
+            let icon = T.sniBadgeIcon(item)
+            verify(icon)
+            verify(!icon.visible)
+
+            NotificationTracker.setSniMetadata("org.kde.dolphin", {
+                title: "Dolphin tray",
+                attentionIconName: "dialog-warning",
+                overlayIconName: "mail-unread",
+                toolTipTitle: "Dolphin tray",
+                toolTipSubTitle: "New message"
+            })
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryVerify(() => icon.visible)
+            compare(icon.source, "dialog-warning")
+            verify(item.accessibleDescription.indexOf("New message") >= 0)
+
+            NotificationTracker.setSniAttention("org.kde.dolphin", false)
+            tryVerify(() => icon.visible)
+            compare(icon.source, "mail-unread")
+        }
+
         function test_badgePositionDynamicSwitching() {
             DockView.edge = 2
             let item = makeBadgedItem()

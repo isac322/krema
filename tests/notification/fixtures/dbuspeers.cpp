@@ -300,6 +300,26 @@ QString StatusNotifierItemPeer::status() const
     return m_status;
 }
 
+QString StatusNotifierItemPeer::title() const
+{
+    return m_title;
+}
+
+QString StatusNotifierItemPeer::attentionIconName() const
+{
+    return m_attentionIconName;
+}
+
+QString StatusNotifierItemPeer::overlayIconName() const
+{
+    return m_overlayIconName;
+}
+
+QVariant StatusNotifierItemPeer::toolTip() const
+{
+    return m_toolTip;
+}
+
 void StatusNotifierItemPeer::setId(const QString &id)
 {
     if (m_id == id) {
@@ -317,6 +337,46 @@ void StatusNotifierItemPeer::setStatus(const QString &status)
     m_status = status;
     Q_EMIT statusChanged();
     Q_EMIT NewStatus(status);
+}
+
+void StatusNotifierItemPeer::setTitle(const QString &title)
+{
+    if (m_title == title) {
+        return;
+    }
+    m_title = title;
+    Q_EMIT titleChanged();
+    Q_EMIT NewTitle();
+}
+
+void StatusNotifierItemPeer::setAttentionIconName(const QString &name)
+{
+    if (m_attentionIconName == name) {
+        return;
+    }
+    m_attentionIconName = name;
+    Q_EMIT attentionIconNameChanged();
+    Q_EMIT NewAttentionIcon();
+}
+
+void StatusNotifierItemPeer::setOverlayIconName(const QString &name)
+{
+    if (m_overlayIconName == name) {
+        return;
+    }
+    m_overlayIconName = name;
+    Q_EMIT overlayIconNameChanged();
+    Q_EMIT NewOverlayIcon();
+}
+
+void StatusNotifierItemPeer::setToolTip(const QVariant &toolTip)
+{
+    if (m_toolTip == toolTip) {
+        return;
+    }
+    m_toolTip = toolTip;
+    Q_EMIT toolTipChanged();
+    Q_EMIT NewToolTip();
 }
 
 } // namespace krema::test

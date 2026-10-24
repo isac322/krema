@@ -612,10 +612,12 @@ TEST_CASE("SNI watcher replaces its snapshot after gapless service owner replace
     krema::test::StatusNotifierItemPeer oldItem(QStringLiteral("org.example.fixture.OldSni"), QStringLiteral("/OldItem"));
     oldItem.setId(QStringLiteral("org.example.old-sni"));
     oldItem.setStatus(QStringLiteral("NeedsAttention"));
+    oldItem.setTitle(QStringLiteral("Old title"));
     REQUIRE(oldItem.start());
     krema::test::StatusNotifierItemPeer newItem(QStringLiteral("org.example.fixture.NewSni"), QStringLiteral("/NewItem"));
     newItem.setId(QStringLiteral("org.example.new-sni"));
     newItem.setStatus(QStringLiteral("NeedsAttention"));
+    newItem.setTitle(QStringLiteral("New title"));
     REQUIRE(newItem.start());
     krema::test::StatusNotifierWatcherPeer original;
     original.setRegisteredItems({oldItem.itemAddress()});
@@ -653,6 +655,8 @@ TEST_CASE("SNI watcher replaces its snapshot after gapless service owner replace
     REQUIRE(waitFor([&] {
         return !tracker.sniNeedsAttention(QStringLiteral("org.example.old-sni")) && tracker.sniNeedsAttention(QStringLiteral("org.example.new-sni"));
     }));
+    CHECK(tracker.sniTitle(QStringLiteral("org.example.old-sni")).isEmpty());
+    CHECK(tracker.sniTitle(QStringLiteral("org.example.new-sni")) == QStringLiteral("New title"));
 }
 
 TEST_CASE("SNI registration, status transitions, re-registration and owner loss are observable", "[notification][sni][dbus]")
@@ -727,6 +731,51 @@ TEST_CASE("SNI registration, status transitions, re-registration and owner loss 
     REQUIRE(watcher.start());
     REQUIRE(waitFor([&] {
         return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+}
+
+TEST_CASE("SNI metadata is queried and refreshed through live signals", "[notification][sni][metadata][dbus]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.Metadata"));
+    item.setId(QStringLiteral("org.example.metadata"));
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    item.setTitle(QStringLiteral("Initial title"));
+    item.setAttentionIconName(QStringLiteral("dialog-warning"));
+    item.setOverlayIconName(QStringLiteral("mail-unread"));
+    item.setToolTip(QStringList{QStringLiteral("tray-icon"), QStringLiteral("Tooltip title"), QStringLiteral("Tooltip subtitle")});
+    REQUIRE(item.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Initial title");
+    }));
+    CHECK(tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("dialog-warning"));
+    CHECK(tracker.sniOverlayIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("mail-unread"));
+    CHECK(tracker.sniToolTipTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Tooltip title"));
+    CHECK(tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Tooltip subtitle"));
+
+    item.setTitle(QStringLiteral("Updated title"));
+    item.setAttentionIconName(QStringLiteral("bell"));
+    item.setOverlayIconName(QStringLiteral("mail-read"));
+    item.setToolTip(QStringList{QStringLiteral("tray-icon"), QStringLiteral("Updated tooltip"), QStringLiteral("Updated subtitle")});
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated title")
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("bell")
+            && tracker.sniOverlayIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("mail-read")
+            && tracker.sniToolTipTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated tooltip")
+            && tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated subtitle");
+    }));
+
+    watcher.removeItem(item.itemAddress());
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.metadata")).isEmpty()
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")).isEmpty()
+            && tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")).isEmpty();
     }));
 }
 

@@ -13,12 +13,12 @@
 
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
+#include <QDBusArgument>
 
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
-#include <QDateTime>
 #include <QLoggingCategory>
 #include <QTimer>
 
@@ -70,6 +70,67 @@ static QString canonicalDesktopId(const QString &rawId)
         id = stripDesktopSuffix(service->storageId().toLower());
     }
     return id;
+}
+
+struct SniToolTip {
+    QString title;
+    QString subTitle;
+};
+
+static SniToolTip parseSniToolTip(const QVariant &value)
+{
+    if (value.metaType() == QMetaType::fromType<QDBusArgument>()) {
+        const QDBusArgument argument = value.value<QDBusArgument>();
+        if (argument.currentType() == QDBusArgument::VariantType) {
+            QDBusVariant nested;
+            argument >> nested;
+            return parseSniToolTip(nested.variant());
+        }
+        if (argument.currentType() == QDBusArgument::MapType) {
+            SniToolTip result;
+            argument.beginMap();
+            while (!argument.atEnd()) {
+                QString key;
+                QDBusVariant mapValue;
+                argument >> key >> mapValue;
+                if (key == QLatin1String("title")) {
+                    result.title = mapValue.variant().toString();
+                } else if (key == QLatin1String("description")) {
+                    result.subTitle = mapValue.variant().toString();
+                }
+            }
+            argument.endMap();
+            return result;
+        }
+        if (argument.currentType() != QDBusArgument::StructureType) {
+            return {};
+        }
+        SniToolTip result;
+        QString iconName;
+        argument.beginStructure();
+        argument >> iconName;
+        argument.beginArray();
+        while (!argument.atEnd()) {
+            argument.beginStructure();
+            qint32 width = 0;
+            qint32 height = 0;
+            QByteArray pixmap;
+            argument >> width >> height >> pixmap;
+            argument.endStructure();
+        }
+        argument.endArray();
+        argument >> result.title >> result.subTitle;
+        argument.endStructure();
+        return result;
+    }
+    if (const auto map = value.toMap(); !map.isEmpty()) {
+        return {map.value(QStringLiteral("title")).toString(), map.value(QStringLiteral("description")).toString()};
+    }
+    const QStringList list = value.toStringList();
+    if (list.size() >= 2) {
+        return {list.at(list.size() - 2), list.at(list.size() - 1)};
+    }
+    return {};
 }
 } // namespace
 
@@ -451,20 +512,68 @@ int NotificationTracker::unreadCount(const QString &desktopEntry) const
     return 0;
 }
 
-bool NotificationTracker::sniNeedsAttention(const QString &appId) const
+const NotificationTracker::SniEntry *NotificationTracker::sniEntryForApp(const QString &appId) const
 {
     if (appId.isEmpty()) {
-        return false;
+        return nullptr;
     }
-
     const QString normalized = canonicalDesktopId(appId);
+    if (normalized.isEmpty()) {
+        return nullptr;
+    }
+    const SniEntry *fallback = nullptr;
     for (const auto &entry : m_sniItems) {
-        if (canonicalDesktopId(entry.id) == normalized && entry.status == QLatin1String("NeedsAttention")) {
-            qCInfo(lcNotif) << "  sniNeedsAttention(" << appId << ") = true (sniId=" << entry.id << ")";
-            return true;
+        if (canonicalDesktopId(entry.id) != normalized) {
+            continue;
+        }
+        if (entry.status == QLatin1String("NeedsAttention")) {
+            return &entry;
+        }
+        if (!fallback) {
+            fallback = &entry;
         }
     }
+    return fallback;
+}
+
+bool NotificationTracker::sniNeedsAttention(const QString &appId) const
+{
+    const auto *entry = sniEntryForApp(appId);
+    if (entry && entry->status == QLatin1String("NeedsAttention")) {
+        qCInfo(lcNotif) << "  sniNeedsAttention(" << appId << ") = true (sniId=" << entry->id << ")";
+        return true;
+    }
     return false;
+}
+
+QString NotificationTracker::sniTitle(const QString &appId) const
+{
+    const auto *entry = sniEntryForApp(appId);
+    return entry ? entry->title : QString();
+}
+
+QString NotificationTracker::sniAttentionIconName(const QString &appId) const
+{
+    const auto *entry = sniEntryForApp(appId);
+    return entry ? entry->attentionIconName : QString();
+}
+
+QString NotificationTracker::sniOverlayIconName(const QString &appId) const
+{
+    const auto *entry = sniEntryForApp(appId);
+    return entry ? entry->overlayIconName : QString();
+}
+
+QString NotificationTracker::sniToolTipTitle(const QString &appId) const
+{
+    const auto *entry = sniEntryForApp(appId);
+    return entry ? entry->toolTipTitle : QString();
+}
+
+QString NotificationTracker::sniToolTipSubTitle(const QString &appId) const
+{
+    const auto *entry = sniEntryForApp(appId);
+    return entry ? entry->toolTipSubTitle : QString();
 }
 
 void NotificationTracker::clearUnreadNotifications(const QString &appId)
@@ -835,6 +944,19 @@ void NotificationTracker::setupSniWatcher()
             qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItem.NewStatus:" << bus.lastError().message();
         }
     }
+    const auto connectSniSignal = [this, &bus](bool &connected, const QString &signal, const char *slot) {
+        if (connected) {
+            return;
+        }
+        connected = bus.connect(QString(), QString(), QStringLiteral("org.kde.StatusNotifierItem"), signal, this, slot);
+        if (!connected) {
+            qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItem." << signal << ":" << bus.lastError().message();
+        }
+    };
+    connectSniSignal(m_sniTitleMatchConnected, QStringLiteral("NewTitle"), SLOT(onSniNewTitle(QDBusMessage)));
+    connectSniSignal(m_sniAttentionIconMatchConnected, QStringLiteral("NewAttentionIcon"), SLOT(onSniNewAttentionIcon(QDBusMessage)));
+    connectSniSignal(m_sniOverlayIconMatchConnected, QStringLiteral("NewOverlayIcon"), SLOT(onSniNewOverlayIcon(QDBusMessage)));
+    connectSniSignal(m_sniToolTipMatchConnected, QStringLiteral("NewToolTip"), SLOT(onSniNewToolTip(QDBusMessage)));
 
     connect(&m_sniServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onSniServiceUnregistered);
     connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onSniWatcherServiceOwnerChanged);
@@ -917,7 +1039,7 @@ void NotificationTracker::trackSniItem(const QString &service, const QString &ob
 
     m_sniServiceWatcher.addWatchedService(service);
     const quint64 generation = ++m_sniItemGeneration;
-    m_sniItems.insert(key, SniEntry{.id = QString(), .status = QStringLiteral("Passive"), .generation = generation});
+    m_sniItems.insert(key, SniEntry{QString(), QStringLiteral("Passive"), {}, {}, {}, {}, {}, generation});
 
     QDBusMessage idMsg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
     idMsg << QStringLiteral("org.kde.StatusNotifierItem") << QStringLiteral("Id");
@@ -960,6 +1082,58 @@ void NotificationTracker::trackSniItem(const QString &service, const QString &ob
         if (it->status != newStatus) {
             qCInfo(lcNotif) << "SNI initial status:" << key << it->status << "->" << newStatus;
             it->status = newStatus;
+            bumpRevision();
+        }
+    });
+    querySniProperty(key, generation, service, objectPath, QStringLiteral("Title"));
+    querySniProperty(key, generation, service, objectPath, QStringLiteral("AttentionIconName"));
+    querySniProperty(key, generation, service, objectPath, QStringLiteral("OverlayIconName"));
+    querySniProperty(key, generation, service, objectPath, QStringLiteral("ToolTip"));
+}
+
+void NotificationTracker::querySniProperty(const QString &key,
+                                            quint64 generation,
+                                            const QString &service,
+                                            const QString &objectPath,
+                                            const QString &property)
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
+    msg << QStringLiteral("org.kde.StatusNotifierItem") << property;
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, key, generation, property](QDBusPendingCallWatcher *w) {
+        QDBusPendingReply<QDBusVariant> reply = *w;
+        w->deleteLater();
+        if (reply.isError()) {
+            qCInfo(lcNotif) << "SNI property query failed for" << key << property << ":" << reply.error().message();
+            return;
+        }
+        auto it = m_sniItems.find(key);
+        if (it == m_sniItems.end() || it->generation != generation) {
+            return;
+        }
+        const QVariant value = reply.value().variant();
+        QString newValue;
+        if (property == QLatin1String("ToolTip")) {
+            const auto toolTip = parseSniToolTip(value);
+            bool changed = it->toolTipTitle != toolTip.title || it->toolTipSubTitle != toolTip.subTitle;
+            it->toolTipTitle = toolTip.title;
+            it->toolTipSubTitle = toolTip.subTitle;
+            if (changed) {
+                bumpRevision();
+            }
+            return;
+        }
+        newValue = value.toString();
+        QString *storedValue = nullptr;
+        if (property == QLatin1String("Title")) {
+            storedValue = &it->title;
+        } else if (property == QLatin1String("AttentionIconName")) {
+            storedValue = &it->attentionIconName;
+        } else if (property == QLatin1String("OverlayIconName")) {
+            storedValue = &it->overlayIconName;
+        }
+        if (storedValue && *storedValue != newValue) {
+            *storedValue = newValue;
             bumpRevision();
         }
     });
@@ -1066,6 +1240,41 @@ void NotificationTracker::onSniNewStatus(const QString &status, const QDBusMessa
         }
     } else {
         qCInfo(lcNotif) << "SNI NewStatus from unknown item:" << key << "status=" << status;
+    }
+}
+void NotificationTracker::onSniNewTitle(const QDBusMessage &message)
+{
+    const QString key = sniKeyForMessage(message);
+    const auto it = m_sniItems.constFind(key);
+    if (it != m_sniItems.cend()) {
+        querySniProperty(key, it->generation, message.service(), message.path(), QStringLiteral("Title"));
+    }
+}
+
+void NotificationTracker::onSniNewAttentionIcon(const QDBusMessage &message)
+{
+    const QString key = sniKeyForMessage(message);
+    const auto it = m_sniItems.constFind(key);
+    if (it != m_sniItems.cend()) {
+        querySniProperty(key, it->generation, message.service(), message.path(), QStringLiteral("AttentionIconName"));
+    }
+}
+
+void NotificationTracker::onSniNewOverlayIcon(const QDBusMessage &message)
+{
+    const QString key = sniKeyForMessage(message);
+    const auto it = m_sniItems.constFind(key);
+    if (it != m_sniItems.cend()) {
+        querySniProperty(key, it->generation, message.service(), message.path(), QStringLiteral("OverlayIconName"));
+    }
+}
+
+void NotificationTracker::onSniNewToolTip(const QDBusMessage &message)
+{
+    const QString key = sniKeyForMessage(message);
+    const auto it = m_sniItems.constFind(key);
+    if (it != m_sniItems.cend()) {
+        querySniProperty(key, it->generation, message.service(), message.path(), QStringLiteral("ToolTip"));
     }
 }
 

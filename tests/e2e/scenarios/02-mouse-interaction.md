@@ -68,6 +68,7 @@ If the dock is hidden (Auto hide / Dodge windows), show it first (README "Showin
 - Bounce animation plays on the dock item; its full icon remains inside the dock surface throughout the motion, including while hover zoom is held
 - Attention waits for the final launch bounce cycle, then starts without overlapping its displacement
 - Indicator dot appears under the icon
+- When the app still requests live attention, the attention-only dot remains visible after the transient animation ends, including when `Badge display` is `Off`; a numeric count remains hidden in that mode.
 
 **Verification:** window list (new window), screenshot (indicator dot), video (zoomed launch bounce), mapped icon bounds (surface containment)
 **Automated:** tests/appium/test_02_mouse.py::test_mouse002_left_click_launches_pinned_app (launch bounce: tests/appium/test_02_mouse.py::test_mouse002_pinned_launch_bounces); tests/qml/tst_dockitem_surface_geometry.qml::test_launchBounceStaysInsideSurface (Bottom/Right at 1.5, 1.6, and 2.0); tests/unit/test_input_region.cpp (animated input reserve)

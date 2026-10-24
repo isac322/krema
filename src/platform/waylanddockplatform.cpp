@@ -6,8 +6,10 @@
 #include <LayerShellQt/Window>
 
 #include <QGuiApplication>
+#include <QHideEvent>
 #include <QLoggingCategory>
 #include <QPainter>
+#include <QPlatformSurfaceEvent>
 #include <QRasterWindow>
 #include <qpa/qplatformnativeinterface.h>
 
@@ -30,6 +32,8 @@ class ProbeWindow : public QRasterWindow
 public:
     /// Called when the surface is mapped (first buffer committed) or unmapped.
     std::function<void(bool)> mappedChanged;
+    /// Called when the probe is genuinely hidden or its native surface is torn down.
+    std::function<void()> surfaceUnmapped;
 
 protected:
     void paintEvent(QPaintEvent *) override
@@ -51,17 +55,41 @@ protected:
         }
     }
 
+    void hideEvent(QHideEvent *event) override
+    {
+        m_mapped = false;
+        if (surfaceUnmapped) {
+            surfaceUnmapped();
+        }
+        QRasterWindow::hideEvent(event);
+    }
+
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::PlatformSurface) {
+            const auto *surfaceEvent = static_cast<QPlatformSurfaceEvent *>(event);
+            if (surfaceEvent->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+                m_mapped = false;
+                if (surfaceUnmapped) {
+                    surfaceUnmapped();
+                }
+            }
+        }
+        return QRasterWindow::event(event);
+    }
+
 private:
     bool m_mapped = false;
 };
 
 /// Commit @p window's pending layer-surface state (exclusive zone) now,
-/// without waiting for its next frame. Only for a mapped surface: before its
-/// first configure the shell integration owns the commits.
+/// without waiting for its next frame. The native surface must already exist;
+/// unlike exposure, a native handle is still available during transient
+/// configure/unexpose transitions.
 void commitMappedSurface(QWindow *window)
 {
     auto *nativeInterface = QGuiApplication::platformNativeInterface();
-    if (!window || !window->isExposed() || !nativeInterface) {
+    if (!window || !window->handle() || !nativeInterface) {
         return;
     }
     if (auto *surface = static_cast<wl_surface *>(nativeInterface->nativeResourceForWindow(QByteArrayLiteral("surface"), window))) {
@@ -185,16 +213,19 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
 
     if (!enabled) {
         // Hand the reservation back to the dock surface: clear the probe's
-        // reservation and commit both surfaces together before destroying the
-        // probe, so KWin re-arranges once and never drops the reservation.
-        m_probeMapped = false;
+        // reservation and commit it while its native surface still exists,
+        // even if Qt transiently reports it as unexposed.
+        m_probeResetting = true;
         if (m_probeLayerWindow) {
             m_probeLayerWindow->setExclusiveZone(0);
             commitMappedSurface(m_probe.get());
         }
+        m_probeMapped = false;
+        m_probeOwnsReservation = false;
         applyExclusiveZone();
         m_probeLayerWindow = nullptr;
         m_probe.reset();
+        m_probeResetting = false;
         return;
     }
 
@@ -213,7 +244,24 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
     // placed; then both change in one flush (see applyExclusiveZone).
     probe->mappedChanged = [this](bool mapped) {
         m_probeMapped = mapped;
+        if (mapped) {
+            // A true expose follows the probe's first committed buffer. Once
+            // that happens, exposure loss during an edge/configure transition
+            // must not give the dock a chance to reacquire the reservation.
+            m_probeOwnsReservation = true;
+        }
         applyExclusiveZone();
+    };
+    probe->surfaceUnmapped = [this] {
+        if (!m_probeResetting && m_probeLayerWindow) {
+            m_probeLayerWindow->setExclusiveZone(0);
+            commitMappedSurface(m_probe.get());
+        }
+        m_probeMapped = false;
+        m_probeOwnsReservation = false;
+        if (!m_probeResetting) {
+            applyExclusiveZone();
+        }
     };
     m_probeLayerWindow = LayerShellQt::Window::get(probe.get());
     if (m_probeLayerWindow) {
@@ -240,7 +288,16 @@ void WaylandDockPlatform::setPanelRelative(bool enabled)
         if (visible) {
             showProbe();
         } else if (m_probe) {
+            m_probeResetting = true;
+            if (m_probeLayerWindow) {
+                m_probeLayerWindow->setExclusiveZone(0);
+                commitMappedSurface(m_probe.get());
+            }
             m_probe->hide();
+            m_probeResetting = false;
+            m_probeMapped = false;
+            m_probeOwnsReservation = false;
+            applyExclusiveZone();
         }
     });
     if (m_window->isVisible()) {
@@ -261,7 +318,16 @@ void WaylandDockPlatform::showProbe()
     // compositor reports the output, so also place the window on the target
     // screen. (The platform window itself must survive: LayerShellQt set its
     // shell integration when it was created.)
+    m_probeResetting = true;
+    if (m_probeLayerWindow) {
+        m_probeLayerWindow->setExclusiveZone(0);
+        commitMappedSurface(m_probe.get());
+    }
     m_probe->hide();
+    m_probeResetting = false;
+    m_probeMapped = false;
+    m_probeOwnsReservation = false;
+    applyExclusiveZone();
     m_probe->setScreen(screen);
     if (screen) {
         m_probe->setPosition(screen->geometry().topLeft());
@@ -313,15 +379,18 @@ void WaylandDockPlatform::applyExclusiveZone()
 
     const bool reserve = m_visibilityMode == VisibilityMode::AlwaysVisible;
     const int probeZone = reserve ? std::max(m_exclusiveZone, 0) : 0;
-    if (m_panelRelative && m_probeMapped && m_probeLayerWindow) {
+    if (m_panelRelative && (m_probeMapped || m_probeOwnsReservation) && m_probeLayerWindow) {
         // The dock stays at the screen edge and draws its offset from the
         // panels itself; the probe sits right past their reserved space and
         // carries the dock's reservation from there. Both surfaces commit
-        // together so KWin re-arranges once (see setPanelRelative).
+        // together so KWin re-arranges once (see setPanelRelative). Keep this
+        // owner branch active across transient exposure loss during re-anchor.
         m_probeLayerWindow->setExclusiveZone(probeZone);
         m_layerWindow->setExclusiveZone(-1);
         commitMappedSurface(m_probe.get());
-        commitMappedSurface(m_window);
+        if (m_window && m_window->isExposed()) {
+            commitMappedSurface(m_window);
+        }
         return;
     }
 

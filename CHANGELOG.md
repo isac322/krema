@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Local notification clearing now removes only the dock's unread contribution while keeping the server-active lifecycle until KDE reports a close.
 - Notification tracking reconnected after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.
 - Long Do Not Disturb periods kept a valid expiry timer on older Qt versions and ended only when their configured deadline passed.
+- Prevented transient duplicate panel reservations while a panel-relative dock probe is reconfigured or remapped across edges; real probe teardown now hands the exclusive zone back to the dock exactly once (#135)
 
 ## [0.12.0] - 2026-10-12
 

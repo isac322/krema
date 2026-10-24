@@ -1048,11 +1048,16 @@ void NotificationTracker::trackSniItem(const QString &service, const QString &ob
         return;
     }
     const QString key = sniKey(service, objectPath);
+    if (auto it = m_sniItems.find(key); it != m_sniItems.end()) {
+        if (it->initialQueryFailed || it->id.isEmpty()) {
+            ensureSniMetadataQueried(key, *it);
+        }
+        return;
+    }
 
     m_sniServiceWatcher.addWatchedService(service);
     const quint64 generation = ++m_sniItemGeneration;
     m_sniItems.insert(key, SniEntry{QString(), QStringLiteral("Passive"), {}, {}, {}, {}, {}, false, generation});
-
     queryAllSniProperties(key, generation, service, objectPath);
 }
 void NotificationTracker::queryAllSniProperties(const QString &key,
@@ -1310,10 +1315,11 @@ void NotificationTracker::onSniServiceOwnerChanged(const QString &service, const
         }
     }
 
+    const bool changed = !objectPaths.isEmpty();
     for (const QString &objectPath : std::as_const(objectPaths)) {
         m_sniItems.remove(sniKey(service, objectPath));
     }
-    if (!objectPaths.isEmpty()) {
+    if (changed) {
         bumpRevision();
     }
 

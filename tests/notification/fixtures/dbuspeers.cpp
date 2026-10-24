@@ -283,7 +283,27 @@ StatusNotifierItemPeer::~StatusNotifierItemPeer()
 
 bool StatusNotifierItemPeer::start(bool replaceExisting)
 {
-    return claimServiceWithoutObject(replaceExisting) && exportObjectAndEmitReady();
+    if (m_serviceRegistered && m_objectRegistered) {
+        return true;
+    }
+    if (!m_objectRegistered) {
+        m_objectRegistered = m_bus.registerObject(m_objectPath,
+                                                  this,
+                                                  QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
+    }
+    if (!m_objectRegistered || !claimServiceWithoutObject(replaceExisting)) {
+        if (m_objectRegistered && !m_serviceRegistered) {
+            m_bus.unregisterObject(m_objectPath);
+            m_objectRegistered = false;
+        }
+        return false;
+    }
+    Q_EMIT NewStatus(m_status);
+    Q_EMIT NewTitle();
+    Q_EMIT NewAttentionIcon();
+    Q_EMIT NewOverlayIcon();
+    Q_EMIT NewToolTip();
+    return true;
 }
 
 bool StatusNotifierItemPeer::claimServiceWithoutObject(bool replaceExisting)

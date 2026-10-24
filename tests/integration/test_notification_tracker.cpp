@@ -758,6 +758,12 @@ TEST_CASE("SNI metadata is queried and refreshed through live signals", "[notifi
     CHECK(tracker.sniOverlayIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("mail-unread"));
     CHECK(tracker.sniToolTipTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Tooltip title"));
     CHECK(tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Tooltip subtitle"));
+    const int revisionBeforeDuplicateRegistration = tracker.revision();
+    Q_EMIT watcher.StatusNotifierItemRegistered(item.itemAddress());
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    CHECK(tracker.revision() == revisionBeforeDuplicateRegistration);
+    CHECK(tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Initial title"));
+    CHECK(tracker.sniNeedsAttention(QStringLiteral("org.example.metadata")));
 
     item.setTitle(QStringLiteral("Updated title"));
     item.setAttentionIconName(QStringLiteral("bell"));

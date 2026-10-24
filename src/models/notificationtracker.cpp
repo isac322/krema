@@ -1053,56 +1053,6 @@ void NotificationTracker::trackSniItem(const QString &service, const QString &ob
     const quint64 generation = ++m_sniItemGeneration;
     m_sniItems.insert(key, SniEntry{QString(), QStringLiteral("Passive"), {}, {}, {}, {}, {}, false, generation});
 
-    QDBusMessage idMsg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
-    idMsg << QStringLiteral("org.kde.StatusNotifierItem") << QStringLiteral("Id");
-    auto *idWatcher = new QDBusPendingCallWatcher(bus.asyncCall(idMsg), this);
-    connect(idWatcher, &QDBusPendingCallWatcher::finished, this, [this, key, generation](QDBusPendingCallWatcher *w) {
-        QDBusPendingReply<QDBusVariant> reply = *w;
-        w->deleteLater();
-        const auto it = m_sniItems.find(key);
-        if (reply.isError()) {
-            if (it != m_sniItems.end() && it->generation == generation) {
-                it->initialQueryFailed = true;
-            }
-            qCInfo(lcNotif) << "SNI Id query failed for" << key << ":" << reply.error().message();
-            return;
-        }
-        if (it == m_sniItems.end() || it->generation != generation) {
-            return;
-        }
-        const QString newId = reply.value().variant().toString();
-        if (it->id == newId) {
-            return;
-        }
-        it->id = newId;
-        qCInfo(lcNotif) << "SNI tracked:" << key << "id=" << it->id;
-        bumpRevision();
-    });
-
-    QDBusMessage statusMsg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
-    statusMsg << QStringLiteral("org.kde.StatusNotifierItem") << QStringLiteral("Status");
-    auto *statusWatcher = new QDBusPendingCallWatcher(bus.asyncCall(statusMsg), this);
-    connect(statusWatcher, &QDBusPendingCallWatcher::finished, this, [this, key, generation](QDBusPendingCallWatcher *w) {
-        QDBusPendingReply<QDBusVariant> reply = *w;
-        w->deleteLater();
-        const auto it = m_sniItems.find(key);
-        if (reply.isError()) {
-            if (it != m_sniItems.end() && it->generation == generation) {
-                it->initialQueryFailed = true;
-            }
-            qCInfo(lcNotif) << "SNI Status query failed for" << key << ":" << reply.error().message();
-            return;
-        }
-        if (it == m_sniItems.end() || it->generation != generation) {
-            return;
-        }
-        const QString newStatus = reply.value().variant().toString();
-        if (it->status != newStatus) {
-            qCInfo(lcNotif) << "SNI initial status:" << key << it->status << "->" << newStatus;
-            it->status = newStatus;
-            bumpRevision();
-        }
-    });
     queryAllSniProperties(key, generation, service, objectPath);
 }
 void NotificationTracker::queryAllSniProperties(const QString &key,
@@ -1110,6 +1060,8 @@ void NotificationTracker::queryAllSniProperties(const QString &key,
                                                  const QString &service,
                                                  const QString &objectPath)
 {
+    querySniProperty(key, generation, service, objectPath, QStringLiteral("Id"));
+    querySniProperty(key, generation, service, objectPath, QStringLiteral("Status"));
     querySniProperty(key, generation, service, objectPath, QStringLiteral("Title"));
     querySniProperty(key, generation, service, objectPath, QStringLiteral("AttentionIconName"));
     querySniProperty(key, generation, service, objectPath, QStringLiteral("OverlayIconName"));
@@ -1153,7 +1105,11 @@ void NotificationTracker::querySniProperty(const QString &key,
         }
         newValue = value.toString();
         QString *storedValue = nullptr;
-        if (property == QLatin1String("Title")) {
+        if (property == QLatin1String("Id")) {
+            storedValue = &it->id;
+        } else if (property == QLatin1String("Status")) {
+            storedValue = &it->status;
+        } else if (property == QLatin1String("Title")) {
             storedValue = &it->title;
         } else if (property == QLatin1String("AttentionIconName")) {
             storedValue = &it->attentionIconName;

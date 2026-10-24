@@ -19,11 +19,14 @@ Item {
     property string appFilter: ""
     property bool activeOnly: false
     property bool unreadOnly: false
+    property bool requireAppFilter: false
     property bool compact: false
     property bool showHeader: true
     readonly property var rows: {
         // revision is intentionally read to make the QVariantList reactive.
         let revision = NotificationTracker.revision
+        if (requireAppFilter && appFilter.trim().length === 0)
+            return []
         let result = NotificationTracker.notifications(appFilter, activeOnly)
         return unreadOnly ? result.filter(item => !item.read && !item.dismissed) : result
     }

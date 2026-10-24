@@ -447,5 +447,30 @@ Item {
                       container(popup).y + container(popup).height / 2)
             tryCompare(PreviewController, "previewHovered", true)
         }
+        function test_emptyAppIdDoesNotLeakOtherAppsNotifications() {
+            DockModel.tasksModel.setTaskData(0, "AppId", "")
+            NotificationTracker.setNotifications([
+                notification({ desktopEntry: "org.example.other" }),
+            ])
+            let popup = makePopup()
+            show(0, "Kate")
+            waitThumbs(popup, 1)
+            compare(popup.currentAppId, "")
+            compare(inbox(popup).count, 0)
+            verify(!popup.hasNotificationContent)
+            verify(!T.findFirst(popup, o => o.objectName === "notificationCard-101"))
+        }
+
+        function test_blacklistedOrClearedUnreadCountSuppressesCards() {
+            NotificationTracker.setNotifications([notification()])
+            NotificationTracker.setUnread("org.kde.konsole", 0)
+            let popup = makePopup()
+            show(1, "Konsole")
+            waitThumbs(popup, 3)
+            compare(inbox(popup).count, 1)
+            verify(!popup.hasUnreadForCurrentApp)
+            verify(!popup.hasNotificationContent)
+            verify(!T.findFirst(popup, o => o.objectName === "previewNotificationSection").visible)
+        }
     }
 }

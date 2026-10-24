@@ -22,10 +22,15 @@ Item {
     id: root
     anchors.fill: parent
 
-    readonly property string currentAppId: PreviewController.parentIndex >= 0
-        ? DockModel.appId(PreviewController.parentIndex) : ""
+    property string currentAppId: ""
+    readonly property bool hasUnreadForCurrentApp: {
+        let _rev = NotificationTracker.revision
+        return root.currentAppId.length > 0
+            && NotificationTracker.unreadCount(root.currentAppId) > 0
+    }
     readonly property bool hasWindowContent: childWindowModel.count > 0
-    readonly property bool hasNotificationContent: previewInbox.count > 0
+    readonly property bool hasNotificationContent:
+        root.hasUnreadForCurrentApp && previewInbox.count > 0
 
     function announcePreviewOpen(appName, count) {
         let message = count === 0 && root.hasNotificationContent
@@ -73,6 +78,7 @@ Item {
 
     function rebuildChildModel() {
         let parentIdx = PreviewController.parentIndex
+        root.currentAppId = parentIdx >= 0 ? DockModel.appId(parentIdx) : ""
         if (parentIdx < 0) {
             // Keep delegates alive so PipeWire streams pause/resume naturally
             // via visibility cascade. Destroying delegates triggers
@@ -174,6 +180,7 @@ Item {
             if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 let count = childWindowModel.count
                 root.announcePreviewOpen(PreviewController.appName, count)
+                Qt.callLater(root.checkPopupStillHasContent)
             }
         }
     }
@@ -326,6 +333,7 @@ Item {
                     appFilter: root.currentAppId
                     activeOnly: true
                     unreadOnly: true
+                    requireAppFilter: true
                     compact: true
                     showHeader: false
                 }

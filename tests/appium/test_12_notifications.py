@@ -106,6 +106,10 @@ def _open_notification_settings(krema: Krema) -> None:
 
 def _card_xpath(summary: str) -> str:
     return f"{SETTINGS}//list_item[@name='{summary}']"
+def _preview_card_xpath(summary: str) -> str:
+    return f"//popup_menu//list_item[@name='{summary}']"
+
+
 
 
 def _visible_state(krema: Krema, card_xpath: str, state: str) -> bool:
@@ -154,6 +158,20 @@ def test_not001_external_watcher_badge_close_and_local_inbox_lifecycle(
             lambda: "2 notifications" in description(),
             message="dock item to expose two watcher notifications",
         )
+        hover_ready(krema, "Alpha")
+        preview_card = _preview_card_xpath(f"{token}-first")
+        wait_until(
+            lambda: krema.preview_visible() and krema.find(preview_card) is not None,
+            message="hover popup to expose the app-scoped unread card",
+        )
+        card = krema.find(preview_card)
+        assert card is not None
+        assert has_state(card, "showing") or has_state(card, "visible")
+        assert krema.find(
+            f"{preview_card}//*[contains(@name, 'External notification {token}-first')]"
+        ) is not None
+        assert krema.find(f"{preview_card}//button[@name='Mark read']") is not None
+        assert krema.find(f"{preview_card}//button[@name='Dismiss']") is not None
         _close(first)
         wait_until(
             lambda: "1 notifications" in description(),

@@ -34,12 +34,22 @@ QtObject {
         if (activeOnly) rows = rows.filter(r => !!r.active)
         return rows
     }
+    function _syncUnreadFromRows() {
+        let counts = ({})
+        for (let row of notificationRows) {
+            if (!row.active || row.read || row.dismissed || !row.desktopEntry)
+                continue
+            counts[row.desktopEntry] = (counts[row.desktopEntry] || 0) + 1
+        }
+        unread = counts
+    }
     function _replaceNotification(id, changes) {
         let rows = notificationRows.slice()
         for (let i = 0; i < rows.length; ++i) {
             if (Number(rows[i].id) === Number(id)) {
                 rows[i] = Object.assign({}, rows[i], changes)
                 notificationRows = rows
+                _syncUnreadFromRows()
                 revision++
                 return
             }
@@ -56,7 +66,7 @@ QtObject {
     function invokeAction(id, action) {
         _record("invokeAction", arguments)
     }
-    function setNotifications(rows) { notificationRows = rows; revision++ }
+    function setNotifications(rows) { notificationRows = rows; _syncUnreadFromRows(); revision++ }
     function clearUnreadNotifications(appId) {
         _record("clearUnreadNotifications", arguments)
         if (!Object.prototype.hasOwnProperty.call(unread, appId) || unread[appId] <= 0) return

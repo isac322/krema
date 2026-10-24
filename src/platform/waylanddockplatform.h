@@ -60,6 +60,10 @@ private:
     bool m_panelRelative = false;
     /// The probe is mapped, so it can take over the reservation.
     bool m_probeMapped = false;
+    /// The probe has committed the reservation; transient exposure loss does not revoke it.
+    bool m_probeOwnsReservation = false;
+    /// Suppress lifecycle callbacks while deliberately replacing the probe surface.
+    bool m_probeResetting = false;
 };
 
 } // namespace krema

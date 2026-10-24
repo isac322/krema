@@ -21,6 +21,7 @@ QtObject {
     property bool previewKeyboardActive: false
     property int focusedThumbnailIndex: -1
     function showPreview(i, pos, ext) { _record("showPreview", arguments); parentIndex = i; visible = true }
+    function hidePreviewImmediate() { _record("hidePreviewImmediate", arguments); hidePreview() }
     function hidePreview() { _record("hidePreview", arguments); visible = false }
     function hidePreviewDelayed() { _record("hidePreviewDelayed", arguments) }
     function cancelHide() { _record("cancelHide", arguments) }
@@ -34,7 +35,7 @@ QtObject {
     function focusedThumbnailTitle() { return "" }
     function focusedThumbnailIsActive() { return false }
     function focusedThumbnailIsMinimized() { return false }
-    function previewThumbnailCount() { return 0 }
+    function previewThumbnailCount() { return parentIndex >= 0 ? 1 : 0 }
 
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["calls", "visible", "parentIndex", "appName", "contentX", "contentY", "contentWidth", "contentHeight", "previewHovered", "previewKeyboardActive", "focusedThumbnailIndex"]

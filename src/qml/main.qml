@@ -256,6 +256,11 @@ Item {
 
         // Preview keyboard mode: route keys to PreviewController
         if (PreviewController.previewKeyboardActive) {
+            if (PreviewController.previewThumbnailCount() <= 0) {
+                PreviewController.endPreviewKeyboardNav()
+                event.accepted = true
+                return
+            }
             // Thumbnail navigation follows dock axis (Left/Right for horizontal, Up/Down for vertical)
             let thumbPrev = DockView.isVertical ? Qt.Key_Up : Qt.Key_Left
             let thumbNext = DockView.isVertical ? Qt.Key_Down : Qt.Key_Right
@@ -331,18 +336,20 @@ Item {
             event.accepted = true
             break
         case previewKey:
-            // Open preview for the focused item (if it has windows); not for
-            // a held hover that still awaits its post-menu reconcile.
+            // Open preview for the focused item (if it has windows or unread
+            // notifications); not for a held hover awaiting reconciliation.
             if (hoveredIndex >= 0 && !_hoverHeld) {
                 let idx = DockModel.tasksModel.index(hoveredIndex, 0)
                 let isWindow = DockModel.tasksModel.data(
                     idx, TaskManager.AbstractTasksModel.IsWindow)
-                if (isWindow) {
+                if (isWindow || root.itemHasUnreadNotifications(hoveredIndex)) {
                     let item = dockRepeater.itemAt(hoveredIndex)
                     if (item) {
                         showPreviewForItem(hoveredIndex, item)
-                        PreviewController.startPreviewKeyboardNav()
-                        announcePreviewThumbnail()
+                        if (isWindow && PreviewController.previewThumbnailCount() > 0) {
+                            PreviewController.startPreviewKeyboardNav()
+                            announcePreviewThumbnail()
+                        }
                     }
                 }
             }
@@ -475,6 +482,12 @@ Item {
         let str = url.toString()
         return str.endsWith(".desktop") || str.startsWith("applications:")
     }
+    function itemHasUnreadNotifications(index) {
+        let _rev = NotificationTracker.revision
+        if (index < 0 || index >= dockRepeater.count) return false
+        let appId = DockModel.appId(index)
+        return appId.length > 0 && NotificationTracker.unreadCount(appId) > 0
+    }
 
     function _tryAutoPreview() {
         if (_hoverHeld) return
@@ -483,13 +496,14 @@ Item {
         let idx = DockModel.tasksModel.index(hoveredIndex, 0)
         let isWindow = DockModel.tasksModel.data(
             idx, TaskManager.AbstractTasksModel.IsWindow)
-        if (isWindow) {
+        if (isWindow || root.itemHasUnreadNotifications(hoveredIndex)) {
             tooltipItem.show = false
             tooltipTimer.stop()
             let item = dockRepeater.itemAt(hoveredIndex)
             if (item) showPreviewForItem(hoveredIndex, item)
         }
     }
+
 
     // Show the preview popup centred on the item's VISUAL (zoomed, pushed)
     // centre; mapToGlobal includes the item's transforms. The extent passed is
@@ -1667,12 +1681,13 @@ Item {
             let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
             let isWindow = DockModel.tasksModel.data(
                 idx, TaskManager.AbstractTasksModel.IsWindow)
-            if (isWindow && DockSettings.previewEnabled) {
-                // Window task → show preview popup
+            let hasUnreadNotifications = root.itemHasUnreadNotifications(root.hoveredIndex)
+            if (DockSettings.previewEnabled && (isWindow || hasUnreadNotifications)) {
+                // Window or notification-bearing task → show preview popup
                 let item = dockRepeater.itemAt(root.hoveredIndex)
                 if (item) root.showPreviewForItem(root.hoveredIndex, item)
             } else if (!PreviewController.visible) {
-                // Hover previews disabled or launcher-only → show text tooltip
+                // Hover previews disabled or launcher-only without notifications
                 tooltipItem.show = true
             }
         }

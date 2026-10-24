@@ -20,6 +20,28 @@ Krema combines four badge sources:
 Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux, so
 sources 2–4 cover the rest.
 
+## Preview-popup notification cards
+
+The dock preview reuses the watcher's retained records for an app-scoped
+notification section. It requests `notifications(appId, true)` and then keeps
+only records that are both active and locally unread (`!read && !dismissed`).
+Window thumbnails and cards share one popup for windowed apps; a pinned
+launcher with no windows can open the same popup when it has unread watcher
+records.
+
+The compact cards retain the summary, body, urgency, app label, payload action
+buttons, `Mark read`, and `Dismiss`. The timestamp and close-reason metadata is
+omitted from this bounded popup presentation. A local-state disclaimer remains
+visible: these actions update Krema's local read/dismiss state and do not move
+the originating app's server-side read cursor.
+
+The notification section is capped at 14 Kirigami grid units and becomes
+scrollable for longer unread lists. When the last unread card is read or
+dismissed, a notification-only popup closes immediately. If the last window
+closes while unread cards remain, the thumbnails disappear but the card
+section stays open. A popup with neither windows nor active unread cards is
+never left as an empty shell.
+
 ## Input boundaries and service lifecycle
 
 Krema consumes the KDE watcher, Unity LauncherEntry, SNI `NeedsAttention`,
@@ -416,6 +438,38 @@ Both trackers are C++ singletons with a `revision` property for reactive QML bin
 `Q_INVOKABLE` lookups, so QML never iterates notifications per dock item.
 
 ---
+
+### Persistent attention-only dot
+
+The dock keeps numeric badge precedence without turning a boolean attention state into a
+fake notification count:
+
+```qml
+readonly property bool _showCountBadge:
+    _badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
+readonly property bool _showAttentionDot:
+    _isDemandingAttention && !_showCountBadge
+readonly property bool _badgeIsDot:
+    DockSettings.badgeDisplayMode === 1 || !_showCountBadge
+```
+
+When an app requests attention through SNI `NeedsAttention`, Unity `urgent`, or the task
+manager attention role while no count badge is being shown, the existing `badge` overlay
+shows a small persistent dot. This includes `Badge display: Off` when a positive count
+exists: the count remains hidden, but live attention remains visible. The dot follows the
+live attention state and remains visible after the transient attention animation ends.
+Clearing the underlying attention state removes it immediately.
+
+The precedence is:
+
+1. A positive Unity or watcher count shows the configured numeric badge (or configured
+   badge dot) unless Badge display is Off.
+2. Live attention with no visible count badge shows the attention-only dot, including
+   when Badge display is Off and a count exists.
+3. No count badge and no attention shows no badge.
+
+The marker is not a count, so the accessible description says `Attention requested` and
+never reports a synthetic `1 notification` or a zero-count label.
 
 ## CMake Integration
 

@@ -218,6 +218,26 @@ void onReserveScreenSpaceChanged()
 For a preview surface whose edge-dependent layout changes, call its existing edge-layout update and request `QQuickWindow::update()` only when the preview is visible. Keep this refresh scoped to the setting-change/layout path rather than adding a repaint to every geometry update.
 
 ---
+## Panel-Relative Reservation Handoff
+
+Panel-relative docks use a small Bottom-layer probe to carry the dock's
+positive exclusive zone. The probe's first true expose establishes reservation
+ownership; a transient `isExposed() == false` during an anchor or size
+reconfigure is not a teardown and MUST NOT return the positive zone to the
+dock surface. The handoff code therefore keeps the probe owner state sticky
+until a real hide, platform-surface destruction, or explicit panel-relative
+disable.
+
+When ownership is established, the probe requests the positive zone and the
+dock requests `-1` in the same committed update. During a transient exposure
+loss, `applyExclusiveZone()` MUST continue that owner branch and commit the
+probe when its native handle exists. On a genuine teardown, clear the probe
+zone and commit it before resetting ownership or destroying the probe; only
+then may the dock take the positive reservation. This preserves the invariant
+that at most one dock/probe surface has a positive exclusive zone at any
+observable protocol point.
+
+---
 
 ## Input Region
 

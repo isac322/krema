@@ -31,7 +31,20 @@
 // Must run under run-with-kwin.sh, which provides WAYLAND_DISPLAY, a private
 // session bus and throwaway XDG directories.
 
+// Test-only access to the platform's private handoff state. Include all
+// headers pulled by the platform header before redefining private.
 #include "fakepointer.h"
+#include <QMargins>
+#include <QPointer>
+#include <QRegion>
+#include <QScreen>
+#include <QSize>
+#include <QWindow>
+#include <memory>
+#include <sstream>
+#define private public
+#include "platform/waylanddockplatform.h"
+#undef private
 #include "krema.h"
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
@@ -54,6 +67,7 @@
 #include <QDBusReply>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QExposeEvent>
 #include <QFile>
 #include <QHash>
 #include <QJsonArray>
@@ -61,6 +75,7 @@
 #include <QJsonObject>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPlatformSurfaceEvent>
 #include <QProcess>
 #include <QQuickStyle>
 #include <QRasterWindow>
@@ -724,6 +739,30 @@ std::optional<NormalWindow> windowOf(const Placement &p, qint64 pid)
     return std::nullopt;
 }
 
+/// Samples KWin's maximized work-area top inset on every short event-loop turn.
+QList<int> sampleMaximizedTop(krema::MultiDockManager &manager, qint64 pid, const QSet<qint64> &, int durationMs)
+{
+    QList<int> samples;
+    auto *shell = manager.primaryShell();
+    const QString outputName = shell && shell->view()->screen() ? shell->view()->screen()->name() : QString();
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < durationMs) {
+        const auto snapshot = KWinQuery::instance().snapshot();
+        if (snapshot && snapshot->outputs.contains(outputName)) {
+            const QRect output = snapshot->outputs.value(outputName).geometry;
+            for (const auto &normal : snapshot->normals) {
+                if (normal.pid == pid) {
+                    samples.append(normal.maximizeArea.y() - output.y());
+                    break;
+                }
+            }
+        }
+        QTest::qWait(1);
+    }
+    return samples;
+}
+
 /// The maximized window fills its work area, and the work area holds exactly
 /// one dock reservation: the resting panel bar plus @p margin (no other
 /// panel reserves space here).
@@ -845,6 +884,181 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     requireSettles(*manager, pids, "non-reserving panel, Panels, margin 8", [](const Placement &p) {
         return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - 8 && reservationCoversDock(p);
     });
+}
+
+TEST_CASE("Panel probe ownership survives transient exposure loss during edge switches", "[panel-margin][issue-135]")
+{
+    configure(1, 8);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const QString outputName = view->screen()->name();
+    StandInPanel panel(kPanelZone, outputName);
+    REQUIRE(panel.waitForStarted());
+
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    const auto probeOwnsReservation = [&] {
+        return platform->m_probe && platform->m_probeLayerWindow && platform->m_probeLayerWindow->exclusionZone() > 0
+            && platform->m_layerWindow && platform->m_layerWindow->exclusionZone() == -1;
+    };
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    // A real empty expose event is delivered while the native surface remains
+    // visible. Force the resulting transient state deterministically so this
+    // test also exercises the exact owner-loss branch from the bug report.
+    QExposeEvent transient{QRegion()};
+    QCoreApplication::sendEvent(platform->m_probe.get(), &transient);
+    platform->m_probeMapped = false;
+    platform->setExclusiveZone(platform->m_exclusiveZone);
+    REQUIRE(probeOwnsReservation());
+
+    const krema::DockPlatform::Edge edges[] = {
+        krema::DockPlatform::Edge::Top,
+        krema::DockPlatform::Edge::Left,
+        krema::DockPlatform::Edge::Right,
+        krema::DockPlatform::Edge::Bottom,
+    };
+    for (const auto edge : edges) {
+        platform->setEdge(edge);
+        view->setEdge(edge);
+        QExposeEvent edgeTransient{QRegion()};
+        QCoreApplication::sendEvent(platform->m_probe.get(), &edgeTransient);
+        platform->m_probeMapped = false;
+        platform->setExclusiveZone(platform->m_exclusiveZone);
+        INFO("edge switch retained a single positive reservation");
+        REQUIRE(probeOwnsReservation());
+    }
+}
+
+TEST_CASE("Panel probe edge switch keeps KWin consumer work area single-reserved", "[panel-margin][issue-135]")
+{
+    configure(1, 8);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8);
+    });
+
+    OrdinaryWindow consumer;
+    REQUIRE(consumer.waitForStarted());
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const qint64 consumerPid = consumer.pid();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            const auto placement = measure(*manager, {}, maximizeAction(consumerPid, manager->primaryShell()->view()->screen()->name()), false);
+            const auto window = placement ? windowOf(*placement, consumerPid) : std::nullopt;
+            return window && !window->maximizeArea.isEmpty();
+        },
+        kTimeoutMs));
+
+    std::optional<Placement> initial;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            initial = measure(*manager, {}, {}, false);
+            return initial.has_value() && windowOf(*initial, consumerPid).has_value();
+        },
+        kTimeoutMs));
+    const auto initialWindow = windowOf(*initial, consumerPid);
+    REQUIRE(initialWindow);
+    const int singleReservation = initial->output.bottom() - initialWindow->maximizeArea.bottom();
+    REQUIRE(singleReservation > 0);
+
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    platform->setEdge(krema::DockPlatform::Edge::Top);
+    view->setEdge(krema::DockPlatform::Edge::Top);
+    // Simulate transient expose loss without detaching the probe. Explicitly
+    // request the probe update so the old implementation commits both the
+    // existing probe reservation and its fallback dock reservation.
+    platform->m_probeMapped = false;
+    if (platform->m_probeLayerWindow) {
+        platform->m_probeLayerWindow->setExclusiveZone(platform->m_exclusiveZone);
+        platform->m_probe->requestUpdate();
+    }
+    platform->setExclusiveZone(platform->m_exclusiveZone);
+
+    const QList<int> samples = sampleMaximizedTop(*manager, consumerPid, {}, 700);
+    REQUIRE(!samples.isEmpty());
+    REQUIRE(platform->m_layerWindow->exclusionZone() == -1);
+    INFO("KWin top inset sample count " << samples.size() << ", max " << *std::max_element(samples.cbegin(), samples.cend()));
+    REQUIRE(*std::max_element(samples.cbegin(), samples.cend()) <= singleReservation);
+    REQUIRE(std::find(samples.cbegin(), samples.cend(), singleReservation) != samples.cend());
+}
+
+TEST_CASE("Panel probe teardown returns ownership before remapping", "[panel-margin][issue-135]")
+{
+    configure(1, 8);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const QString outputName = view->screen()->name();
+    StandInPanel panel(kPanelZone, outputName);
+    REQUIRE(panel.waitForStarted());
+
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    const auto probeOwnsReservation = [&] {
+        return platform->m_probe && platform->m_probeLayerWindow && platform->m_probeLayerWindow->exclusionZone() > 0
+            && platform->m_layerWindow && platform->m_layerWindow->exclusionZone() == -1;
+    };
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    platform->m_probe->hide();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return platform->m_probe && !platform->m_probeMapped && platform->m_layerWindow->exclusionZone() > 0;
+        },
+        kTimeoutMs));
+
+    platform->showProbe();
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    // Disable Panels while exposure is transiently lost. The probe must be
+    // cleared and destroyed before the dock receives the positive zone.
+    QExposeEvent transient{QRegion()};
+    QCoreApplication::sendEvent(platform->m_probe.get(), &transient);
+    platform->m_probeMapped = false;
+    platform->setPanelRelative(false);
+    REQUIRE(platform->m_probe == nullptr);
+    REQUIRE(platform->m_probeLayerWindow == nullptr);
+    REQUIRE(platform->m_layerWindow->exclusionZone() > 0);
+
+    platform->setPanelRelative(true);
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
+
+    // SurfaceAboutToBeDestroyed is a real teardown boundary, even when the
+    // QWindow itself still reports visible.
+    QPlatformSurfaceEvent surfaceDestroyed{QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed};
+    QCoreApplication::sendEvent(platform->m_probe.get(), &surfaceDestroyed);
+    REQUIRE(!platform->m_probeMapped);
+    REQUIRE(platform->m_layerWindow->exclusionZone() > 0);
+
+    platform->showProbe();
+    REQUIRE(QTest::qWaitFor(probeOwnsReservation, kTimeoutMs));
 }
 
 TEST_CASE("Panels mode measures the gap from a panel started before Krema", "[panel-margin]")

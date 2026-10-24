@@ -150,5 +150,45 @@ Item {
             inbox.activeOnly = true
             tryVerify(() => T.findAll(inbox, o => String(o.objectName).startsWith("notificationCard-")).length === 1)
         }
+        function test_unreadOnlyFiltersReadAndDismissedRows() {
+            NotificationTracker.setNotifications([
+                sample(),
+                sample({ id: 102, read: true }),
+                sample({ id: 103, dismissed: true }),
+            ])
+            let inbox = makeInbox()
+            inbox.unreadOnly = true
+            compare(inbox.count, 1)
+            verify(card(inbox))
+            verify(!T.findFirst(inbox, o => o.objectName === "notificationCard-102"))
+            verify(!T.findFirst(inbox, o => o.objectName === "notificationCard-103"))
+        }
+
+        function test_compactModeKeepsActionsAndLocalDisclaimer() {
+            NotificationTracker.setNotifications([
+                sample({ active: false, closeReason: "expired" }),
+            ])
+            let inbox = makeInbox()
+            inbox.compact = true
+            inbox.showHeader = false
+            tryVerify(() => !!card(inbox))
+            verify(textObject(inbox, "notificationSummary"))
+            verify(textObject(inbox, "notificationBody"))
+            verify(textObject(inbox, "notificationUrgency"))
+            verify(textObject(inbox, "notificationActions"))
+            verify(textObject(inbox, "notificationInboxSyncNotice").visible)
+            verify(!textObject(inbox, "notificationTimeout").visible)
+            verify(!textObject(inbox, "notificationCloseReason").visible)
+        }
+
+        function test_countTracksVisibleRowsAndLocalActions() {
+            NotificationTracker.setNotifications([sample(), sample({ id: 102 })])
+            let inbox = makeInbox()
+            compare(inbox.count, 2)
+            inbox.unreadOnly = true
+            compare(inbox.count, 2)
+            T.findFirst(inbox, o => o.objectName === "markNotificationReadButton").clicked()
+            tryCompare(inbox, "count", 1)
+        }
     }
 }

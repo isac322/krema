@@ -20,6 +20,28 @@ Krema combines four badge sources:
 Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux, so
 sources 2–4 cover the rest.
 
+## Preview-popup notification cards
+
+The dock preview reuses the watcher's retained records for an app-scoped
+notification section. It requests `notifications(appId, true)` and then keeps
+only records that are both active and locally unread (`!read && !dismissed`).
+Window thumbnails and cards share one popup for windowed apps; a pinned
+launcher with no windows can open the same popup when it has unread watcher
+records.
+
+The compact cards retain the summary, body, urgency, app label, payload action
+buttons, `Mark read`, and `Dismiss`. The timestamp and close-reason metadata is
+omitted from this bounded popup presentation. A local-state disclaimer remains
+visible: these actions update Krema's local read/dismiss state and do not move
+the originating app's server-side read cursor.
+
+The notification section is capped at 14 Kirigami grid units and becomes
+scrollable for longer unread lists. When the last unread card is read or
+dismissed, a notification-only popup closes immediately. If the last window
+closes while unread cards remain, the thumbnails disappear but the card
+section stays open. A popup with neither windows nor active unread cards is
+never left as an empty shell.
+
 ## Input boundaries and service lifecycle
 
 Krema consumes the KDE watcher, Unity LauncherEntry, SNI `NeedsAttention`,

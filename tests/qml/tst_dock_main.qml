@@ -1987,5 +1987,34 @@ Item {
                 }
             }
         }
+        function test_launcherUnreadNotificationOpensPreviewOnHoverAndKeyboard() {
+            DockSettings.previewEnabled = true
+            DockModel.tasksModel.addTask({
+                display: "Chat", AppId: "org.example.Chat",
+                IsWindow: false, IsLauncher: true
+            })
+            NotificationTracker.setNotifications([{
+                id: 901,
+                desktopEntry: "org.example.Chat",
+                appName: "Chat",
+                summary: "New chat",
+                body: "Hello",
+                actions: [],
+                timeout: 5000,
+                urgency: 1,
+                active: true,
+                read: false,
+                dismissed: false,
+            }])
+            NotificationTracker.setUnread("org.example.Chat", 1)
+            let dock = makeDock(1)
+            verify(dock.itemHasUnreadNotifications(0))
+            hoverItem(items(dock)[0])
+            tryCompare(PreviewController, "visible", true, 2000)
+            PreviewController.hidePreview()
+            dock.startKeyboardNavigation()
+            keyClick(Qt.Key_Up)
+            tryCompare(PreviewController, "visible", true, 2000)
+        }
     }
 }

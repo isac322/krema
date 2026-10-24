@@ -13,6 +13,7 @@
 - preview-live-thumbnail: PipeWire-based live window thumbnails
 - preview-fast-pointer-entry: Pointer entering a popup reported visible by AT-SPI keeps it open past the hide delay
 - preview-slow-pointer-transfer: The animation reserve keeps continuous dock-to-preview and return movement alive at the default hide delay
+- preview-unread-notification-cards: Windowed and launcher-only apps show compact active-unread notification cards in the preview popup
 - preview-task-index: Preview thumbnails keep their initial displayed order and exact native targets after pinned/running partitioning
 
 ## Affected Files
@@ -26,6 +27,9 @@
 - src/shell/previewcontroller.cpp
 - src/models/dockmodel.h
 - src/models/dockmodel.cpp
+- src/qml/NotificationInbox.qml
+- tests/qml/tst_notification_inbox.qml
+- tests/qml/tst_preview_popup.qml
 
 **Tier:** Tier 2 (Appium) for real pointer, AT-SPI, KWin, and PipeWire
 observations. Tier 1 QML tests cover tooltip suppression and popup lifecycle
@@ -375,3 +379,36 @@ state. PipeWire/Screenshot2 checks require DRM/vgem.
 
 **Verification:** Independent fixture/KWin identity sets and counts, AT-SPI thumbnail names and measured left-to-right order, unchanged full baseline identities on every grouped reopen or return, real pointer coordinates, KWin active identities after every slot selection, and popup closure.
 **Automated (strict feature coverage):** `tests/appium/test_10_task_zone_input.py::test_prev010_last_thumbnail_and_other_app_pin_transitions` exercises all three horizontal slots and both vertical slots before and after other-app unpin/repin transitions. It retains strict single-action vertical hover and physical last-center input reachability. The native preview surface follows the laid-out popup extent within available output space. PREV-010 checks partition order and exact native activation with center-point input reachability; PREV-011 separately verifies whole-popup and whole-thumbnail containment. Image/RHI/DRM and default timing remain unverified.
+
+## TC PREV-NOT: Unread Notification Cards
+
+**Precondition:** A watcher notification with a matching desktop-entry for a
+windowed app and for a pinned launcher with no windows.
+
+**Steps:**
+1. Send active unread records for two different apps, plus read, dismissed, and
+   closed records. Hover the windowed app, then the launcher-only app.
+2. Check summary, body, app label, urgency, payload actions, Mark read, Dismiss,
+   and the visible local-state disclaimer. Invoke an action and verify its
+   notification ID and action key at the server.
+3. Read or dismiss cards one at a time. Close the last window with unread cards
+   remaining, then remove the last active unread card.
+4. Send many cards and scroll the bounded section. Transfer the pointer from
+   dock to popup and away, and open the launcher popup through dock keyboard
+   navigation.
+
+**Expected:** Only the selected app's active unread cards appear. A windowed
+app shows thumbnails above cards; a launcher needs no window. Losing the last
+window keeps unread cards, while losing the last card with no windows closes
+the popup. The local actions do not claim server synchronization. The card
+section stays within 14 grid units, buttons remain in the native input region,
+and the notification-only announcement gives the unread count, not “0 windows.”
+Pointer entry and departure retain the existing hide-delay behavior.
+
+**Automated (Tier 1):** `tests/qml/tst_notification_inbox.qml`,
+`tests/qml/tst_preview_popup.qml`, and `tests/qml/tst_dock_main.qml`.
+**Automated (Tier 2):**
+`tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle`
+checks real watcher content and external close removal from the hover popup.
+The launcher-only pointer/keyboard, action-server receipt, and many-card
+scrolling steps above remain manual real-session checks.

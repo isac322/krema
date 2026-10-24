@@ -234,6 +234,55 @@ bool noStaleTestWindows()
         kTimeoutMs);
 }
 
+QString wheelDesktopPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+        + QStringLiteral("/applications/krema-wheeltest.desktop");
+}
+
+QByteArray wheelDesktopContents(const QString &marker)
+{
+    return QStringLiteral("[Desktop Entry]\nType=Application\nName=Krema Wheel Test\nExec=sh "
+                          "-c \"echo x >> %1\"\nIcon=application-x-executable\n")
+        .arg(marker)
+        .toUtf8();
+}
+
+QString pinDesktopPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+        + QStringLiteral("/applications/krema-pintest.desktop");
+}
+
+QByteArray pinDesktopContents()
+{
+    return QByteArrayLiteral("[Desktop Entry]\nType=Application\nName=Krema Pin Test\nExec=true\nIcon=application-x-executable\n");
+}
+
+bool prepareLauncherFixtures()
+{
+    const QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (!QDir().mkpath(dataHome + QStringLiteral("/applications"))) {
+        return false;
+    }
+
+    const QString marker = dataHome + QStringLiteral("/krema-launch-marker");
+    const auto write = [](const QString &path, const QByteArray &contents) {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            return false;
+        }
+        return file.write(contents) == contents.size();
+    };
+    if (!write(wheelDesktopPath(), wheelDesktopContents(marker))) {
+        return false;
+    }
+    if (!write(pinDesktopPath(), pinDesktopContents())) {
+        return false;
+    }
+    return QProcess::execute(QStringLiteral("kbuildsycoca6"), {QStringLiteral("--noincremental")}) == 0;
+}
+
 } // namespace
 
 TEST_CASE("Left-click on a grouped app cycles through its windows", "[grouped-activation]")
@@ -285,21 +334,13 @@ TEST_CASE("Left-click on a grouped app cycles through its windows", "[grouped-ac
 
 TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[grouped-activation]")
 {
+    REQUIRE(noStaleTestWindows());
     const QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    REQUIRE(QDir().mkpath(dataHome + QStringLiteral("/applications")));
     const QString marker = dataHome + QStringLiteral("/krema-launch-marker");
     QFile::remove(marker);
+    REQUIRE(QFile::exists(wheelDesktopPath()));
 
-    QFile desktop(dataHome + QStringLiteral("/applications/krema-wheeltest.desktop"));
-    REQUIRE(desktop.open(QIODevice::WriteOnly));
-    desktop.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=Krema Wheel Test\nExec=sh "
-                                 "-c \"echo x >> %1\"\nIcon=application-x-executable\n")
-                      .arg(marker)
-                      .toUtf8());
-    desktop.close();
-    QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
-
-    const QUrl url = QUrl::fromLocalFile(desktop.fileName());
+    const QUrl url = QUrl::fromLocalFile(wheelDesktopPath());
     auto *tasks = model().tasksModel();
     tasks->requestAddLauncher(url);
     const auto unpin = qScopeGuard([&] {
@@ -345,18 +386,13 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
 
 TEST_CASE("A launcher pinned by file URL counts as pinned and toggles off", "[grouped-activation]")
 {
-    const QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    REQUIRE(QDir().mkpath(dataHome + QStringLiteral("/applications")));
-    QFile desktop(dataHome + QStringLiteral("/applications/krema-pintest.desktop"));
-    REQUIRE(desktop.open(QIODevice::WriteOnly));
-    desktop.write("[Desktop Entry]\nType=Application\nName=Krema Pin Test\nExec=true\nIcon=application-x-executable\n");
-    desktop.close();
-    QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+    REQUIRE(noStaleTestWindows());
+    REQUIRE(QFile::exists(pinDesktopPath()));
 
     // A pinned-launcher list loaded from settings keeps the file URL string,
     // while the row reports an applications: URL, so a string lookup in
     // launcherList() misses it.
-    const QUrl url = QUrl::fromLocalFile(desktop.fileName());
+    const QUrl url = QUrl::fromLocalFile(pinDesktopPath());
     auto *tasks = model().tasksModel();
     const QStringList saved = model().pinnedLaunchers();
     model().setPinnedLaunchers(saved + QStringList{url.toString()});
@@ -925,5 +961,8 @@ int main(int argc, char *argv[])
         return otherMain(argc, argv);
     }
     QApplication application(argc, argv);
+    if (!prepareLauncherFixtures()) {
+        return 1;
+    }
     return Catch::Session().run(argc, argv);
 }

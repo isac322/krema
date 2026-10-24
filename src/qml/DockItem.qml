@@ -95,6 +95,10 @@ Item {
         }
         return 0
     }
+    readonly property bool _showAttentionDot:
+        _isDemandingAttention && _badgeCount === 0
+    readonly property bool _badgeIsDot:
+        DockSettings.badgeDisplayMode === 1 || _badgeCount === 0
 
     readonly property bool _badgeOnLeft: DockSettings.badgePosition === 1
         || (DockSettings.badgePosition === 2 && DockView.edge === 2)
@@ -661,7 +665,8 @@ Item {
         id: badge
         objectName: "badge"
         z: 2
-        visible: dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
+        visible: (dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2)
+            || dockItem._showAttentionDot
         x: {
             let nom = dockItem._badgeOnLeft
                 ? iconImage.x - width * 0.2
@@ -712,15 +717,16 @@ Item {
             let limit = iconImage.y
             return maxY >= limit ? Math.min(nom, maxY) : nom
         }
-        width: DockSettings.badgeDisplayMode === 1
-               ? Math.round(iconSize * 0.18)
-               : Math.round(iconSize * 0.38)
+        width: dockItem._badgeIsDot
+            ? Math.round(iconSize * 0.18)
+            : Math.round(iconSize * 0.38)
         height: width
         radius: width / 2
         color: dockItem._badgeBgColor
         Accessible.ignored: true
+        readonly property bool isDot: dockItem._badgeIsDot
 
-        layer.enabled: DockSettings.badgeDisplayMode === 0
+        layer.enabled: !badge.isDot
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: Qt.alpha("black", 0.4)
@@ -731,7 +737,7 @@ Item {
         QQC2.Label {
             id: badgeLabel
             objectName: "badgeLabel"
-            visible: DockSettings.badgeDisplayMode === 0
+            visible: !badge.isDot && dockItem._badgeCount > 0
             anchors.centerIn: parent
             text: dockItem._badgeCount > 99 ? "99+" : dockItem._badgeCount.toString()
             color: dockItem._badgeTextColor

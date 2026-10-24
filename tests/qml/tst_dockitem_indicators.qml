@@ -657,6 +657,84 @@ Item {
             tryCompare(item, "_showAttentionAnim", false, 3000)
         }
 
+        function test_sniAttentionOnlyShowsPersistentDot() {
+            DockSettings.badgeDisplayMode = 0
+            DockSettings.attentionAnimation = 0
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            let label = T.badgeLabel(item)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryCompare(item, "_badgeCount", 0)
+            tryCompare(item, "_showAttentionDot", true)
+            verify(badge.visible)
+            compare(badge.isDot, true)
+            compare(label.visible, false)
+            verify(item.accessibleDescription.indexOf("Attention requested") >= 0)
+            verify(item.accessibleDescription.indexOf("notification") < 0)
+        }
+
+        function test_sniAttentionDotSurvivesAnimationTimeout() {
+            DockSettings.attentionAnimation = 1
+            DockSettings.attentionAnimationDuration = 1
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryCompare(item, "_animationActive", true)
+            tryCompare(badge, "visible", true)
+            tryCompare(item, "_animationActive", false, 3000)
+            verify(badge.visible)
+            compare(badge.isDot, true)
+            NotificationTracker.setSniAttention("org.kde.dolphin", false)
+            tryVerify(() => !badge.visible)
+        }
+
+        function test_numericBadgePrecedenceOverAttentionDot() {
+            DockSettings.badgeDisplayMode = 0
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            let label = T.badgeLabel(item)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            NotificationTracker.setUnread("org.kde.dolphin", 3)
+            tryCompare(item, "_badgeCount", 3)
+            compare(badge.isDot, false)
+            compare(label.visible, true)
+            compare(label.text, "3")
+            NotificationTracker.setUnread("org.kde.dolphin", 0)
+            tryCompare(item, "_badgeCount", 0)
+            tryCompare(badge, "isDot", true)
+            compare(label.visible, false)
+            verify(badge.visible)
+        }
+
+        function test_badgeOffKeepsLiveAttentionDot() {
+            DockSettings.badgeDisplayMode = 2
+            DockSettings.attentionAnimation = 0
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            NotificationTracker.setUnread("org.kde.dolphin", 3)
+            tryCompare(item, "_badgeCount", 3)
+            compare(badge.visible, false)
+            NotificationTracker.setUnread("org.kde.dolphin", 0)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryCompare(item, "_badgeCount", 0)
+            tryCompare(item, "_isDemandingAttention", true)
+            verify(badge.visible)
+            compare(badge.isDot, true)
+        }
+
+        function test_dndKeepsPersistentAttentionDot() {
+            DockSettings.attentionAnimation = 1
+            NotificationTracker.dndActive = true
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryCompare(item, "_isDemandingAttention", true)
+            compare(item._animationActive, false)
+            verify(!item._showAttentionAnim)
+            verify(badge.visible)
+            compare(badge.isDot, true)
+        }
+
         function test_blinkAnimationRestoresIconOpacity() {
             DockSettings.attentionAnimation = 6
             DockSettings.attentionAnimationDuration = 1

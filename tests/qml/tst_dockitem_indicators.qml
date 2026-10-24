@@ -286,16 +286,17 @@ Item {
             verify(!icon.visible)
 
             NotificationTracker.setSniMetadata("org.kde.dolphin", {
-                title: "Dolphin tray",
+                title: "Dolphin File Manager",
                 attentionIconName: "dialog-warning",
                 overlayIconName: "mail-unread",
-                toolTipTitle: "Dolphin tray",
-                toolTipSubTitle: "New message"
+                toolTipTitle: "Dolphin File Manager",
+                toolTipSubTitle: "2 transfers active"
             })
             NotificationTracker.setSniAttention("org.kde.dolphin", true)
             tryVerify(() => icon.visible)
             compare(icon.source, "dialog-warning")
-            verify(item.accessibleDescription.indexOf("New message") >= 0)
+            verify(item.accessibleDescription.indexOf("Dolphin File Manager") >= 0)
+            verify(item.accessibleDescription.indexOf("2 transfers active") >= 0)
             let iconImage = T.iconImage(item)
             let badge = T.badge(item)
             verify(icon.y > iconImage.y + iconImage.height * 0.5)
@@ -774,12 +775,13 @@ Item {
         }
 
         function test_urgentAndWindowAttentionShowPersistentDot() {
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            let label = T.badgeLabel(item)
             for (let mode of [0, 2]) {
                 DockSettings.badgeDisplayMode = mode
                 DockSettings.attentionAnimation = 0
-                let item = makeItem({ IsWindow: true, IsDemandingAttention: true })
-                let badge = T.badge(item)
-                let label = T.badgeLabel(item)
+                DockModel.tasksModel.setTaskData(0, "IsDemandingAttention", true)
                 tryCompare(item, "_isDemandingAttention", true)
                 verify(badge.visible)
                 compare(badge.isDot, true)

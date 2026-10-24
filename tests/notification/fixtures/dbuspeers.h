@@ -3,13 +3,34 @@
 
 #pragma once
 
+#include <QDBusArgument>
 #include <QDBusConnection>
+#include <QDBusMetaType>
 #include <QObject>
 #include <QVariant>
 #include <QVariantMap>
+#include <QVector>
 
 namespace krema::test
 {
+
+struct ToolTipPixmap {
+    qint32 width = 0;
+    qint32 height = 0;
+    QByteArray data;
+};
+
+struct ToolTipData {
+    QString iconName;
+    QVector<ToolTipPixmap> iconPixmap;
+    QString title;
+    QString description;
+};
+
+const QDBusArgument &operator>>(const QDBusArgument &argument, ToolTipPixmap &pixmap);
+QDBusArgument &operator<<(QDBusArgument &argument, const ToolTipPixmap &pixmap);
+const QDBusArgument &operator>>(const QDBusArgument &argument, ToolTipData &toolTip);
+QDBusArgument &operator<<(QDBusArgument &argument, const ToolTipData &toolTip);
 
 class NotificationServerPeer : public QObject
 {
@@ -92,9 +113,10 @@ class StatusNotifierItemPeer : public QObject
     Q_PROPERTY(QVariant ToolTip READ toolTip WRITE setToolTip NOTIFY toolTipChanged)
 public:
     explicit StatusNotifierItemPeer(QString serviceName, QString objectPath = QStringLiteral("/StatusNotifierItem"), QObject *parent = nullptr);
+    StatusNotifierItemPeer(QString serviceName, QString objectPath, const QDBusConnection &bus, QObject *parent = nullptr);
     ~StatusNotifierItemPeer() override;
 
-    bool start();
+    bool start(bool replaceExisting = false);
     void stop();
     bool isRegistered() const;
     QString serviceName() const;
@@ -141,3 +163,6 @@ private:
 };
 
 } // namespace krema::test
+
+Q_DECLARE_METATYPE(krema::test::ToolTipPixmap)
+Q_DECLARE_METATYPE(krema::test::ToolTipData)

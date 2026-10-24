@@ -742,7 +742,7 @@ TEST_CASE("SNI metadata is queried and refreshed through live signals", "[notifi
     item.setTitle(QStringLiteral("Initial title"));
     item.setAttentionIconName(QStringLiteral("dialog-warning"));
     item.setOverlayIconName(QStringLiteral("mail-unread"));
-    item.setToolTip(QStringList{QStringLiteral("tray-icon"), QStringLiteral("Tooltip title"), QStringLiteral("Tooltip subtitle")});
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{QStringLiteral("tray-icon"), {}, QStringLiteral("Tooltip title"), QStringLiteral("Tooltip subtitle")}));
     REQUIRE(item.start());
 
     krema::test::StatusNotifierWatcherPeer watcher;
@@ -762,7 +762,7 @@ TEST_CASE("SNI metadata is queried and refreshed through live signals", "[notifi
     item.setTitle(QStringLiteral("Updated title"));
     item.setAttentionIconName(QStringLiteral("bell"));
     item.setOverlayIconName(QStringLiteral("mail-read"));
-    item.setToolTip(QStringList{QStringLiteral("tray-icon"), QStringLiteral("Updated tooltip"), QStringLiteral("Updated subtitle")});
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{QStringLiteral("tray-icon"), {}, QStringLiteral("Updated tooltip"), QStringLiteral("Updated subtitle")}));
     REQUIRE(waitFor([&] {
         return tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated title")
             && tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("bell")
@@ -802,6 +802,50 @@ TEST_CASE("SNI metadata selection prefers attention deterministically", "[notifi
     REQUIRE(waitFor([&] {
         return tracker.sniNeedsAttention(QStringLiteral("org.example.same-app"))
             && tracker.sniTitle(QStringLiteral("org.example.same-app")) == QStringLiteral("Attention title");
+    }));
+}
+
+TEST_CASE("SNI item metadata refreshes after gapless service owner replacement", "[notification][sni][metadata][owner-handover]")
+{
+    const QString serviceName = QStringLiteral("org.example.fixture.GaplessSni");
+    const QString objectPath = QStringLiteral("/StatusNotifierItem");
+    krema::test::StatusNotifierItemPeer original(serviceName, objectPath);
+    original.setId(QStringLiteral("org.example.gapless"));
+    original.setStatus(QStringLiteral("NeedsAttention"));
+    original.setTitle(QStringLiteral("Old title"));
+    original.setAttentionIconName(QStringLiteral("old-attention"));
+    REQUIRE(original.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({original.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("Old title")
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("old-attention");
+    }));
+
+    const QString connectionName = QStringLiteral("sni-item-owner-replacement");
+    const auto replacementBus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, connectionName);
+    const auto disconnect = qScopeGuard([&] {
+        QDBusConnection::disconnectFromBus(connectionName);
+    });
+    REQUIRE(replacementBus.isConnected());
+
+    krema::test::StatusNotifierItemPeer replacement(serviceName, objectPath, replacementBus);
+    replacement.setId(QStringLiteral("org.example.gapless"));
+    replacement.setStatus(QStringLiteral("NeedsAttention"));
+    replacement.setTitle(QStringLiteral("New title"));
+    replacement.setAttentionIconName(QStringLiteral("new-attention"));
+    replacement.setOverlayIconName(QStringLiteral("new-overlay"));
+    REQUIRE(replacement.start(true));
+
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New title")
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-attention")
+            && tracker.sniOverlayIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-overlay");
     }));
 }
 

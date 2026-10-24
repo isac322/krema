@@ -138,7 +138,7 @@ private Q_SLOTS:
     void onSniNewAttentionIcon(const QDBusMessage &message);
     void onSniNewOverlayIcon(const QDBusMessage &message);
     void onSniNewToolTip(const QDBusMessage &message);
-    void onSniServiceUnregistered(const QString &service);
+    void onSniServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
     void onSniWatcherServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
 
 private:

@@ -144,7 +144,7 @@ NotificationTracker::NotificationTracker(QObject *parent)
     : QAbstractListModel(parent)
     , m_notificationServiceWatcher(QStringLiteral("org.freedesktop.Notifications"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_sniWatcherServiceWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
-    , m_sniServiceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForUnregistration)
+    , m_sniServiceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_dndExpiryTimer(this)
 {
     // Settings — must load() explicitly (constructor doesn't auto-load)
@@ -966,9 +966,8 @@ void NotificationTracker::setupSniWatcher()
     connectSniSignal(m_sniOverlayIconMatchConnected, QStringLiteral("NewOverlayIcon"), SLOT(onSniNewOverlayIcon(QDBusMessage)));
     connectSniSignal(m_sniToolTipMatchConnected, QStringLiteral("NewToolTip"), SLOT(onSniNewToolTip(QDBusMessage)));
 
-    connect(&m_sniServiceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &NotificationTracker::onSniServiceUnregistered);
+    connect(&m_sniServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onSniServiceOwnerChanged);
     connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onSniWatcherServiceOwnerChanged);
-
     const auto *dbusInterface = bus.interface();
     if (dbusInterface && dbusInterface->isServiceRegistered(QString::fromLatin1(kSniWatcherService))) {
         queryRegisteredSniItems();
@@ -1041,9 +1040,6 @@ void NotificationTracker::trackSniItem(const QString &service, const QString &ob
         return;
     }
     const QString key = sniKey(service, objectPath);
-    if (m_sniItems.contains(key)) {
-        return;
-    }
 
     m_sniServiceWatcher.addWatchedService(service);
     const quint64 generation = ++m_sniItemGeneration;
@@ -1286,25 +1282,36 @@ void NotificationTracker::onSniNewToolTip(const QDBusMessage &message)
     }
 }
 
-void NotificationTracker::onSniServiceUnregistered(const QString &service)
+void NotificationTracker::onSniServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner)
 {
+    if (oldOwner.isEmpty()) {
+        return;
+    }
+
     const QString prefix = service + kSniKeySeparator;
-    bool changed = false;
-    for (auto it = m_sniItems.begin(); it != m_sniItems.end();) {
+    QStringList objectPaths;
+    for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
         if (it.key().startsWith(prefix)) {
-            qCInfo(lcNotif) << "SNI service gone:" << service << it.key() << "id=" << it->id;
-            it = m_sniItems.erase(it);
-            changed = true;
-        } else {
-            ++it;
+            objectPaths.append(it.key().mid(prefix.size()));
         }
     }
-    m_sniServiceWatcher.removeWatchedService(service);
-    if (changed) {
+
+    for (const QString &objectPath : std::as_const(objectPaths)) {
+        m_sniItems.remove(sniKey(service, objectPath));
+    }
+    if (!objectPaths.isEmpty()) {
         bumpRevision();
     }
-}
 
+    if (newOwner.isEmpty()) {
+        m_sniServiceWatcher.removeWatchedService(service);
+        return;
+    }
+
+    for (const QString &objectPath : std::as_const(objectPaths)) {
+        trackSniItem(service, objectPath);
+    }
+}
 void NotificationTracker::onSniWatcherServiceOwnerChanged(const QString &service, const QString &, const QString &newOwner)
 {
     if (service != QString::fromLatin1(kSniWatcherService)) {

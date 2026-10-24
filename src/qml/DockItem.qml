@@ -35,10 +35,10 @@ Item {
         if (_isDemandingAttention) parts.push(i18n("Attention requested"))
         if (_badgeCount > 0)
             parts.push(i18n("%1 notifications", _badgeCount))
+        if (_sniToolTipTitle.length > 0 && _sniToolTipTitle !== displayName)
+            parts.push(_sniToolTipTitle)
         if (_sniToolTipSubTitle.length > 0)
             parts.push(_sniToolTipSubTitle)
-        else if (_sniToolTipTitle.length > 0 && _sniToolTipTitle !== displayName)
-            parts.push(_sniToolTipTitle)
         return parts.join(", ")
     }
 

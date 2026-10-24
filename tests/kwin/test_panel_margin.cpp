@@ -739,6 +739,30 @@ std::optional<NormalWindow> windowOf(const Placement &p, qint64 pid)
     return std::nullopt;
 }
 
+/// Samples KWin's maximized work-area top inset on every short event-loop turn.
+QList<int> sampleMaximizedTop(krema::MultiDockManager &manager, qint64 pid, const QSet<qint64> &, int durationMs)
+{
+    QList<int> samples;
+    auto *shell = manager.primaryShell();
+    const QString outputName = shell && shell->view()->screen() ? shell->view()->screen()->name() : QString();
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < durationMs) {
+        const auto snapshot = KWinQuery::instance().snapshot();
+        if (snapshot && snapshot->outputs.contains(outputName)) {
+            const QRect output = snapshot->outputs.value(outputName).geometry;
+            for (const auto &normal : snapshot->normals) {
+                if (normal.pid == pid) {
+                    samples.append(normal.maximizeArea.y() - output.y());
+                    break;
+                }
+            }
+        }
+        QTest::qWait(1);
+    }
+    return samples;
+}
+
 /// The maximized window fills its work area, and the work area holds exactly
 /// one dock reservation: the resting panel bar plus @p margin (no other
 /// panel reserves space here).
@@ -914,6 +938,66 @@ TEST_CASE("Panel probe ownership survives transient exposure loss during edge sw
         INFO("edge switch retained a single positive reservation");
         REQUIRE(probeOwnsReservation());
     }
+}
+
+TEST_CASE("Panel probe edge switch keeps KWin consumer work area single-reserved", "[panel-margin][issue-135]")
+{
+    configure(1, 8);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8);
+    });
+
+    OrdinaryWindow consumer;
+    REQUIRE(consumer.waitForStarted());
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const qint64 consumerPid = consumer.pid();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            const auto placement = measure(*manager, {}, maximizeAction(consumerPid, manager->primaryShell()->view()->screen()->name()), false);
+            const auto window = placement ? windowOf(*placement, consumerPid) : std::nullopt;
+            return window && !window->maximizeArea.isEmpty();
+        },
+        kTimeoutMs));
+
+    std::optional<Placement> initial;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            initial = measure(*manager, {}, {}, false);
+            return initial.has_value() && windowOf(*initial, consumerPid).has_value();
+        },
+        kTimeoutMs));
+    const auto initialWindow = windowOf(*initial, consumerPid);
+    REQUIRE(initialWindow);
+    const int singleReservation = initial->output.bottom() - initialWindow->maximizeArea.bottom();
+    REQUIRE(singleReservation > 0);
+
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    platform->setEdge(krema::DockPlatform::Edge::Top);
+    view->setEdge(krema::DockPlatform::Edge::Top);
+    // Simulate transient expose loss without detaching the probe. Explicitly
+    // request the probe update so the old implementation commits both the
+    // existing probe reservation and its fallback dock reservation.
+    platform->m_probeMapped = false;
+    if (platform->m_probeLayerWindow) {
+        platform->m_probeLayerWindow->setExclusiveZone(platform->m_exclusiveZone);
+        platform->m_probe->requestUpdate();
+    }
+    platform->setExclusiveZone(platform->m_exclusiveZone);
+
+    const QList<int> samples = sampleMaximizedTop(*manager, consumerPid, {}, 700);
+    REQUIRE(!samples.isEmpty());
+    REQUIRE(platform->m_layerWindow->exclusionZone() == -1);
+    INFO("KWin top inset sample count " << samples.size() << ", max " << *std::max_element(samples.cbegin(), samples.cend()));
+    REQUIRE(*std::max_element(samples.cbegin(), samples.cend()) <= singleReservation);
+    REQUIRE(std::find(samples.cbegin(), samples.cend(), singleReservation) != samples.cend());
 }
 
 TEST_CASE("Panel probe teardown returns ownership before remapping", "[panel-margin][issue-135]")

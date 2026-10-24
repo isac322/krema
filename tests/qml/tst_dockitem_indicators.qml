@@ -711,15 +711,23 @@ Item {
             DockSettings.attentionAnimation = 0
             let item = makeItem({ IsWindow: true })
             let badge = T.badge(item)
+            let label = T.badgeLabel(item)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
             NotificationTracker.setUnread("org.kde.dolphin", 3)
             tryCompare(item, "_badgeCount", 3)
-            compare(badge.visible, false)
+            tryCompare(item, "_isDemandingAttention", true)
+            verify(badge.visible)
+            compare(badge.isDot, true)
+            compare(label.visible, false)
+            NotificationTracker.setSniAttention("org.kde.dolphin", false)
+            tryVerify(() => !badge.visible)
             NotificationTracker.setUnread("org.kde.dolphin", 0)
             NotificationTracker.setSniAttention("org.kde.dolphin", true)
             tryCompare(item, "_badgeCount", 0)
             tryCompare(item, "_isDemandingAttention", true)
             verify(badge.visible)
             compare(badge.isDot, true)
+            compare(label.visible, false)
         }
 
         function test_dndKeepsPersistentAttentionDot() {

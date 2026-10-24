@@ -95,10 +95,12 @@ Item {
         }
         return 0
     }
+    readonly property bool _showCountBadge:
+        _badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
     readonly property bool _showAttentionDot:
-        _isDemandingAttention && _badgeCount === 0
+        _isDemandingAttention && !_showCountBadge
     readonly property bool _badgeIsDot:
-        DockSettings.badgeDisplayMode === 1 || _badgeCount === 0
+        DockSettings.badgeDisplayMode === 1 || !_showCountBadge
 
     readonly property bool _badgeOnLeft: DockSettings.badgePosition === 1
         || (DockSettings.badgePosition === 2 && DockView.edge === 2)
@@ -665,8 +667,7 @@ Item {
         id: badge
         objectName: "badge"
         z: 2
-        visible: (dockItem._badgeCount > 0 && DockSettings.badgeDisplayMode !== 2)
-            || dockItem._showAttentionDot
+        visible: dockItem._showCountBadge || dockItem._showAttentionDot
         x: {
             let nom = dockItem._badgeOnLeft
                 ? iconImage.x - width * 0.2
@@ -737,7 +738,7 @@ Item {
         QQC2.Label {
             id: badgeLabel
             objectName: "badgeLabel"
-            visible: !badge.isDot && dockItem._badgeCount > 0
+            visible: !badge.isDot && dockItem._showCountBadge
             anchors.centerIn: parent
             text: dockItem._badgeCount > 99 ? "99+" : dockItem._badgeCount.toString()
             color: dockItem._badgeTextColor

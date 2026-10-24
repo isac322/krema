@@ -87,6 +87,9 @@ static SniToolTip parseSniToolTip(const QVariant &value)
             return parseSniToolTip(nested.variant());
         }
         if (argument.currentType() == QDBusArgument::MapType) {
+            if (argument.currentSignature() != QLatin1String("a{sv}")) {
+                return {};
+            }
             SniToolTip result;
             argument.beginMap();
             while (!argument.atEnd()) {
@@ -103,6 +106,9 @@ static SniToolTip parseSniToolTip(const QVariant &value)
             return result;
         }
         if (argument.currentType() != QDBusArgument::StructureType) {
+            return {};
+        }
+        if (argument.currentSignature() != QLatin1String("(sa(iiay)ss)")) {
             return {};
         }
         SniToolTip result;
@@ -521,19 +527,21 @@ const NotificationTracker::SniEntry *NotificationTracker::sniEntryForApp(const Q
     if (normalized.isEmpty()) {
         return nullptr;
     }
-    const SniEntry *fallback = nullptr;
-    for (const auto &entry : m_sniItems) {
-        if (canonicalDesktopId(entry.id) != normalized) {
+    const SniEntry *best = nullptr;
+    QString bestKey;
+    int bestRank = -1;
+    for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
+        if (canonicalDesktopId(it->id) != normalized) {
             continue;
         }
-        if (entry.status == QLatin1String("NeedsAttention")) {
-            return &entry;
-        }
-        if (!fallback) {
-            fallback = &entry;
+        const int rank = it->status == QLatin1String("NeedsAttention") ? 2 : (it->status == QLatin1String("Active") ? 1 : 0);
+        if (!best || rank > bestRank || (rank == bestRank && it.key() < bestKey)) {
+            best = &it.value();
+            bestKey = it.key();
+            bestRank = rank;
         }
     }
-    return fallback;
+    return best;
 }
 
 bool NotificationTracker::sniNeedsAttention(const QString &appId) const

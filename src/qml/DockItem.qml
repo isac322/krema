@@ -82,6 +82,10 @@ Item {
         let _dep = model.display  // reactive dependency on model data
         return DockModel.appId(index)
     }
+    readonly property bool _sniAttentionActive: {
+        let _rev = NotificationTracker.revision
+        return _appId.length > 0 && NotificationTracker.sniNeedsAttention(_appId)
+    }
     readonly property string _sniAttentionIconName: {
         let _rev = NotificationTracker.revision
         return _appId.length > 0 ? NotificationTracker.sniAttentionIconName(_appId) : ""
@@ -769,16 +773,14 @@ Item {
         id: sniBadgeIcon
         objectName: "sniBadgeIcon"
         z: 3
-        visible: (NotificationTracker.sniNeedsAttention(_appId) && _sniAttentionIconName.length > 0)
-                 || _sniOverlayIconName.length > 0
-        source: (NotificationTracker.sniNeedsAttention(_appId) && _sniAttentionIconName.length > 0)
-                    ? _sniAttentionIconName : _sniOverlayIconName
+        visible: (dockItem._sniAttentionActive && dockItem._sniAttentionIconName.length > 0)
+                 || (DockSettings.badgeDisplayMode !== 2 && dockItem._sniOverlayIconName.length > 0)
+        source: (dockItem._sniAttentionActive && dockItem._sniAttentionIconName.length > 0)
+                    ? dockItem._sniAttentionIconName : dockItem._sniOverlayIconName
         width: Math.max(8, Math.round(iconSize * 0.28))
         height: width
-        x: dockItem._badgeOnLeft
-            ? iconImage.x + iconImage.width - width * 0.8
-            : iconImage.x - width * 0.2
-        y: iconImage.y - height * 0.2
+        x: iconImage.x + iconImage.width - width * 0.8
+        y: iconImage.y + iconImage.height - height * 0.8
         Accessible.ignored: true
     }
 

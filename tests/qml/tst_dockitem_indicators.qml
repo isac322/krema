@@ -296,10 +296,17 @@ Item {
             tryVerify(() => icon.visible)
             compare(icon.source, "dialog-warning")
             verify(item.accessibleDescription.indexOf("New message") >= 0)
+            let iconImage = T.iconImage(item)
+            let badge = T.badge(item)
+            verify(icon.y > iconImage.y + iconImage.height * 0.5)
+            verify(badge.y < iconImage.y + iconImage.height * 0.5)
 
+            DockSettings.badgeDisplayMode = 2
             NotificationTracker.setSniAttention("org.kde.dolphin", false)
+            tryVerify(() => !icon.visible)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
             tryVerify(() => icon.visible)
-            compare(icon.source, "mail-unread")
+            compare(icon.source, "dialog-warning")
         }
 
         function test_badgePositionDynamicSwitching() {

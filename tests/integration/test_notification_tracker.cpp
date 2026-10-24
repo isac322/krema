@@ -779,6 +779,32 @@ TEST_CASE("SNI metadata is queried and refreshed through live signals", "[notifi
     }));
 }
 
+TEST_CASE("SNI metadata selection prefers attention deterministically", "[notification][sni][metadata][precedence]")
+{
+    krema::test::StatusNotifierItemPeer active(QStringLiteral("org.example.fixture.Active"), QStringLiteral("/Active"));
+    active.setId(QStringLiteral("org.example.same-app"));
+    active.setStatus(QStringLiteral("Active"));
+    active.setTitle(QStringLiteral("Active title"));
+    REQUIRE(active.start());
+
+    krema::test::StatusNotifierItemPeer attention(QStringLiteral("org.example.fixture.Attention"), QStringLiteral("/Attention"));
+    attention.setId(QStringLiteral("org.example.same-app"));
+    attention.setStatus(QStringLiteral("NeedsAttention"));
+    attention.setTitle(QStringLiteral("Attention title"));
+    REQUIRE(attention.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({active.itemAddress(), attention.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.same-app"))
+            && tracker.sniTitle(QStringLiteral("org.example.same-app")) == QStringLiteral("Attention title");
+    }));
+}
+
 TEST_CASE("DND application inhibition is active without an Until deadline and clears", "[notification][dnd][settings]")
 {
     auto &notificationServer = NotificationManager::Server::self();

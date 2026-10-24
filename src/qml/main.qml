@@ -341,8 +341,10 @@ Item {
                     let item = dockRepeater.itemAt(hoveredIndex)
                     if (item) {
                         showPreviewForItem(hoveredIndex, item)
-                        PreviewController.startPreviewKeyboardNav()
-                        announcePreviewThumbnail()
+                        if (isWindow && PreviewController.previewThumbnailCount() > 0) {
+                            PreviewController.startPreviewKeyboardNav()
+                            announcePreviewThumbnail()
+                        }
                     }
                 }
             }

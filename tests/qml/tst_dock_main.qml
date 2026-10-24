@@ -2015,6 +2015,7 @@ Item {
             dock.startKeyboardNavigation()
             keyClick(Qt.Key_Up)
             tryCompare(PreviewController, "visible", true, 2000)
+            compare(PreviewController.previewKeyboardActive, false)
         }
     }
 }

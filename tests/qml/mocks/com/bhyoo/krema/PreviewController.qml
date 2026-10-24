@@ -35,7 +35,7 @@ QtObject {
     function focusedThumbnailTitle() { return "" }
     function focusedThumbnailIsActive() { return false }
     function focusedThumbnailIsMinimized() { return false }
-    function previewThumbnailCount() { return 0 }
+    function previewThumbnailCount() { return parentIndex >= 0 ? 1 : 0 }
 
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["calls", "visible", "parentIndex", "appName", "contentX", "contentY", "contentWidth", "contentHeight", "previewHovered", "previewKeyboardActive", "focusedThumbnailIndex"]

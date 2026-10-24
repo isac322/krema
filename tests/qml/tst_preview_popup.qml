@@ -350,6 +350,7 @@ Item {
             show(0, "Kate")
             waitThumbs(popup, 1)
             DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            DockModel.tasksModel.setTaskData(0, "IsWindow", false)
             tryVerify(() => !popup.hasWindowContent)
             tryCompare(PreviewController, "visible", data.cards)
         }
@@ -471,6 +472,16 @@ Item {
             verify(!popup.hasUnreadForCurrentApp)
             verify(!popup.hasNotificationContent)
             verify(!T.findFirst(popup, o => o.objectName === "previewNotificationSection").visible)
+        }
+        function test_pendingWinIdListDoesNotPrematurelyCloseWindowPreview() {
+            DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            let popup = makePopup()
+            show(0, "Kate")
+            tryCompare(PreviewController, "visible", true)
+            verify(!popup.hasWindowContent)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", ["kate-1"])
+            waitThumbs(popup, 1)
+            verify(PreviewController.visible)
         }
     }
 }

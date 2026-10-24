@@ -41,8 +41,16 @@ Item {
     }
 
     function checkPopupStillHasContent() {
-        if (PreviewController.visible && PreviewController.parentIndex >= 0
-                && !root.hasWindowContent && !root.hasNotificationContent) {
+        if (!PreviewController.visible || PreviewController.parentIndex < 0)
+            return
+        let parentIdx = PreviewController.parentIndex
+        let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
+        let isWindowOrGroup = parentModelIdx.valid && (
+            Boolean(DockModel.tasksModel.data(
+                parentModelIdx, TaskManager.AbstractTasksModel.IsWindow))
+            || DockModel.childCount(parentIdx) > 0
+        )
+        if (!isWindowOrGroup && !root.hasWindowContent && !root.hasNotificationContent) {
             PreviewController.hidePreviewImmediate()
         }
     }

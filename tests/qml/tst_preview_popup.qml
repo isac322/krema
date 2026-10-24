@@ -7,6 +7,7 @@
 import QtQuick
 import QtQuick.Window
 import QtTest
+import org.kde.kirigami as Kirigami
 import com.bhyoo.krema 1.0
 import "../../src/qml" as Krema
 import "TestUtils.js" as T
@@ -36,13 +37,38 @@ Item {
         function init() {
             KremaMocks.resetAll()
             // Row 0: single-window app. Row 1: grouped app with three windows.
-            DockModel.tasksModel.addTask({ display: "Kate", IsWindow: true, IsActive: true, WinIdList: ["kate-1"] })
-            DockModel.tasksModel.addTask({ display: "Konsole", IsWindow: true, WinIdList: ["k-1", "k-2", "k-3"] })
+            DockModel.tasksModel.addTask({
+                display: "Kate", AppId: "org.kde.kate", IsWindow: true,
+                IsActive: true, WinIdList: ["kate-1"]
+            })
+            DockModel.tasksModel.addTask({
+                display: "Konsole", AppId: "org.kde.konsole", IsWindow: true,
+                WinIdList: ["k-1", "k-2", "k-3"]
+            })
             DockModel.tasksModel.addChildTask(1, { display: "Konsole 1", IsActive: true })
             DockModel.tasksModel.addChildTask(1, { display: "Konsole 2" })
             DockModel.tasksModel.addChildTask(1, { display: "Konsole 3", IsMinimized: true })
             // Row 2: launcher without windows.
-            DockModel.tasksModel.addTask({ display: "Okular", IsWindow: false })
+            DockModel.tasksModel.addTask({
+                display: "Okular", AppId: "org.kde.okular", IsWindow: false
+            })
+        }
+
+        function notification(overrides) {
+            return Object.assign({
+                id: 101,
+                desktopEntry: "org.kde.konsole",
+                appName: "Konsole",
+                summary: "Build finished",
+                body: "The build is ready.",
+                actions: ["open", "Open"],
+                timeout: 5000,
+                urgency: 1,
+                active: true,
+                read: false,
+                dismissed: false,
+                closeReason: "",
+            }, overrides || {})
         }
 
         function makePopup() {
@@ -262,6 +288,205 @@ Item {
             tryCompare(PreviewController, "previewHovered", true)
             tryCompare(PreviewController, "previewKeyboardActive", false)
             mouseMove(stage, -1, -1)
+        }
+        function inbox(popup) {
+            return T.findFirst(popup, o => o.objectName === "previewNotificationInbox")
+        }
+
+        // B1/B4: one mixed surface, scoped to the current app and active unread rows.
+        function test_notificationCardsFilterAndRetargetAlongsideThumbnails() {
+            NotificationTracker.setNotifications([
+                notification(),
+                notification({ id: 102, read: true }),
+                notification({ id: 103, dismissed: true }),
+                notification({ id: 104, active: false }),
+                notification({ id: 105, desktopEntry: "org.kde.okular" }),
+            ])
+            let popup = makePopup()
+            show(1, "Konsole")
+            waitThumbs(popup, 3)
+            compare(inbox(popup).count, 1)
+            verify(T.findFirst(popup, o => o.objectName === "notificationCard-101"))
+            verify(popup.hasWindowContent && popup.hasNotificationContent)
+            show(2, "Okular")
+            tryCompare(inbox(popup), "appFilter", "org.kde.okular")
+            tryCompare(inbox(popup), "count", 1)
+            verify(T.findFirst(popup, o => o.objectName === "notificationCard-105"))
+            verify(!T.findFirst(popup, o => o.objectName === "notificationCard-101"))
+            verify(!popup.hasWindowContent && popup.hasNotificationContent)
+        }
+
+        // B5/B6: preserve real payload, exact actions, and the local-read contract.
+        function test_notificationPayloadActionsAndLocalDisclaimer() {
+            NotificationTracker.setNotifications([notification()])
+            let popup = makePopup()
+            show(1, "Konsole")
+            waitThumbs(popup, 3)
+            let card = T.findFirst(popup, o => o.objectName === "notificationCard-101")
+            verify(card)
+            compare(T.findFirst(card, o => o.objectName === "notificationSummary").text,
+                    "Build finished")
+            compare(T.findFirst(card, o => o.objectName === "notificationBody").text,
+                    "The build is ready.")
+            compare(T.findFirst(card, o => o.objectName === "notificationApp").text, "Konsole")
+            let action = T.findFirst(card, o => o.objectName === "notificationActionButton")
+            compare(action.Accessible.name, "Notification action: Open")
+            action.clicked()
+            compare(NotificationTracker.callsTo("invokeAction")[0].args, [101, "open"])
+            let notice = T.findFirst(popup, o => o.objectName === "notificationInboxSyncNotice")
+            verify(notice.visible)
+            verify(notice.text.indexOf("not synchronized") >= 0)
+        }
+
+        // B7: losing the last window keeps cards, but never an empty shell.
+        function test_lastWindowClose_data() {
+            return [{ tag: "cards-remain", cards: true }, { tag: "no-cards", cards: false }]
+        }
+
+        function test_lastWindowClose(data) {
+            if (data.cards)
+                NotificationTracker.setNotifications([notification({ desktopEntry: "org.kde.kate" })])
+            let popup = makePopup()
+            show(0, "Kate")
+            waitThumbs(popup, 1)
+            if (data.cards)
+                PreviewController.startPreviewKeyboardNav(0)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            DockModel.tasksModel.setTaskData(0, "IsWindow", false)
+            tryVerify(() => !popup.hasWindowContent)
+            tryCompare(PreviewController, "visible", data.cards)
+            if (data.cards)
+                tryCompare(PreviewController, "previewKeyboardActive", false)
+        }
+
+        // B8: Mark read, Dismiss, and server close remove the last local card.
+        function test_lastNotificationClosesNotificationOnlyPopup_data() {
+            return [{ tag: "mark-read", operation: "read" },
+                    { tag: "dismiss", operation: "dismiss" },
+                    { tag: "server-close", operation: "close" }]
+        }
+
+        function test_lastNotificationClosesNotificationOnlyPopup(data) {
+            NotificationTracker.setNotifications([
+                notification({ desktopEntry: "org.kde.okular" }),
+                notification({ id: 102, desktopEntry: "org.kde.okular" }),
+            ])
+            let popup = makePopup()
+            show(2, "Okular")
+            tryCompare(inbox(popup), "count", 2)
+            NotificationTracker.markRead(102)
+            tryCompare(inbox(popup), "count", 1)
+            verify(PreviewController.visible)
+            if (data.operation === "close") {
+                NotificationTracker._replaceNotification(101, { active: false })
+            } else {
+                let buttonName = data.operation === "read"
+                    ? "markNotificationReadButton" : "dismissNotificationButton"
+                T.findFirst(popup, o => o.objectName === buttonName).clicked()
+            }
+            tryCompare(PreviewController, "visible", false)
+            compare(PreviewController.callsTo("hidePreviewImmediate").length, 1)
+        }
+
+        // B9: task and watcher signals settle together before checking emptiness.
+        function test_notificationAndWindowRevisionOrder_data() {
+            return [{ tag: "notification-first", notificationFirst: true },
+                    { tag: "window-first", notificationFirst: false }]
+        }
+
+        function test_notificationAndWindowRevisionOrder(data) {
+            let popup = makePopup()
+            show(0, "Kate")
+            waitThumbs(popup, 1)
+            let rows = [notification({ desktopEntry: "org.kde.kate" })]
+            if (data.notificationFirst) NotificationTracker.setNotifications(rows)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            if (!data.notificationFirst) NotificationTracker.setNotifications(rows)
+            tryCompare(inbox(popup), "count", 1)
+            tryVerify(() => !popup.hasWindowContent)
+            verify(PreviewController.visible)
+        }
+
+        // B10: cards stay bounded and controller/input-region size tracks layout.
+        function test_manyNotificationCardsAreScrollableAndBounded() {
+            let rows = []
+            for (let i = 0; i < 20; i++)
+                rows.push(notification({ id: i + 100, desktopEntry: "org.kde.okular" }))
+            NotificationTracker.setNotifications(rows)
+            let popup = makePopup()
+            show(2, "Okular")
+            tryCompare(inbox(popup), "count", 20)
+            let section = T.findFirst(popup, o => o.objectName === "previewNotificationSection")
+            verify(waitForPolish(stage.Window.window))
+            verify(section.height < inbox(popup).implicitHeight)
+            verify(section.height <= Kirigami.Units.gridUnit * 14)
+            compare(PreviewController.contentWidth, container(popup).width)
+            compare(PreviewController.contentHeight, container(popup).height)
+        }
+        // B2/B3: launcher-only entries are valid only while unread cards exist.
+        function test_launcherOnlyNotificationPopupEntryAndEmptyClose() {
+            NotificationTracker.setNotifications([
+                notification({ desktopEntry: "org.kde.okular" }),
+            ])
+            let popup = makePopup()
+            show(2, "Okular")
+            tryCompare(inbox(popup), "count", 1)
+            verify(!popup.hasWindowContent)
+            verify(T.findFirst(popup, o => o.objectName === "previewNotificationSection").visible)
+            NotificationTracker.setNotifications([])
+            tryCompare(PreviewController, "visible", false)
+        }
+
+        // B11/B12: the popup remains an accessible popup surface while hovered.
+        function test_notificationPopupAccessibilityAndHoverLifecycle() {
+            NotificationTracker.setNotifications([notification({ desktopEntry: "org.kde.okular" })])
+            let popup = makePopup()
+            show(2, "Okular")
+            tryVerify(() => container(popup).visible)
+            compare(container(popup).Accessible.name, "Preview for Okular")
+            let card = T.findFirst(popup, o => o.objectName === "notificationCard-101")
+            compare(card.Accessible.name, "Build finished")
+            let action = T.findFirst(card, o => o.objectName === "notificationActionButton")
+            compare(action.Accessible.name, "Notification action: Open")
+            mouseMove(popup, container(popup).x + container(popup).width / 2,
+                      container(popup).y + container(popup).height / 2)
+            tryCompare(PreviewController, "previewHovered", true)
+        }
+        function test_emptyAppIdDoesNotLeakOtherAppsNotifications() {
+            DockModel.tasksModel.setTaskData(0, "AppId", "")
+            NotificationTracker.setNotifications([
+                notification({ desktopEntry: "org.example.other" }),
+            ])
+            let popup = makePopup()
+            show(0, "Kate")
+            waitThumbs(popup, 1)
+            compare(popup.currentAppId, "")
+            compare(inbox(popup).count, 0)
+            verify(!popup.hasNotificationContent)
+            verify(!T.findFirst(popup, o => o.objectName === "notificationCard-101"))
+        }
+
+        function test_blacklistedOrClearedUnreadCountSuppressesCards() {
+            NotificationTracker.setNotifications([notification()])
+            NotificationTracker.setUnread("org.kde.konsole", 0)
+            let popup = makePopup()
+            show(1, "Konsole")
+            waitThumbs(popup, 3)
+            compare(inbox(popup).count, 1)
+            verify(!popup.hasUnreadForCurrentApp)
+            verify(!popup.hasNotificationContent)
+            verify(!T.findFirst(popup, o => o.objectName === "previewNotificationSection").visible)
+        }
+        function test_pendingWinIdListDoesNotPrematurelyCloseWindowPreview() {
+            DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            let popup = makePopup()
+            show(0, "Kate")
+            wait(20)
+            compare(PreviewController.visible, true)
+            verify(!popup.hasWindowContent)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", ["kate-1"])
+            waitThumbs(popup, 1)
+            verify(PreviewController.visible)
         }
     }
 }

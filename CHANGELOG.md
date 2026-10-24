@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added app-scoped unread notification cards to the window preview popup. Windowed and launcher-only apps can show compact summaries, bodies, local Mark read/Dismiss controls, and notification actions without changing the full Settings inbox.
 - Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
 - Added a QML-facing notification model backed by the existing KDE watcher. It exposes notification metadata, actions, urgency, timeout, replacement and close lifecycle, local read/dismiss state, active-only and per-app queries, and official KDE action invocation. The UI labels read and dismissed state as local to Krema; it does not claim to synchronize an application's server-side read cursor.
 - Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)

@@ -18,14 +18,21 @@ Item {
 
     property string appFilter: ""
     property bool activeOnly: false
+    property bool unreadOnly: false
+    property bool requireAppFilter: false
+    property bool compact: false
     property bool showHeader: true
     readonly property var rows: {
         // revision is intentionally read to make the QVariantList reactive.
         let revision = NotificationTracker.revision
-        return NotificationTracker.notifications(appFilter, activeOnly)
+        if (requireAppFilter && appFilter.trim().length === 0)
+            return []
+        let result = NotificationTracker.notifications(appFilter, activeOnly)
+        return unreadOnly ? result.filter(item => !item.read && !item.dismissed) : result
     }
+    readonly property int count: rows.length
 
-    implicitWidth: Kirigami.Units.gridUnit * 24
+    implicitWidth: Kirigami.Units.gridUnit * (compact ? 18 : 24)
     implicitHeight: inboxColumn.implicitHeight
     Accessible.role: Accessible.List
     Accessible.name: i18n("Notification inbox")
@@ -46,7 +53,7 @@ Item {
 
         QQC2.Label {
             objectName: "notificationInboxSyncNotice"
-            visible: root.showHeader
+            visible: root.showHeader || root.compact
             width: parent.width
             wrapMode: Text.WordWrap
             color: Kirigami.Theme.disabledTextColor
@@ -56,7 +63,7 @@ Item {
 
         QQC2.Label {
             objectName: "notificationInboxEmptyLabel"
-            visible: inboxRepeater.count === 0
+            visible: root.count === 0
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             color: Kirigami.Theme.disabledTextColor
@@ -72,7 +79,8 @@ Item {
                 objectName: "notificationCard-" + modelData.id
                 required property var modelData
                 width: inboxColumn.width
-                implicitHeight: cardColumn.implicitHeight + Kirigami.Units.largeSpacing * 2
+                implicitHeight: cardColumn.implicitHeight
+                    + (root.compact ? Kirigami.Units.smallSpacing : Kirigami.Units.largeSpacing) * 2
                 radius: Kirigami.Units.smallSpacing
                 color: modelData.dismissed
                     ? Qt.alpha(Kirigami.Theme.backgroundColor, 0.45)
@@ -92,7 +100,7 @@ Item {
                         left: parent.left
                         right: parent.right
                         top: parent.top
-                        margins: Kirigami.Units.largeSpacing
+                        margins: root.compact ? Kirigami.Units.smallSpacing : Kirigami.Units.largeSpacing
                     }
                     spacing: Kirigami.Units.smallSpacing
 
@@ -149,6 +157,7 @@ Item {
                         }
                         QQC2.Label {
                             objectName: "notificationTimeout"
+                            visible: !root.compact
                             text: i18n("Timeout: %1 ms", notificationCard.modelData.timeout)
                             color: Kirigami.Theme.disabledTextColor
                         }
@@ -156,7 +165,7 @@ Item {
 
                     QQC2.Label {
                         objectName: "notificationCloseReason"
-                        visible: !notificationCard.modelData.active
+                        visible: !root.compact && !notificationCard.modelData.active
                         text: i18n("Closed: %1", notificationCard.modelData.closeReason || i18n("unknown"))
                         color: Kirigami.Theme.disabledTextColor
                     }

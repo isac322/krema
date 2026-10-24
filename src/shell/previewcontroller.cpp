@@ -225,12 +225,16 @@ void PreviewController::showPreview(int index, qreal itemGlobalPos, qreal itemEx
     doShow();
 }
 
+void PreviewController::hidePreviewImmediate()
+{
+    hidePreview();
+}
+
 void PreviewController::hidePreview()
 {
     m_hideTimer.stop();
     doHide();
 }
-
 void PreviewController::hidePreviewDelayed()
 {
     if (!m_visible || m_held) {

@@ -80,9 +80,11 @@ public:
     /// Reconfigure preview surface anchors/margins after edge change.
     void updateEdge();
 
+    /// Hide the preview immediately without any pending hover transition.
+    Q_INVOKABLE void hidePreviewImmediate();
+
     /// Hide the preview immediately.
     Q_INVOKABLE void hidePreview();
-
     /// Hide the preview after a delay (for dock→preview mouse transition).
     Q_INVOKABLE void hidePreviewDelayed();
 

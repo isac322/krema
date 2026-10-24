@@ -423,6 +423,38 @@ Both trackers are C++ singletons with a `revision` property for reactive QML bin
 
 ---
 
+### Persistent attention-only dot
+
+The dock keeps numeric badge precedence without turning a boolean attention state into a
+fake notification count:
+
+```qml
+readonly property bool _showCountBadge:
+    _badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
+readonly property bool _showAttentionDot:
+    _isDemandingAttention && !_showCountBadge
+readonly property bool _badgeIsDot:
+    DockSettings.badgeDisplayMode === 1 || !_showCountBadge
+```
+
+When an app requests attention through SNI `NeedsAttention`, Unity `urgent`, or the task
+manager attention role while no count badge is being shown, the existing `badge` overlay
+shows a small persistent dot. This includes `Badge display: Off` when a positive count
+exists: the count remains hidden, but live attention remains visible. The dot follows the
+live attention state and remains visible after the transient attention animation ends.
+Clearing the underlying attention state removes it immediately.
+
+The precedence is:
+
+1. A positive Unity or watcher count shows the configured numeric badge (or configured
+   badge dot) unless Badge display is Off.
+2. Live attention with no visible count badge shows the attention-only dot, including
+   when Badge display is Off and a count exists.
+3. No count badge and no attention shows no badge.
+
+The marker is not a count, so the accessible description says `Attention requested` and
+never reports a synthetic `1 notification` or a zero-count label.
+
 ## CMake Integration
 
 ```cmake

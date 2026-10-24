@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Added a QML-facing notification model backed by the existing KDE watcher. It exposes notification metadata, actions, urgency, timeout, replacement and close lifecycle, local read/dismiss state, active-only and per-app queries, and official KDE action invocation. The UI labels read and dismissed state as local to Krema; it does not claim to synchronize an application's server-side read cursor.
 - Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
 - Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges could use the system accent color or a custom color with automatic text contrast (#103)
+- Added a persistent attention-only dot to dock badges for live SNI, Unity urgent, and task-manager attention states with no numeric count; Badge display: Off hides numeric badges while keeping the live attention marker visible.
 - Added a "Reveal trigger" setting (Settings → Behavior, Auto hide and Dodge windows) for a hidden dock that rests past an always-visible Plasma panel on the same edge. With Screen edge, the default, pushing the pointer against the screen edge revealed the dock even over the panel, and the panel still got every click there. With Dock position, the dock was revealed only from the panel's inner edge. Without KWin scripting, panel-relative placement is unavailable and both reveal choices used the dock surface's screen-edge strip (#90)
 
 ### Changed
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Local notification clearing now removes only the dock's unread contribution while keeping the server-active lifecycle until KDE reports a close.
 - Notification tracking reconnected after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.
 - Long Do Not Disturb periods kept a valid expiry timer on older Qt versions and ended only when their configured deadline passed.
+- Prevented transient duplicate panel reservations while a panel-relative dock probe is reconfigured or remapped across edges; real probe teardown now hands the exclusive zone back to the dock exactly once (#135)
 
 ## [0.12.0] - 2026-10-12
 

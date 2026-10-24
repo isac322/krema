@@ -94,6 +94,18 @@ def settings_windows(krema: Krema) -> list[kwin.Window]:
     return [w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")]
 
 
+def sample_settings_y(krema: Krema, duration: float = 1.0) -> list[int]:
+    """Sample the Settings frame from KWin during a layer-surface transition."""
+    samples: list[int] = []
+    deadline = time.monotonic() + duration
+    while time.monotonic() < deadline:
+        windows = settings_windows(krema)
+        if windows:
+            samples.append(windows[0].y)
+        time.sleep(0.01)
+    return samples
+
+
 #: Thickness of krema's edge strips (kEdgeTriggerThickness): the Follow Active
 #: Mouse trigger maps one on each inactive output. They are not docks.
 EDGE_TRIGGER_PX = 4
@@ -652,6 +664,9 @@ def test_set006_screen_edge_top_moves_dock_to_top(krema: Krema, apps: TestWindow
     assert current_card(krema, "Screen edge") == "Bottom"
 
     pick(krema, "Screen edge", "Top")
+    transition_y = sample_settings_y(krema)
+    assert transition_y, "KWin must expose Settings geometry during the edge transition"
+    assert max(transition_y) < 140, f"edge switch must not double the top reservation: y samples={transition_y}"
     wait_until(lambda: config_value(krema, "Edge") == str(kcfg.EDGE_TOP), message="kremarc Edge=0")
     def top_dock():
         r = krema.surface_rect("dock")

@@ -50,8 +50,11 @@ Item {
                 parentModelIdx, TaskManager.AbstractTasksModel.IsWindow))
             || DockModel.childCount(parentIdx) > 0
         )
-        if (!isWindowOrGroup && !root.hasWindowContent && !root.hasNotificationContent) {
-            PreviewController.hidePreviewImmediate()
+        if (!isWindowOrGroup && !root.hasWindowContent) {
+            if (PreviewController.previewKeyboardActive)
+                PreviewController.endPreviewKeyboardNav()
+            if (!root.hasNotificationContent)
+                PreviewController.hidePreviewImmediate()
         }
     }
 

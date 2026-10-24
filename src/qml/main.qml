@@ -256,6 +256,11 @@ Item {
 
         // Preview keyboard mode: route keys to PreviewController
         if (PreviewController.previewKeyboardActive) {
+            if (PreviewController.previewThumbnailCount() <= 0) {
+                PreviewController.endPreviewKeyboardNav()
+                event.accepted = true
+                return
+            }
             // Thumbnail navigation follows dock axis (Left/Right for horizontal, Up/Down for vertical)
             let thumbPrev = DockView.isVertical ? Qt.Key_Up : Qt.Key_Left
             let thumbNext = DockView.isVertical ? Qt.Key_Down : Qt.Key_Right

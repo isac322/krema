@@ -349,10 +349,14 @@ Item {
             let popup = makePopup()
             show(0, "Kate")
             waitThumbs(popup, 1)
+            if (data.cards)
+                PreviewController.startPreviewKeyboardNav(0)
             DockModel.tasksModel.setTaskData(0, "WinIdList", [])
             DockModel.tasksModel.setTaskData(0, "IsWindow", false)
             tryVerify(() => !popup.hasWindowContent)
             tryCompare(PreviewController, "visible", data.cards)
+            if (data.cards)
+                tryCompare(PreviewController, "previewKeyboardActive", false)
         }
 
         // B8: Mark read, Dismiss, and server close remove the last local card.

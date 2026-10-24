@@ -14,10 +14,20 @@ QtObject {
     property bool dndActive: false
     property var unread: ({})
     property var sni: ({})
-    // Stage 2 notification records mirror NotificationTracker.notifications().
-    property var notificationRows: []
+    property var sniMetadata: ({})
     function unreadCount(appId) { return unread[appId] || 0 }
     function sniNeedsAttention(appId) { return !!sni[appId] }
+    // Stage 2 notification records mirror NotificationTracker.notifications().
+    property var notificationRows: []
+    function _sniValue(appId, key) {
+        let metadata = sniMetadata[appId]
+        return metadata ? (metadata[key] || "") : ""
+    }
+    function sniTitle(appId) { return _sniValue(appId, "title") }
+    function sniAttentionIconName(appId) { return _sniValue(appId, "attentionIconName") }
+    function sniOverlayIconName(appId) { return _sniValue(appId, "overlayIconName") }
+    function sniToolTipTitle(appId) { return _sniValue(appId, "toolTipTitle") }
+    function sniToolTipSubTitle(appId) { return _sniValue(appId, "toolTipSubTitle") }
     function notifications(appId, activeOnly) {
         let rows = notificationRows
         if (appId) rows = rows.filter(r => r.desktopEntry === appId)
@@ -64,10 +74,16 @@ QtObject {
     }
     function setUnread(appId, n) { let u = Object.assign({}, unread); u[appId] = n; unread = u; revision++ }
     function setSniAttention(appId, v) { let s = Object.assign({}, sni); s[appId] = v; sni = s; revision++ }
+    function setSniMetadata(appId, metadata) {
+        let values = Object.assign({}, sniMetadata)
+        values[appId] = metadata
+        sniMetadata = values
+        revision++
+    }
 
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["calls", "dndActive", "unread", "sni",
-        "notificationRows"]
+        "sniMetadata", "notificationRows"]
     property var _defaults: ({})
     Component.onCompleted: {
         for (const k of _resettable) _defaults[k] = this[k]

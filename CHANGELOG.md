@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added live SNI metadata for dock items: attention and overlay icon names are shown from the app's StatusNotifierItem, and SNI tooltip title/subtitle text is exposed to accessibility while canonical identity matching and generation checks prevent stale tray data.
 - Added app-scoped unread notification cards to the window preview popup. Windowed and launcher-only apps can show compact summaries, bodies, local Mark read/Dismiss controls, and notification actions without changing the full Settings inbox.
 - Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
 - Added a QML-facing notification model backed by the existing KDE watcher. It exposes notification metadata, actions, urgency, timeout, replacement and close lifecycle, local read/dismiss state, active-only and per-app queries, and official KDE action invocation. The UI labels read and dismissed state as local to Krema; it does not claim to synchronize an application's server-side read cursor.

@@ -35,6 +35,10 @@ Item {
         if (_isDemandingAttention) parts.push(i18n("Attention requested"))
         if (_badgeCount > 0)
             parts.push(i18n("%1 notifications", _badgeCount))
+        if (_sniToolTipTitle.length > 0 && _sniToolTipTitle !== displayName)
+            parts.push(_sniToolTipTitle)
+        if (_sniToolTipSubTitle.length > 0)
+            parts.push(_sniToolTipSubTitle)
         return parts.join(", ")
     }
 
@@ -77,6 +81,26 @@ Item {
     readonly property string _appId: {
         let _dep = model.display  // reactive dependency on model data
         return DockModel.appId(index)
+    }
+    readonly property bool _sniAttentionActive: {
+        let _rev = NotificationTracker.revision
+        return _appId.length > 0 && NotificationTracker.sniNeedsAttention(_appId)
+    }
+    readonly property string _sniAttentionIconName: {
+        let _rev = NotificationTracker.revision
+        return _appId.length > 0 ? NotificationTracker.sniAttentionIconName(_appId) : ""
+    }
+    readonly property string _sniOverlayIconName: {
+        let _rev = NotificationTracker.revision
+        return _appId.length > 0 ? NotificationTracker.sniOverlayIconName(_appId) : ""
+    }
+    readonly property string _sniToolTipTitle: {
+        let _rev = NotificationTracker.revision
+        return _appId.length > 0 ? NotificationTracker.sniToolTipTitle(_appId) : ""
+    }
+    readonly property string _sniToolTipSubTitle: {
+        let _rev = NotificationTracker.revision
+        return _appId.length > 0 ? NotificationTracker.sniToolTipSubTitle(_appId) : ""
     }
 
     // === Inbox (persistent badge) ===
@@ -751,6 +775,20 @@ Item {
             width: parent.width - 2
             height: parent.height - 2
         }
+    }
+    Kirigami.Icon {
+        id: sniBadgeIcon
+        objectName: "sniBadgeIcon"
+        z: 3
+        visible: (dockItem._sniAttentionActive && dockItem._sniAttentionIconName.length > 0)
+                 || (DockSettings.badgeDisplayMode !== 2 && dockItem._sniOverlayIconName.length > 0)
+        source: (dockItem._sniAttentionActive && dockItem._sniAttentionIconName.length > 0)
+                    ? dockItem._sniAttentionIconName : dockItem._sniOverlayIconName
+        width: Math.max(8, Math.round(iconSize * 0.28))
+        height: width
+        x: iconImage.x + iconImage.width - width * 0.8
+        y: iconImage.y + iconImage.height - height * 0.8
+        Accessible.ignored: true
     }
 
     // Progress bar (LauncherEntry task progress)

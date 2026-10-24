@@ -60,6 +60,20 @@ before querying a nonempty new owner's snapshot. Per-item generations reject
 stale asynchronous `Id` and `Status` replies. Do not also connect registration
 and unregistration handlers: one owner change must trigger one lifecycle reset.
 
+StatusNotifierItem services follow the standard export-before-claim ordering:
+the `/StatusNotifierItem` object is exported before the well-known service name
+is claimed. A same-name SNI owner replacement erases the old `service|*`
+entries, emits `revisionChanged()`, and queries the replacement owner under
+that ordering contract.
+
+If a non-standard peer claims its name before exporting the object, failed
+initial `Get` calls set `initialQueryFailed`. Recovery is signal-driven only:
+`StatusNotifierItemRegistered`, `NewStatus`, `NewTitle`, `NewAttentionIcon`,
+`NewOverlayIcon`, `NewToolTip`, or `PropertiesChanged` re-requests the
+properties. Krema does not use timer polling for this state. Duplicate
+`StatusNotifierItemRegistered` signals preserve populated entries instead of
+resetting them to blank `Passive` state.
+
 ### DND deadlines and QTimer bounds
 
 `NotificationManager::Settings` supplies application inhibition and the
@@ -328,6 +342,22 @@ bool matchSniToDockItem(const QString &sniId, const QString &appId) {
 | Permission requirements | None |
 
 ---
+
+## SNI metadata in dock indicators
+
+Krema retains the SNI `Title`, `AttentionIconName`, `OverlayIconName`, and
+`ToolTip` fields alongside `Status`. These values are queried when an item is
+registered and refreshed through the corresponding `NewTitle`,
+`NewAttentionIcon`, `NewOverlayIcon`, and `NewToolTip` signals. Queries are
+generation-checked so replies from an unregistered or replaced item cannot
+restore stale metadata.
+
+Dock lookups use the same canonical desktop identity as notification counts.
+When multiple SNI items identify the same application, an item in
+`NeedsAttention` status has precedence. The attention icon is shown only while
+that status is active; otherwise an available overlay icon is shown. SNI
+tooltip title/subtitle text is included in the dock item's accessible
+description, but SNI metadata does not create a numeric notification count.
 
 ## Approach 3: Direct `org.freedesktop.Notifications` D-Bus Signal Subscription
 

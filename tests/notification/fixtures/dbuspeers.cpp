@@ -8,6 +8,38 @@
 #include <utility>
 namespace krema::test
 {
+
+const QDBusArgument &operator>>(const QDBusArgument &argument, ToolTipPixmap &pixmap)
+{
+    argument.beginStructure();
+    argument >> pixmap.width >> pixmap.height >> pixmap.data;
+    argument.endStructure();
+    return argument;
+}
+
+QDBusArgument &operator<<(QDBusArgument &argument, const ToolTipPixmap &pixmap)
+{
+    argument.beginStructure();
+    argument << pixmap.width << pixmap.height << pixmap.data;
+    argument.endStructure();
+    return argument;
+}
+
+const QDBusArgument &operator>>(const QDBusArgument &argument, ToolTipData &toolTip)
+{
+    argument.beginStructure();
+    argument >> toolTip.iconName >> toolTip.iconPixmap >> toolTip.title >> toolTip.description;
+    argument.endStructure();
+    return argument;
+}
+
+QDBusArgument &operator<<(QDBusArgument &argument, const ToolTipData &toolTip)
+{
+    argument.beginStructure();
+    argument << toolTip.iconName << toolTip.iconPixmap << toolTip.title << toolTip.description;
+    argument.endStructure();
+    return argument;
+}
 namespace
 {
 constexpr auto kNotificationsService = "org.freedesktop.Notifications";
@@ -227,11 +259,21 @@ QStringList StatusNotifierWatcherPeer::registeredItems() const
 }
 
 StatusNotifierItemPeer::StatusNotifierItemPeer(QString serviceName, QString objectPath, QObject *parent)
+    : StatusNotifierItemPeer(std::move(serviceName), std::move(objectPath), QDBusConnection::sessionBus(), parent)
+{
+}
+
+StatusNotifierItemPeer::StatusNotifierItemPeer(QString serviceName,
+                                               QString objectPath,
+                                               const QDBusConnection &bus,
+                                               QObject *parent)
     : QObject(parent)
-    , m_bus(QDBusConnection::sessionBus())
+    , m_bus(bus)
     , m_serviceName(std::move(serviceName))
     , m_objectPath(std::move(objectPath))
 {
+    qDBusRegisterMetaType<ToolTipPixmap>();
+    qDBusRegisterMetaType<ToolTipData>();
 }
 
 StatusNotifierItemPeer::~StatusNotifierItemPeer()
@@ -239,23 +281,63 @@ StatusNotifierItemPeer::~StatusNotifierItemPeer()
     stop();
 }
 
-bool StatusNotifierItemPeer::start()
+bool StatusNotifierItemPeer::start(bool replaceExisting)
 {
     if (m_serviceRegistered && m_objectRegistered) {
         return true;
     }
-    m_serviceRegistered = m_bus.registerService(m_serviceName);
+    if (!m_objectRegistered) {
+        m_objectRegistered = m_bus.registerObject(m_objectPath,
+                                                  this,
+                                                  QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
+    }
+    if (!m_objectRegistered || !claimServiceWithoutObject(replaceExisting)) {
+        if (m_objectRegistered && !m_serviceRegistered) {
+            m_bus.unregisterObject(m_objectPath);
+            m_objectRegistered = false;
+        }
+        return false;
+    }
+    Q_EMIT NewStatus(m_status);
+    Q_EMIT NewTitle();
+    Q_EMIT NewAttentionIcon();
+    Q_EMIT NewOverlayIcon();
+    Q_EMIT NewToolTip();
+    return true;
+}
+
+bool StatusNotifierItemPeer::claimServiceWithoutObject(bool replaceExisting)
+{
+    if (m_serviceRegistered) {
+        return true;
+    }
+    const auto registration = m_bus.interface()->registerService(
+        m_serviceName,
+        replaceExisting ? QDBusConnectionInterface::ReplaceExistingService : QDBusConnectionInterface::DontQueueService,
+        QDBusConnectionInterface::AllowReplacement);
+    m_serviceRegistered = registration.isValid() && registration.value() == QDBusConnectionInterface::ServiceRegistered;
+    return m_serviceRegistered;
+}
+
+bool StatusNotifierItemPeer::exportObjectAndEmitReady()
+{
     if (!m_serviceRegistered) {
         return false;
     }
-    m_objectRegistered = m_bus.registerObject(m_objectPath,
-                                              this,
-                                              QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
     if (!m_objectRegistered) {
-        m_bus.unregisterService(m_serviceName);
-        m_serviceRegistered = false;
+        m_objectRegistered = m_bus.registerObject(m_objectPath,
+                                                  this,
+                                                  QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
     }
-    return m_objectRegistered;
+    if (!m_objectRegistered) {
+        return false;
+    }
+    Q_EMIT NewStatus(m_status);
+    Q_EMIT NewTitle();
+    Q_EMIT NewAttentionIcon();
+    Q_EMIT NewOverlayIcon();
+    Q_EMIT NewToolTip();
+    return true;
 }
 
 void StatusNotifierItemPeer::stop()
@@ -300,6 +382,26 @@ QString StatusNotifierItemPeer::status() const
     return m_status;
 }
 
+QString StatusNotifierItemPeer::title() const
+{
+    return m_title;
+}
+
+QString StatusNotifierItemPeer::attentionIconName() const
+{
+    return m_attentionIconName;
+}
+
+QString StatusNotifierItemPeer::overlayIconName() const
+{
+    return m_overlayIconName;
+}
+
+QVariant StatusNotifierItemPeer::toolTip() const
+{
+    return m_toolTip;
+}
+
 void StatusNotifierItemPeer::setId(const QString &id)
 {
     if (m_id == id) {
@@ -317,6 +419,46 @@ void StatusNotifierItemPeer::setStatus(const QString &status)
     m_status = status;
     Q_EMIT statusChanged();
     Q_EMIT NewStatus(status);
+}
+
+void StatusNotifierItemPeer::setTitle(const QString &title)
+{
+    if (m_title == title) {
+        return;
+    }
+    m_title = title;
+    Q_EMIT titleChanged();
+    Q_EMIT NewTitle();
+}
+
+void StatusNotifierItemPeer::setAttentionIconName(const QString &name)
+{
+    if (m_attentionIconName == name) {
+        return;
+    }
+    m_attentionIconName = name;
+    Q_EMIT attentionIconNameChanged();
+    Q_EMIT NewAttentionIcon();
+}
+
+void StatusNotifierItemPeer::setOverlayIconName(const QString &name)
+{
+    if (m_overlayIconName == name) {
+        return;
+    }
+    m_overlayIconName = name;
+    Q_EMIT overlayIconNameChanged();
+    Q_EMIT NewOverlayIcon();
+}
+
+void StatusNotifierItemPeer::setToolTip(const QVariant &toolTip)
+{
+    if (m_toolTip == toolTip) {
+        return;
+    }
+    m_toolTip = toolTip;
+    Q_EMIT toolTipChanged();
+    Q_EMIT NewToolTip();
 }
 
 } // namespace krema::test

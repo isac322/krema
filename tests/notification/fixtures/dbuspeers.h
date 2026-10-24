@@ -3,13 +3,34 @@
 
 #pragma once
 
+#include <QDBusArgument>
 #include <QDBusConnection>
+#include <QDBusMetaType>
 #include <QObject>
-#include <QStringList>
+#include <QVariant>
 #include <QVariantMap>
+#include <QVector>
 
 namespace krema::test
 {
+
+struct ToolTipPixmap {
+    qint32 width = 0;
+    qint32 height = 0;
+    QByteArray data;
+};
+
+struct ToolTipData {
+    QString iconName;
+    QVector<ToolTipPixmap> iconPixmap;
+    QString title;
+    QString description;
+};
+
+const QDBusArgument &operator>>(const QDBusArgument &argument, ToolTipPixmap &pixmap);
+QDBusArgument &operator<<(QDBusArgument &argument, const ToolTipPixmap &pixmap);
+const QDBusArgument &operator>>(const QDBusArgument &argument, ToolTipData &toolTip);
+QDBusArgument &operator<<(QDBusArgument &argument, const ToolTipData &toolTip);
 
 class NotificationServerPeer : public QObject
 {
@@ -86,12 +107,17 @@ class StatusNotifierItemPeer : public QObject
     Q_CLASSINFO("D-Bus Interface", "org.kde.StatusNotifierItem")
     Q_PROPERTY(QString Id READ id WRITE setId NOTIFY idChanged)
     Q_PROPERTY(QString Status READ status WRITE setStatus NOTIFY statusChanged)
-
+    Q_PROPERTY(QString Title READ title WRITE setTitle NOTIFY titleChanged)
+    Q_PROPERTY(QString AttentionIconName READ attentionIconName WRITE setAttentionIconName NOTIFY attentionIconNameChanged)
+    Q_PROPERTY(QString OverlayIconName READ overlayIconName WRITE setOverlayIconName NOTIFY overlayIconNameChanged)
+    Q_PROPERTY(QVariant ToolTip READ toolTip WRITE setToolTip NOTIFY toolTipChanged)
 public:
     explicit StatusNotifierItemPeer(QString serviceName, QString objectPath = QStringLiteral("/StatusNotifierItem"), QObject *parent = nullptr);
+    StatusNotifierItemPeer(QString serviceName, QString objectPath, const QDBusConnection &bus, QObject *parent = nullptr);
     ~StatusNotifierItemPeer() override;
-
-    bool start();
+    bool start(bool replaceExisting = false);
+    bool claimServiceWithoutObject(bool replaceExisting = false);
+    bool exportObjectAndEmitReady();
     void stop();
     bool isRegistered() const;
     QString serviceName() const;
@@ -99,13 +125,29 @@ public:
     QString itemAddress() const;
     QString id() const;
     QString status() const;
+    QString title() const;
+    QString attentionIconName() const;
+    QString overlayIconName() const;
+    QVariant toolTip() const;
     void setId(const QString &id);
     void setStatus(const QString &status);
+    void setTitle(const QString &title);
+    void setAttentionIconName(const QString &name);
+    void setOverlayIconName(const QString &name);
+    void setToolTip(const QVariant &toolTip);
 
 Q_SIGNALS:
     void NewStatus(const QString &status);
+    void NewTitle();
+    void NewAttentionIcon();
+    void NewOverlayIcon();
+    void NewToolTip();
     void idChanged();
     void statusChanged();
+    void titleChanged();
+    void attentionIconNameChanged();
+    void overlayIconNameChanged();
+    void toolTipChanged();
 
 private:
     QDBusConnection m_bus;
@@ -113,8 +155,15 @@ private:
     QString m_objectPath;
     QString m_id;
     QString m_status = QStringLiteral("Passive");
+    QString m_title;
+    QString m_attentionIconName;
+    QString m_overlayIconName;
+    QVariant m_toolTip;
     bool m_serviceRegistered = false;
     bool m_objectRegistered = false;
 };
 
 } // namespace krema::test
+
+Q_DECLARE_METATYPE(krema::test::ToolTipPixmap)
+Q_DECLARE_METATYPE(krema::test::ToolTipData)

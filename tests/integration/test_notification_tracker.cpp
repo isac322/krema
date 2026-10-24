@@ -612,10 +612,12 @@ TEST_CASE("SNI watcher replaces its snapshot after gapless service owner replace
     krema::test::StatusNotifierItemPeer oldItem(QStringLiteral("org.example.fixture.OldSni"), QStringLiteral("/OldItem"));
     oldItem.setId(QStringLiteral("org.example.old-sni"));
     oldItem.setStatus(QStringLiteral("NeedsAttention"));
+    oldItem.setTitle(QStringLiteral("Old title"));
     REQUIRE(oldItem.start());
     krema::test::StatusNotifierItemPeer newItem(QStringLiteral("org.example.fixture.NewSni"), QStringLiteral("/NewItem"));
     newItem.setId(QStringLiteral("org.example.new-sni"));
     newItem.setStatus(QStringLiteral("NeedsAttention"));
+    newItem.setTitle(QStringLiteral("New title"));
     REQUIRE(newItem.start());
     krema::test::StatusNotifierWatcherPeer original;
     original.setRegisteredItems({oldItem.itemAddress()});
@@ -653,6 +655,8 @@ TEST_CASE("SNI watcher replaces its snapshot after gapless service owner replace
     REQUIRE(waitFor([&] {
         return !tracker.sniNeedsAttention(QStringLiteral("org.example.old-sni")) && tracker.sniNeedsAttention(QStringLiteral("org.example.new-sni"));
     }));
+    CHECK(tracker.sniTitle(QStringLiteral("org.example.old-sni")).isEmpty());
+    CHECK(tracker.sniTitle(QStringLiteral("org.example.new-sni")) == QStringLiteral("New title"));
 }
 
 TEST_CASE("SNI registration, status transitions, re-registration and owner loss are observable", "[notification][sni][dbus]")
@@ -727,6 +731,136 @@ TEST_CASE("SNI registration, status transitions, re-registration and owner loss 
     REQUIRE(watcher.start());
     REQUIRE(waitFor([&] {
         return tracker.sniNeedsAttention(QStringLiteral("org.example.sni"));
+    }));
+}
+
+TEST_CASE("SNI metadata is queried and refreshed through live signals", "[notification][sni][metadata][dbus]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.Metadata"));
+    item.setId(QStringLiteral("org.example.metadata"));
+    item.setStatus(QStringLiteral("NeedsAttention"));
+    item.setTitle(QStringLiteral("Initial title"));
+    item.setAttentionIconName(QStringLiteral("dialog-warning"));
+    item.setOverlayIconName(QStringLiteral("mail-unread"));
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{QStringLiteral("tray-icon"), {}, QStringLiteral("Tooltip title"), QStringLiteral("Tooltip subtitle")}));
+    REQUIRE(item.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Initial title");
+    }));
+    CHECK(tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("dialog-warning"));
+    CHECK(tracker.sniOverlayIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("mail-unread"));
+    CHECK(tracker.sniToolTipTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Tooltip title"));
+    CHECK(tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Tooltip subtitle"));
+    const int revisionBeforeDuplicateRegistration = tracker.revision();
+    Q_EMIT watcher.StatusNotifierItemRegistered(item.itemAddress());
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    CHECK(tracker.revision() == revisionBeforeDuplicateRegistration);
+    CHECK(tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Initial title"));
+    CHECK(tracker.sniNeedsAttention(QStringLiteral("org.example.metadata")));
+
+    item.setTitle(QStringLiteral("Updated title"));
+    item.setAttentionIconName(QStringLiteral("bell"));
+    item.setOverlayIconName(QStringLiteral("mail-read"));
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{QStringLiteral("tray-icon"), {}, QStringLiteral("Updated tooltip"), QStringLiteral("Updated subtitle")}));
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated title")
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("bell")
+            && tracker.sniOverlayIconName(QStringLiteral("org.example.metadata")) == QStringLiteral("mail-read")
+            && tracker.sniToolTipTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated tooltip")
+            && tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")) == QStringLiteral("Updated subtitle");
+    }));
+
+    watcher.removeItem(item.itemAddress());
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.metadata")).isEmpty()
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.metadata")).isEmpty()
+            && tracker.sniToolTipSubTitle(QStringLiteral("org.example.metadata")).isEmpty();
+    }));
+}
+
+TEST_CASE("SNI metadata selection prefers attention deterministically", "[notification][sni][metadata][precedence]")
+{
+    krema::test::StatusNotifierItemPeer active(QStringLiteral("org.example.fixture.Active"), QStringLiteral("/Active"));
+    active.setId(QStringLiteral("org.example.same-app"));
+    active.setStatus(QStringLiteral("Active"));
+    active.setTitle(QStringLiteral("Active title"));
+    REQUIRE(active.start());
+
+    krema::test::StatusNotifierItemPeer attention(QStringLiteral("org.example.fixture.Attention"), QStringLiteral("/Attention"));
+    attention.setId(QStringLiteral("org.example.same-app"));
+    attention.setStatus(QStringLiteral("NeedsAttention"));
+    attention.setTitle(QStringLiteral("Attention title"));
+    REQUIRE(attention.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({active.itemAddress(), attention.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniNeedsAttention(QStringLiteral("org.example.same-app"))
+            && tracker.sniTitle(QStringLiteral("org.example.same-app")) == QStringLiteral("Attention title");
+    }));
+}
+
+TEST_CASE("SNI item metadata refreshes after gapless service owner replacement", "[notification][sni][metadata][owner-handover]")
+{
+    const QString serviceName = QStringLiteral("org.example.fixture.GaplessSni");
+    const QString objectPath = QStringLiteral("/StatusNotifierItem");
+    krema::test::StatusNotifierItemPeer original(serviceName, objectPath);
+    original.setId(QStringLiteral("org.example.gapless"));
+    original.setStatus(QStringLiteral("NeedsAttention"));
+    original.setTitle(QStringLiteral("Old title"));
+    original.setAttentionIconName(QStringLiteral("old-attention"));
+    REQUIRE(original.start());
+
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({original.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("Old title")
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("old-attention");
+    }));
+
+    const QString connectionName = QStringLiteral("sni-item-owner-replacement");
+    const auto replacementBus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, connectionName);
+    const auto disconnect = qScopeGuard([&] {
+        QDBusConnection::disconnectFromBus(connectionName);
+    });
+    REQUIRE(replacementBus.isConnected());
+
+    krema::test::StatusNotifierItemPeer replacement(serviceName, objectPath, replacementBus);
+    replacement.setId(QStringLiteral("org.example.gapless"));
+    replacement.setStatus(QStringLiteral("NeedsAttention"));
+    replacement.setTitle(QStringLiteral("New title"));
+    replacement.setAttentionIconName(QStringLiteral("new-attention"));
+    replacement.setOverlayIconName(QStringLiteral("new-overlay"));
+    replacement.setToolTip(QVariant::fromValue(krema::test::ToolTipData{QStringLiteral("new-icon"),
+                                                                          {},
+                                                                          QStringLiteral("New tooltip"),
+                                                                          QStringLiteral("New subtitle")}));
+    REQUIRE(replacement.claimServiceWithoutObject(true));
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    REQUIRE(replacement.exportObjectAndEmitReady());
+
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New title")
+            && tracker.sniAttentionIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-attention")
+            && tracker.sniOverlayIconName(QStringLiteral("org.example.gapless")) == QStringLiteral("new-overlay")
+            && tracker.sniToolTipTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New tooltip")
+            && tracker.sniToolTipSubTitle(QStringLiteral("org.example.gapless")) == QStringLiteral("New subtitle")
+            && tracker.sniNeedsAttention(QStringLiteral("org.example.gapless"));
     }));
 }
 

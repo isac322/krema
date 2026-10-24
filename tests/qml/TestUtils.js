@@ -65,6 +65,10 @@ function badgeLabel(dockItem) {
     return b ? directChildren(b, isFitLabel)[0] : null
 }
 
+function sniBadgeIcon(dockItem) {
+    return directChildren(dockItem, c => c.objectName === "sniBadgeIcon")[0]
+}
+
 // The fallback initial shown inside the icon when no icon image is loaded.
 function placeholderLabel(dockItem) {
     return findFirst(iconImage(dockItem), o => o.text !== undefined)

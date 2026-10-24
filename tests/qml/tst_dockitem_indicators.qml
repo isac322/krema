@@ -279,6 +279,37 @@ Item {
             }
         }
 
+        function test_sniMetadataBadgeAndAccessibleDescription() {
+            let item = makeItem({ IsWindow: true })
+            let icon = T.sniBadgeIcon(item)
+            verify(icon)
+            verify(!icon.visible)
+
+            NotificationTracker.setSniMetadata("org.kde.dolphin", {
+                title: "Dolphin File Manager",
+                attentionIconName: "dialog-warning",
+                overlayIconName: "mail-unread",
+                toolTipTitle: "Dolphin File Manager",
+                toolTipSubTitle: "2 transfers active"
+            })
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryVerify(() => icon.visible)
+            compare(icon.source, "dialog-warning")
+            verify(item.accessibleDescription.indexOf("Dolphin File Manager") >= 0)
+            verify(item.accessibleDescription.indexOf("2 transfers active") >= 0)
+            let iconImage = T.iconImage(item)
+            let badge = T.badge(item)
+            verify(icon.y > iconImage.y + iconImage.height * 0.5)
+            verify(badge.y < iconImage.y + iconImage.height * 0.5)
+
+            DockSettings.badgeDisplayMode = 2
+            NotificationTracker.setSniAttention("org.kde.dolphin", false)
+            tryVerify(() => !icon.visible)
+            NotificationTracker.setSniAttention("org.kde.dolphin", true)
+            tryVerify(() => icon.visible)
+            compare(icon.source, "dialog-warning")
+        }
+
         function test_badgePositionDynamicSwitching() {
             DockView.edge = 2
             let item = makeBadgedItem()
@@ -741,6 +772,30 @@ Item {
             verify(!item._showAttentionAnim)
             verify(badge.visible)
             compare(badge.isDot, true)
+        }
+
+        function test_urgentAndWindowAttentionShowPersistentDot() {
+            let item = makeItem({ IsWindow: true })
+            let badge = T.badge(item)
+            let label = T.badgeLabel(item)
+            for (let mode of [0, 2]) {
+                DockSettings.badgeDisplayMode = mode
+                DockSettings.attentionAnimation = 0
+                DockModel.tasksModel.setTaskData(0, "IsDemandingAttention", true)
+                tryCompare(item, "_isDemandingAttention", true)
+                verify(badge.visible)
+                compare(badge.isDot, true)
+                compare(label.visible, false)
+                DockModel.tasksModel.setTaskData(0, "IsDemandingAttention", false)
+                tryVerify(() => !badge.visible)
+                LauncherEntryTracker.setEntry(launcherUrl, { urgent: true })
+                tryCompare(item, "_isDemandingAttention", true)
+                verify(badge.visible)
+                compare(badge.isDot, true)
+                compare(label.visible, false)
+                LauncherEntryTracker.setEntry(launcherUrl, { urgent: false })
+                tryVerify(() => !badge.visible)
+            }
         }
 
         function test_blinkAnimationRestoresIconOpacity() {

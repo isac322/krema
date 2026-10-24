@@ -1032,3 +1032,8 @@ uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`
 and real pointer/AT-SPI interaction with the Notifications settings page.
 SNI, Unity, DND, portal, and Jobs protocol coverage remains in the wire-level
 notification catalog; no animation pixel assertion is required here.
+`tests/integration/test_notification_tracker.cpp` (`krema_notification_tracker_tests`)
+and `tests/qml/tst_dockitem_indicators.qml` (`qml_tst_dockitem_indicators`)
+additionally cover StatusNotifierItem `Title`, `AttentionIconName`,
+`OverlayIconName`, and `ToolTip` metadata, `sniBadgeIcon` bottom-right
+rendering, and accessible tooltip descriptions.

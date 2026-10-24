@@ -96,6 +96,11 @@ public:
 
     /// Return true if the SNI item matching @p appId has NeedsAttention status.
     [[nodiscard]] Q_INVOKABLE bool sniNeedsAttention(const QString &appId) const;
+    [[nodiscard]] Q_INVOKABLE QString sniTitle(const QString &appId) const;
+    [[nodiscard]] Q_INVOKABLE QString sniAttentionIconName(const QString &appId) const;
+    [[nodiscard]] Q_INVOKABLE QString sniOverlayIconName(const QString &appId) const;
+    [[nodiscard]] Q_INVOKABLE QString sniToolTipTitle(const QString &appId) const;
+    [[nodiscard]] Q_INVOKABLE QString sniToolTipSubTitle(const QString &appId) const;
     /// Clear the local unread contribution for the given app without closing
     /// its server notification.
     Q_INVOKABLE void clearUnreadNotifications(const QString &appId);
@@ -129,10 +134,19 @@ private Q_SLOTS:
     void onSniRegistered(const QString &item);
     void onSniUnregistered(const QString &item);
     void onSniNewStatus(const QString &status, const QDBusMessage &message);
-    void onSniServiceUnregistered(const QString &service);
+    void onSniNewTitle(const QDBusMessage &message);
+    void onSniNewAttentionIcon(const QDBusMessage &message);
+    void onSniNewOverlayIcon(const QDBusMessage &message);
+    void onSniNewToolTip(const QDBusMessage &message);
+    void onSniPropertiesChanged(const QString &interfaceName,
+                                const QVariantMap &changedProperties,
+                                const QStringList &invalidatedProperties,
+                                const QDBusMessage &message);
+    void onSniServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
     void onSniWatcherServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
 
 private:
+    struct SniEntry;
     struct NotificationRecord;
     void registerNotificationWatcher();
     void connectNotificationClosedMatch();
@@ -148,7 +162,11 @@ private:
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
     QString sniKeyForMessage(const QDBusMessage &message) const;
+    void queryAllSniProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath);
+    void querySniProperty(const QString &key, quint64 generation, const QString &service, const QString &objectPath, const QString &property);
+    void ensureSniMetadataQueried(const QString &key, SniEntry &entry);
     void clearSniItems();
+    [[nodiscard]] const SniEntry *sniEntryForApp(const QString &appId) const;
 
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
@@ -195,10 +213,16 @@ private:
     QMap<QPair<QDateTime, uint>, uint> m_inactiveRecordOrder;
     QHash<uint, QPair<QDateTime, uint>> m_inactiveRecordKeys;
 
-    // SNI tracking: "service|objectPath" -> {id, status}
+    // SNI tracking: "service|objectPath" -> item metadata
     struct SniEntry {
         QString id; // Application identifier from SNI Id property
         QString status; // "Passive", "Active", "NeedsAttention"
+        QString title;
+        QString attentionIconName;
+        QString overlayIconName;
+        QString toolTipTitle;
+        QString toolTipSubTitle;
+        bool initialQueryFailed = false;
         quint64 generation = 0;
     };
     QHash<QString, SniEntry> m_sniItems;
@@ -218,7 +242,11 @@ private:
     bool m_sniWatcherRegisteredMatchConnected = false;
     bool m_sniWatcherUnregisteredMatchConnected = false;
     bool m_sniStatusMatchConnected = false;
-
+    bool m_sniTitleMatchConnected = false;
+    bool m_sniAttentionIconMatchConnected = false;
+    bool m_sniOverlayIconMatchConnected = false;
+    bool m_sniToolTipMatchConnected = false;
+    bool m_sniPropertiesChangedMatchConnected = false;
     int m_revision = 0;
     bool m_dndActive = false;
 };

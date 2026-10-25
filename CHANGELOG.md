@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Long Do Not Disturb periods kept a valid expiry timer on older Qt versions and ended only when their configured deadline passed.
 - Prevented transient duplicate panel reservations while a panel-relative dock probe is reconfigured or remapped across edges; real probe teardown now hands the exclusive zone back to the dock exactly once (#135)
 
+### Removed
+
+- Removed the local notification inbox from Settings and window previews along with retained notification history storage, keeping Krema focused on dock-native unread badges, attention indicators, and StatusNotifierItem metadata.
+
 ## [0.12.0] - 2026-10-12
 
 Krema v0.12.0 lets you set the gap between the floating dock and the screen edge in this lightweight KDE Plasma 6 dock for Wayland, adds each app's own .desktop actions such as Firefox's "New Private Window" to the right-click menu, and keeps a magnified icon magnified while its context menu is open.

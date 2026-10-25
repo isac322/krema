@@ -24,6 +24,25 @@ Item {
 
     // C++ singletons: PreviewController, DockModel
 
+    readonly property bool hasWindowContent: childWindowModel.count > 0
+
+    function checkPopupStillHasContent() {
+        if (!PreviewController.visible || PreviewController.parentIndex < 0)
+            return
+        let parentIdx = PreviewController.parentIndex
+        let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
+        let isWindowOrGroup = parentModelIdx.valid && (
+            Boolean(DockModel.tasksModel.data(
+                parentModelIdx, TaskManager.AbstractTasksModel.IsWindow))
+            || DockModel.childCount(parentIdx) > 0
+        )
+        if (!isWindowOrGroup && !root.hasWindowContent) {
+            if (PreviewController.previewKeyboardActive)
+                PreviewController.endPreviewKeyboardNav()
+            PreviewController.hidePreview()
+        }
+    }
+
     function announcePreviewOpen(appName, count) {
         Accessible.announce(
             i18n("Preview for %1, %2 windows", appName, count),
@@ -174,6 +193,7 @@ Item {
         function onDataChanged() {
             if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 root.rebuildChildModel()
+                root.checkPopupStillHasContent()
             }
         }
         function onRowsInserted() {
@@ -187,9 +207,12 @@ Item {
                 let parentIdx = PreviewController.parentIndex
                 let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
                 if (!parentModelIdx.valid) {
+                    if (PreviewController.previewKeyboardActive)
+                        PreviewController.endPreviewKeyboardNav()
                     PreviewController.hidePreview()
                 } else {
                     root.rebuildChildModel()
+                    root.checkPopupStillHasContent()
                 }
             }
         }
@@ -198,7 +221,9 @@ Item {
     // The visible popup container
     Rectangle {
         id: popup
-        visible: PreviewController.visible && PreviewController.parentIndex >= 0
+        visible: PreviewController.visible
+            && PreviewController.parentIndex >= 0
+            && root.hasWindowContent
 
         Accessible.role: Accessible.PopupMenu
         Accessible.name: PreviewController.appName

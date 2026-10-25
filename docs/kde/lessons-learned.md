@@ -532,7 +532,7 @@ Keep the absolute Until deadline authoritative: a timeout rereads it and
 rearms when necessary. Use one `serviceOwnerChanged` handler per watched
 notification/SNI-watcher service, invalidating pending generations before
 registering or querying the new owner. Clear the old SNI snapshot on every
-owner change without changing retained notification history or unread state.
+owner change without changing active unread notification state.
 
 **Regression oracles:** Require an active `INT_MAX` arm for a 30-day deadline;
 an early emitted timeout must keep DND active without advancing the clock.

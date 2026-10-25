@@ -33,6 +33,7 @@ import pytest
 from krema_e2e import env, input as inp, kwin
 from krema_e2e.waits import wait_until
 from krema_e2e.windows import TestWindows
+from test_12_notifications import STIMULUS, _close, _notify, _stop_server
 
 CONFIG_WRITER = Path("/build/bin/krema_notification_config_writer")
 

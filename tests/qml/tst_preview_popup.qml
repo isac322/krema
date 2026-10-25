@@ -264,5 +264,30 @@ Item {
             tryCompare(PreviewController, "previewKeyboardActive", false)
             mouseMove(stage, -1, -1)
         }
+
+        function test_pinnedLastWindowCloseHidesPopupAndEndsKeyboardNav() {
+            let popup = makePopup()
+            show(0, "Dolphin")
+            waitThumbs(popup, 1)
+            PreviewController.previewKeyboardActive = true
+            DockModel.tasksModel.setTaskData(0, "IsWindow", false)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            tryCompare(PreviewController, "visible", false)
+            compare(PreviewController.previewKeyboardActive, false)
+            compare(container(popup).visible, false)
+        }
+
+        function test_pendingWinIdListDoesNotPrematurelyCloseWindowPreview() {
+            let popup = makePopup()
+            show(0, "Dolphin")
+            waitThumbs(popup, 1)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", [])
+            wait(20)
+            compare(PreviewController.visible, true)
+            DockModel.tasksModel.setTaskData(0, "WinIdList", ["dolphin-1"])
+            waitThumbs(popup, 1)
+            compare(PreviewController.visible, true)
+            compare(container(popup).visible, true)
+        }
     }
 }

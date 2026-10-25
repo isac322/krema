@@ -11,14 +11,41 @@ that do NOT support the Unity Launcher API.
 
 ## Sources in Krema
 
-Krema combines four badge sources:
+Krema combines five badge sources:
 1. `LauncherEntryTracker` (C++) — Unity Launcher API `com.canonical.Unity.LauncherEntry` (exact count, progress, urgent)
 2. `NotificationTracker` (C++) — unread notifications via `RegisterWatcher` (canonical desktop identity)
 3. `NotificationTracker` (C++) — SNI `NeedsAttention` (boolean)
 4. `model.IsDemandingAttention` — EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` (boolean, all apps)
+5. Chat adapters — application-specific SNI icons and task-window titles (unread / mention state, and reported counts)
 
-Most Electron apps (Slack, Discord, etc.) do NOT send Unity Launcher API signals on Linux, so
-sources 2–4 cover the rest.
+Most Electron apps do not send Unity Launcher API signals on Linux. Their chat
+state can instead be recovered from the app's own tray or window metadata.
+
+### Chat states (unreleased)
+
+Supported chat adapters use `0 = None`, `1 = Unread`, and `2 = Mention`. Mentions
+use the Plasma negative-text color, while ordinary unread messages use the link
+color. Number mode shows a reported count when available; Dot mode omits numbers.
+Off hides ordinary unread dots and numeric badges but keeps a mention dot when
+there is no numeric count, alongside the existing live-attention marker.
+Plasma's global and per-application badge preferences gate chat state without
+discarding the stored state. DND suppresses attention animations, not badges.
+
+Visible Unity counts have priority, followed by a chat-reported count, then
+Freedesktop unread notification counts. The largest count across matching task
+windows is used rather than summing windows for the same account.
+
+| App | State source | Count source |
+| --- | --- | --- |
+| Slack Desktop | Lower-right pink mention / cyan unread tray badge | Positive notification count in tray tooltip |
+
+Electron `_status_icon_N` tray identity suffixes are stripped before
+desktop-service lookup. Generic `chrome_status_icon_` items can also match an
+exact canonical tooltip title or tray title. Tray pixmaps are decoded from
+network-order ARGB only after dimensions and payload length are validated; images
+are limited to 256 × 256. An app's `IconThemePath` PNG fallback is limited to
+256 KiB. `NewIcon`, `NewIconThemePath`, and metadata property changes refresh
+state through a coalesced in-flight/pending query, with no polling timer.
 
 
 ## Input boundaries and service lifecycle

@@ -29,6 +29,7 @@ class DockModel : public QObject
     Q_PROPERTY(TaskManager::TasksModel *tasksModel READ tasksModel CONSTANT)
     Q_PROPERTY(QStringList pinnedLaunchers READ pinnedLaunchers WRITE setPinnedLaunchers NOTIFY pinnedLaunchersChanged)
     Q_PROPERTY(int pinnedTaskCount READ pinnedTaskCount NOTIFY pinnedTaskCountChanged)
+    Q_PROPERTY(int chatStateRevision READ chatStateRevision NOTIFY chatStateRevisionChanged)
     Q_PROPERTY(int virtualDesktopMode READ virtualDesktopMode WRITE setVirtualDesktopMode NOTIFY virtualDesktopModeChanged)
     Q_PROPERTY(QVariant currentDesktop READ currentDesktop NOTIFY currentDesktopChanged)
 
@@ -47,6 +48,7 @@ public:
     [[nodiscard]] bool separateLaunchers() const;
     void setSeparateLaunchers(bool separate);
     [[nodiscard]] int pinnedTaskCount() const;
+    [[nodiscard]] int chatStateRevision() const;
 
     /// Move the task at @p fromIndex to @p toIndex as an explicit user
     /// reorder and save the new launcher order. Returns true on success.
@@ -90,9 +92,18 @@ public:
     /// the task at @p index (not necessarily the raw Wayland app_id).
     Q_INVOKABLE QString appId(int index) const;
 
+    /// Return the chat unread state: 0=None, 1=Unread, 2=Mention.
+    Q_INVOKABLE int taskChatUnreadState(int row) const;
+
+    /// Return the chat mention count for the task at @p row.
+    Q_INVOKABLE int taskChatMentionCount(int row) const;
+    [[nodiscard]] static int chatUnreadStateForTitles(const QString &appId, const QStringList &titles);
+    [[nodiscard]] static int chatMentionCountForTitles(const QString &appId, const QStringList &titles);
+
 Q_SIGNALS:
     void pinnedLaunchersChanged();
     void pinnedTaskCountChanged();
+    void chatStateRevisionChanged();
     void virtualDesktopModeChanged();
     void currentDesktopChanged();
 
@@ -119,11 +130,13 @@ private:
     bool placeStartedTasksInLauncherSlots();
     [[nodiscard]] static int findRow(const QList<CurrentRow> &rows, const SettledRow &settled, int settledLauncherPosition, int excludedRow);
     void snapshotSettledRows();
+    [[nodiscard]] QStringList windowTitlesForRow(int row) const;
 
     bool m_separateLaunchers = false;
     bool m_partitionPending = false;
     bool m_reconcilingPartition = false;
     int m_pinnedTaskCount = 0;
+    int m_chatStateRevision = 0;
     int m_virtualDesktopMode = 0;
     QList<SettledRow> m_settledRows;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;

@@ -45,6 +45,14 @@ Item {
             tryCompare(row, "count", 1)
             return row.itemAt(0)
         }
+        function makeSlackItem(roles) {
+            return makeItem(Object.assign({
+                display: "Slack",
+                AppId: "slack",
+                LauncherUrlWithoutIcon: "applications:slack.desktop",
+                IsWindow: true
+            }, roles || {}))
+        }
 
         function dockEdges() {
             return [
@@ -507,6 +515,105 @@ Item {
             DockSettings.badgeCustomColor = "#00ffffff"
             verify(Qt.colorEqual(numberBadge.color, Kirigami.Theme.highlightColor))
         }
+        // --- Slack two-tier chat badge contract ---
+
+        function test_slackRestStateHasNoChatBadge() {
+            let item = makeSlackItem()
+            compare(item._chatUnreadState, 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!item._showBadge)
+            verify(!T.badge(item).visible)
+        }
+
+        function test_slackUnreadStateUsesLinkColorDot() {
+            let item = makeSlackItem()
+            NotificationTracker.setSniChat("slack", 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._badgeCount, 0)
+            verify(item._showChatStateDot)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
+        }
+
+        function test_slackMentionCountUsesNegativeColorNumericBadge() {
+            let item = makeSlackItem()
+            NotificationTracker.setSniChat("slack", 2, 3)
+            tryCompare(item, "_chatMentionCount", 3)
+            compare(item._badgeCount, 3)
+            verify(item._showNumericOrCountBadge)
+            compare(T.badge(item).isDot, false)
+            compare(T.badgeLabel(item).text, "3")
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            let expectedText = Kirigami.ColorUtils.brightnessForColor(T.badge(item).color) === Kirigami.ColorUtils.Light
+                ? "#000000" : "#ffffff"
+            verify(Qt.colorEqual(T.badgeLabel(item).color, expectedText))
+        }
+        function test_slackTaskAndSniChatStateUseMaximum() {
+            let item = makeSlackItem()
+            DockModel.setTaskChat(0, 1, 5)
+            NotificationTracker.setSniChat("slack", 2, 3)
+            tryCompare(item, "_chatUnreadState", 2)
+            tryCompare(item, "_chatMentionCount", 5)
+            compare(item._badgeCount, 5)
+        }
+
+
+        function test_slackChatCountPrecedesNotificationUnreadAndUnityCount() {
+            let item = makeSlackItem()
+            NotificationTracker.setUnread("slack", 9)
+            NotificationTracker.setSniChat("slack", 2, 3)
+            tryCompare(item, "_badgeCount", 3)
+            LauncherEntryTracker.setEntry("applications:slack.desktop", {
+                count: 7, countVisible: true
+            })
+            tryCompare(item, "_badgeCount", 7)
+        }
+
+        function test_slackChatAndUnreadBadgesAreGated() {
+            let item = makeSlackItem()
+            NotificationTracker.setUnread("slack", 4)
+            NotificationTracker.setSniChat("slack", 2, 3)
+            NotificationTracker.setBadgesEnabledForApp("slack", false)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!item._showBadge)
+            NotificationTracker.setBadgesEnabledForApp("slack", true)
+            tryCompare(item, "_badgeCount", 3)
+        }
+
+        function test_slackChatBadgeDisplayModes() {
+            let item = makeSlackItem()
+            NotificationTracker.setSniChat("slack", 2, 3)
+            DockSettings.badgeDisplayMode = 1
+            tryCompare(item, "_badgeCount", 3)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            compare(T.badgeLabel(item).visible, false)
+
+            NotificationTracker.setSniChat("slack", 2, 0)
+            DockSettings.badgeDisplayMode = 2
+            tryCompare(item, "_chatUnreadState", 2)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+
+            NotificationTracker.setSniChat("slack", 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            verify(!T.badge(item).visible)
+        }
+
+        function test_slackChatAccessibilityUsesZeroCountStateText() {
+            let item = makeSlackItem()
+            NotificationTracker.setSniChat("slack", 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            verify(item.accessibleDescription.indexOf("Unread messages") >= 0)
+            NotificationTracker.setSniChat("slack", 2, 0)
+            tryCompare(item, "_chatUnreadState", 2)
+            verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+        }
+
 
         function test_noBadgeWithoutNotifications() {
             let item = makeItem({ IsWindow: true })

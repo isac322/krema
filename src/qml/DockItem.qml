@@ -837,15 +837,23 @@ Item {
 
     // Bounce property/value depends on edge direction
     readonly property string _bounceProp: DockView.isVertical ? "x" : "y"
+    // Scales with the icon (14 px at 48 px, like the attention bounce) so the
+    // hop stays visible on large docks.
+    readonly property real _bounceDistance: iconSize * 14 / 48
     readonly property real _bounceTarget: {
         switch (DockView.edge) {
-        case 0: return 8    // Top: bounce down
-        case 1: return -8   // Bottom: bounce up
-        case 2: return 8    // Left: bounce right
-        case 3: return -8   // Right: bounce left
+        case 0: return _bounceDistance    // Top: bounce down
+        case 1: return -_bounceDistance   // Bottom: bounce up
+        case 2: return _bounceDistance    // Left: bounce right
+        case 3: return -_bounceDistance   // Right: bounce left
         }
-        return -8
+        return -_bounceDistance
     }
+    // A global animation speed above 1x (e.g. AnimationDurationFactor=0.25)
+    // would shrink the hop to a few milliseconds that nobody can see, so keep a
+    // floor. Still 0 when animations are disabled system-wide.
+    readonly property int _bounceHalfDuration:
+        Kirigami.Units.longDuration > 0 ? Math.max(Kirigami.Units.longDuration, 220) : 0
 
     SequentialAnimation {
         id: bounceAnim
@@ -855,16 +863,16 @@ Item {
             target: bounceTranslate; property: dockItem._bounceProp
             to: dockItem._bounceTarget
             duration: dockItem._finishingBounce
-                ? Kirigami.Units.longDuration * 0.85
-                : Kirigami.Units.longDuration
+                ? dockItem._bounceHalfDuration * 0.85
+                : dockItem._bounceHalfDuration
             easing.type: Easing.OutQuad
         }
         NumberAnimation {
             target: bounceTranslate; property: dockItem._bounceProp
             to: 0
             duration: dockItem._finishingBounce
-                ? Kirigami.Units.longDuration * 0.85
-                : Kirigami.Units.longDuration
+                ? dockItem._bounceHalfDuration * 0.85
+                : dockItem._bounceHalfDuration
             easing.type: Easing.InQuad
         }
 

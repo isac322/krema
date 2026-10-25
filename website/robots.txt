@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://krema.bhyoo.com/sitemap.xml

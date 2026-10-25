@@ -130,10 +130,10 @@ void MockTasksModel::reset()
     Q_EMIT requestsChanged();
 }
 
-QVariant MockTasksModel::get(int row, const QString &roleName) const
+QVariant MockTasksModel::get(int row, const QString &roleName, int childRow) const
 {
     const int role = roleForName(roleName);
-    return role >= 0 ? data(index(row, 0), role) : QVariant();
+    return role >= 0 ? data(makeModelIndex(row, childRow), role) : QVariant();
 }
 
 QModelIndex MockTasksModel::makeModelIndex(int row, int childRow) const

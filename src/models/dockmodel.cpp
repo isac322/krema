@@ -14,6 +14,7 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
+#include <QRegularExpression>
 #include <QRect>
 #include <QVariant>
 #include <QScreen>
@@ -79,6 +80,62 @@ QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &
     const QByteArray digest = QCryptographicHash::hash(material, QCryptographicHash::Sha256).toHex();
     return QStringLiteral("raw:%1").arg(QString::fromLatin1(digest));
 }
+struct ChatTitleState {
+    int unreadState = 0;
+    int mentionCount = 0;
+};
+
+enum class ChatTitleAdapter {
+    None,
+    Slack,
+};
+
+ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
+{
+    QString appId = rawAppId.trimmed().toLower();
+    if (appId.endsWith(QLatin1String(".desktop"))) {
+        appId.chop(8);
+    }
+    if (appId == QLatin1String("slack") || appId == QLatin1String("com.slack.slack")) {
+        return ChatTitleAdapter::Slack;
+    }
+    return ChatTitleAdapter::None;
+}
+
+ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapter)
+{
+    if (adapter == ChatTitleAdapter::None) {
+        return {};
+    }
+
+    static const QRegularExpression slackMention(
+        QStringLiteral("^\\s*(?:(?:\\(([1-9][0-9]*)\\)\\s*)?!\\s+.+|\\(([1-9][0-9]*)\\)\\s+.+)-\\s*Slack\\s*$"));
+    static const QRegularExpression slackUnread(
+        QStringLiteral("^\\s*\\*\\s+.+-\\s*Slack\\s*$"));
+
+    ChatTitleState result;
+    bool hasMention = false;
+    bool hasUnread = false;
+    for (const QString &title : titles) {
+        const QRegularExpressionMatch mentionMatch = slackMention.match(title);
+        if (mentionMatch.hasMatch()) {
+            hasMention = true;
+            const QString captured = !mentionMatch.captured(1).isEmpty() ? mentionMatch.captured(1) : mentionMatch.captured(2);
+            bool ok = false;
+            const int count = captured.toInt(&ok);
+            if (ok) {
+                result.mentionCount = std::max(result.mentionCount, count);
+            }
+            continue;
+        }
+        if (slackUnread.match(title).hasMatch()) {
+            hasUnread = true;
+        }
+    }
+    result.unreadState = hasMention ? 2 : (hasUnread ? 1 : 0);
+    return result;
+}
+
 } // namespace
 
 DockModel::DockModel(QObject *parent)
@@ -149,6 +206,15 @@ DockModel::DockModel(QObject *parent)
     connect(m_activityInfo.get(), &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
         m_tasksModel->setActivity(m_activityInfo->currentActivity());
     });
+
+    const auto bumpChatStateRevision = [this]() {
+        ++m_chatStateRevision;
+        Q_EMIT chatStateRevisionChanged();
+    };
+    connect(m_tasksModel.get(), &QAbstractItemModel::dataChanged, this, bumpChatStateRevision);
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, bumpChatStateRevision);
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, bumpChatStateRevision);
+    connect(m_tasksModel.get(), &QAbstractItemModel::modelReset, this, bumpChatStateRevision);
 
     // Launch in place: a task started for a visible pinned launcher replaces
     // that launcher at its position. libtaskmanager stopped doing this for
@@ -567,6 +633,59 @@ QString DockModel::appId(int index) const
         return {};
     }
     return idx.data(TaskManager::AbstractTasksModel::AppId).toString();
+}
+
+int DockModel::chatStateRevision() const
+{
+    return m_chatStateRevision;
+}
+
+int DockModel::chatUnreadStateForTitles(const QString &appId, const QStringList &titles)
+{
+    const ChatTitleAdapter adapter = chatTitleAdapterForAppId(appId);
+    if (adapter == ChatTitleAdapter::None) {
+        return 0;
+    }
+    return chatTitleState(titles, adapter).unreadState;
+}
+
+int DockModel::chatMentionCountForTitles(const QString &appId, const QStringList &titles)
+{
+    const ChatTitleAdapter adapter = chatTitleAdapterForAppId(appId);
+    if (adapter == ChatTitleAdapter::None) {
+        return 0;
+    }
+    return chatTitleState(titles, adapter).mentionCount;
+}
+
+int DockModel::taskChatUnreadState(int row) const
+{
+    return chatUnreadStateForTitles(appId(row), windowTitlesForRow(row));
+}
+
+int DockModel::taskChatMentionCount(int row) const
+{
+    return chatMentionCountForTitles(appId(row), windowTitlesForRow(row));
+}
+
+QStringList DockModel::windowTitlesForRow(int row) const
+{
+    const QModelIndex index = m_tasksModel->index(row, 0);
+    if (!index.isValid()) {
+        return {};
+    }
+
+    const int childCount = m_tasksModel->rowCount(index);
+    const bool isWindow = index.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    QStringList titles;
+    titles.reserve(childCount + (isWindow ? 1 : 0));
+    for (int child = 0; child < childCount; ++child) {
+        titles.append(m_tasksModel->index(child, 0, index).data(Qt::DisplayRole).toString());
+    }
+    if (isWindow) {
+        titles.append(index.data(Qt::DisplayRole).toString());
+    }
+    return titles;
 }
 
 int DockModel::virtualDesktopMode() const

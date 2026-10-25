@@ -307,7 +307,7 @@ SettingsPage {
                 // the attention animation through the overlay below.
                 apps: [
                     { icon: "org.kde.dolphin", fallback: "system-file-manager", state: "inactive", badge: 0, padding: 1.0 },
-                    { icon: "org.kde.konsole", fallback: "utilities-terminal", state: "inactive", badge: 8, padding: 1.0 },
+                    { icon: "org.kde.konsole", fallback: "utilities-terminal", state: "inactive", badge: 8, chatUnreadState: 2, chatMentionCount: 8, padding: 1.0 },
                     { icon: "org.kde.kate", fallback: "accessories-text-editor", state: "minimized", badge: 0, padding: 0.82 },
                     { icon: page.sampleIcon, fallback: page.sampleIconFallback, state: "active", badge: 0, padding: 1.0 },
                     { icon: "firefox", fallback: "org.kde.falkon", state: "inactive", badge: 0, padding: 1.0 },
@@ -523,6 +523,14 @@ SettingsPage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     text: i18n("How notification badges appear on dock icons")
+                    font: Kirigami.Theme.smallFont
+                    color: page.secondaryTextColor
+                    wrapMode: Text.Wrap
+                    Accessible.ignored: true
+                }
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Chat mentions use the theme's negative color; unread messages use the link color. A custom color is used for other badges, with readable text chosen automatically.")
                     font: Kirigami.Theme.smallFont
                     color: page.secondaryTextColor
                     wrapMode: Text.Wrap

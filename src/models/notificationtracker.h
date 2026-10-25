@@ -7,6 +7,7 @@
 #include <QDBusServiceWatcher>
 #include <QDateTime>
 #include <QHash>
+#include <QImage>
 #include <QSet>
 #include <QTimer>
 #include <QStringList>
@@ -48,6 +49,13 @@ public:
 
     [[nodiscard]] int revision() const;
     [[nodiscard]] bool dndActive() const;
+    /// Return whether badges are enabled for @p appId (global and per-app settings).
+    [[nodiscard]] Q_INVOKABLE bool badgesEnabled(const QString &appId) const;
+
+    /// Return the Slack SNI chat state: 0 = none, 1 = unread, 2 = mention.
+    [[nodiscard]] Q_INVOKABLE int sniChatUnreadState(const QString &appId) const;
+    /// Return Slack's positive mention count reported by its tray tooltip.
+    [[nodiscard]] Q_INVOKABLE int sniChatMentionCount(const QString &appId) const;
 
     /// Return the number of unread notifications for the given desktop entry (e.g. "slack").
     [[nodiscard]] Q_INVOKABLE int unreadCount(const QString &desktopEntry) const;
@@ -96,6 +104,9 @@ private Q_SLOTS:
     void onSniNewAttentionIcon(const QDBusMessage &message);
     void onSniNewOverlayIcon(const QDBusMessage &message);
     void onSniNewToolTip(const QDBusMessage &message);
+    void onSniNewIcon(const QDBusMessage &message);
+    void onSniNewIconThemePath(const QDBusMessage &message);
+    void processSniIconRefreshes();
     void onSniPropertiesChanged(const QString &interfaceName,
                                 const QVariantMap &changedProperties,
                                 const QStringList &invalidatedProperties,
@@ -114,12 +125,26 @@ private:
     void updateDndState();
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
-    QString sniKeyForMessage(const QDBusMessage &message) const;
     void queryAllSniProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath);
-    void querySniProperty(const QString &key, quint64 generation, const QString &service, const QString &objectPath, const QString &property);
+    void querySniProperty(const QString &key,
+                          quint64 generation,
+                          const QString &service,
+                          const QString &objectPath,
+                          const QString &property,
+                          const QString &interfaceName = {},
+                          bool iconQuery = false);
+    void scheduleSniIconRefresh(const QString &key, const QString &interfaceName);
+    void querySniIconProperties(const QString &key,
+                                quint64 generation,
+                                const QString &service,
+                                const QString &objectPath,
+                                const QString &interfaceName);
+    void updateSniIconImage(SniEntry &entry);
+    void updateSniChatState(SniEntry &entry);
     void ensureSniMetadataQueried(const QString &key, SniEntry &entry);
     void clearSniItems();
     [[nodiscard]] const SniEntry *sniEntryForApp(const QString &appId) const;
+    [[nodiscard]] QString sniKeyForMessage(const QDBusMessage &message) const;
 
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
@@ -138,6 +163,19 @@ private:
         QString overlayIconName;
         QString toolTipTitle;
         QString toolTipSubTitle;
+        QImage iconImage;
+        QString iconName;
+        QString iconThemePath;
+        QImage iconPixmapImage;
+        int chatUnreadState = 0;
+        int chatMentionCount = 0;
+        bool iconQueryInFlight = false;
+        bool iconQueryPending = false;
+        QString iconQueryInterface;
+        int iconQueryOutstanding = 0;
+        QImage iconQueryPreviousImage;
+        int iconQueryPreviousChatState = 0;
+        int iconQueryPreviousMentionCount = 0;
         bool initialQueryFailed = false;
         quint64 generation = 0;
     };
@@ -147,14 +185,15 @@ private:
     QDBusServiceWatcher m_sniWatcherServiceWatcher;
     QDBusServiceWatcher m_sniServiceWatcher;
     QTimer m_dndExpiryTimer;
-
+    bool m_sniIconRefreshQueued = false;
+    bool m_notificationWatcherRegistered = false;
+    int m_revision = 0;
     quint64 m_notificationOwnerGeneration = 0;
     quint64 m_sniWatcherGeneration = 0;
     quint64 m_sniItemGeneration = 0;
     bool m_notificationObjectRegistered = false;
     bool m_notificationClosedMatchConnected = false;
     bool m_notificationRegisterPending = false;
-    bool m_notificationWatcherRegistered = false;
     bool m_sniWatcherRegisteredMatchConnected = false;
     bool m_sniWatcherUnregisteredMatchConnected = false;
     bool m_sniStatusMatchConnected = false;
@@ -162,8 +201,11 @@ private:
     bool m_sniAttentionIconMatchConnected = false;
     bool m_sniOverlayIconMatchConnected = false;
     bool m_sniToolTipMatchConnected = false;
+    bool m_sniIconMatchConnected = false;
+    bool m_sniIconThemePathMatchConnected = false;
+    bool m_sniFreedesktopIconMatchConnected = false;
+    bool m_sniFreedesktopIconThemePathMatchConnected = false;
     bool m_sniPropertiesChangedMatchConnected = false;
-    int m_revision = 0;
     bool m_dndActive = false;
 };
 

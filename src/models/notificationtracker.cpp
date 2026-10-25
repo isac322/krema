@@ -19,6 +19,7 @@
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDBusVariant>
 #include <QDir>
 #include <QFile>
 #include <QImage>
@@ -36,6 +37,23 @@ namespace
 constexpr auto kNotificationService = "org.freedesktop.Notifications";
 constexpr auto kSniWatcherService = "org.kde.StatusNotifierWatcher";
 constexpr auto kSniKeySeparator = QLatin1Char('|');
+constexpr auto kFerdiumService = "org.ferdium.Ferdium";
+constexpr auto kFerdiumPath = "/org/ferdium";
+constexpr auto kFerdiumInterface = "org.ferdium.Ferdium";
+constexpr auto kPropertiesInterface = "org.freedesktop.DBus.Properties";
+constexpr auto kPropertiesChangedSignal = "PropertiesChanged";
+constexpr auto kFerdiumDirectProperty = "UnreadDirectMessageCount";
+constexpr auto kFerdiumIndirectProperty = "UnreadIndirectMessageCount";
+constexpr auto kFerdiumAppId = "org.ferdium.ferdium";
+constexpr auto kFerdiumAlias = "ferdium";
+
+static QVariant unwrapDbusVariant(const QVariant &value)
+{
+    if (value.metaType() == QMetaType::fromType<QDBusVariant>()) {
+        return value.value<QDBusVariant>().variant();
+    }
+    return value;
+}
 
 static QString sniKey(const QString &service, const QString &objectPath)
 {
@@ -247,6 +265,7 @@ enum class SniChatClient : quint8 {
     WebCord,
     Mattermost,
     Telegram,
+    Ferdium,
 };
 
 static QString normalizedSniId(const QString &rawId)
@@ -267,11 +286,17 @@ static SniChatClient sniChatClientForId(const QString &rawId)
         || id == QLatin1String("com.discord.app")) {
         return SniChatClient::Discord;
     }
-    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop")) {
+    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop") || id == QLatin1String("dev.vencord")) {
         return SniChatClient::Vesktop;
+    }
+    if (id == QLatin1String("webcord") || id == QLatin1String("io.github.spacingbat3.webcord")) {
+        return SniChatClient::WebCord;
     }
     if (id == QLatin1String("mattermost") || id == QLatin1String("mattermost-desktop") || id == QLatin1String("com.mattermost") || id == QLatin1String("com.mattermost.desktop")) {
         return SniChatClient::Mattermost;
+    }
+    if (id == QLatin1String(kFerdiumAppId) || id == QLatin1String(kFerdiumAlias)) {
+        return SniChatClient::Ferdium;
     }
     if (id == QLatin1String("org.telegram") || id == QLatin1String("telegram") || id == QLatin1String("telegram-desktop")
         || id == QLatin1String("telegramdesktop")) {
@@ -284,6 +309,30 @@ static bool sniIdsMatch(const QString &left, const QString &right)
 {
     const auto leftClient = sniChatClientForId(left);
     return leftClient != SniChatClient::None && leftClient == sniChatClientForId(right);
+}
+static int ferdiumPixelState(const QImage &image)
+{
+    if (image.isNull()) {
+        return 0;
+    }
+    const int xStart = (image.width() + 1) / 2;
+    const int yEnd = (image.height() + 1) / 2;
+    int redPixels = 0;
+    int tealPixels = 0;
+    for (int y = 0; y < yEnd; ++y) {
+        for (int x = xStart; x < image.width(); ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            if (pixel.alpha() >= 180 && pixel.red() >= 200 && pixel.green() <= 90 && pixel.blue() <= 90) {
+                ++redPixels;
+            } else if (pixel.alpha() >= 100 && pixel.red() <= 35 && pixel.green() >= 70 && pixel.green() <= 120 && pixel.blue() >= 115) {
+                ++tealPixels;
+            }
+        }
+    }
+    if (redPixels >= 25) {
+        return 2;
+    }
+    return tealPixels >= 25 ? 1 : 0;
 }
 
 enum class SniPixelColor : quint8 {
@@ -445,6 +494,7 @@ NotificationTracker::NotificationTracker(QObject *parent)
     , m_notificationServiceWatcher(QStringLiteral("org.freedesktop.Notifications"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_sniWatcherServiceWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_sniServiceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
+    , m_ferdiumServiceWatcher(QString::fromLatin1(kFerdiumService), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_dndExpiryTimer(this)
 {
     // Settings — must load() explicitly (constructor doesn't auto-load)
@@ -464,6 +514,7 @@ NotificationTracker::NotificationTracker(QObject *parent)
     connect(&m_dndExpiryTimer, &QTimer::timeout, this, &NotificationTracker::updateDndState);
     setupNotificationWatcher();
     setupSniWatcher();
+    setupFerdiumWatcher();
     updateDndState();
 }
 
@@ -500,8 +551,8 @@ bool NotificationTracker::badgesEnabled(const QString &appId) const
         return !normalized.isEmpty();
     }
     const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
-    return !std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized](const QString &entry) {
-        return canonicalDesktopId(entry) == normalized;
+    return !std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &appId](const QString &entry) {
+        return canonicalDesktopId(entry) == normalized || sniIdsMatch(entry, appId);
     });
 }
 
@@ -509,6 +560,14 @@ int NotificationTracker::sniChatUnreadState(const QString &appId) const
 {
     if (!badgesEnabled(appId)) {
         return 0;
+    }
+    if (sniChatClientForId(appId) == SniChatClient::Ferdium) {
+        if (m_ferdiumDirectCount > 0) {
+            return 2;
+        }
+        if (m_ferdiumIndirectCount > 0) {
+            return 1;
+        }
     }
     const auto *entry = sniEntryForApp(appId);
     return entry ? entry->chatUnreadState : 0;
@@ -519,9 +578,13 @@ int NotificationTracker::sniChatMentionCount(const QString &appId) const
     if (!badgesEnabled(appId)) {
         return 0;
     }
+    if (sniChatClientForId(appId) == SniChatClient::Ferdium) {
+        return static_cast<int>(qMin(m_ferdiumDirectCount, static_cast<quint32>(std::numeric_limits<int>::max())));
+    }
     const auto *entry = sniEntryForApp(appId);
     return entry ? entry->chatMentionCount : 0;
 }
+
 
 void NotificationTracker::updateDndState()
 {
@@ -883,6 +946,146 @@ void NotificationTracker::NotificationClosed(uint id, uint)
     }
 }
 
+void NotificationTracker::setupFerdiumWatcher()
+{
+    auto bus = QDBusConnection::sessionBus();
+    connect(&m_ferdiumServiceWatcher,
+            &QDBusServiceWatcher::serviceOwnerChanged,
+            this,
+            &NotificationTracker::onFerdiumServiceOwnerChanged);
+
+    if (!m_ferdiumPropertiesMatchConnected) {
+        m_ferdiumPropertiesMatchConnected =
+            bus.connect(QString::fromLatin1(kFerdiumService),
+                       QString::fromLatin1(kFerdiumPath),
+                       QString::fromLatin1(kPropertiesInterface),
+                       QString::fromLatin1(kPropertiesChangedSignal),
+                       this,
+                       SLOT(onFerdiumPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
+        if (!m_ferdiumPropertiesMatchConnected) {
+            qCWarning(lcNotif) << "Failed to subscribe to Ferdium PropertiesChanged:" << bus.lastError().message();
+        }
+    }
+
+    const auto *dbusInterface = bus.interface();
+    if (dbusInterface && dbusInterface->isServiceRegistered(QString::fromLatin1(kFerdiumService))) {
+        m_ferdiumServiceOwned = true;
+        queryFerdiumCounts(m_ferdiumOwnerGeneration);
+    } else {
+        qCInfo(lcNotif) << "Ferdium service is not owned yet; waiting for service registration";
+    }
+}
+
+void NotificationTracker::setFerdiumCounts(quint32 directCount, quint32 indirectCount)
+{
+    if (m_ferdiumDirectCount == directCount && m_ferdiumIndirectCount == indirectCount) {
+        return;
+    }
+
+    m_ferdiumDirectCount = directCount;
+    m_ferdiumIndirectCount = indirectCount;
+    for (auto &entry : m_sniItems) {
+        if (sniChatClientForId(entry.id) == SniChatClient::Ferdium) {
+            updateSniChatState(entry);
+        }
+    }
+    qCInfo(lcNotif) << "Ferdium unread counts changed: direct=" << directCount << "indirect=" << indirectCount;
+    bumpRevision();
+}
+
+void NotificationTracker::queryFerdiumCounts(quint64 generation)
+{
+    if (generation != m_ferdiumOwnerGeneration || !m_ferdiumServiceOwned) {
+        return;
+    }
+    if (m_ferdiumQueryInFlight) {
+        m_ferdiumQueryPending = true;
+        return;
+    }
+
+    QDBusMessage message = QDBusMessage::createMethodCall(QString::fromLatin1(kFerdiumService),
+                                                          QString::fromLatin1(kFerdiumPath),
+                                                          QString::fromLatin1(kPropertiesInterface),
+                                                          QStringLiteral("GetAll"));
+    message << QString::fromLatin1(kFerdiumInterface);
+    m_ferdiumQueryInFlight = true;
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(message), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, generation](QDBusPendingCallWatcher *w) {
+        QDBusPendingReply<QVariantMap> reply = *w;
+        w->deleteLater();
+        if (generation != m_ferdiumOwnerGeneration) {
+            return;
+        }
+        m_ferdiumQueryInFlight = false;
+        if (!m_ferdiumServiceOwned) {
+            return;
+        }
+        if (reply.isError()) {
+            qCWarning(lcNotif) << "Ferdium count query failed:" << reply.error().message();
+        } else {
+            const QVariantMap properties = reply.value();
+            const quint32 directCount = unwrapDbusVariant(properties.value(QString::fromLatin1(kFerdiumDirectProperty))).toUInt();
+            const quint32 indirectCount = unwrapDbusVariant(properties.value(QString::fromLatin1(kFerdiumIndirectProperty))).toUInt();
+            setFerdiumCounts(directCount, indirectCount);
+        }
+        if (m_ferdiumQueryPending) {
+            m_ferdiumQueryPending = false;
+            queryFerdiumCounts(generation);
+        }
+    });
+}
+
+void NotificationTracker::onFerdiumServiceOwnerChanged(const QString &service, const QString &, const QString &newOwner)
+{
+    if (service != QString::fromLatin1(kFerdiumService)) {
+        return;
+    }
+
+    ++m_ferdiumOwnerGeneration;
+    m_ferdiumQueryInFlight = false;
+    m_ferdiumQueryPending = false;
+    m_ferdiumServiceOwned = !newOwner.isEmpty();
+    setFerdiumCounts(0, 0);
+    qCInfo(lcNotif) << "Ferdium owner changed; owned=" << m_ferdiumServiceOwned;
+    if (m_ferdiumServiceOwned) {
+        queryFerdiumCounts(m_ferdiumOwnerGeneration);
+    }
+}
+
+void NotificationTracker::onFerdiumPropertiesChanged(const QString &interfaceName,
+                                                      const QVariantMap &changedProperties,
+                                                      const QStringList &invalidatedProperties,
+                                                      const QDBusMessage &message)
+{
+    if (interfaceName != QString::fromLatin1(kFerdiumInterface) || message.path() != QString::fromLatin1(kFerdiumPath)) {
+        return;
+    }
+    bool changed = false;
+    quint32 directCount = m_ferdiumDirectCount;
+    quint32 indirectCount = m_ferdiumIndirectCount;
+    const QString directProperty = QString::fromLatin1(kFerdiumDirectProperty);
+    const QString indirectProperty = QString::fromLatin1(kFerdiumIndirectProperty);
+    if (changedProperties.contains(directProperty)) {
+        directCount = unwrapDbusVariant(changedProperties.value(directProperty)).toUInt();
+        changed = true;
+    }
+    if (changedProperties.contains(indirectProperty)) {
+        indirectCount = unwrapDbusVariant(changedProperties.value(indirectProperty)).toUInt();
+        changed = true;
+    }
+    const bool invalidated = invalidatedProperties.contains(directProperty)
+        || invalidatedProperties.contains(indirectProperty);
+    if (!changed && !invalidated) {
+        return;
+    }
+    if (changed) {
+        setFerdiumCounts(directCount, indirectCount);
+    }
+    if (invalidated) {
+        queryFerdiumCounts(m_ferdiumOwnerGeneration);
+    }
+}
+
 // --- SNI watcher ---
 
 void NotificationTracker::setupSniWatcher()
@@ -1069,6 +1272,19 @@ void NotificationTracker::updateSniChatState(SniEntry &entry)
     if (isSlack) {
         entry.chatUnreadState = slackPixelState(entry.iconImage);
         entry.chatMentionCount = slackMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);
+        return;
+    }
+    if (chatClient == SniChatClient::Ferdium) {
+        if (m_ferdiumDirectCount > 0) {
+            entry.chatUnreadState = 2;
+            entry.chatMentionCount = static_cast<int>(qMin(m_ferdiumDirectCount, static_cast<quint32>(std::numeric_limits<int>::max())));
+        } else if (m_ferdiumIndirectCount > 0) {
+            entry.chatUnreadState = 1;
+            entry.chatMentionCount = 0;
+        } else {
+            entry.chatUnreadState = ferdiumPixelState(entry.iconImage);
+            entry.chatMentionCount = 0;
+        }
         return;
     }
     if (chatClient == SniChatClient::Telegram) {

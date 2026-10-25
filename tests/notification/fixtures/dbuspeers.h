@@ -180,6 +180,38 @@ private:
     QVariant m_toolTip = QVariant::fromValue(ToolTipData{});
     bool m_serviceRegistered = false;
     bool m_objectRegistered = false;
+};
+
+class FerdiumPeer : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.ferdium.Ferdium")
+    Q_PROPERTY(uint UnreadDirectMessageCount READ unreadDirectMessageCount WRITE setUnreadDirectMessageCount NOTIFY unreadDirectMessageCountChanged)
+    Q_PROPERTY(uint UnreadIndirectMessageCount READ unreadIndirectMessageCount WRITE setUnreadIndirectMessageCount NOTIFY unreadIndirectMessageCountChanged)
+
+public:
+    explicit FerdiumPeer(const QDBusConnection &bus = QDBusConnection::sessionBus(), QObject *parent = nullptr);
+    ~FerdiumPeer() override;
+
+    bool start(bool replaceExisting = false);
+    void stop();
+    bool isRegistered() const;
+    uint unreadDirectMessageCount() const;
+    uint unreadIndirectMessageCount() const;
+    void setUnreadDirectMessageCount(uint count);
+    void setUnreadIndirectMessageCount(uint count);
+
+Q_SIGNALS:
+    void unreadDirectMessageCountChanged();
+    void unreadIndirectMessageCountChanged();
+
+private:
+    QDBusConnection m_bus;
+    uint m_unreadDirectMessageCount = 0;
+    uint m_unreadIndirectMessageCount = 0;
+    bool m_serviceRegistered = false;
+    bool m_objectRegistered = false;
+};
 
 } // namespace krema::test
 

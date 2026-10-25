@@ -113,6 +113,11 @@ private Q_SLOTS:
                                 const QDBusMessage &message);
     void onSniServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
     void onSniWatcherServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
+    void onFerdiumServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
+    void onFerdiumPropertiesChanged(const QString &interfaceName,
+                                    const QVariantMap &changedProperties,
+                                    const QStringList &invalidatedProperties,
+                                    const QDBusMessage &message);
 
 private:
     struct SniEntry;
@@ -120,9 +125,14 @@ private:
     void connectNotificationClosedMatch();
     void setupNotificationWatcher();
     void setupSniWatcher();
+    void setupFerdiumWatcher();
     void bumpRevision();
     bool removeActiveNotification(uint id);
     void updateDndState();
+    void queryRegisteredSniItems();
+    void trackSniItem(const QString &service, const QString &objectPath);
+    void queryFerdiumCounts(quint64 generation);
+    void setFerdiumCounts(quint32 directCount, quint32 indirectCount);
     void queryAllSniProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath);
     void querySniProperty(const QString &key,
                           quint64 generation,
@@ -142,9 +152,11 @@ private:
     void ensureSniMetadataQueried(const QString &key, SniEntry &entry);
     void clearSniItems();
     [[nodiscard]] const SniEntry *sniEntryForApp(const QString &appId) const;
+    [[nodiscard]] QString sniKeyForMessage(const QDBusMessage &message) const;
 
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
+
 
     // Active notification ID -> canonical desktop entry (for reverse lookup).
     QHash<uint, QString> m_notifIdToEntry;
@@ -173,6 +185,7 @@ private:
         QImage iconQueryPreviousImage;
         int iconQueryPreviousChatState = 0;
         int iconQueryPreviousMentionCount = 0;
+        bool initialQueryFailed = false;
         quint64 generation = 0;
     };
     QHash<QString, SniEntry> m_sniItems;
@@ -180,8 +193,18 @@ private:
     QDBusServiceWatcher m_notificationServiceWatcher;
     QDBusServiceWatcher m_sniWatcherServiceWatcher;
     QDBusServiceWatcher m_sniServiceWatcher;
+    QDBusServiceWatcher m_ferdiumServiceWatcher;
     QTimer m_dndExpiryTimer;
     bool m_sniIconRefreshQueued = false;
+    quint64 m_ferdiumOwnerGeneration = 0;
+    quint32 m_ferdiumDirectCount = 0;
+    quint32 m_ferdiumIndirectCount = 0;
+    bool m_ferdiumServiceOwned = false;
+    bool m_ferdiumPropertiesMatchConnected = false;
+    bool m_ferdiumQueryInFlight = false;
+    bool m_ferdiumQueryPending = false;
+    bool m_notificationWatcherRegistered = false;
+    int m_revision = 0;
     quint64 m_notificationOwnerGeneration = 0;
     quint64 m_sniWatcherGeneration = 0;
     quint64 m_sniItemGeneration = 0;

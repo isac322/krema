@@ -74,6 +74,23 @@ Item {
             }, roles || {}))
         }
 
+        function mattermostApps() {
+            return [
+                { tag: "mattermost", appId: "mattermost" },
+                { tag: "mattermost-desktop", appId: "mattermost-desktop" },
+                { tag: "com.mattermost.desktop", appId: "com.mattermost.desktop" },
+            ]
+        }
+
+        function makeMattermostItem(app) {
+            return makeItem({
+                display: "Mattermost",
+                AppId: app.appId,
+                LauncherUrlWithoutIcon: "applications:" + app.appId + ".desktop",
+                IsWindow: true
+            })
+        }
+
         function dockEdges() {
             return [
                 { tag: "top", edge: 0 },
@@ -821,6 +838,131 @@ Item {
             compare(T.badge(item).isDot, true)
             compare(T.badgeLabel(item).visible, false)
             verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+        }
+
+        // --- Mattermost SNI chat presentation ---
+
+        function test_mattermostSniTransitions_data() {
+            let rows = []
+            for (let app of mattermostApps()) {
+                for (let count of [0, 3])
+                    rows.push({ tag: app.tag + "-mentions-" + count,
+                                appId: app.appId, count: count })
+            }
+            return rows
+        }
+
+        function test_mattermostSniTransitions(data) {
+            let item = makeMattermostItem(data)
+            compare(item._chatUnreadState, 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            compare(item.accessibleDescription, "")
+
+            NotificationTracker.setSniChat(data.appId, 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            compare(T.badgeLabel(item).visible, false)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
+            verify(item.accessibleDescription.indexOf("Unread messages") >= 0)
+
+            NotificationTracker.setSniChat(data.appId, 2, data.count)
+            tryCompare(item, "_chatUnreadState", 2)
+            compare(item._chatMentionCount, data.count)
+            compare(item._badgeCount, data.count)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, data.count === 0)
+            compare(T.badgeLabel(item).visible, data.count > 0)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            if (data.count > 0) {
+                compare(T.badgeLabel(item).text, data.count.toString())
+                let expectedText = Kirigami.ColorUtils.brightnessForColor(T.badge(item).color) === Kirigami.ColorUtils.Light
+                    ? "#000000" : "#ffffff"
+                verify(Qt.colorEqual(T.badgeLabel(item).color, expectedText))
+                verify(item.accessibleDescription.indexOf("3 notifications") >= 0)
+            } else {
+                verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+            }
+            verify(item.accessibleDescription.indexOf("Unread messages") < 0)
+
+            NotificationTracker.setSniChat(data.appId, 0, 0)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            compare(item.accessibleDescription, "")
+        }
+
+        function test_mattermostUnityCountTakesPrecedence_data() {
+            return mattermostApps()
+        }
+
+        function test_mattermostUnityCountTakesPrecedence(data) {
+            let item = makeMattermostItem(data)
+            NotificationTracker.setUnread(data.appId, 9)
+            NotificationTracker.setSniChat(data.appId, 2, 3)
+            tryCompare(item, "_badgeCount", 3)
+            let url = "applications:" + data.appId + ".desktop"
+            LauncherEntryTracker.setEntry(url, { count: 7, countVisible: true })
+            tryCompare(item, "_badgeCount", 7)
+            compare(T.badgeLabel(item).text, "7")
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            verify(item.accessibleDescription.indexOf("7 notifications") >= 0)
+
+            LauncherEntryTracker.setEntry(url, { count: 0, countVisible: true })
+            tryCompare(item, "_badgeCount", 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            compare(T.badgeLabel(item).visible, false)
+            verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+
+            LauncherEntryTracker.setEntry(url, { countVisible: false })
+            tryCompare(item, "_badgeCount", 3)
+            compare(T.badgeLabel(item).text, "3")
+            NotificationTracker.setSniChat(data.appId, 0, 0)
+            tryCompare(item, "_badgeCount", 9)
+            compare(T.badgeLabel(item).text, "9")
+        }
+
+        function test_mattermostBadgeSettingsGateSni_data() {
+            let rows = []
+            for (let app of mattermostApps()) {
+                for (let global of [false, true])
+                    rows.push({ tag: app.tag + (global ? "-global" : "-application"),
+                                appId: app.appId, global: global })
+            }
+            return rows
+        }
+
+        function test_mattermostBadgeSettingsGateSni(data) {
+            let item = makeMattermostItem(data)
+            let setEnabled = enabled => {
+                if (data.global)
+                    NotificationTracker.setBadgesEnabled(enabled)
+                else
+                    NotificationTracker.setBadgesEnabledForApp(data.appId, enabled)
+            }
+            NotificationTracker.setSniChat(data.appId, 2, 3)
+            NotificationTracker.setUnread(data.appId, 9)
+            tryCompare(item, "_badgeCount", 3)
+            setEnabled(false)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            compare(item.accessibleDescription, "")
+            setEnabled(true)
+            tryCompare(item, "_badgeCount", 3)
+            setEnabled(false)
+            LauncherEntryTracker.setEntry("applications:" + data.appId + ".desktop", {
+                count: 7, countVisible: true
+            })
+            tryCompare(item, "_badgeCount", 7)
+            verify(T.badge(item).visible)
         }
 
         function test_noBadgeWithoutNotifications() {

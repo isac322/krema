@@ -32,7 +32,7 @@ The following settings are part of the current unreleased development work and a
 
 - **Reserve screen space** — The Behavior switch is enabled by default and applies to **Always visible** mode. When enabled, maximized windows avoid the dock; Auto hide and Dodge windows keep their existing platform behavior. The switch is saved for the next start and can be changed while the dock is running.
 - **Separate pinned and running apps** — The Behavior switch is disabled by default. When enabled, pinned apps, including pinned apps that are running, stay in the first section; unpinned running apps follow after the divider. Dragging across that boundary stays within the source section and does not pin or unpin an app. With the switch off, dock items keep the existing free-reorder behavior.
-- **Chat notification states** — Slack Desktop distinguishes unread messages with a blue dot from mentions with a red badge. A reported mention count appears in Number mode; Unity launcher counts keep priority. Plasma's global and per-app badge settings apply to these chat states.
+- **Chat notification states** — Slack Desktop distinguishes unread messages with a blue dot from mentions with a red badge. Telegram Desktop reads tray badge states and falls back to window-title counts. A reported count appears in Number mode; Unity launcher counts keep priority. Plasma's global and per-app badge settings apply to these chat states.
 
 These entries describe unreleased behavior; they are not claims about the latest published release.
 
@@ -87,6 +87,7 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Notification Badges** — Badge count on dock icons via D-Bus and SmartLauncher Unity API
 - **Discord-family chat badges** — Discord and Vesktop recognize `• Discord` unread and `(N) Discord` mention titles; WebCord recognizes `*WebCord` unread and `[N] WebCord` mention titles. Their tray icons add unread or mention states, while Unity Launcher counts remain authoritative.
 - **Mattermost Desktop badges** — Recognizes `mattermost`, `mattermost-desktop`, and `com.mattermost.desktop`; detects Mention and Unread from lower-right tray-icon pixels or tooltip text, with Mention taking precedence
+- **Telegram Desktop badges (unreleased)** — Supports `org.telegram.desktop`, `telegram`, `telegram-desktop`, and `telegramdesktop`; reads theme icon names or composited tray badges, with window-title counts as a fallback
 - **Badge Display Modes** — Choose between Number, Dot, or Off
 - **6 Attention Animations** — Bounce, Wiggle, Pulse, Glow, Dot Color, and Blink
 - **Task Progress Bar** — Progress indicator on dock icons (e.g. file copy in Dolphin)

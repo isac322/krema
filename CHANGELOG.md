@@ -10,9 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Added live SNI metadata for dock items: attention and overlay icon names are shown from the app's StatusNotifierItem, and SNI tooltip title/subtitle text is exposed to accessibility while canonical identity matching and generation checks prevent stale tray data.
-- Added app-scoped unread notification cards to the window preview popup. Windowed and launcher-only apps can show compact summaries, bodies, local Mark read/Dismiss controls, and notification actions without changing the full Settings inbox.
 - Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
-- Added a QML-facing notification model backed by the existing KDE watcher. It exposes notification metadata, actions, urgency, timeout, replacement and close lifecycle, local read/dismiss state, active-only and per-app queries, and official KDE action invocation. The UI labels read and dismissed state as local to Krema; it does not claim to synchronize an application's server-side read cursor.
 - Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Auto-hide and dodge panels were ignored. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
 - Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges could use the system accent color or a custom color with automatic text contrast (#103)
 - Added a persistent attention-only dot to dock badges for live SNI, Unity urgent, and task-manager attention states with no numeric count; Badge display: Off hides numeric badges while keeping the live attention marker visible.
@@ -21,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
-- Bounded retained inactive notification history to 100 records while preserving active notifications and their unread counts.
 
 ### Fixed
 
@@ -29,8 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
-- Notification badges now react immediately when notifications are cleared locally, use canonical case-insensitive desktop identities without fuzzy last-segment matching, and retain watcher metadata and close reasons while distinguishing directed closes from broadcast reasons
-- Local notification clearing now removes only the dock's unread contribution while keeping the server-active lifecycle until KDE reports a close.
 - Notification tracking reconnected after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.
 - Long Do Not Disturb periods kept a valid expiry timer on older Qt versions and ended only when their configured deadline passed.
 - Prevented transient duplicate panel reservations while a panel-relative dock probe is reconfigured or remapped across edges; real probe teardown now hands the exclusive zone back to the dock exactly once (#135)

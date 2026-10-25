@@ -251,7 +251,6 @@ are transport/coverage evidence only and are not Krema notification inputs.
 | Timed DND long-deadline arming and real deadline rewrite | Tier 2 (Qt/KWin integration) | `tests/integration/test_notification_tracker.cpp` — timed DND boundary, early timeout re-arm, and short-deadline rewrite coverage | The tracker safely arms a 30-day `Until` without waiting 30 days; an unchanged-clock early timeout recomputes the real deadline and remains active, then a real config rewrite to a short `Until` expires on wall-clock time |
 | Notification service atomic owner handover | Tier 3 (real Appium/KWin video) | `tests/appium/record_notifications.py` — replacement notification server capture | A non-empty old and new `org.freedesktop.Notifications` owner transition is observed; the replacement server receives one watcher registration and a real notification reaches the dock after handover |
 | Recorder acquisition and teardown failure containment | Tier 3 (opt-in real-capture regression) | `tests/appium/notification_cleanup_probe.py`, loaded explicitly with `-p`; see `tests/appium/README.md` | Real SNI setup rejection, missing-writer, malformed-snapshot, kded-wait timeout, original-scenario, and artifact-write failures must verify acquired-resource release, independent teardown, honest failed metadata, and exact original exception preservation. A failed snapshot read must leave no receiver that records later probe signals, whose delivery is independently confirmed. After a kded-wait timeout the recorder itself must KILL and reap its child (`kded-kill`/`kded-reap` stages on failure, source-reviewed only); probe-only cleanup after the saved verdict is recorded separately and never justifies a pass. Baseline-source comparisons stay outside the repository |
-| Settings inbox cleanup failure containment | Tier 3 (opt-in real-session regression) | `tests/appium/notification_inbox_cleanup_probe.py`, loaded explicitly with `-p`; see `tests/appium/README.md` | A rejected Settings cleanup lookup must not skip SIGTERM shutdown of the test-owned notification server or replace an earlier scenario exception; if the scenario passed, the first cleanup error is raised |
 | SNI attention clears watcher unread state | Tier 2 (KWin/private D-Bus integration) | `tests/integration/test_notification_tracker.cpp` — `SNI registration, status transitions, re-registration and owner loss are observable` | Real SNI `NeedsAttention -> Active/Passive` clears only the matching canonical app's watcher unread count and changes revision; re-entering `NeedsAttention` keeps the boolean attention state without recreating a numeric badge |
 | Context-menu Clear Notifications | Tier 2 (KWin/native QMenu integration) | `tests/integration/test_launcher_entry.cpp` — `Context menu clears only watcher unread notifications` | The real `QMenu` contains `Clear Notifications` iff the selected app has watcher unread; triggering it clears only that app's watcher count and leaves another app plus a visible Unity count unchanged |
 
@@ -275,93 +274,3 @@ session bus. The helper writes a typed `QDateTime` through KConfig with
 drains the framework's queued notification without manual `ConfigChanged`
 signals, retries, or a fallback writer. Missing helpers and failed writes or
 bus barriers fail the recording.
-
-## Stage 2 QML model surface
-
-Stage 2 adds QML-facing assertions to the wire-level catalog. It consumes the
-same watcher payload that the v1 `RegisterWatcher` path records; it does not
-replace v1 protocol scenarios or JSONL evidence.
-
-The `NotificationTracker` model exposes these roles:
-
-- `id`, `desktopEntry`, `appName`, `appIcon`, `summary`, and `body`;
-- `actions`, `hints`, `timeout`, `replacesId`, and `urgency`;
-- `active`, `read`, `dismissed`, `closeReason`, and `broadcastReason`; and
-- `createdAt` and `updatedAt`.
-
-The QML invokables are:
-
-```qml
-NotificationTracker.notifications("")
-NotificationTracker.notifications("", true)
-NotificationTracker.markRead(id)
-NotificationTracker.markDismissed(id)
-NotificationTracker.invokeAction(id, action)
-```
-
-`invokeAction()` sends the official KDE
-`org.kde.NotificationManager.InvokeAction` method with the notification ID and
-action key. `markRead()`, `markDismissed()`, and `clearUnreadNotifications()`
-update Krema's local desktop-notification state only. They do not write a Slack,
-Telegram, Discord, email, or other application-server read cursor.
-
-The QML presentation uses these labels and distinctions:
-
-- heading `Notifications`, or `Notifications for <app>` when filtered;
-- summary, body, app, urgency, and timeout on each card;
-- state labels `Unread`, `Read`, `Dismissed`, and `Closed`;
-- payload action buttons, plus `Mark read` and `Dismiss`; and
-- `Read and dismissed state is local to Krema; it is not synchronized with the app's server.`
-
-`markRead(id)`, `markDismissed(id)`, and `clearUnreadNotifications(appId)` do not
-close the server notification. A locally read or dismissed row remains active
-until a directed `CloseNotification` or a broadcast `NotificationClosed` is
-observed. The Stage 2 catalog uses `krema-notification-model` for model-only
-scenarios; those assertions are made in the Krema QML surface or
-`tst_notification_inbox`, not as fabricated wire events.
-
-## Stage 2 QA procedure
-
-The existing QA app remains the wire-level sender:
-
-```sh
-python3 tools/notification-debugger.py
-```
-
-Stage 2 scenarios use the **Notifications** tab and the existing `targetBar`,
-`Summary`, `Body`, `Replaces ID`, `Timeout`, `Urgency`,
-`Actions (key=label per line)`, `Send Notification`, `Close ID`,
-`CloseNotification`, and `Received Notifications` controls. Use the model
-surface or the `tst_notification_inbox` QML harness for model assertions.
-
-For each run:
-
-1. Select a Stage 2 scenario and put its `correlation` marker in the summary
-   or body.
-2. Send the notification through the QA app and record its numeric server ID.
-3. Confirm the wire-level send and observation independently from the QML row.
-4. Query `notifications()` or `notifications("", true)` and assert the roles
-   and lifecycle transition listed by the scenario.
-5. Invoke `markRead`, `markDismissed`, or `invokeAction` only through the
-   documented model API.
-6. Press **Reset All**, close remaining server IDs, and retain the JSONL plus
-   model screenshot or QML assertion output.
-
-For action coverage, retain a D-Bus trace proving the destination
-`org.freedesktop.Notifications`, interface `org.kde.NotificationManager`, and
-method `InvokeAction`. A method call alone does not prove that the originating
-application handled the action. For replacement, retain both old and new IDs.
-For close-reason coverage, retain directed and broadcast
-`NotificationClosed` results separately. For read-boundary coverage, record
-that the operation changed only Krema's local model state.
-
-## Stage 2 limitations
-
-- `RegisterWatcher` receives only notifications sent after Krema registers.
-- The originating application may not expose an action or may not emit an
-  observable `ActionInvoked` callback; record that as an environment limitation.
-- A local `read` or `dismissed` value is not an application inbox read receipt.
-- Application-server read acknowledgement is outside this model and is not
-  expected evidence.
-- Portal, Unity, SNI, Jobs, DND, and inbox-simulation coverage remains in the
-  v1 wire scenarios and must not be substituted for model evidence.

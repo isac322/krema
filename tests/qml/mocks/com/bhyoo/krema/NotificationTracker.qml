@@ -17,8 +17,6 @@ QtObject {
     property var sniMetadata: ({})
     function unreadCount(appId) { return unread[appId] || 0 }
     function sniNeedsAttention(appId) { return !!sni[appId] }
-    // Stage 2 notification records mirror NotificationTracker.notifications().
-    property var notificationRows: []
     function _sniValue(appId, key) {
         let metadata = sniMetadata[appId]
         return metadata ? (metadata[key] || "") : ""
@@ -28,45 +26,6 @@ QtObject {
     function sniOverlayIconName(appId) { return _sniValue(appId, "overlayIconName") }
     function sniToolTipTitle(appId) { return _sniValue(appId, "toolTipTitle") }
     function sniToolTipSubTitle(appId) { return _sniValue(appId, "toolTipSubTitle") }
-    function notifications(appId, activeOnly) {
-        let rows = notificationRows
-        if (appId) rows = rows.filter(r => r.desktopEntry === appId)
-        if (activeOnly) rows = rows.filter(r => !!r.active)
-        return rows
-    }
-    function _syncUnreadFromRows() {
-        let counts = ({})
-        for (let row of notificationRows) {
-            if (!row.active || row.read || row.dismissed || !row.desktopEntry)
-                continue
-            counts[row.desktopEntry] = (counts[row.desktopEntry] || 0) + 1
-        }
-        unread = counts
-    }
-    function _replaceNotification(id, changes) {
-        let rows = notificationRows.slice()
-        for (let i = 0; i < rows.length; ++i) {
-            if (Number(rows[i].id) === Number(id)) {
-                rows[i] = Object.assign({}, rows[i], changes)
-                notificationRows = rows
-                _syncUnreadFromRows()
-                revision++
-                return
-            }
-        }
-    }
-    function markRead(id) {
-        _record("markRead", arguments)
-        _replaceNotification(id, { read: true })
-    }
-    function markDismissed(id) {
-        _record("markDismissed", arguments)
-        _replaceNotification(id, { dismissed: true })
-    }
-    function invokeAction(id, action) {
-        _record("invokeAction", arguments)
-    }
-    function setNotifications(rows) { notificationRows = rows; _syncUnreadFromRows(); revision++ }
     function clearUnreadNotifications(appId) {
         _record("clearUnreadNotifications", arguments)
         if (!Object.prototype.hasOwnProperty.call(unread, appId) || unread[appId] <= 0) return
@@ -83,7 +42,7 @@ QtObject {
 
     // Restores every property listed in _resettable to its declared value.
     readonly property var _resettable: ["calls", "dndActive", "unread", "sni",
-        "sniMetadata", "notificationRows"]
+        "sniMetadata"]
     property var _defaults: ({})
     Component.onCompleted: {
         for (const k of _resettable) _defaults[k] = this[k]

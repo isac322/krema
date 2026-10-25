@@ -3,7 +3,7 @@
 """Drive the real notification lifecycle while an external recorder runs.
 
 This file is deliberately outside ``test_*.py``.  It reuses the notification
-stimulus/server and inbox helpers from ``test_12_notifications`` but keeps the
+stimulus/server helpers from ``test_12_notifications`` but keeps the
 visual-evidence flow separate from the permanent functional test.
 
 The evidence runner is intentionally restricted to the existing X11
@@ -31,18 +31,8 @@ from gi.repository import GLib
 import pytest
 
 from krema_e2e import env, input as inp, kwin
-from krema_e2e.krema import Krema, context_menu_entries, has_state
 from krema_e2e.waits import wait_until
 from krema_e2e.windows import TestWindows
-from test_06_settings import SIDEBAR
-from test_12_notifications import (
-    STIMULUS,
-    _card_xpath,
-    _close,
-    _notify,
-    _stop_server,
-    _visible_state,
-)
 
 CONFIG_WRITER = Path("/build/bin/krema_notification_config_writer")
 
@@ -236,82 +226,10 @@ def _set_dnd_until(krema: Krema, until: datetime | None) -> None:
         receiver.remove()
 
 
-def _open_settings(krema: Krema) -> None:
-    entries = context_menu_entries(pinned=False, is_window=True, has_notifications=True)
-    before_windows = {window.internal_id for window in krema.windows()}
-    _click(krema, krema.settled_item_center("Alpha"), button="right")
-    menu = wait_until(
-        lambda: next(
-            (
-                window
-                for window in krema.windows()
-                if window.internal_id not in before_windows and not window.normal_window
-            ),
-            None,
-        ),
-        message="native dock context menu mapped",
-    )
-    location = subprocess.check_output(["xdotool", "getmouselocation", "--shell"], text=True)
-    coordinates = dict(line.split("=", 1) for line in location.splitlines())
-    host_window = coordinates["WINDOW"]
-    subprocess.run(["xdotool", "windowfocus", "--sync", host_window], check=True)
-    focus = subprocess.check_output(["xdotool", "getwindowfocus"], text=True).strip()
-    title_before = subprocess.check_output(["xdotool", "getwindowname", host_window], text=True).strip()
-    if "to grab input" in title_before.lower():
-        subprocess.run(["xdotool", "key", "Control_R"], check=True)
-    title_after = wait_until(
-        lambda: (
-            title
-            if "ungrab" in (title := subprocess.check_output(["xdotool", "getwindowname", host_window], text=True).strip()).lower()
-            else None
-        ),
-        message="nested KWin window to report grabbed input",
-    )
-    env.artifact_path("visual-evidence/notifications/x11-focus.json").write_text(
-        json.dumps(
-            {
-                "pointer_window": host_window,
-                "focused_window": focus,
-                "title_before_grab": title_before,
-                "title_after_grab": title_after,
-                "menu_window": menu.internal_id,
-                "menu_geometry": menu.geometry,
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    for _ in range(entries.index("Settings...") + 1):
-        subprocess.run(["xdotool", "key", "--clearmodifiers", "Down"], check=True)
-        time.sleep(0.08)
-    subprocess.run(["xdotool", "key", "--clearmodifiers", "Return"], check=True)
-    wait_until(
-        lambda: next(
-            (
-                window
-                for window in krema.windows()
-                if window.normal_window and not window.skip_taskbar and window.title.startswith("Settings")
-            ),
-            None,
-        ),
-        message="Settings window",
-    )
-
-
-def _open_notifications_page(krema: Krema) -> None:
-    page = krema.wait_for(f"{SIDEBAR}[@name='Notifications']")
-    if not has_state(page, "checked"):
-        _click(krema, krema.screen_rect(page, "settings").center)
-    wait_until(
-        lambda: any(has_state(item, "checked") for item in krema.find_all(f"{SIDEBAR}[@name='Notifications']")),
-        message="Notifications page selected",
-    )
-
 
 @pytest.mark.kremarc({"PinnedLaunchers": [], "AttentionAnimation": 1, "AttentionAnimationDuration": 10})
 def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -> None:
-    """Record badge 2→1→0, reconnect, and local inbox read/dismiss states."""
+    """Record badge 2→1→0, reconnect, owner handover, SNI, and DND state."""
     if os.environ.get("KREMA_RECORD_EXTERNAL") != "1":
         pytest.fail("This recorder requires external X11 capture with -draw_mouse 1")
     evidence = env.artifact_path("visual-evidence/notifications")
@@ -450,35 +368,8 @@ def test_record_notifications(krema: Krema, apps: TestWindows, tmp_path: Path) -
         time.sleep(2.0)
         sni.set_status("Active")
         _set_dnd_until(krema, None)
-
-        read_id = _notify(token, "read")
-        dismiss_id = _notify(token, "dismiss")
-        tracked.extend((read_id, dismiss_id))
-        read_summary = f"{token}-read"
-        dismiss_summary = f"{token}-dismiss"
-        _open_settings(krema)
-        _open_notifications_page(krema)
-        read_card = _card_xpath(read_summary)
-        dismiss_card = _card_xpath(dismiss_summary)
-        wait_until(
-            lambda: _visible_state(krema, read_card, "Unread") and _visible_state(krema, dismiss_card, "Unread"),
-            message="inbox cards unread",
-        )
-        mark("inbox-unread")
-        time.sleep(2.0)
-
-        read_button = krema.wait_for(f"{read_card}//button[@name='Mark read']")
-        _click(krema, krema.screen_rect(read_button, "settings").center)
-        wait_until(lambda: _visible_state(krema, read_card, "Read"), message="inbox card read")
-        mark("inbox-read")
-        time.sleep(2.0)
-
-        dismiss_button = krema.wait_for(f"{dismiss_card}//button[@name='Dismiss']")
-        _click(krema, krema.screen_rect(dismiss_button, "settings").center)
-        wait_until(lambda: _visible_state(krema, dismiss_card, "Dismissed"), message="inbox card dismissed")
-        mark("inbox-dismissed")
-        time.sleep(2.0)
         scenario_completed = True
+
     finally:
         scenario_error = sys.exc_info()[1]
         cleanup_errors: list[dict[str, str]] = []

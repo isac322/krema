@@ -103,7 +103,7 @@ Item {
         return _appId.length > 0 ? NotificationTracker.sniToolTipSubTitle(_appId) : ""
     }
 
-    // === Inbox (persistent badge) ===
+    // === Persistent notification badge ===
     // Sources: LauncherEntry count (1st, app-managed), fd.o watcher unreadCount (2nd, dock-managed)
     // Clear: focus → fd.o auto-clear, context menu → manual clear, SNI→Active → fd.o clear
     // Unified badge count (priority: LauncherEntry > WatchedNotifications)
@@ -153,10 +153,10 @@ Item {
     // → _triggerAttention() → auto-stops after attentionAnimationDuration. Suppressed by DND.
     //
     // API support matrix:
-    //   fd.o RegisterWatcher: notification(badge↑→animation) + inbox(badge count) + clear(focus/menu/SNI)
+    //   fd.o RegisterWatcher: notification(badge↑→animation) + badge count + clear(focus/menu/SNI)
     //   Portal: transparent (routed to fd.o)
     //   SNI: notification(NeedsAttention→animation) + clear(→Active clears fd.o)
-    //   LauncherEntry: inbox(count→badge, app-managed) + notification(urgent→animation) + progress bar
+    //   LauncherEntry: count→badge (app-managed) + notification(urgent→animation) + progress bar
     //   Window: notification(IsDemandingAttention→animation)
     //   DND: suppresses notification animation (badge persists)
     // Attention condition (Plasma-compatible: IsDemandingAttention OR LauncherEntry urgent OR SNI NeedsAttention)

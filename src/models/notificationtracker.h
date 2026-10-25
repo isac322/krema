@@ -3,18 +3,14 @@
 
 #pragma once
 
-#include <QAbstractListModel>
-#include <QDateTime>
 #include <QDBusMessage>
 #include <QDBusServiceWatcher>
-#include <QMap>
+#include <QDateTime>
 #include <QHash>
-#include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QStringList>
-#include <QVariantList>
 #include <QVariantMap>
-#include <QVector>
 
 #include <memory>
 
@@ -38,7 +34,7 @@ namespace krema
  * reactive dependency: QML bindings that read `revision` are re-evaluated
  * whenever notification state changes.
  */
-class NotificationTracker : public QAbstractListModel
+class NotificationTracker : public QObject
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.kde.NotificationWatcher")
@@ -47,49 +43,11 @@ class NotificationTracker : public QAbstractListModel
     Q_PROPERTY(bool dndActive READ dndActive NOTIFY dndActiveChanged)
 
 public:
-    enum NotificationRole {
-        IdRole = Qt::UserRole + 1,
-        DesktopEntryRole,
-        AppNameRole,
-        AppIconRole,
-        SummaryRole,
-        BodyRole,
-        ActionsRole,
-        HintsRole,
-        TimeoutRole,
-        ReplacesIdRole,
-        UrgencyRole,
-        ActiveRole,
-        ReadRole,
-        DismissedRole,
-        CloseReasonRole,
-        BroadcastReasonRole,
-        CreatedAtRole,
-        UpdatedAtRole,
-    };
-    Q_ENUM(NotificationRole)
-
     explicit NotificationTracker(QObject *parent = nullptr);
     ~NotificationTracker() override;
 
-    [[nodiscard]] int rowCount(const QModelIndex &parent = {}) const override;
-    [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
-
     [[nodiscard]] int revision() const;
     [[nodiscard]] bool dndActive() const;
-
-    /// Return a snapshot of retained notifications, optionally filtered by app and active state.
-    [[nodiscard]] Q_INVOKABLE QVariantList notifications(const QString &desktopEntry = {}, bool activeOnly = false) const;
-
-    /// Mark a notification read locally; this does not update the originating application.
-    [[nodiscard]] Q_INVOKABLE bool markRead(uint id);
-
-    /// Mark a notification dismissed locally; this does not close it at the server.
-    [[nodiscard]] Q_INVOKABLE bool markDismissed(uint id);
-
-    /// Invoke an action through KDE's notification manager.
-    [[nodiscard]] Q_INVOKABLE bool invokeAction(uint id, const QString &action);
 
     /// Return the number of unread notifications for the given desktop entry (e.g. "slack").
     [[nodiscard]] Q_INVOKABLE int unreadCount(const QString &desktopEntry) const;
@@ -147,17 +105,12 @@ private Q_SLOTS:
 
 private:
     struct SniEntry;
-    struct NotificationRecord;
     void registerNotificationWatcher();
     void connectNotificationClosedMatch();
     void setupNotificationWatcher();
     void setupSniWatcher();
     void bumpRevision();
-    void pruneInactiveNotificationRecords();
-    void markNotificationInactive(uint id);
-    void removeInactiveNotification(uint id);
-    void resetNotificationModel();
-    QVariantMap notificationMap(const NotificationRecord &record) const;
+    bool removeActiveNotification(uint id);
     void updateDndState();
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
@@ -171,47 +124,10 @@ private:
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
 
-    enum class CloseReason : quint8 {
-        Active,
-        Replaced,
-        Directed,
-        BroadcastExpired,
-        BroadcastDismissed,
-        BroadcastClosedByCall,
-        BroadcastUndefined,
-    };
-
-    // Retain the full watcher payload and lifecycle for each server ID. Closed
-    // records remain available internally until the server reuses their ID.
-    struct NotificationRecord {
-        uint serverId = 0;
-        QString desktopEntry;
-        QString appName;
-        QString appIcon;
-        QString summary;
-        QString body;
-        QStringList actions;
-        QVariantMap hints;
-        int timeout = 0;
-        uint replacesId = 0;
-        quint8 urgency = 0;
-        QDateTime createdAt;
-        QDateTime updatedAt;
-        CloseReason closeReason = CloseReason::Active;
-        uint broadcastReason = 0;
-        bool read = false;
-        bool dismissed = false;
-    };
-
-    QVector<uint> m_modelIds;
-
     // Active notification ID -> canonical desktop entry (for reverse lookup).
     QHash<uint, QString> m_notifIdToEntry;
     // Canonical desktop entry -> set of active notification IDs.
     QHash<QString, QSet<uint>> m_unreadNotifs;
-    QHash<uint, NotificationRecord> m_notificationRecords;
-    QMap<QPair<QDateTime, uint>, uint> m_inactiveRecordOrder;
-    QHash<uint, QPair<QDateTime, uint>> m_inactiveRecordKeys;
 
     // SNI tracking: "service|objectPath" -> item metadata
     struct SniEntry {

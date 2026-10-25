@@ -20,8 +20,7 @@
       "status-notifier-item",
       "kde-job",
       "inbox-simulation",
-      "dnd",
-      "krema-notification-model"
+      "dnd"
     ]
   },
   "gui_contract": {
@@ -33,8 +32,8 @@
       "smartLauncherTab",
       "sniTab",
       "jobsTab",
-      "inboxTab",
-      "dndTab"
+      "dndTab",
+      "inboxTab"
     ],
     "state": "scenarioState",
     "sent_events": "sentTable",
@@ -51,226 +50,6 @@
     "release DND cookies",
     "clear local Inbox simulation state"
   ],
-  "stage2": {
-    "scope": "qml-model",
-    "wire": false,
-    "description": "Stage 2 model assertions use the Krema QML surface or tst_notification_inbox; they do not replace v1 wire-level JSONL evidence.",
-    "qa_app": {
-      "window": "notificationDebuggerWindow",
-      "tab": "Notifications",
-      "controls": [
-        "targetBar",
-        "Summary",
-        "Body",
-        "Replaces ID",
-        "Timeout",
-        "Urgency",
-        "Actions (key=label per line)",
-        "Send Notification",
-        "Close ID",
-        "CloseNotification",
-        "Received Notifications"
-      ],
-      "reset": "Reset All"
-    },
-    "qml_surface": {
-      "heading": "Notifications",
-      "filtered_heading": "Notifications for <app>",
-      "sync_notice": "Read and dismissed state is local to Krema; it is not synchronized with the app's server.",
-      "card_fields": ["summary", "body", "app", "urgency", "timeout"],
-      "state_labels": ["Unread", "Read", "Dismissed", "Closed"],
-      "actions": ["payload action buttons", "Mark read", "Dismiss"]
-    },
-    "model_api": {
-      "model": "NotificationTracker",
-      "roles": [
-        "id",
-        "desktopEntry",
-        "appName",
-        "appIcon",
-        "summary",
-        "body",
-        "actions",
-        "hints",
-        "timeout",
-        "replacesId",
-        "urgency",
-        "active",
-        "read",
-        "dismissed",
-        "closeReason",
-        "broadcastReason",
-        "createdAt",
-        "updatedAt"
-      ],
-      "invokables": [
-        "notifications(desktopEntry = {}, activeOnly = false)",
-        "markRead(id)",
-        "markDismissed(id)",
-        "invokeAction(id, action)"
-      ],
-      "action_method": "org.kde.NotificationManager.InvokeAction",
-      "read_scope": "local-only"
-    },
-    "automation": {
-      "mechanism": "krema-notification-model",
-      "assertion_sources": ["Krema QML surface", "tst_notification_inbox"],
-      "wire_jsonl": "not-required for model assertions; retain v1 wire evidence for the triggering notification"
-    },
-    "scenarios": [
-    {
-      "id": "stage2-rich-metadata",
-      "stage": "stage2",
-      "title": "Retain rich notification metadata",
-      "tab": "Notifications",
-      "mechanism": "freedesktop-notifications",
-      "correlation": "stage2-metadata-<run>",
-      "controls": ["Notifications tab", "Notifications heading", "Summary", "Body", "Urgency", "Timeout", "Actions (key=label per line)", "Send Notification", "Received Notifications"],
-      "steps": [
-        "Select a target desktop entry and keep Override desktop-entry from target enabled.",
-        "Set Summary and Body to unique run values, choose a non-default Urgency, set Timeout to 0, and enter default=Open and action1=Reply.",
-        "Press Send Notification and record the returned numeric notification ID.",
-        "In the Krema QML notification surface or QML harness, list notifications() and locate that ID.",
-        "Verify appName, desktopEntry, appIcon, summary, body, actions, hints, timeout, urgency, createdAt, and updatedAt match the sent payload; verify active is true and read/dismissed are false."
-      ],
-      "expected": [
-        "The watcher payload is represented as one model row with the documented roles.",
-        "The QA app's sent record and Krema's model row share the same server ID.",
-        "No app-specific inbox state is inferred from the notification payload."
-      ],
-      "evidence": ["QA app sent record", "Received Notifications row", "QML model view or test assertion showing all metadata roles"],
-      "automation": {
-        "wire_jsonl": "triggering notification uses the v1 event contract",
-        "assertion_source": "Krema QML surface or tst_notification_inbox"
-      }
-    },
-    {
-      "id": "stage2-action-invocation",
-      "stage": "stage2",
-      "title": "Invoke a notification action through KDE",
-      "tab": "Notifications",
-      "mechanism": "freedesktop-notifications",
-      "operation": "org.kde.NotificationManager.InvokeAction",
-      "correlation": "stage2-action-<run>",
-      "controls": ["Notifications tab", "Notifications heading", "Actions (key=label per line)", "Send Notification", "Received Notifications", "payload action buttons"],
-      "steps": [
-        "Send a notification with default=Open and action1=Reply, using a timeout long enough to interact.",
-        "Locate the row by server ID in the Krema QML surface or QML harness and invoke action1 through invokeAction(id, action).",
-        "Capture the session-bus method call and confirm the destination is org.freedesktop.Notifications, the interface is org.kde.NotificationManager, the method is InvokeAction, and the arguments contain the same numeric ID and action key.",
-        "If Plasma emits ActionInvoked, record that independent observation; do not treat the method call alone as proof that the application handled the action."
-      ],
-      "expected": [
-        "Stage 2 uses the official KDE InvokeAction method, not a private callback or a fabricated app API.",
-        "The model keeps the action label/key metadata available to QML.",
-        "Application handling remains an external observation."
-      ],
-      "evidence": ["D-Bus monitor or captured method call", "QML action control", "Optional ActionInvoked signal"],
-      "automation": {
-        "wire_jsonl": "triggering notification and optional ActionInvoked use the v1 event contract",
-        "assertion_source": "Krema QML surface or tst_notification_inbox"
-      }
-    },
-    {
-      "id": "stage2-local-read-dismiss",
-      "stage": "stage2",
-      "title": "Distinguish local read from local dismissal",
-      "tab": "Notifications",
-      "mechanism": "krema-notification-model",
-      "correlation": "stage2-lifecycle-<run>",
-      "controls": ["Notifications tab", "Notifications heading", "Send Notification", "Received Notifications", "Mark read", "Dismiss"],
-      "steps": [
-        "Send one persistent notification and locate its row by server ID.",
-        "Call markRead(id) from the QML surface or QML harness; verify read becomes true while dismissed and active remain unchanged.",
-        "Send a second persistent notification and call markDismissed(id); verify dismissed becomes true, read remains false, and the notification stays active until the server closes it.",
-        "Query notifications(\"\", true) and verify active rows are returned, including a locally dismissed notification that has not been closed by the server.",
-        "Reset the QA app and close any remaining server notification IDs."
-      ],
-      "expected": [
-        "Read and dismissed are distinct local model state.",
-        "markRead and markDismissed do not claim to update an application's server-side read cursor.",
-        "Dismissal clears the local unread contribution but does not close the server notification; active state changes only when a directed or broadcast close is received."
-      ],
-      "evidence": ["Before/after QML model rows", "activeOnly query result", "QA app reset record"],
-      "automation": {
-        "wire_jsonl": "triggering notifications and reset use the v1 event contract",
-        "assertion_source": "Krema QML surface or tst_notification_inbox"
-      }
-    },
-    {
-      "id": "stage2-replacement",
-      "stage": "stage2",
-      "title": "Replace one logical notification",
-      "tab": "Notifications",
-      "mechanism": "freedesktop-notifications",
-      "correlation": "stage2-replacement-<run>",
-      "controls": ["Notifications tab", "Notifications heading", "Summary", "Body", "Replaces ID", "Send Notification", "Received Notifications"],
-      "steps": [
-        "Send a persistent notification and record its server ID as oldId.",
-        "Set Replaces ID to oldId, change Summary and Body, and press Send Notification; record newId.",
-        "Query notifications() and inspect both lifecycle records.",
-        "Verify oldId has active=false and closeReason=replaced, while newId is active=true, has replacesId=oldId, and carries the replacement metadata.",
-        "Verify the app's active notification count increases by one logical row, not two."
-      ],
-      "expected": [
-        "Replacement updates one active logical notification without double-counting the app badge.",
-        "The replaced record remains available for lifecycle inspection when retained by the model."
-      ],
-      "evidence": ["Two Received Notifications rows", "QML model rows for oldId/newId", "Dock badge count before and after replacement"],
-      "automation": {
-        "wire_jsonl": "triggering notifications use the v1 event contract",
-        "assertion_source": "Krema QML surface or tst_notification_inbox"
-      }
-    },
-    {
-      "id": "stage2-close-reasons",
-      "stage": "stage2",
-      "title": "Retain directed and broadcast close reasons",
-      "tab": "Notifications",
-      "mechanism": "freedesktop-notifications",
-      "correlation": "stage2-close-<run>",
-      "controls": ["Notifications tab", "Notifications heading", "Send Notification", "Close ID", "CloseNotification", "Received Notifications"],
-      "steps": [
-        "Send one persistent notification, then set Close ID to its ID and press CloseNotification. Verify the retained row reports active=false and closeReason=directed.",
-        "Send a second persistent notification and let it expire, or dismiss it from the Plasma notification UI. Verify the retained row reports active=false and closeReason=broadcast-expired or broadcast-dismissed, with the numeric broadcastReason retained.",
-        "If the server reports a different valid broadcast reason, record that value rather than rewriting it as directed."
-      ],
-      "expected": [
-        "Directed CloseNotification and broadcast NotificationClosed remain distinguishable.",
-        "Broadcast close reasons update the model and do not remove retained lifecycle metadata."
-      ],
-      "evidence": ["Received Notifications status transitions", "NotificationClosed JSONL/event record", "QML closeReason and broadcastReason values"],
-      "automation": {
-        "wire_jsonl": "directed and broadcast close events use the v1 event contract",
-        "assertion_source": "Krema QML surface or tst_notification_inbox"
-      }
-    },
-    {
-      "id": "stage2-app-read-limitation",
-      "stage": "stage2",
-      "title": "Document the application-read boundary",
-      "tab": "Notifications",
-      "mechanism": "krema-notification-model",
-      "correlation": "stage2-read-boundary-<run>",
-      "controls": ["Notifications tab", "Notifications heading", "Send Notification", "Received Notifications", "Mark read", "Read and dismissed state is local to Krema; it is not synchronized with the app's server."],
-      "steps": [
-        "Send a notification whose body identifies this run and mark it read with markRead(id).",
-        "Verify the Krema row changes its local read role and that the dock-managed unread count follows existing badge behavior.",
-        "Inspect the QA app and D-Bus trace for the operation: no app-specific inbox read API, Slack/Telegram/Discord cursor, or server-side message-read acknowledgement is expected.",
-        "Record the result as local desktop notification state only."
-      ],
-      "expected": [
-        "Krema can mark its retained notification record read locally.",
-        "The feature does not claim that the originating application marked a message read on its server.",
-        "A missing application acknowledgement is a documented limitation, not a failed Stage 2 operation."
-      ],
-      "evidence": ["QML local read state", "D-Bus trace showing no app-specific read call", "QA limitation note"],
-      "automation": {
-        "wire_jsonl": "triggering notification uses the v1 event contract",
-        "assertion_source": "Krema QML surface or tst_notification_inbox"
-      }
-    }
-    ]
-  },
   "scenarios": [
     {
       "id": "notifications-basic",
@@ -550,9 +329,9 @@
       }
     },
     {
-      "id": "krema-dock-notification-inbox",
-      "title": "External watcher badge and local Settings inbox lifecycle",
-      "tab": "Notifications settings",
+      "id": "krema-dock-notification-badge",
+      "title": "External watcher badge lifecycle",
+      "tab": "Notifications",
       "mechanism": "freedesktop-notifications",
       "correlation": "krema-e2e-<run>",
       "preconditions": [
@@ -571,22 +350,14 @@
       "steps": [
         "Send two persistent notifications for the running test window and retain their numeric IDs.",
         "Verify the matching Krema dock item exposes 2 notifications through its AT-SPI description.",
-        "Close the two IDs one at a time and verify the observable count changes to 1 and then clears.",
-        "Send two more persistent notifications, open Settings → Notifications, and verify both cards start Unread.",
-        "Use Mark read on one card and verify Read plus a reduced local unread count while the card remains active.",
-        "Use Dismiss on the other card and verify Dismissed plus a cleared local unread count while the card remains active.",
-        "Verify the inbox states are local to Krema and do not claim an application/server read acknowledgement; close all remaining IDs."
+        "Close the two IDs one at a time and verify the observable count changes to 1 and then clears."
       ],
       "expected": [
         "An external Notify reaches Krema's running watcher and contributes to the dock badge count.",
-        "External CloseNotification updates the dock count without restarting Krema.",
-        "Read and Dismissed are distinct local model states.",
-        "The Settings inbox local-sync notice remains visible."
+        "External CloseNotification updates the dock count without restarting Krema."
       ],
       "capture": [
-        "Dock item AT-SPI description at counts 2, 1, and 0",
-        "Notifications settings cards before and after Mark read/Dismiss",
-        "Visible local-sync notice"
+        "Dock item AT-SPI description at counts 2, 1, and 0"
       ],
       "limitations": [
         "Portal AddNotification forwarding into Plasma is optional and is not inferred here; use portal-notification for its explicit limitation result.",
@@ -597,17 +368,13 @@
       "automation": {
         "controls": [
           "tests/notification/notify.py notify",
-          "tests/notification/notify.py close",
-          "Notifications settings page",
-          "Mark read",
-          "Dismiss"
+          "tests/notification/notify.py close"
         ],
-        "test": "tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close_and_local_inbox_lifecycle",
-        "assertion_source": "Krema dock AT-SPI and Notifications settings AT-SPI",
+        "test": "tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close",
+        "assertion_source": "Krema dock AT-SPI",
         "assertions": [
           "Two external notification IDs produce a 2 → 1 → 0 observable dock count.",
-          "Settings inbox transitions Unread → Read and Unread → Dismissed locally.",
-          "No server/application read synchronization is claimed."
+          "No notification history or server/application read synchronization is claimed."
         ]
       }
     },

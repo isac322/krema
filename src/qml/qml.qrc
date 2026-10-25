@@ -5,7 +5,6 @@
         <file>DockItem.qml</file>
         <file>ZoomAnimationProfile.qml</file>
         <file>SettingsDialog.qml</file>
-        <file>NotificationInbox.qml</file>
         <file>PreviewPopup.qml</file>
         <file>PreviewThumbnail.qml</file>
         <file>settings/ChoiceCard.qml</file>
@@ -20,7 +19,6 @@
         <file>settings/PanelStylePage.qml</file>
         <file>settings/ShadowPage.qml</file>
         <file>settings/AnimationsPage.qml</file>
-        <file>settings/NotificationsPage.qml</file>
         <file>settings/BehaviorPage.qml</file>
         <file>settings/MonitorsPage.qml</file>
         <file>settings/PreviewPage.qml</file>

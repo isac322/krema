@@ -33,8 +33,13 @@ Item {
         if (count > 1) parts.push(i18n("%1 windows", count))
         if (launching) parts.push(i18n("Starting"))
         if (_isDemandingAttention) parts.push(i18n("Attention requested"))
-        if (_badgeCount > 0)
+        if (_badgeCount > 0) {
             parts.push(i18n("%1 notifications", _badgeCount))
+        } else if (_chatUnreadState === 2) {
+            parts.push(i18n("Mention notification"))
+        } else if (_chatUnreadState === 1) {
+            parts.push(i18n("Unread messages"))
+        }
         if (_sniToolTipTitle.length > 0 && _sniToolTipTitle !== displayName)
             parts.push(_sniToolTipTitle)
         if (_sniToolTipSubTitle.length > 0)
@@ -77,7 +82,7 @@ Item {
         return LauncherEntryTracker.progress(_launcherUrl)
     }
 
-    // Desktop entry name for notification lookup (e.g. "org.kde.dolphin", "slack")
+    // Desktop entry name for notification and chat lookup (e.g. "slack").
     readonly property string _appId: {
         let _dep = model.display  // reactive dependency on model data
         return DockModel.appId(index)
@@ -103,32 +108,67 @@ Item {
         return _appId.length > 0 ? NotificationTracker.sniToolTipSubTitle(_appId) : ""
     }
 
-    // === Persistent notification badge ===
-    // Sources: LauncherEntry count (1st, app-managed), fd.o watcher unreadCount (2nd, dock-managed)
-    // Clear: focus → fd.o auto-clear, context menu → manual clear, SNI→Active → fd.o clear
-    // Unified badge count (priority: LauncherEntry > WatchedNotifications)
+    readonly property bool _isSlackApp: {
+        let _id = _appId.trim().toLowerCase()
+        if (_id.endsWith(".desktop"))
+            _id = _id.slice(0, -8)
+        return _id === "slack" || _id === "com.slack.slack" || _id === "com.slack"
+    }
+
+    // Chat state from the SNI adapter (gated by Plasma badge preferences).
+    readonly property int _chatUnreadState: {
+        let _sniRev = NotificationTracker.revision
+        if (_appId.length === 0 || !NotificationTracker.badgesEnabled(_appId))
+            return 0
+        return NotificationTracker.sniChatUnreadState(_appId)
+    }
+    readonly property int _chatMentionCount: {
+        let _sniRev = NotificationTracker.revision
+        if (_appId.length === 0 || !NotificationTracker.badgesEnabled(_appId))
+            return 0
+        return NotificationTracker.sniChatMentionCount(_appId)
+    }
+
+    // === Persistent notification and chat badge ===
+    // Sources: Slack SNI tooltip count (sole authority for Slack), LauncherEntry count, chat mention count, fd.o unread count.
     readonly property int _badgeCount: {
         let _rev = NotificationTracker.revision  // reactive dependency
+        if (_isSlackApp)
+            return _chatMentionCount
         // 1st: LauncherEntry (Unity API) — exact count from the app
         if (_launcherCountVisible)
             return _launcherCount
-        // 2nd: WatchedNotifications — unread notification count
-        if (_appId.length > 0) {
+        // 2nd: Chat adapter — positive mention count from the app
+        if (_chatMentionCount > 0)
+            return _chatMentionCount
+        // 3rd: WatchedNotifications — unread notification count
+        if (_appId.length > 0 && NotificationTracker.badgesEnabled(_appId)) {
             let n = NotificationTracker.unreadCount(_appId)
             if (n > 0) return n
         }
         return 0
     }
-    readonly property bool _showCountBadge:
+    readonly property bool _showNumericOrCountBadge:
         _badgeCount > 0 && DockSettings.badgeDisplayMode !== 2
+    readonly property bool _showChatStateDot:
+        _badgeCount === 0
+        && (_chatUnreadState === 2
+            || (_chatUnreadState === 1 && DockSettings.badgeDisplayMode !== 2))
     readonly property bool _showAttentionDot:
-        _isDemandingAttention && !_showCountBadge
+        _isDemandingAttention && !_showNumericOrCountBadge
+    readonly property bool _showBadge:
+        _showNumericOrCountBadge || _showAttentionDot || _showChatStateDot
     readonly property bool _badgeIsDot:
-        DockSettings.badgeDisplayMode === 1 || !_showCountBadge
+        DockSettings.badgeDisplayMode === 1 || !_showNumericOrCountBadge
+
 
     readonly property bool _badgeOnLeft: DockSettings.badgePosition === 1
         || (DockSettings.badgePosition === 2 && DockView.edge === 2)
     readonly property color _badgeBgColor: {
+        if (_chatUnreadState === 2)
+            return Kirigami.Theme.negativeTextColor
+        if (_chatUnreadState === 1)
+            return Kirigami.Theme.linkColor
         if (DockSettings.badgeUseAccentColor) {
             return Kirigami.Theme.highlightColor
         }
@@ -139,13 +179,15 @@ Item {
         return Kirigami.Theme.highlightColor
     }
     readonly property color _badgeTextColor: {
-        if (DockSettings.badgeUseAccentColor) {
+        if (_chatUnreadState === 2 || _chatUnreadState === 1)
+            return Kirigami.ColorUtils.brightnessForColor(_badgeBgColor) === Kirigami.ColorUtils.Light
+                ? "#000000" : "#ffffff"
+        if (DockSettings.badgeUseAccentColor)
             return Kirigami.Theme.highlightedTextColor
-        }
-        return Kirigami.ColorUtils.brightnessForColor(dockItem._badgeBgColor) === Kirigami.ColorUtils.Light
-            ? "#000000"
-            : "#ffffff"
+        return Kirigami.ColorUtils.brightnessForColor(_badgeBgColor) === Kirigami.ColorUtils.Light
+            ? "#000000" : "#ffffff"
     }
+
 
     // === Notification (transient attention) ===
     // Sources: Window.IsDemandingAttention, LauncherEntry urgent, SNI NeedsAttention, badgeCount increase
@@ -686,12 +728,12 @@ Item {
         }
     }
 
-    // Badge count overlay (unified: LauncherEntry + WatchedNotifications)
+    // Badge overlay (LauncherEntry, chat mentions, and WatchedNotifications)
     Rectangle {
         id: badge
         objectName: "badge"
         z: 2
-        visible: dockItem._showCountBadge || dockItem._showAttentionDot
+        visible: dockItem._showBadge
         x: {
             let nom = dockItem._badgeOnLeft
                 ? iconImage.x - width * 0.2
@@ -762,7 +804,7 @@ Item {
         QQC2.Label {
             id: badgeLabel
             objectName: "badgeLabel"
-            visible: !badge.isDot && dockItem._showCountBadge
+            visible: !badge.isDot && dockItem._showNumericOrCountBadge
             anchors.centerIn: parent
             text: dockItem._badgeCount > 99 ? "99+" : dockItem._badgeCount.toString()
             color: dockItem._badgeTextColor

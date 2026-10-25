@@ -6,6 +6,7 @@
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMetaType>
+#include <QImage>
 #include <QObject>
 #include <QVariant>
 #include <QVariantMap>
@@ -64,6 +65,7 @@ public Q_SLOTS:
     Q_SCRIPTABLE void UnRegisterWatcher();
 
 private:
+    QString m_ownedConnectionName;
     QDBusConnection m_bus;
     bool m_serviceRegistered = false;
     bool m_objectRegistered = false;
@@ -108,6 +110,9 @@ class StatusNotifierItemPeer : public QObject
     Q_PROPERTY(QString Id READ id WRITE setId NOTIFY idChanged)
     Q_PROPERTY(QString Status READ status WRITE setStatus NOTIFY statusChanged)
     Q_PROPERTY(QString Title READ title WRITE setTitle NOTIFY titleChanged)
+    Q_PROPERTY(QString IconName READ iconName WRITE setIconName NOTIFY iconNameChanged)
+    Q_PROPERTY(QVector<krema::test::ToolTipPixmap> IconPixmap READ iconPixmap WRITE setRawIconPixmap NOTIFY iconPixmapChanged)
+    Q_PROPERTY(QString IconThemePath READ iconThemePath WRITE setIconThemePath NOTIFY iconThemePathChanged)
     Q_PROPERTY(QString AttentionIconName READ attentionIconName WRITE setAttentionIconName NOTIFY attentionIconNameChanged)
     Q_PROPERTY(QString OverlayIconName READ overlayIconName WRITE setOverlayIconName NOTIFY overlayIconNameChanged)
     Q_PROPERTY(QVariant ToolTip READ toolTip WRITE setToolTip NOTIFY toolTipChanged)
@@ -126,12 +131,20 @@ public:
     QString id() const;
     QString status() const;
     QString title() const;
+    QString iconName() const;
+    QVector<ToolTipPixmap> iconPixmap() const;
+    QString iconThemePath() const;
     QString attentionIconName() const;
     QString overlayIconName() const;
     QVariant toolTip() const;
     void setId(const QString &id);
     void setStatus(const QString &status);
     void setTitle(const QString &title);
+    void setIconName(const QString &name);
+    void setIconPixmap(const QImage &image);
+    void setIconPixmap(const QVector<ToolTipPixmap> &pixmaps);
+    void setRawIconPixmap(const QVector<ToolTipPixmap> &pixmaps);
+    void setIconThemePath(const QString &path);
     void setAttentionIconName(const QString &name);
     void setOverlayIconName(const QString &name);
     void setToolTip(const QVariant &toolTip);
@@ -139,16 +152,20 @@ public:
 Q_SIGNALS:
     void NewStatus(const QString &status);
     void NewTitle();
+    void NewIcon();
+    void NewIconThemePath();
     void NewAttentionIcon();
     void NewOverlayIcon();
     void NewToolTip();
     void idChanged();
     void statusChanged();
     void titleChanged();
+    void iconNameChanged();
+    void iconPixmapChanged();
+    void iconThemePathChanged();
     void attentionIconNameChanged();
     void overlayIconNameChanged();
     void toolTipChanged();
-
 private:
     QDBusConnection m_bus;
     QString m_serviceName;
@@ -156,9 +173,12 @@ private:
     QString m_id;
     QString m_status = QStringLiteral("Passive");
     QString m_title;
+    QString m_iconName;
+    QVector<ToolTipPixmap> m_iconPixmap;
+    QString m_iconThemePath;
     QString m_attentionIconName;
     QString m_overlayIconName;
-    QVariant m_toolTip;
+    QVariant m_toolTip = QVariant::fromValue(ToolTipData{});
     bool m_serviceRegistered = false;
     bool m_objectRegistered = false;
 };
@@ -167,3 +187,4 @@ private:
 
 Q_DECLARE_METATYPE(krema::test::ToolTipPixmap)
 Q_DECLARE_METATYPE(krema::test::ToolTipData)
+Q_DECLARE_METATYPE(QVector<krema::test::ToolTipPixmap>)

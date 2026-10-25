@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added Slack Desktop unread and mention indicators: blue unread dots and red mention badges, with counts when Slack reports them and support for Electron tray identities.
 - Added live SNI metadata for dock items: attention and overlay icon names are shown from the app's StatusNotifierItem, and SNI tooltip title/subtitle text is exposed to accessibility while canonical identity matching and generation checks prevent stale tray data.
 - Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
 - Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Hidden auto-hide and dodge panels are ignored; visible same-edge panel frames, including frames with no exclusive zone, can define the panel-relative depth. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)

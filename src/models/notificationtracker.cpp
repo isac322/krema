@@ -243,18 +243,93 @@ static QImage loadSniIconFallback(const QString &themePath, const QString &iconN
     return image;
 }
 
-static bool isSlackAppId(const QString &rawId)
+enum class SniChatClient : quint8 {
+    None,
+    Slack,
+    Discord,
+    Vesktop,
+    WebCord,
+};
+
+static QString normalizedSniId(const QString &rawId)
 {
     QString id = stripDesktopSuffix(rawId.trimmed().toLower());
     static const QRegularExpression statusIconSuffix(QStringLiteral("_[sS]tatus_[iI]con_[0-9]+$"));
     id.remove(statusIconSuffix);
-    id = stripDesktopSuffix(id);
-    return id == QLatin1String("slack") || id == QLatin1String("com.slack.slack") || id == QLatin1String("com.slack");
+    return stripDesktopSuffix(id);
 }
 
-static bool slackIdsMatch(const QString &left, const QString &right)
+static SniChatClient sniChatClientForId(const QString &rawId)
 {
-    return isSlackAppId(left) && isSlackAppId(right);
+    const QString id = normalizedSniId(rawId);
+    if (id == QLatin1String("slack") || id == QLatin1String("com.slack.slack") || id == QLatin1String("com.slack")) {
+        return SniChatClient::Slack;
+    }
+    if (id == QLatin1String("discord") || id == QLatin1String("com.discordapp.discord")
+        || id == QLatin1String("com.discord.app")) {
+        return SniChatClient::Discord;
+    }
+    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop")) {
+        return SniChatClient::Vesktop;
+    }
+    if (id == QLatin1String("webcord") || id == QLatin1String("io.github.spacingbat3.webcord")) {
+        return SniChatClient::WebCord;
+    }
+    return SniChatClient::None;
+}
+
+static bool sniIdsMatch(const QString &left, const QString &right)
+{
+    const auto leftClient = sniChatClientForId(left);
+    return leftClient != SniChatClient::None && leftClient == sniChatClientForId(right);
+}
+
+enum class SniPixelColor : quint8 {
+    WebCordRed,
+    WebCordBlue,
+    DiscordRed,
+};
+
+static int countSniPixels(const QImage &image, bool topRight, SniPixelColor color)
+{
+    if (image.isNull()) {
+        return 0;
+    }
+    const int xStart = (image.width() + 1) / 2;
+    const int yStart = topRight ? 0 : (image.height() + 1) / 2;
+    const int yEnd = topRight ? (image.height() + 1) / 2 : image.height();
+    int count = 0;
+    for (int y = yStart; y < yEnd; ++y) {
+        for (int x = xStart; x < image.width(); ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            const bool red = pixel.alpha() >= 180 && pixel.red() >= 200
+                && pixel.green() <= (color == SniPixelColor::WebCordRed ? 90 : 100)
+                && pixel.blue() <= (color == SniPixelColor::WebCordRed ? 90 : 100);
+            const bool blue = pixel.alpha() >= 180 && pixel.red() <= 170
+                && pixel.green() >= 150 && pixel.blue() >= 210
+                && pixel.blue() - pixel.red() >= 50;
+            if ((color == SniPixelColor::WebCordBlue && blue)
+                || (color != SniPixelColor::WebCordBlue && red)) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+static int webCordPixelState(const QImage &image)
+{
+    if (countSniPixels(image, true, SniPixelColor::WebCordRed) >= 25) {
+        return 2;
+    }
+    return countSniPixels(image, true, SniPixelColor::WebCordBlue) >= 25 ? 1 : 0;
+}
+
+static int discordPixelState(const QImage &image)
+{
+    const int topRightRed = countSniPixels(image, true, SniPixelColor::DiscordRed);
+    const int bottomRightRed = countSniPixels(image, false, SniPixelColor::DiscordRed);
+    return topRightRed >= 12 && bottomRightRed == 0 ? 1 : 0;
 }
 
 static int slackPixelState(const QImage &image)
@@ -353,7 +428,7 @@ bool NotificationTracker::badgesEnabled(const QString &appId) const
     }
     const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
     return !std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &appId](const QString &entry) {
-        return canonicalDesktopId(entry) == normalized || slackIdsMatch(entry, appId);
+        return canonicalDesktopId(entry) == normalized || sniIdsMatch(entry, appId);
     });
 }
 
@@ -457,10 +532,11 @@ const NotificationTracker::SniEntry *NotificationTracker::sniEntryForApp(const Q
         const QString rawId = it->id.trimmed().toLower();
         const QString titleId = canonicalDesktopId(it->title);
         const QString toolTipId = canonicalDesktopId(it->toolTipTitle);
-        const bool exactMatch = canonicalDesktopId(it->id) == normalized || slackIdsMatch(it->id, appId);
+        const bool exactMatch = canonicalDesktopId(it->id) == normalized || sniIdsMatch(it->id, appId);
         const bool chromeTitleMatch = rawId.startsWith(QStringLiteral("chrome_status_icon_"))
             && (titleId == normalized || toolTipId == normalized
-                || (isSlackAppId(appId) && (isSlackAppId(it->title) || isSlackAppId(it->toolTipTitle))));
+                || (sniChatClientForId(appId) == SniChatClient::Slack
+                    && (sniChatClientForId(it->title) == SniChatClient::Slack || sniChatClientForId(it->toolTipTitle) == SniChatClient::Slack)));
         if (!exactMatch && !chromeTitleMatch) {
             continue;
         }
@@ -912,18 +988,24 @@ void NotificationTracker::updateSniIconImage(SniEntry &entry)
 void NotificationTracker::updateSniChatState(SniEntry &entry)
 {
     entry.chatMentionCount = 0;
-    const QString slackId = canonicalDesktopId(QStringLiteral("slack"));
     const QString rawId = entry.id.trimmed().toLower();
     const bool isChromeStatusIcon = rawId.startsWith(QStringLiteral("chrome_status_icon_"));
-    const bool isSlack = isSlackAppId(entry.id)
-        || (isChromeStatusIcon && (isSlackAppId(entry.title) || isSlackAppId(entry.toolTipTitle)));
-    if (!isSlack) {
-        entry.chatUnreadState = 0;
-        entry.chatMentionCount = 0;
+    const auto chatClient = sniChatClientForId(entry.id);
+    const bool isSlack = chatClient == SniChatClient::Slack
+        || (isChromeStatusIcon && (sniChatClientForId(entry.title) == SniChatClient::Slack || sniChatClientForId(entry.toolTipTitle) == SniChatClient::Slack));
+    if (isSlack) {
+        entry.chatUnreadState = slackPixelState(entry.iconImage);
+        entry.chatMentionCount = slackMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);
         return;
     }
-    entry.chatUnreadState = slackPixelState(entry.iconImage);
-    entry.chatMentionCount = slackMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);
+    entry.chatMentionCount = 0;
+    if (chatClient == SniChatClient::WebCord) {
+        entry.chatUnreadState = webCordPixelState(entry.iconImage);
+    } else if (chatClient == SniChatClient::Discord || chatClient == SniChatClient::Vesktop) {
+        entry.chatUnreadState = discordPixelState(entry.iconImage);
+    } else {
+        entry.chatUnreadState = 0;
+    }
 }
 
 void NotificationTracker::querySniProperty(const QString &key,

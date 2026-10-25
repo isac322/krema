@@ -274,6 +274,7 @@ StatusNotifierItemPeer::StatusNotifierItemPeer(QString serviceName,
 {
     qDBusRegisterMetaType<ToolTipPixmap>();
     qDBusRegisterMetaType<ToolTipData>();
+    qDBusRegisterMetaType<QVector<ToolTipPixmap>>();
 }
 
 StatusNotifierItemPeer::~StatusNotifierItemPeer()
@@ -300,6 +301,8 @@ bool StatusNotifierItemPeer::start(bool replaceExisting)
     }
     Q_EMIT NewStatus(m_status);
     Q_EMIT NewTitle();
+    Q_EMIT NewIcon();
+    Q_EMIT NewIconThemePath();
     Q_EMIT NewAttentionIcon();
     Q_EMIT NewOverlayIcon();
     Q_EMIT NewToolTip();
@@ -334,6 +337,8 @@ bool StatusNotifierItemPeer::exportObjectAndEmitReady()
     }
     Q_EMIT NewStatus(m_status);
     Q_EMIT NewTitle();
+    Q_EMIT NewIcon();
+    Q_EMIT NewIconThemePath();
     Q_EMIT NewAttentionIcon();
     Q_EMIT NewOverlayIcon();
     Q_EMIT NewToolTip();
@@ -387,6 +392,21 @@ QString StatusNotifierItemPeer::title() const
     return m_title;
 }
 
+QString StatusNotifierItemPeer::iconName() const
+{
+    return m_iconName;
+}
+
+QVector<ToolTipPixmap> StatusNotifierItemPeer::iconPixmap() const
+{
+    return m_iconPixmap;
+}
+
+QString StatusNotifierItemPeer::iconThemePath() const
+{
+    return m_iconThemePath;
+}
+
 QString StatusNotifierItemPeer::attentionIconName() const
 {
     return m_attentionIconName;
@@ -431,6 +451,84 @@ void StatusNotifierItemPeer::setTitle(const QString &title)
     Q_EMIT NewTitle();
 }
 
+void StatusNotifierItemPeer::setIconName(const QString &name)
+{
+    if (m_iconName == name) {
+        return;
+    }
+    m_iconName = name;
+    Q_EMIT iconNameChanged();
+    Q_EMIT NewIcon();
+}
+
+void StatusNotifierItemPeer::setIconPixmap(const QImage &image)
+{
+    QVector<ToolTipPixmap> pixmaps;
+    if (!image.isNull()) {
+        const QImage converted = image.convertToFormat(QImage::Format_ARGB32);
+        ToolTipPixmap pixmap;
+        pixmap.width = converted.width();
+        pixmap.height = converted.height();
+        pixmap.data.reserve(converted.width() * converted.height() * 4);
+        for (int y = 0; y < converted.height(); ++y) {
+            const auto *line = reinterpret_cast<const QRgb *>(converted.constScanLine(y));
+            for (int x = 0; x < converted.width(); ++x) {
+                const QRgb pixel = line[x];
+                pixmap.data.append(char(qAlpha(pixel)));
+                pixmap.data.append(char(qRed(pixel)));
+                pixmap.data.append(char(qGreen(pixel)));
+                pixmap.data.append(char(qBlue(pixel)));
+            }
+        }
+        pixmaps.append(std::move(pixmap));
+    }
+
+    if (m_iconPixmap.size() == pixmaps.size()) {
+        bool equal = true;
+        for (qsizetype i = 0; i < pixmaps.size(); ++i) {
+            equal = equal && m_iconPixmap.at(i).width == pixmaps.at(i).width && m_iconPixmap.at(i).height == pixmaps.at(i).height
+                && m_iconPixmap.at(i).data == pixmaps.at(i).data;
+        }
+        if (equal) {
+            return;
+        }
+    }
+    m_iconPixmap = std::move(pixmaps);
+    Q_EMIT iconPixmapChanged();
+    Q_EMIT NewIcon();
+}
+void StatusNotifierItemPeer::setIconPixmap(const QVector<ToolTipPixmap> &pixmaps)
+{
+    setRawIconPixmap(pixmaps);
+}
+
+void StatusNotifierItemPeer::setRawIconPixmap(const QVector<ToolTipPixmap> &pixmaps)
+{
+    if (m_iconPixmap.size() == pixmaps.size()) {
+        bool equal = true;
+        for (qsizetype i = 0; i < pixmaps.size(); ++i) {
+            equal = equal && m_iconPixmap.at(i).width == pixmaps.at(i).width && m_iconPixmap.at(i).height == pixmaps.at(i).height
+                && m_iconPixmap.at(i).data == pixmaps.at(i).data;
+        }
+        if (equal) {
+            return;
+        }
+    }
+    m_iconPixmap = pixmaps;
+    Q_EMIT iconPixmapChanged();
+    Q_EMIT NewIcon();
+}
+
+void StatusNotifierItemPeer::setIconThemePath(const QString &path)
+{
+    if (m_iconThemePath == path) {
+        return;
+    }
+    m_iconThemePath = path;
+    Q_EMIT iconThemePathChanged();
+    Q_EMIT NewIconThemePath();
+}
+
 void StatusNotifierItemPeer::setAttentionIconName(const QString &name)
 {
     if (m_attentionIconName == name) {
@@ -463,4 +561,3 @@ void StatusNotifierItemPeer::setToolTip(const QVariant &toolTip)
 
 } // namespace krema::test
 
-#include "dbuspeers.moc"

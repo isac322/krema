@@ -150,6 +150,15 @@ DockModel::DockModel(QObject *parent)
         m_tasksModel->setActivity(m_activityInfo->currentActivity());
     });
 
+    const auto bumpChatStateRevision = [this]() {
+        ++m_chatStateRevision;
+        Q_EMIT chatStateRevisionChanged();
+    };
+    connect(m_tasksModel.get(), &QAbstractItemModel::dataChanged, this, bumpChatStateRevision);
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, bumpChatStateRevision);
+    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, bumpChatStateRevision);
+    connect(m_tasksModel.get(), &QAbstractItemModel::modelReset, this, bumpChatStateRevision);
+
     // Launch in place: a task started for a visible pinned launcher replaces
     // that launcher at its position. libtaskmanager stopped doing this for
     // manual sorting when it moved launcher hiding into TaskFilterProxyModel
@@ -567,6 +576,43 @@ QString DockModel::appId(int index) const
         return {};
     }
     return idx.data(TaskManager::AbstractTasksModel::AppId).toString();
+}
+
+int DockModel::chatStateRevision() const
+{
+    return m_chatStateRevision;
+}
+
+int DockModel::taskChatUnreadState(int row) const
+{
+    Q_UNUSED(row)
+    return 0;
+}
+
+int DockModel::taskChatMentionCount(int row) const
+{
+    Q_UNUSED(row)
+    return 0;
+}
+
+QStringList DockModel::windowTitlesForRow(int row) const
+{
+    const QModelIndex index = m_tasksModel->index(row, 0);
+    if (!index.isValid()) {
+        return {};
+    }
+
+    const int childCount = m_tasksModel->rowCount(index);
+    const bool isWindow = index.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    QStringList titles;
+    titles.reserve(childCount + (isWindow ? 1 : 0));
+    for (int child = 0; child < childCount; ++child) {
+        titles.append(m_tasksModel->index(child, 0, index).data(Qt::DisplayRole).toString());
+    }
+    if (isWindow) {
+        titles.append(index.data(Qt::DisplayRole).toString());
+    }
+    return titles;
 }
 
 int DockModel::virtualDesktopMode() const

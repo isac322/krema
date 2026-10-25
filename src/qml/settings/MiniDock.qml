@@ -82,7 +82,33 @@ Item {
             ? "#000000"
             : "#ffffff"
     }
-
+    function _chatStateFor(data) {
+        return data.chatUnreadState ?? data.chatState ?? 0
+    }
+    function _mentionCountFor(data) {
+        return data.chatMentionCount ?? data.mentionCount ?? 0
+    }
+    function _badgeCountFor(data) {
+        const appCount = data.badge ?? 0
+        const mentionCount = _mentionCountFor(data)
+        return appCount > 0 ? appCount : mentionCount > 0 ? mentionCount : 0
+    }
+    function _badgeColorFor(data) {
+        const state = _chatStateFor(data)
+        if (state === 2)
+            return Kirigami.Theme.negativeTextColor
+        if (state === 1)
+            return Kirigami.Theme.linkColor
+        return _badgeBgColor
+    }
+    function _badgeTextColorFor(data) {
+        if (_chatStateFor(data) === 0 && badgeUseAccentColor)
+            return Kirigami.Theme.highlightedTextColor
+        const color = _badgeColorFor(data)
+        return Kirigami.ColorUtils.brightnessForColor(color) === Kirigami.ColorUtils.Light
+            ? "#000000"
+            : "#ffffff"
+    }
     /// Dock entries: icon name, fallback icon, window state ("active",
     /// "inactive", "minimized" or "launcher"), badge count and the simulated
     /// internal padding (icon fill ratio) that icon size normalization removes.
@@ -353,6 +379,15 @@ Item {
                 // Slot centre = rest centre + the layout's centre shift.
                 readonly property real primaryCenter: index * dock.pitch + dock.iconPx / 2 + zoomOffset
                 readonly property string windowState: modelData.state ?? "launcher"
+                readonly property int chatState: dock._chatStateFor(modelData)
+                readonly property int badgeCount: dock._badgeCountFor(modelData)
+                readonly property bool numericBadge:
+                    badgeCount > 0 && dock.badgeDisplayMode !== 2
+                readonly property bool chatStateDot:
+                    badgeCount === 0
+                    && (chatState === 2
+                        || (chatState === 1 && dock.badgeDisplayMode !== 2))
+                readonly property bool showBadge: numericBadge || chatStateDot
                 readonly property Item iconBox: box
 
                 x: dock.vertical ? 0 : primaryCenter - slotLength / 2
@@ -415,22 +450,22 @@ Item {
                 Rectangle {
                     objectName: "miniDockBadge"
                     z: 2
-                    visible: (slot.modelData.badge ?? 0) > 0 && dock.badgeDisplayMode !== 2
-                    width: Math.round(box.width * (dock.badgeDisplayMode === 1 ? 0.18 : 0.38))
+                    visible: slot.showBadge
+                    width: Math.round(box.width * (slot.numericBadge ? 0.38 : 0.18))
                     height: width
                     radius: width / 2
                     x: dock._badgeOnLeft ? box.x - width * 0.2 : box.x + box.width - width * 0.8
                     y: box.y - height * 0.2
-                    color: dock._badgeBgColor
+                    color: dock._badgeColorFor(slot.modelData)
 
                     QQC2.Label {
                         objectName: "miniDockBadgeLabel"
-                        visible: dock.badgeDisplayMode === 0
+                        visible: slot.numericBadge
                         anchors.centerIn: parent
                         width: parent.width - 2
                         height: parent.height - 2
-                        text: (slot.modelData.badge ?? 0) > 99 ? "99+" : String(slot.modelData.badge ?? 0)
-                        color: dock._badgeTextColor
+                        text: slot.badgeCount > 99 ? "99+" : String(slot.badgeCount)
+                        color: dock._badgeTextColorFor(slot.modelData)
                         font.pixelSize: Math.max(1, parent.height * 0.55)
                         font.bold: true
                         fontSizeMode: Text.Fit

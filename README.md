@@ -32,6 +32,7 @@ The following settings are part of the current unreleased development work and a
 
 - **Reserve screen space** — The Behavior switch is enabled by default and applies to **Always visible** mode. When enabled, maximized windows avoid the dock; Auto hide and Dodge windows keep their existing platform behavior. The switch is saved for the next start and can be changed while the dock is running.
 - **Separate pinned and running apps** — The Behavior switch is disabled by default. When enabled, pinned apps, including pinned apps that are running, stay in the first section; unpinned running apps follow after the divider. Dragging across that boundary stays within the source section and does not pin or unpin an app. With the switch off, dock items keep the existing free-reorder behavior.
+- **Chat notification states** — Slack Desktop distinguishes unread messages with a blue dot from mentions with a red badge. A reported mention count appears in Number mode; Unity launcher counts keep priority. Plasma's global and per-app badge settings apply to these chat states.
 
 These entries describe unreleased behavior; they are not claims about the latest published release.
 

@@ -28,7 +28,6 @@ namespace krema
 {
 namespace
 {
-constexpr qsizetype kMaxInactiveNotificationRecords = 100;
 constexpr auto kNotificationService = "org.freedesktop.Notifications";
 constexpr auto kSniWatcherService = "org.kde.StatusNotifierWatcher";
 constexpr auto kSniKeySeparator = QLatin1Char('|');
@@ -141,7 +140,7 @@ static SniToolTip parseSniToolTip(const QVariant &value)
 } // namespace
 
 NotificationTracker::NotificationTracker(QObject *parent)
-    : QAbstractListModel(parent)
+    : QObject(parent)
     , m_notificationServiceWatcher(QStringLiteral("org.freedesktop.Notifications"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_sniWatcherServiceWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_sniServiceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
@@ -177,104 +176,6 @@ NotificationTracker::~NotificationTracker()
     QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
 }
 
-int NotificationTracker::rowCount(const QModelIndex &parent) const
-{
-    return parent.isValid() ? 0 : m_modelIds.size();
-}
-
-QVariant NotificationTracker::data(const QModelIndex &index, int role) const
-{
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_modelIds.size()) {
-        return {};
-    }
-    const auto recordIt = m_notificationRecords.constFind(m_modelIds.at(index.row()));
-    if (recordIt == m_notificationRecords.cend()) {
-        return {};
-    }
-    const auto &record = recordIt.value();
-    switch (role) {
-    case IdRole:
-        return record.serverId;
-    case DesktopEntryRole:
-        return record.desktopEntry;
-    case AppNameRole:
-        return record.appName;
-    case AppIconRole:
-        return record.appIcon;
-    case SummaryRole:
-        return record.summary;
-    case BodyRole:
-        return record.body;
-    case ActionsRole:
-        return record.actions;
-    case HintsRole:
-        return record.hints;
-    case TimeoutRole:
-        return record.timeout;
-    case ReplacesIdRole:
-        return record.replacesId;
-    case UrgencyRole:
-        return record.urgency;
-    case ActiveRole:
-        return m_notifIdToEntry.contains(record.serverId);
-    case ReadRole:
-        return record.read;
-    case DismissedRole:
-        return record.dismissed;
-    case CloseReasonRole:
-        switch (record.closeReason) {
-        case CloseReason::Active:
-            return QStringLiteral("active");
-        case CloseReason::Replaced:
-            return QStringLiteral("replaced");
-        case CloseReason::Directed:
-            return QStringLiteral("directed");
-        case CloseReason::BroadcastExpired:
-            return QStringLiteral("broadcast-expired");
-        case CloseReason::BroadcastDismissed:
-            return QStringLiteral("broadcast-dismissed");
-        case CloseReason::BroadcastClosedByCall:
-            return QStringLiteral("broadcast-closed-by-call");
-        case CloseReason::BroadcastUndefined:
-            return QStringLiteral("broadcast-undefined");
-        }
-        break;
-    case BroadcastReasonRole:
-        return record.broadcastReason;
-    case CreatedAtRole:
-        return record.createdAt;
-    case UpdatedAtRole:
-        return record.updatedAt;
-    default:
-        break;
-    }
-    return {};
-}
-
-QHash<int, QByteArray> NotificationTracker::roleNames() const
-{
-    return {
-        {IdRole, "id"},
-        {DesktopEntryRole, "desktopEntry"},
-        {AppNameRole, "appName"},
-        {AppIconRole, "appIcon"},
-        {SummaryRole, "summary"},
-        {BodyRole, "body"},
-        {ActionsRole, "actions"},
-        {HintsRole, "hints"},
-        {TimeoutRole, "timeout"},
-        {ReplacesIdRole, "replacesId"},
-        {UrgencyRole, "urgency"},
-        {ActiveRole, "active"},
-        {ReadRole, "read"},
-        {DismissedRole, "dismissed"},
-        {CloseReasonRole, "closeReason"},
-        {BroadcastReasonRole, "broadcastReason"},
-        {CreatedAtRole, "createdAt"},
-        {UpdatedAtRole, "updatedAt"},
-    };
-}
-
 int NotificationTracker::revision() const
 {
     return m_revision;
@@ -285,173 +186,6 @@ bool NotificationTracker::dndActive() const
     return m_dndActive;
 }
 
-QVariantList NotificationTracker::notifications(const QString &desktopEntry, bool activeOnly) const
-{
-    const QString normalized = desktopEntry.isEmpty() ? QString() : canonicalDesktopId(desktopEntry);
-    QVariantList result;
-    for (uint id : m_modelIds) {
-        const auto it = m_notificationRecords.constFind(id);
-        if (it == m_notificationRecords.cend()) {
-            continue;
-        }
-        if (!normalized.isEmpty() && it->desktopEntry != normalized) {
-            continue;
-        }
-        if (activeOnly && !m_notifIdToEntry.contains(id)) {
-            continue;
-        }
-        result.append(notificationMap(it.value()));
-    }
-    return result;
-}
-
-bool NotificationTracker::markRead(uint id)
-{
-    auto it = m_notificationRecords.find(id);
-    if (it == m_notificationRecords.end() || it->read) {
-        return false;
-    }
-    it->read = true;
-    if (auto entryIt = m_notifIdToEntry.find(id); entryIt != m_notifIdToEntry.end()) {
-        if (auto unreadIt = m_unreadNotifs.find(entryIt.value()); unreadIt != m_unreadNotifs.end()) {
-            unreadIt->remove(id);
-            if (unreadIt->isEmpty()) {
-                m_unreadNotifs.erase(unreadIt);
-            }
-        }
-    }
-    it->updatedAt = QDateTime::currentDateTimeUtc();
-    bumpRevision();
-    return true;
-}
-
-bool NotificationTracker::markDismissed(uint id)
-{
-    auto it = m_notificationRecords.find(id);
-    if (it == m_notificationRecords.end() || it->dismissed) {
-        return false;
-    }
-    it->dismissed = true;
-    if (auto entryIt = m_notifIdToEntry.find(id); entryIt != m_notifIdToEntry.end()) {
-        if (auto unreadIt = m_unreadNotifs.find(entryIt.value()); unreadIt != m_unreadNotifs.end()) {
-            unreadIt->remove(id);
-            if (unreadIt->isEmpty()) {
-                m_unreadNotifs.erase(unreadIt);
-            }
-        }
-    }
-    it->updatedAt = QDateTime::currentDateTimeUtc();
-    bumpRevision();
-    return true;
-}
-
-bool NotificationTracker::invokeAction(uint id, const QString &action)
-{
-    const auto it = m_notificationRecords.constFind(id);
-    if (it == m_notificationRecords.cend() || action.isEmpty()) {
-        return false;
-    }
-    QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"),
-                                                          QStringLiteral("/org/freedesktop/Notifications"),
-                                                          QStringLiteral("org.kde.NotificationManager"),
-                                                          QStringLiteral("InvokeAction"));
-    message << id << action;
-    return QDBusConnection::sessionBus().asyncCall(message).isValid();
-}
-
-QVariantMap NotificationTracker::notificationMap(const NotificationRecord &record) const
-{
-    QVariantMap result;
-    result.insert(QStringLiteral("id"), record.serverId);
-    result.insert(QStringLiteral("desktopEntry"), record.desktopEntry);
-    result.insert(QStringLiteral("appName"), record.appName);
-    result.insert(QStringLiteral("appIcon"), record.appIcon);
-    result.insert(QStringLiteral("summary"), record.summary);
-    result.insert(QStringLiteral("body"), record.body);
-    result.insert(QStringLiteral("actions"), record.actions);
-    result.insert(QStringLiteral("hints"), record.hints);
-    result.insert(QStringLiteral("timeout"), record.timeout);
-    result.insert(QStringLiteral("replacesId"), record.replacesId);
-    result.insert(QStringLiteral("urgency"), record.urgency);
-    result.insert(QStringLiteral("active"), m_notifIdToEntry.contains(record.serverId));
-    result.insert(QStringLiteral("read"), record.read);
-    result.insert(QStringLiteral("dismissed"), record.dismissed);
-    result.insert(QStringLiteral("broadcastReason"), record.broadcastReason);
-    result.insert(QStringLiteral("createdAt"), record.createdAt);
-    result.insert(QStringLiteral("updatedAt"), record.updatedAt);
-    QString closeReason;
-    switch (record.closeReason) {
-    case CloseReason::Active:
-        closeReason = QStringLiteral("active");
-        break;
-    case CloseReason::Replaced:
-        closeReason = QStringLiteral("replaced");
-        break;
-    case CloseReason::Directed:
-        closeReason = QStringLiteral("directed");
-        break;
-    case CloseReason::BroadcastExpired:
-        closeReason = QStringLiteral("broadcast-expired");
-        break;
-    case CloseReason::BroadcastDismissed:
-        closeReason = QStringLiteral("broadcast-dismissed");
-        break;
-    case CloseReason::BroadcastClosedByCall:
-        closeReason = QStringLiteral("broadcast-closed-by-call");
-        break;
-    case CloseReason::BroadcastUndefined:
-        closeReason = QStringLiteral("broadcast-undefined");
-        break;
-    }
-    result.insert(QStringLiteral("closeReason"), closeReason);
-    return result;
-}
-
-void NotificationTracker::removeInactiveNotification(uint id)
-{
-    const auto keyIt = m_inactiveRecordKeys.find(id);
-    if (keyIt == m_inactiveRecordKeys.end()) {
-        return;
-    }
-    m_inactiveRecordOrder.remove(keyIt.value());
-    m_inactiveRecordKeys.erase(keyIt);
-}
-
-void NotificationTracker::markNotificationInactive(uint id)
-{
-    removeInactiveNotification(id);
-    const auto recordIt = m_notificationRecords.constFind(id);
-    if (recordIt == m_notificationRecords.cend()) {
-        return;
-    }
-    const auto key = qMakePair(recordIt->updatedAt, id);
-    m_inactiveRecordOrder.insert(key, id);
-    m_inactiveRecordKeys.insert(id, key);
-}
-
-void NotificationTracker::pruneInactiveNotificationRecords()
-{
-    while (m_inactiveRecordOrder.size() > kMaxInactiveNotificationRecords) {
-        const auto oldest = m_inactiveRecordOrder.cbegin();
-        const uint id = oldest.value();
-        m_inactiveRecordKeys.remove(id);
-        m_inactiveRecordOrder.erase(oldest);
-        m_notificationRecords.remove(id);
-    }
-}
-
-void NotificationTracker::resetNotificationModel()
-{
-    QVector<uint> ids;
-    ids.reserve(m_notificationRecords.size());
-    for (auto it = m_notificationRecords.cbegin(); it != m_notificationRecords.cend(); ++it) {
-        ids.append(it.key());
-    }
-    std::sort(ids.begin(), ids.end());
-    beginResetModel();
-    m_modelIds = std::move(ids);
-    endResetModel();
-}
 
 void NotificationTracker::updateDndState()
 {
@@ -591,29 +325,17 @@ void NotificationTracker::clearUnreadNotifications(const QString &appId)
     }
 
     const QString normalized = canonicalDesktopId(appId);
-    bool changed = false;
-
-    // Find and remove all notification entries matching this canonical app.
-    for (auto it = m_unreadNotifs.begin(); it != m_unreadNotifs.end();) {
-        if (it.key() == normalized) {
-            qCInfo(lcNotif) << "clearUnreadNotifications: clearing" << it->size() << "notifications for" << it.key() << "(triggered by SNI" << appId << ")";
-            for (uint notifId : *it) {
-                if (auto recordIt = m_notificationRecords.find(notifId); recordIt != m_notificationRecords.end()) {
-                    recordIt->read = true;
-                    recordIt->updatedAt = QDateTime::currentDateTimeUtc();
-                }
-            }
-            it = m_unreadNotifs.erase(it);
-            changed = true;
-        } else {
-            ++it;
-        }
+    const auto unreadIt = m_unreadNotifs.find(normalized);
+    if (unreadIt == m_unreadNotifs.end()) {
+        return;
     }
 
-    if (changed) {
-        qCInfo(lcNotif) << "clearUnreadNotifications: cleared for" << appId;
-        bumpRevision();
+    const QSet<uint> notificationIds = unreadIt.value();
+    m_unreadNotifs.erase(unreadIt);
+    for (uint id : notificationIds) {
+        m_notifIdToEntry.remove(id);
     }
+    bumpRevision();
 }
 
 void NotificationTracker::dumpState() const
@@ -756,15 +478,33 @@ void NotificationTracker::onNotificationServiceOwnerChanged(const QString &servi
     }
 }
 
+bool NotificationTracker::removeActiveNotification(uint id)
+{
+    const auto it = m_notifIdToEntry.find(id);
+    if (it == m_notifIdToEntry.end()) {
+        return false;
+    }
+
+    const QString entry = it.value();
+    if (auto unreadIt = m_unreadNotifs.find(entry); unreadIt != m_unreadNotifs.end()) {
+        unreadIt->remove(id);
+        if (unreadIt->isEmpty()) {
+            m_unreadNotifs.erase(unreadIt);
+        }
+    }
+    m_notifIdToEntry.erase(it);
+    return true;
+}
+
 void NotificationTracker::Notify(uint id,
                                  const QString &appName,
                                  uint replacesId,
-                                 const QString &appIcon,
-                                 const QString &summary,
-                                 const QString &body,
-                                 const QStringList &actions,
+                                 const QString &,
+                                 const QString &,
+                                 const QString &,
+                                 const QStringList &,
                                  const QVariantMap &hints,
-                                 int expireTimeout)
+                                 int)
 {
     QString rawEntry = hints.value(QStringLiteral("desktop-entry")).toString();
     if (rawEntry.isEmpty()) {
@@ -775,139 +515,28 @@ void NotificationTracker::Notify(uint id,
         return;
     }
 
-    const QDateTime now = QDateTime::currentDateTimeUtc();
-    NotificationRecord record;
-    record.serverId = id;
-    record.desktopEntry = desktopEntry;
-    record.appName = appName;
-    record.appIcon = appIcon;
-    record.summary = summary;
-    record.body = body;
-    record.actions = actions;
-    record.hints = hints;
-    record.timeout = expireTimeout;
-    record.replacesId = replacesId;
-    record.urgency = static_cast<quint8>(qMin(hints.value(QStringLiteral("urgency")).toUInt(), 255u));
-    record.createdAt = now;
-    record.updatedAt = now;
-
-    qCInfo(lcNotif) << ">>> Notify: id=" << id << "appName=" << appName << "desktop-entry hint=" << hints.value(QStringLiteral("desktop-entry")).toString()
-                    << "resolved=" << desktopEntry << "replacesId=" << replacesId << "summary=" << summary;
-
-    // A reused server ID no longer refers to any previous retained record.
-    removeInactiveNotification(id);
-    if (auto current = m_notifIdToEntry.find(id); current != m_notifIdToEntry.end()) {
-        const QString oldEntry = current.value();
-        if (auto setIt = m_unreadNotifs.find(oldEntry); setIt != m_unreadNotifs.end()) {
-            setIt->remove(id);
-            if (setIt->isEmpty()) {
-                m_unreadNotifs.erase(setIt);
-            }
-        }
-        m_notifIdToEntry.erase(current);
-    }
-
-    // If replacing, remove the old active ID while retaining its lifecycle.
+    removeActiveNotification(id);
     if (replacesId > 0) {
-        if (auto it = m_notifIdToEntry.find(replacesId); it != m_notifIdToEntry.end()) {
-            const QString oldEntry = it.value();
-            if (auto setIt = m_unreadNotifs.find(oldEntry); setIt != m_unreadNotifs.end()) {
-                setIt->remove(replacesId);
-                if (setIt->isEmpty()) {
-                    m_unreadNotifs.erase(setIt);
-                }
-            }
-            m_notifIdToEntry.erase(it);
-            if (auto oldRecord = m_notificationRecords.find(replacesId); oldRecord != m_notificationRecords.end()) {
-                oldRecord->closeReason = CloseReason::Replaced;
-                oldRecord->updatedAt = now;
-            }
-            markNotificationInactive(replacesId);
-            qCInfo(lcNotif) << "    replaced old notif id=" << replacesId << "entry=" << oldEntry;
-        }
+        removeActiveNotification(replacesId);
     }
 
-    m_notificationRecords.insert(id, record);
     m_notifIdToEntry[id] = desktopEntry;
     m_unreadNotifs[desktopEntry].insert(id);
-
-    qCInfo(lcNotif) << "    stored: unread[" << desktopEntry << "] =" << m_unreadNotifs[desktopEntry].size();
-
     bumpRevision();
 }
 
 void NotificationTracker::CloseNotification(uint id)
 {
-    auto it = m_notifIdToEntry.find(id);
-    if (it == m_notifIdToEntry.end()) {
-        return;
+    if (removeActiveNotification(id)) {
+        bumpRevision();
     }
-
-    const QString entry = it.value();
-    m_notifIdToEntry.erase(it);
-
-    if (auto setIt = m_unreadNotifs.find(entry); setIt != m_unreadNotifs.end()) {
-        setIt->remove(id);
-        if (setIt->isEmpty()) {
-            m_unreadNotifs.erase(setIt);
-        }
-    }
-    if (auto recordIt = m_notificationRecords.find(id); recordIt != m_notificationRecords.end()) {
-        recordIt->closeReason = CloseReason::Directed;
-        recordIt->updatedAt = QDateTime::currentDateTimeUtc();
-        recordIt->broadcastReason = 0;
-        markNotificationInactive(id);
-    }
-
-    bumpRevision();
-    qCInfo(lcNotif) << "<<< CloseNotification (directed): id=" << id << "entry=" << entry;
 }
 
-void NotificationTracker::NotificationClosed(uint id, uint reason)
+void NotificationTracker::NotificationClosed(uint id, uint)
 {
-    auto it = m_notifIdToEntry.find(id);
-    if (it == m_notifIdToEntry.end()) {
-        if (auto recordIt = m_notificationRecords.find(id); recordIt != m_notificationRecords.end()
-            && recordIt->closeReason == CloseReason::Directed) {
-            recordIt->broadcastReason = reason;
-            recordIt->updatedAt = QDateTime::currentDateTimeUtc();
-            markNotificationInactive(id);
-            bumpRevision();
-        }
-        return;
+    if (removeActiveNotification(id)) {
+        bumpRevision();
     }
-
-    const QString entry = it.value();
-    m_notifIdToEntry.erase(it);
-
-    if (auto setIt = m_unreadNotifs.find(entry); setIt != m_unreadNotifs.end()) {
-        setIt->remove(id);
-        if (setIt->isEmpty()) {
-            m_unreadNotifs.erase(setIt);
-        }
-    }
-    if (auto recordIt = m_notificationRecords.find(id); recordIt != m_notificationRecords.end()) {
-        switch (reason) {
-        case 1:
-            recordIt->closeReason = CloseReason::BroadcastExpired;
-            break;
-        case 2:
-            recordIt->closeReason = CloseReason::BroadcastDismissed;
-            break;
-        case 3:
-            recordIt->closeReason = CloseReason::BroadcastClosedByCall;
-            break;
-        default:
-            recordIt->closeReason = CloseReason::BroadcastUndefined;
-            break;
-        }
-        recordIt->broadcastReason = reason;
-        recordIt->updatedAt = QDateTime::currentDateTimeUtc();
-        markNotificationInactive(id);
-    }
-
-    bumpRevision();
-    qCInfo(lcNotif) << "<<< NotificationClosed (broadcast): id=" << id << "reason=" << reason << "entry=" << entry;
 }
 
 // --- SNI watcher ---
@@ -987,8 +616,6 @@ void NotificationTracker::setupSniWatcher()
 void NotificationTracker::bumpRevision()
 {
     ++m_revision;
-    pruneInactiveNotificationRecords();
-    resetNotificationModel();
     // Build state summary for debugging
     QStringList summary;
     for (auto it = m_unreadNotifs.cbegin(); it != m_unreadNotifs.cend(); ++it) {

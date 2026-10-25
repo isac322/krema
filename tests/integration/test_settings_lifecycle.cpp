@@ -892,7 +892,7 @@ TEST_CASE("Every settings page loads without QML warnings", "[settings][pages]")
     REQUIRE(loader);
 
     const auto modules = dialog->property("modules").toList();
-    REQUIRE(modules.size() == 11);
+    REQUIRE(modules.size() == 10);
     for (const auto &entry : modules) {
         const QString moduleId = entry.toMap().value(QStringLiteral("moduleId")).toString();
         INFO("module " << moduleId.toStdString());
@@ -903,11 +903,6 @@ TEST_CASE("Every settings page loads without QML warnings", "[settings][pages]")
                 return loader->property("status").toInt() == 1 /* Loader.Ready */ && loader->property("item").value<QQuickItem *>();
             },
             kTimeoutMs));
-        if (moduleId == QLatin1String("notifications")) {
-            auto *page = loader->property("item").value<QQuickItem *>();
-            REQUIRE(page);
-            CHECK(page->findChild<QQuickItem *>(QStringLiteral("notificationInbox")));
-        }
         QTest::qWait(300);
         CHECK(g_settingsQmlWarnings.isEmpty());
         if (!g_settingsQmlWarnings.isEmpty()) {

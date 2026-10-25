@@ -22,23 +22,9 @@ Item {
     id: root
     anchors.fill: parent
 
-    property string currentAppId: ""
-    readonly property bool hasUnreadForCurrentApp: {
-        let _rev = NotificationTracker.revision
-        return root.currentAppId.length > 0
-            && NotificationTracker.unreadCount(root.currentAppId) > 0
-    }
-    readonly property bool hasWindowContent: childWindowModel.count > 0
-    readonly property bool hasNotificationContent:
-        root.hasUnreadForCurrentApp && previewInbox.count > 0
+    // C++ singletons: PreviewController, DockModel
 
-    function announcePreviewOpen(appName, count) {
-        let message = count === 0 && root.hasNotificationContent
-            ? i18np("%1, %2 unread notification", "%1, %2 unread notifications",
-                   appName, previewInbox.count)
-            : i18n("Preview for %1, %2 windows", appName, count)
-        Accessible.announce(message, Accessible.Polite)
-    }
+    readonly property bool hasWindowContent: childWindowModel.count > 0
 
     function checkPopupStillHasContent() {
         if (!PreviewController.visible || PreviewController.parentIndex < 0)
@@ -53,10 +39,16 @@ Item {
         if (!isWindowOrGroup && !root.hasWindowContent) {
             if (PreviewController.previewKeyboardActive)
                 PreviewController.endPreviewKeyboardNav()
-            if (!root.hasNotificationContent)
-                PreviewController.hidePreviewImmediate()
+            PreviewController.hidePreview()
         }
     }
+
+    function announcePreviewOpen(appName, count) {
+        Accessible.announce(
+            i18n("Preview for %1, %2 windows", appName, count),
+            Accessible.Polite)
+    }
+
 
     // Surface-level hover detection: keep preview visible when mouse is anywhere
     // on this surface. The C++ input region (updateInputRegion) already constrains
@@ -89,7 +81,6 @@ Item {
 
     function rebuildChildModel() {
         let parentIdx = PreviewController.parentIndex
-        root.currentAppId = parentIdx >= 0 ? DockModel.appId(parentIdx) : ""
         if (parentIdx < 0) {
             // Keep delegates alive so PipeWire streams pause/resume naturally
             // via visibility cascade. Destroying delegates triggers
@@ -191,17 +182,10 @@ Item {
             if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 let count = childWindowModel.count
                 root.announcePreviewOpen(PreviewController.appName, count)
-                Qt.callLater(root.checkPopupStillHasContent)
             }
         }
     }
 
-    Connections {
-        target: NotificationTracker
-        function onRevisionChanged() {
-            Qt.callLater(root.checkPopupStillHasContent)
-        }
-    }
 
     // Also rebuild when the underlying model data changes (window close, title change)
     Connections {
@@ -209,7 +193,7 @@ Item {
         function onDataChanged() {
             if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 root.rebuildChildModel()
-                Qt.callLater(root.checkPopupStillHasContent)
+                root.checkPopupStillHasContent()
             }
         }
         function onRowsInserted() {
@@ -223,10 +207,12 @@ Item {
                 let parentIdx = PreviewController.parentIndex
                 let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
                 if (!parentModelIdx.valid) {
+                    if (PreviewController.previewKeyboardActive)
+                        PreviewController.endPreviewKeyboardNav()
                     PreviewController.hidePreview()
                 } else {
                     root.rebuildChildModel()
-                    Qt.callLater(root.checkPopupStillHasContent)
+                    root.checkPopupStillHasContent()
                 }
             }
         }
@@ -235,7 +221,9 @@ Item {
     // The visible popup container
     Rectangle {
         id: popup
-        visible: PreviewController.visible && PreviewController.parentIndex >= 0
+        visible: PreviewController.visible
+            && PreviewController.parentIndex >= 0
+            && root.hasWindowContent
 
         Accessible.role: Accessible.PopupMenu
         Accessible.name: PreviewController.appName
@@ -276,8 +264,7 @@ Item {
             // App name header (width capped to thumbnail row)
             QQC2.Label {
                 Layout.fillWidth: true
-                Layout.maximumWidth: Math.max(thumbnailRow.implicitWidth,
-                                              Kirigami.Units.gridUnit * 18)
+                Layout.maximumWidth: groupedRow.implicitWidth
                 text: PreviewController.appName
                 font.weight: Font.Bold
                 elide: Text.ElideRight
@@ -291,10 +278,10 @@ Item {
 
             // Grouped windows: horizontal row of thumbnails
             Row {
-                id: thumbnailRow
+                id: groupedRow
                 Layout.alignment: Qt.AlignHCenter
                 spacing: Kirigami.Units.smallSpacing
-                visible: root.hasWindowContent
+                visible: PreviewController.visible && PreviewController.parentIndex >= 0
 
                 Repeater {
                     id: thumbnailRepeater
@@ -316,39 +303,6 @@ Item {
                 }
             }
 
-            Kirigami.Separator {
-                visible: root.hasWindowContent && root.hasNotificationContent
-                Layout.fillWidth: true
-            }
-
-            QQC2.ScrollView {
-                id: previewNotificationSection
-                objectName: "previewNotificationSection"
-                visible: root.hasNotificationContent
-                Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: Math.max(thumbnailRow.visible ? thumbnailRow.width : 0,
-                                                Kirigami.Units.gridUnit * 18)
-                Layout.minimumWidth: Layout.preferredWidth
-                Layout.maximumWidth: Layout.preferredWidth
-                Layout.preferredHeight: Math.min(previewInbox.implicitHeight,
-                                                 Kirigami.Units.gridUnit * 14)
-                Layout.minimumHeight: Layout.preferredHeight
-                Layout.maximumHeight: Layout.preferredHeight
-                clip: true
-                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
-
-                NotificationInbox {
-                    id: previewInbox
-                    objectName: "previewNotificationInbox"
-                    width: previewNotificationSection.availableWidth
-                    appFilter: root.currentAppId
-                    activeOnly: true
-                    unreadOnly: true
-                    requireAppFilter: true
-                    compact: true
-                    showHeader: false
-                }
-            }
 
         }
     }

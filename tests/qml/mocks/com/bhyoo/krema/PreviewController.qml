@@ -21,7 +21,6 @@ QtObject {
     property bool previewKeyboardActive: false
     property int focusedThumbnailIndex: -1
     function showPreview(i, pos, ext) { _record("showPreview", arguments); parentIndex = i; visible = true }
-    function hidePreviewImmediate() { _record("hidePreviewImmediate", arguments); hidePreview() }
     function hidePreview() { _record("hidePreview", arguments); visible = false }
     function hidePreviewDelayed() { _record("hidePreviewDelayed", arguments) }
     function cancelHide() { _record("cancelHide", arguments) }

@@ -52,7 +52,7 @@ public:
     /// Return whether badges are enabled for @p appId (global and per-app settings).
     [[nodiscard]] Q_INVOKABLE bool badgesEnabled(const QString &appId) const;
 
-    /// Return the Slack SNI chat state: 0 = none, 1 = unread, 2 = mention.
+    /// Return the SNI chat state: 0 = none, 1 = unread, 2 = mention.
     [[nodiscard]] Q_INVOKABLE int sniChatUnreadState(const QString &appId) const;
     /// Return Slack's positive mention count reported by its tray tooltip.
     [[nodiscard]] Q_INVOKABLE int sniChatMentionCount(const QString &appId) const;

@@ -28,8 +28,16 @@ QtObject {
     function isOnCurrentDesktop(i) { let v = _role(i, "IsOnCurrentDesktop"); return v === undefined ? true : !!v }
     function childCount(i) { return tasksModel.rowCount(tasksModel.index(i, 0)) }
     function isDesktopFile(url) { return url.toString().endsWith(".desktop") }
-    function taskChatUnreadState(i) { return Number(_role(i, "ChatUnreadState") || 0) }
-    function taskChatMentionCount(i) { return Number(_role(i, "ChatMentionCount") || 0) }
+    // Presentation fixtures provide title-classifier output as roles, including
+    // independent maxima across grouped children.
+    function _taskChatMaximum(i, role) {
+        let maximum = _role(i, "IsWindow") ? Number(_role(i, role) || 0) : 0
+        for (let child = 0; child < childCount(i); ++child)
+            maximum = Math.max(maximum, Number(tasksModel.get(i, role, child) || 0))
+        return maximum
+    }
+    function taskChatUnreadState(i) { return _taskChatMaximum(i, "ChatUnreadState") }
+    function taskChatMentionCount(i) { return _taskChatMaximum(i, "ChatMentionCount") }
     function setTaskChatUnreadState(i, state) {
         tasksModel.setTaskData(i, "ChatUnreadState", state)
         chatStateRevision++

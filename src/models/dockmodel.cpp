@@ -14,6 +14,7 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
+#include <QRegularExpression>
 #include <QRect>
 #include <QVariant>
 #include <QScreen>
@@ -79,6 +80,70 @@ QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &
     const QByteArray digest = QCryptographicHash::hash(material, QCryptographicHash::Sha256).toHex();
     return QStringLiteral("raw:%1").arg(QString::fromLatin1(digest));
 }
+struct ChatTitleState {
+    int unreadState = 0;
+    int mentionCount = 0;
+};
+
+enum class ChatTitleAdapter {
+    None,
+    Discord,
+    WebCord,
+};
+
+ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
+{
+    QString appId = rawAppId.trimmed().toLower();
+    if (appId.endsWith(QLatin1String(".desktop"))) {
+        appId.chop(8);
+    }
+    if (appId == QLatin1String("discord") || appId == QLatin1String("com.discordapp.discord")
+        || appId == QLatin1String("vesktop") || appId == QLatin1String("dev.vencord.vesktop")) {
+        return ChatTitleAdapter::Discord;
+    }
+    if (appId == QLatin1String("webcord") || appId == QLatin1String("io.github.spacingbat3.webcord")) {
+        return ChatTitleAdapter::WebCord;
+    }
+    return ChatTitleAdapter::None;
+}
+
+ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapter)
+{
+    if (adapter == ChatTitleAdapter::None) {
+        return {};
+    }
+
+    static const QRegularExpression discordMention(
+        QStringLiteral("^\\s*\\(([1-9][0-9]*)\\)\\s+Discord(?:\\b|\\s*\\||.*-\\s*Discord\\s*$)"));
+    static const QRegularExpression discordUnread(
+        QStringLiteral("^\\s*•\\s+Discord(?:\\b|\\s*\\||.*-\\s*Discord\\s*$)"));
+    static const QRegularExpression webCordMention(QStringLiteral("^\\s*\\[([1-9][0-9]*)\\]\\s+WebCord\\b"));
+    static const QRegularExpression webCordUnread(QStringLiteral("^\\s*\\*+\\s*\\[?WebCord\\]?\\b"));
+
+    const QRegularExpression &mentionPattern = adapter == ChatTitleAdapter::WebCord ? webCordMention : discordMention;
+    const QRegularExpression &unreadPattern = adapter == ChatTitleAdapter::WebCord ? webCordUnread : discordUnread;
+    ChatTitleState result;
+    bool hasMention = false;
+    bool hasUnread = false;
+    for (const QString &title : titles) {
+        const QRegularExpressionMatch mentionMatch = mentionPattern.match(title);
+        if (mentionMatch.hasMatch()) {
+            hasMention = true;
+            bool ok = false;
+            const int count = mentionMatch.captured(1).toInt(&ok);
+            if (ok) {
+                result.mentionCount = std::max(result.mentionCount, count);
+            }
+            continue;
+        }
+        if (unreadPattern.match(title).hasMatch()) {
+            hasUnread = true;
+        }
+    }
+    result.unreadState = hasMention ? 2 : (hasUnread ? 1 : 0);
+    return result;
+}
+
 } // namespace
 
 DockModel::DockModel(QObject *parent)
@@ -585,14 +650,20 @@ int DockModel::chatStateRevision() const
 
 int DockModel::taskChatUnreadState(int row) const
 {
-    Q_UNUSED(row)
-    return 0;
+    const ChatTitleAdapter adapter = chatTitleAdapterForAppId(appId(row));
+    if (adapter == ChatTitleAdapter::None) {
+        return 0;
+    }
+    return chatTitleState(windowTitlesForRow(row), adapter).unreadState;
 }
 
 int DockModel::taskChatMentionCount(int row) const
 {
-    Q_UNUSED(row)
-    return 0;
+    const ChatTitleAdapter adapter = chatTitleAdapterForAppId(appId(row));
+    if (adapter == ChatTitleAdapter::None) {
+        return 0;
+    }
+    return chatTitleState(windowTitlesForRow(row), adapter).mentionCount;
 }
 
 QStringList DockModel::windowTitlesForRow(int row) const

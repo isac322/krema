@@ -88,6 +88,8 @@ struct ChatTitleState {
 enum class ChatTitleAdapter {
     None,
     Slack,
+    Discord,
+    WebCord,
 };
 
 ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
@@ -98,6 +100,13 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
     }
     if (appId == QLatin1String("slack") || appId == QLatin1String("com.slack.slack")) {
         return ChatTitleAdapter::Slack;
+    }
+    if (appId == QLatin1String("discord") || appId == QLatin1String("com.discordapp.discord")
+        || appId == QLatin1String("vesktop") || appId == QLatin1String("dev.vencord.vesktop")) {
+        return ChatTitleAdapter::Discord;
+    }
+    if (appId == QLatin1String("webcord") || appId == QLatin1String("io.github.spacingbat3.webcord")) {
+        return ChatTitleAdapter::WebCord;
     }
     return ChatTitleAdapter::None;
 }
@@ -112,23 +121,53 @@ ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapte
         QStringLiteral("^\\s*(?:\\(([1-9][0-9]*)\\)\\s*)?!\\s+.+-\\s*Slack\\s*$|\\s*\\(([1-9][0-9]*)\\)\\s+.+-\\s*Slack\\s*$"));
     static const QRegularExpression slackUnread(
         QStringLiteral("^\\s*\\*\\s+.+-\\s*Slack\\s*$"));
+    if (adapter == ChatTitleAdapter::Slack) {
+        ChatTitleState result;
+        bool hasMention = false;
+        bool hasUnread = false;
+        for (const QString &title : titles) {
+            const QRegularExpressionMatch mentionMatch = slackMention.match(title);
+            if (mentionMatch.hasMatch()) {
+                hasMention = true;
+                const QString captured = !mentionMatch.captured(1).isEmpty() ? mentionMatch.captured(1) : mentionMatch.captured(2);
+                bool ok = false;
+                const int count = captured.toInt(&ok);
+                if (ok) {
+                    result.mentionCount = std::max(result.mentionCount, count);
+                }
+                continue;
+            }
+            if (slackUnread.match(title).hasMatch()) {
+                hasUnread = true;
+            }
+        }
+        result.unreadState = hasMention ? 2 : (hasUnread ? 1 : 0);
+        return result;
+    }
+    static const QRegularExpression discordMention(
+        QStringLiteral("^\\s*\\(([1-9][0-9]*)\\)\\s+Discord(?:\\b|\\s*\\||.*-\\s*Discord\\s*$)"));
+    static const QRegularExpression discordUnread(
+        QStringLiteral("^\\s*•\\s+Discord(?:\\b|\\s*\\||.*-\\s*Discord\\s*$)"));
+    static const QRegularExpression webCordMention(QStringLiteral("^\\s*\\[([1-9][0-9]*)\\]\\s+WebCord\\b"));
+    static const QRegularExpression webCordUnread(QStringLiteral("^\\s*\\*+\\s*\\[?WebCord\\]?\\b"));
 
+    const QRegularExpression &mentionPattern = adapter == ChatTitleAdapter::WebCord ? webCordMention : discordMention;
+    const QRegularExpression &unreadPattern = adapter == ChatTitleAdapter::WebCord ? webCordUnread : discordUnread;
     ChatTitleState result;
     bool hasMention = false;
     bool hasUnread = false;
     for (const QString &title : titles) {
-        const QRegularExpressionMatch mentionMatch = slackMention.match(title);
+        const QRegularExpressionMatch mentionMatch = mentionPattern.match(title);
         if (mentionMatch.hasMatch()) {
             hasMention = true;
-            const QString captured = !mentionMatch.captured(1).isEmpty() ? mentionMatch.captured(1) : mentionMatch.captured(2);
             bool ok = false;
-            const int count = captured.toInt(&ok);
+            const int count = mentionMatch.captured(1).toInt(&ok);
             if (ok) {
                 result.mentionCount = std::max(result.mentionCount, count);
             }
             continue;
         }
-        if (slackUnread.match(title).hasMatch()) {
+        if (unreadPattern.match(title).hasMatch()) {
             hasUnread = true;
         }
     }

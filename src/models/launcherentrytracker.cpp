@@ -29,6 +29,21 @@ static QString stripDesktopSuffix(const QString &id)
     return id.endsWith(suffix) ? id.left(id.size() - suffix.size()) : id;
 }
 
+static QStringList fallbackDesktopIds(const QString &desktopFile)
+{
+    const QString stem = stripDesktopSuffix(desktopFile.trimmed().toLower());
+    if (stem == QLatin1String("discord") || stem == QLatin1String("com.discordapp.discord") || stem == QLatin1String("com.discord.app")) {
+        return {QStringLiteral("discord.desktop"), QStringLiteral("com.discordapp.Discord.desktop"), QStringLiteral("com.discordapp.discord.desktop")};
+    }
+    if (stem == QLatin1String("vesktop") || stem == QLatin1String("dev.vencord.vesktop") || stem == QLatin1String("dev.vencord")) {
+        return {QStringLiteral("vesktop.desktop"), QStringLiteral("dev.vencord.vesktop.desktop")};
+    }
+    if (stem == QLatin1String("webcord") || stem == QLatin1String("io.github.spacingbat3.webcord")) {
+        return {QStringLiteral("webcord.desktop"), QStringLiteral("io.github.spacingbat3.webcord.desktop")};
+    }
+    return {};
+}
+
 LauncherEntryTracker::LauncherEntryTracker(QObject *parent)
     : QObject(parent)
     , m_serviceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForUnregistration)
@@ -173,10 +188,17 @@ void LauncherEntryTracker::update(const QString &appUri, const QVariantMap &prop
 {
     QString storageId = m_appUriToStorageId.value(appUri);
     if (storageId.isEmpty()) {
-        // Apps should send their desktop file name with the application:// prefix.
         static const QLatin1String prefix("application://");
         const QString desktopFile = appUri.startsWith(prefix) ? appUri.mid(prefix.size()) : appUri;
-        const KService::Ptr service = KService::serviceByStorageId(desktopFile);
+        KService::Ptr service = KService::serviceByStorageId(desktopFile);
+        if (!service) {
+            for (const QString &candidate : fallbackDesktopIds(desktopFile)) {
+                service = KService::serviceByStorageId(candidate);
+                if (service) {
+                    break;
+                }
+            }
+        }
         if (!service) {
             qCDebug(lcLauncherEntry) << "No application for LauncherEntry" << appUri;
             return;

@@ -243,18 +243,129 @@ static QImage loadSniIconFallback(const QString &themePath, const QString &iconN
     return image;
 }
 
-static bool isSlackAppId(const QString &rawId)
+enum class SniChatClient : quint8 {
+    None,
+    Slack,
+    Discord,
+    Vesktop,
+    WebCord,
+};
+
+static QString normalizedSniId(const QString &rawId)
 {
     QString id = stripDesktopSuffix(rawId.trimmed().toLower());
     static const QRegularExpression statusIconSuffix(QStringLiteral("_[sS]tatus_[iI]con_[0-9]+$"));
     id.remove(statusIconSuffix);
-    id = stripDesktopSuffix(id);
-    return id == QLatin1String("slack") || id == QLatin1String("com.slack.slack") || id == QLatin1String("com.slack");
+    return stripDesktopSuffix(id);
 }
 
-static bool slackIdsMatch(const QString &left, const QString &right)
+static SniChatClient sniChatClientForId(const QString &rawId)
 {
-    return isSlackAppId(left) && isSlackAppId(right);
+    const QString id = normalizedSniId(rawId);
+    if (id == QLatin1String("slack") || id == QLatin1String("com.slack.slack") || id == QLatin1String("com.slack")) {
+        return SniChatClient::Slack;
+    }
+    if (id == QLatin1String("discord") || id == QLatin1String("com.discordapp.discord")
+        || id == QLatin1String("com.discord.app")) {
+        return SniChatClient::Discord;
+    }
+    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop")
+        || id == QLatin1String("dev.vencord")) {
+        return SniChatClient::Vesktop;
+    }
+    if (id == QLatin1String("webcord") || id == QLatin1String("io.github.spacingbat3.webcord")) {
+        return SniChatClient::WebCord;
+    }
+    return SniChatClient::None;
+}
+
+static bool sniIdsMatch(const QString &left, const QString &right)
+{
+    const auto leftClient = sniChatClientForId(left);
+    return leftClient != SniChatClient::None && leftClient == sniChatClientForId(right);
+}
+
+static QString canonicalNotificationKey(const QString &rawId)
+{
+    switch (sniChatClientForId(rawId)) {
+    case SniChatClient::Slack:
+        return QStringLiteral("slack");
+    case SniChatClient::Discord:
+        return QStringLiteral("discord");
+    case SniChatClient::Vesktop:
+        return QStringLiteral("vesktop");
+    case SniChatClient::WebCord:
+        return QStringLiteral("webcord");
+    case SniChatClient::None:
+        break;
+    }
+    return canonicalDesktopId(rawId);
+}
+
+enum class SniPixelColor : quint8 {
+    WebCordRed,
+    WebCordBlue,
+    DiscordRed,
+};
+
+static int countSniPixels(const QImage &image, bool topRight, SniPixelColor color)
+{
+    if (image.isNull()) {
+        return 0;
+    }
+    const int xStart = (image.width() + 1) / 2;
+    const int yStart = topRight ? 0 : (image.height() + 1) / 2;
+    const int yEnd = topRight ? (image.height() + 1) / 2 : image.height();
+    int count = 0;
+    for (int y = yStart; y < yEnd; ++y) {
+        for (int x = xStart; x < image.width(); ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            const bool red = pixel.alpha() >= 180 && pixel.red() >= 200
+                && pixel.green() <= (color == SniPixelColor::WebCordRed ? 90 : 100)
+                && pixel.blue() <= (color == SniPixelColor::WebCordRed ? 90 : 100);
+            const bool blue = pixel.alpha() >= 180 && pixel.red() <= 170
+                && pixel.green() >= 150 && pixel.blue() >= 210
+                && pixel.blue() - pixel.red() >= 50;
+            if ((color == SniPixelColor::WebCordBlue && blue)
+                || (color != SniPixelColor::WebCordBlue && red)) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+static int webCordPixelState(const QImage &image)
+{
+    if (countSniPixels(image, true, SniPixelColor::WebCordRed) >= 25) {
+        return 2;
+    }
+    return countSniPixels(image, true, SniPixelColor::WebCordBlue) >= 25 ? 1 : 0;
+}
+
+static int webCordMentionCount(const QString &title, const QString &subTitle)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^\\s*WebCord\\s+-\\s+([1-9][0-9]*)\\s+[^#0-9\\s]"),
+        QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+    const QString combined = QString(title + QLatin1Char(' ') + subTitle).trimmed();
+    for (const QString &candidate : {title, subTitle, combined}) {
+        const auto match = pattern.match(candidate);
+        if (match.hasMatch()) {
+            bool ok = false;
+            const int count = match.captured(1).toInt(&ok);
+            if (ok && count > 0) {
+                return count;
+            }
+        }
+    }
+    return 0;
+}
+static int discordPixelState(const QImage &image)
+{
+    const int topRightRed = countSniPixels(image, true, SniPixelColor::DiscordRed);
+    const int bottomRightRed = countSniPixels(image, false, SniPixelColor::DiscordRed);
+    return topRightRed >= 12 && bottomRightRed == 0 ? 1 : 0;
 }
 
 static int slackPixelState(const QImage &image)
@@ -360,7 +471,7 @@ bool NotificationTracker::badgesEnabled(const QString &appId) const
     }
     const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
     return !std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &appId](const QString &entry) {
-        return canonicalDesktopId(entry) == normalized || slackIdsMatch(entry, appId);
+        return canonicalDesktopId(entry) == normalized || sniIdsMatch(entry, appId);
     });
 }
 
@@ -411,7 +522,7 @@ void NotificationTracker::updateDndState()
 
 int NotificationTracker::unreadCount(const QString &desktopEntry) const
 {
-    if (desktopEntry.isEmpty() || isSlackAppId(desktopEntry)) {
+    if (desktopEntry.isEmpty() || sniChatClientForId(desktopEntry) == SniChatClient::Slack) {
         return 0;
     }
 
@@ -419,15 +530,15 @@ int NotificationTracker::unreadCount(const QString &desktopEntry) const
         return 0;
     }
 
-    const QString normalized = canonicalDesktopId(desktopEntry);
+    const QString normalized = canonicalNotificationKey(desktopEntry);
     if (normalized.isEmpty()) {
         return 0;
     }
 
     if (m_notifSettings) {
         const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
-        const bool blacklisted = std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized](const QString &entry) {
-            return canonicalDesktopId(entry) == normalized;
+        const bool blacklisted = std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &desktopEntry](const QString &entry) {
+            return canonicalNotificationKey(entry) == normalized || sniIdsMatch(entry, desktopEntry);
         });
         if (blacklisted) {
             qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0 (blacklisted)";
@@ -464,10 +575,11 @@ const NotificationTracker::SniEntry *NotificationTracker::sniEntryForApp(const Q
         const QString rawId = it->id.trimmed().toLower();
         const QString titleId = canonicalDesktopId(it->title);
         const QString toolTipId = canonicalDesktopId(it->toolTipTitle);
-        const bool exactMatch = canonicalDesktopId(it->id) == normalized || slackIdsMatch(it->id, appId);
+        const bool exactMatch = canonicalDesktopId(it->id) == normalized || sniIdsMatch(it->id, appId);
         const bool chromeTitleMatch = rawId.startsWith(QStringLiteral("chrome_status_icon_"))
             && (titleId == normalized || toolTipId == normalized
-                || (isSlackAppId(appId) && (isSlackAppId(it->title) || isSlackAppId(it->toolTipTitle))));
+                || (sniChatClientForId(appId) == SniChatClient::Slack
+                    && (sniChatClientForId(it->title) == SniChatClient::Slack || sniChatClientForId(it->toolTipTitle) == SniChatClient::Slack)));
         if (!exactMatch && !chromeTitleMatch) {
             continue;
         }
@@ -527,7 +639,7 @@ void NotificationTracker::clearUnreadNotifications(const QString &appId)
         return;
     }
 
-    const QString normalized = canonicalDesktopId(appId);
+    const QString normalized = canonicalNotificationKey(appId);
     const auto unreadIt = m_unreadNotifs.find(normalized);
     if (unreadIt == m_unreadNotifs.end()) {
         return;
@@ -713,8 +825,8 @@ void NotificationTracker::Notify(uint id,
     if (rawEntry.isEmpty()) {
         rawEntry = appName;
     }
-    const QString desktopEntry = canonicalDesktopId(rawEntry);
-    if (desktopEntry.isEmpty() || isSlackAppId(desktopEntry)) {
+    const QString desktopEntry = canonicalNotificationKey(rawEntry);
+    if (desktopEntry.isEmpty() || sniChatClientForId(desktopEntry) == SniChatClient::Slack) {
         return;
     }
 
@@ -735,8 +847,20 @@ void NotificationTracker::CloseNotification(uint id)
     }
 }
 
-void NotificationTracker::NotificationClosed(uint id, uint)
+void NotificationTracker::NotificationClosed(uint id, uint reason)
 {
+    if (reason == 1) {
+        const QString entry = m_notifIdToEntry.value(id);
+        const auto chatClient = sniChatClientForId(entry);
+        if (chatClient != SniChatClient::None && chatClient != SniChatClient::Slack) {
+            for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
+                if (sniIdsMatch(it->id, entry)
+                    && (it->chatUnreadState > 0 || it->iconQueryInFlight || it->iconQueryPending || it->id.isEmpty())) {
+                    return;
+                }
+            }
+        }
+    }
     if (removeActiveNotification(id)) {
         bumpRevision();
     }
@@ -919,19 +1043,26 @@ void NotificationTracker::updateSniIconImage(SniEntry &entry)
 void NotificationTracker::updateSniChatState(SniEntry &entry)
 {
     entry.chatMentionCount = 0;
-    const QString slackId = canonicalDesktopId(QStringLiteral("slack"));
     const QString rawId = entry.id.trimmed().toLower();
     const bool isChromeStatusIcon = rawId.startsWith(QStringLiteral("chrome_status_icon_"));
-    const bool isSlack = isSlackAppId(entry.id)
-        || (isChromeStatusIcon && (isSlackAppId(entry.title) || isSlackAppId(entry.toolTipTitle)));
-    if (!isSlack) {
-        entry.chatUnreadState = 0;
-        entry.chatMentionCount = 0;
+    const auto chatClient = sniChatClientForId(entry.id);
+    const bool isSlack = chatClient == SniChatClient::Slack
+        || (isChromeStatusIcon && (sniChatClientForId(entry.title) == SniChatClient::Slack || sniChatClientForId(entry.toolTipTitle) == SniChatClient::Slack));
+    if (isSlack) {
+        const int pixelState = slackPixelState(entry.iconImage);
+        entry.chatMentionCount = slackMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);
+        entry.chatUnreadState = entry.chatMentionCount > 0 ? 2 : pixelState;
         return;
     }
-    const int pixelState = slackPixelState(entry.iconImage);
-    entry.chatMentionCount = slackMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);
-    entry.chatUnreadState = entry.chatMentionCount > 0 ? 2 : pixelState;
+    entry.chatMentionCount = 0;
+    if (chatClient == SniChatClient::WebCord) {
+        entry.chatMentionCount = webCordMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);
+        entry.chatUnreadState = entry.chatMentionCount > 0 ? 2 : webCordPixelState(entry.iconImage);
+    } else if (chatClient == SniChatClient::Discord || chatClient == SniChatClient::Vesktop) {
+        entry.chatUnreadState = discordPixelState(entry.iconImage);
+    } else {
+        entry.chatUnreadState = 0;
+    }
 }
 
 void NotificationTracker::querySniProperty(const QString &key,
@@ -959,13 +1090,22 @@ void NotificationTracker::querySniProperty(const QString &key,
                 --current->iconQueryOutstanding;
             }
             if (current->iconQueryOutstanding == 0) {
+                updateSniIconImage(*current);
+                updateSniChatState(*current);
+                const int previousChatState = current->iconQueryPreviousChatState;
                 const bool changed = current->iconImage != current->iconQueryPreviousImage
-                    || current->chatUnreadState != current->iconQueryPreviousChatState
+                    || current->chatUnreadState != previousChatState
                     || current->chatMentionCount != current->iconQueryPreviousMentionCount;
                 current->iconQueryInFlight = false;
                 const bool pending = current->iconQueryPending;
                 const QString pendingInterface = current->iconQueryInterface;
+                const QString currentId = current->id;
+                const int committedChatState = current->chatUnreadState;
                 current->iconQueryPending = false;
+                if (previousChatState > 0 && committedChatState == 0
+                    && !currentId.isEmpty() && sniChatClientForId(currentId) != SniChatClient::None) {
+                    clearUnreadNotifications(currentId);
+                }
                 if (changed) {
                     bumpRevision();
                 }
@@ -990,13 +1130,10 @@ void NotificationTracker::querySniProperty(const QString &key,
                     it->toolTipSubTitle.clear();
                 } else if (property == QLatin1String("IconPixmap")) {
                     it->iconPixmapImage = {};
-                    updateSniIconImage(*it);
                 } else if (property == QLatin1String("IconName")) {
                     it->iconName.clear();
-                    updateSniIconImage(*it);
                 } else if (property == QLatin1String("IconThemePath")) {
                     it->iconThemePath.clear();
-                    updateSniIconImage(*it);
                 } else if (property == QLatin1String("Title")) {
                     it->title.clear();
                 } else if (property == QLatin1String("AttentionIconName")) {
@@ -1006,12 +1143,19 @@ void NotificationTracker::querySniProperty(const QString &key,
                 } else if (!iconQuery) {
                     it->initialQueryFailed = true;
                 }
-                updateSniChatState(*it);
-                if (!iconQuery && (it->chatUnreadState != oldState || it->chatMentionCount != oldCount
-                                   || it->title != oldTitle || it->attentionIconName != oldAttentionIcon
-                                   || it->overlayIconName != oldOverlayIcon || it->toolTipTitle != oldToolTipTitle
-                                   || it->toolTipSubTitle != oldToolTipSubTitle)) {
-                    bumpRevision();
+                if (!iconQuery) {
+                    updateSniChatState(*it);
+                    if (!it->iconQueryInFlight && !it->iconQueryPending
+                        && oldState > 0 && it->chatUnreadState == 0
+                        && !it->id.isEmpty() && sniChatClientForId(it->id) != SniChatClient::None) {
+                        clearUnreadNotifications(it->id);
+                    }
+                    if (it->chatUnreadState != oldState || it->chatMentionCount != oldCount
+                        || it->title != oldTitle || it->attentionIconName != oldAttentionIcon
+                        || it->overlayIconName != oldOverlayIcon || it->toolTipTitle != oldToolTipTitle
+                        || it->toolTipSubTitle != oldToolTipSubTitle) {
+                        bumpRevision();
+                    }
                 }
             }
             if (iconQuery) {
@@ -1023,6 +1167,7 @@ void NotificationTracker::querySniProperty(const QString &key,
         if (it == m_sniItems.end() || it->generation != generation) {
             return;
         }
+        const int oldState = it->chatUnreadState;
         const QVariant value = reply.value().variant();
         if (property == QLatin1String("ToolTip")) {
             const auto toolTip = parseSniToolTip(value);
@@ -1030,13 +1175,10 @@ void NotificationTracker::querySniProperty(const QString &key,
             it->toolTipSubTitle = toolTip.subTitle;
         } else if (property == QLatin1String("IconPixmap")) {
             it->iconPixmapImage = decodeSniPixmap(value);
-            updateSniIconImage(*it);
         } else if (property == QLatin1String("IconName")) {
             it->iconName = value.toString();
-            updateSniIconImage(*it);
         } else if (property == QLatin1String("IconThemePath")) {
             it->iconThemePath = value.toString();
-            updateSniIconImage(*it);
         } else {
             QString *storedValue = nullptr;
             if (property == QLatin1String("Id")) {
@@ -1054,10 +1196,15 @@ void NotificationTracker::querySniProperty(const QString &key,
                 *storedValue = value.toString();
             }
         }
-        updateSniChatState(*it);
         if (iconQuery) {
             finishIconQuery();
         } else {
+            updateSniChatState(*it);
+            if (!it->iconQueryInFlight && !it->iconQueryPending
+                && oldState > 0 && it->chatUnreadState == 0
+                && !it->id.isEmpty() && sniChatClientForId(it->id) != SniChatClient::None) {
+                clearUnreadNotifications(it->id);
+            }
             bumpRevision();
         }
     });
@@ -1179,7 +1326,13 @@ void NotificationTracker::onSniUnregistered(const QString &item)
     const QString objectPath = slashIdx > 0 ? item.mid(slashIdx) : QStringLiteral("/StatusNotifierItem");
     const QString key = sniKey(service, objectPath);
 
-    if (m_sniItems.remove(key) > 0) {
+    if (auto existing = m_sniItems.find(key); existing != m_sniItems.end()) {
+        const QString removedId = existing->id;
+        const int removedChatState = existing->chatUnreadState;
+        m_sniItems.erase(existing);
+        if (removedChatState > 0 && !removedId.isEmpty() && sniChatClientForId(removedId) != SniChatClient::None) {
+            clearUnreadNotifications(removedId);
+        }
         bool hasMoreItems = false;
         const QString prefix = service + kSniKeySeparator;
         for (auto it = m_sniItems.cbegin(); it != m_sniItems.cend(); ++it) {
@@ -1235,9 +1388,10 @@ void NotificationTracker::onSniNewStatus(const QString &status, const QDBusMessa
         // to the app (e.g. opened Slack). Clear notification watcher counts
         // for this app so badge count reflects the acknowledged state.
         if (oldStatus == QLatin1String("NeedsAttention") && status != QLatin1String("NeedsAttention") && !it->id.isEmpty()) {
-            clearUnreadNotifications(it->id);
+            if (sniChatClientForId(it->id) == SniChatClient::None || it->chatUnreadState == 0) {
+                clearUnreadNotifications(it->id);
+            }
         }
-        updateSniChatState(*it);
         bumpRevision();
     } else {
         qCInfo(lcNotif) << "SNI NewStatus from unknown item:" << key << "status=" << status;
@@ -1352,7 +1506,15 @@ void NotificationTracker::onSniServiceOwnerChanged(const QString &service, const
 
     const bool changed = !objectPaths.isEmpty();
     for (const QString &objectPath : std::as_const(objectPaths)) {
-        m_sniItems.remove(sniKey(service, objectPath));
+        if (auto existing = m_sniItems.find(sniKey(service, objectPath)); existing != m_sniItems.end()) {
+            const QString removedId = existing->id;
+            const int removedChatState = existing->chatUnreadState;
+            m_sniItems.erase(existing);
+            if (newOwner.isEmpty() && removedChatState > 0
+                && !removedId.isEmpty() && sniChatClientForId(removedId) != SniChatClient::None) {
+                clearUnreadNotifications(removedId);
+            }
+        }
     }
     if (changed) {
         bumpRevision();

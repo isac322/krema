@@ -465,3 +465,59 @@ def test_not005_mattermost_mention_count_clears_when_mentions_are_read(
         )
     finally:
         _finish(tracked_ids, server)
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher("org.telegram.desktop.desktop")]})
+def test_not006_telegram_tray_states_and_title_count(
+    krema: Krema, apps: TestWindows, tmp_path: Path
+) -> None:
+    """Telegram: tray tooltip count and active/muted icon states, then the window-title count fallback."""
+    _install_app(krema, "org.telegram.desktop.desktop", "Telegram", "org.telegram.desktop")
+    krema.start()
+    krema.wait_for_item("Telegram")
+    description = _dock_description(krema, "Telegram")
+    server: subprocess.Popen[str] | None = None
+    try:
+        # Telegram's own updater build reports a hashed instance Id.
+        server = _start_server(
+            tmp_path, chat_sni=("org.telegram.desktop._0123456789abcdef0123456789abcdef", "Telegram")
+        )
+        _chat_sni("Telegram (6)")
+        wait_until(
+            lambda: "6 notifications" in description(),
+            message=lambda: f"Telegram tooltip count to reach the launcher with no window (got {description()!r})",
+        )
+
+        _chat_sni("Telegram", icon_name="org.telegram.desktop-attention-symbolic")
+        wait_until(
+            lambda: "Mention notification" in description() and "notifications" not in description(),
+            message=lambda: f"Telegram active tray icon to show a mention state (got {description()!r})",
+        )
+        _chat_sni("Telegram", icon_name="org.telegram.desktop-mute-symbolic")
+        wait_until(
+            lambda: "Unread messages" in description(),
+            message=lambda: f"Telegram muted tray icon to show unread (got {description()!r})",
+        )
+        _chat_sni("Telegram", icon_name="org.telegram.desktop-panel")
+        wait_until(
+            lambda: "Unread messages" not in description()
+            and "Mention notification" not in description()
+            and "notifications" not in description(),
+            message=lambda: f"Telegram badge to clear at rest (got {description()!r})",
+        )
+
+        window = apps.open("Telegram (3)", app_id="org.telegram.desktop")
+        # With a window the dock item is named after the window title.
+        windowed = _dock_description(krema, "Telegram (3)")
+        wait_until(
+            lambda: "3 notifications" in windowed(),
+            message=lambda: f"Telegram window title count to act as a fallback (got {windowed()!r})",
+        )
+        apps.close(window)
+        wait_until(
+            lambda: "notifications" not in description(),
+            message=lambda: f"Telegram title count to clear with the window (got {description()!r})",
+        )
+    finally:
+        _finish([], server)

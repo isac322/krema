@@ -9,6 +9,7 @@
 #include <KServiceAction>
 
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QString>
@@ -16,8 +17,22 @@
 #include <QTemporaryDir>
 #include <QUrl>
 
+#include <memory>
+
 namespace
 {
+
+std::unique_ptr<QCoreApplication> createCoreApplicationIfNeeded()
+{
+    if (QCoreApplication::instance()) {
+        return nullptr;
+    }
+
+    static int argc = 1;
+    static char name[] = "krema-desktop-actions-test";
+    static char *argv[] = {name, nullptr};
+    return std::make_unique<QCoreApplication>(argc, argv);
+}
 
 QString writeDesktopFile(const QString &directory, const QString &fileName, const QByteArray &contents)
 {
@@ -81,6 +96,7 @@ TEST_CASE("Desktop actions follow the declared order and skip hidden ones", "[de
     // An absolute path outside every XDG applications directory, like a
     // launcher pinned from an arbitrary location.
     const QString path = writeDesktopFile(dir.path(), QStringLiteral("krema-fixture-browser.desktop"), browserEntry);
+    const auto application = createCoreApplicationIfNeeded();
 
     const QList<KServiceAction> actions = krema::desktopActions(QUrl::fromLocalFile(path));
 
@@ -107,6 +123,7 @@ TEST_CASE("Desktop actions use the localized action names", "[desktopactions][i1
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
     const QString path = writeDesktopFile(dir.path(), QStringLiteral("krema-fixture-browser.desktop"), browserEntry);
+    const auto application = createCoreApplicationIfNeeded();
 
     const QList<KServiceAction> actions = krema::desktopActions(QUrl::fromLocalFile(path));
 
@@ -139,6 +156,7 @@ TEST_CASE("Desktop actions keep inner separators only", "[desktopactions]")
                                           "[Desktop Action second]\n"
                                           "Name=Second\n"
                                           "Exec=krema-fixture-separators --second\n");
+    const auto application = createCoreApplicationIfNeeded();
 
     const QList<KServiceAction> actions = krema::desktopActions(QUrl::fromLocalFile(path));
 
@@ -156,6 +174,7 @@ TEST_CASE("Desktop actions are empty when the entry offers none", "[desktopactio
                                            "Type=Application\n"
                                            "Name=Krema Fixture Plain\n"
                                            "Exec=krema-fixture-plain\n");
+    const auto application = createCoreApplicationIfNeeded();
     REQUIRE(krema::desktopActions(QUrl::fromLocalFile(plain)).isEmpty());
 
     // Only hidden actions and separators: nothing to show.
@@ -208,6 +227,7 @@ TEST_CASE("Desktop actions resolve installed and user-local applications", "[des
                                            "Name=Compose\n"
                                            "Icon=mail-message-new\n"
                                            "Exec=krema-fixture-local --compose\n");
+    const auto application = createCoreApplicationIfNeeded();
 
     // TaskManager reports installed applications as applications: URLs and
     // others as file URLs; both must resolve.

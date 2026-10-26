@@ -270,14 +270,16 @@ TEST_CASE("TaskManager nameless client artwork reaches the raw icon provider", "
         },
         kTimeoutMs);
 
-    const int row = taskRow(kRawTitle);
+    int row = taskRow(kRawTitle);
     REQUIRE(row >= 0);
+    int dockRow = -1;
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return visualRow(taskRow(kRawTitle)) >= 0;
+            row = taskRow(kRawTitle);
+            dockRow = visualRow(row);
+            return row >= 0 && dockRow >= 0;
         },
         kTimeoutMs));
-    const int dockRow = visualRow(row);
     REQUIRE(dockRow >= 0);
     const QModelIndex index = model().tasksModel()->index(row, 0);
     REQUIRE(index.isValid());
@@ -334,14 +336,16 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
         kTimeoutMs));
 
 
-    const int row = taskRow(kUnresolvedTitle);
+    int row = taskRow(kUnresolvedTitle);
     REQUIRE(row >= 0);
+    int dockRow = -1;
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return visualRow(taskRow(kUnresolvedTitle)) >= 0;
+            row = taskRow(kUnresolvedTitle);
+            dockRow = visualRow(row);
+            return row >= 0 && dockRow >= 0;
         },
         kTimeoutMs));
-    const int dockRow = visualRow(row);
     REQUIRE(dockRow >= 0);
     const QModelIndex index = model().tasksModel()->index(row, 0);
     REQUIRE(index.isValid());

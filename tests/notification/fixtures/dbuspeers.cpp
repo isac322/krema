@@ -47,7 +47,10 @@ constexpr auto kNotificationsPath = "/org/freedesktop/Notifications";
 constexpr auto kWatcherPath = "/NotificationWatcher";
 constexpr auto kSniWatcherService = "org.kde.StatusNotifierWatcher";
 constexpr auto kSniWatcherPath = "/StatusNotifierWatcher";
+constexpr auto kFerdiumService = "org.ferdium.Ferdium";
+constexpr auto kFerdiumPath = "/org/ferdium";
 }
+
 
 NotificationServerPeer::NotificationServerPeer(const QDBusConnection &bus, QObject *parent)
     : QObject(parent)
@@ -566,6 +569,103 @@ void StatusNotifierItemPeer::setToolTip(const QVariant &toolTip)
     m_toolTip = toolTip;
     Q_EMIT toolTipChanged();
     Q_EMIT NewToolTip();
+}
+
+FerdiumPeer::FerdiumPeer(const QDBusConnection &bus, QObject *parent)
+    : QObject(parent)
+    , m_bus(bus)
+{
+}
+
+FerdiumPeer::~FerdiumPeer()
+{
+    stop();
+}
+
+bool FerdiumPeer::start(bool replaceExisting)
+{
+    if (m_serviceRegistered && m_objectRegistered) {
+        return true;
+    }
+    const auto registration =
+        m_bus.interface()->registerService(QString::fromLatin1(kFerdiumService),
+                                           replaceExisting ? QDBusConnectionInterface::ReplaceExistingService : QDBusConnectionInterface::DontQueueService,
+                                           QDBusConnectionInterface::AllowReplacement);
+    m_serviceRegistered = registration.isValid() && registration.value() == QDBusConnectionInterface::ServiceRegistered;
+    if (!m_serviceRegistered) {
+        return false;
+    }
+    m_objectRegistered = m_bus.registerObject(QString::fromLatin1(kFerdiumPath),
+                                              this,
+                                              QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllProperties);
+    if (!m_objectRegistered) {
+        m_bus.unregisterService(QString::fromLatin1(kFerdiumService));
+        m_serviceRegistered = false;
+    }
+    return m_objectRegistered;
+}
+
+void FerdiumPeer::stop()
+{
+    if (m_objectRegistered) {
+        m_bus.unregisterObject(QString::fromLatin1(kFerdiumPath));
+        m_objectRegistered = false;
+    }
+    if (m_serviceRegistered) {
+        m_bus.unregisterService(QString::fromLatin1(kFerdiumService));
+        m_serviceRegistered = false;
+    }
+}
+
+bool FerdiumPeer::isRegistered() const
+{
+    return m_serviceRegistered && m_objectRegistered;
+}
+
+uint FerdiumPeer::unreadDirectMessageCount() const
+{
+    return m_unreadDirectMessageCount;
+}
+
+uint FerdiumPeer::unreadIndirectMessageCount() const
+{
+    return m_unreadIndirectMessageCount;
+}
+
+void FerdiumPeer::setUnreadDirectMessageCount(uint count)
+{
+    if (m_unreadDirectMessageCount == count) {
+        return;
+    }
+    m_unreadDirectMessageCount = count;
+    Q_EMIT unreadDirectMessageCountChanged();
+    if (m_objectRegistered) {
+        QDBusMessage signal = QDBusMessage::createSignal(QString::fromLatin1(kFerdiumPath),
+                                                         QStringLiteral("org.freedesktop.DBus.Properties"),
+                                                         QStringLiteral("PropertiesChanged"));
+        signal << QStringLiteral("org.ferdium.Ferdium")
+               << QVariantMap{{QStringLiteral("UnreadDirectMessageCount"), m_unreadDirectMessageCount}}
+               << QStringList{};
+        m_bus.send(signal);
+    }
+}
+
+void FerdiumPeer::setUnreadIndirectMessageCount(uint count)
+{
+    if (m_unreadIndirectMessageCount == count) {
+        return;
+    }
+    m_unreadIndirectMessageCount = count;
+    Q_EMIT unreadIndirectMessageCountChanged();
+    if (m_objectRegistered) {
+        QDBusMessage signal = QDBusMessage::createSignal(QString::fromLatin1(kFerdiumPath),
+                                                         QStringLiteral("org.freedesktop.DBus.Properties"),
+                                                         QStringLiteral("PropertiesChanged"));
+        signal << QStringLiteral("org.ferdium.Ferdium")
+               << QVariantMap{{QStringLiteral("UnreadIndirectMessageCount"), m_unreadIndirectMessageCount}}
+               << QStringList{};
+        m_bus.send(signal);
+    }
 }
 
 } // namespace krema::test

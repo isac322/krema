@@ -52,7 +52,7 @@ public:
     /// Return whether badges are enabled for @p appId (global and per-app settings).
     [[nodiscard]] Q_INVOKABLE bool badgesEnabled(const QString &appId) const;
 
-    /// Return the Slack SNI chat state: 0 = none, 1 = unread, 2 = mention.
+    /// Return the SNI chat state: 0 = none, 1 = unread, 2 = mention.
     [[nodiscard]] Q_INVOKABLE int sniChatUnreadState(const QString &appId) const;
     /// Return Slack's positive mention count reported by its tray tooltip.
     [[nodiscard]] Q_INVOKABLE int sniChatMentionCount(const QString &appId) const;
@@ -113,6 +113,11 @@ private Q_SLOTS:
                                 const QDBusMessage &message);
     void onSniServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
     void onSniWatcherServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
+    void onFerdiumServiceOwnerChanged(const QString &service, const QString &oldOwner, const QString &newOwner);
+    void onFerdiumPropertiesChanged(const QString &interfaceName,
+                                    const QVariantMap &changedProperties,
+                                    const QStringList &invalidatedProperties,
+                                    const QDBusMessage &message);
 
 private:
     struct SniEntry;
@@ -120,11 +125,14 @@ private:
     void connectNotificationClosedMatch();
     void setupNotificationWatcher();
     void setupSniWatcher();
+    void setupFerdiumWatcher();
     void bumpRevision();
     bool removeActiveNotification(uint id);
     void updateDndState();
     void queryRegisteredSniItems();
     void trackSniItem(const QString &service, const QString &objectPath);
+    void queryFerdiumCounts(quint64 generation);
+    void setFerdiumCounts(quint32 directCount, quint32 indirectCount);
     void queryAllSniProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath);
     void querySniProperty(const QString &key,
                           quint64 generation,
@@ -148,6 +156,7 @@ private:
 
     // Notification settings (badges enabled, blacklist)
     std::unique_ptr<NotificationManager::Settings> m_notifSettings;
+
 
     // Active notification ID -> canonical desktop entry (for reverse lookup).
     QHash<uint, QString> m_notifIdToEntry;
@@ -178,14 +187,24 @@ private:
         int iconQueryPreviousMentionCount = 0;
         bool initialQueryFailed = false;
         quint64 generation = 0;
+        quint64 ferdiumOwnerGeneration = 0;
     };
     QHash<QString, SniEntry> m_sniItems;
 
     QDBusServiceWatcher m_notificationServiceWatcher;
     QDBusServiceWatcher m_sniWatcherServiceWatcher;
     QDBusServiceWatcher m_sniServiceWatcher;
+    QDBusServiceWatcher m_ferdiumServiceWatcher;
     QTimer m_dndExpiryTimer;
     bool m_sniIconRefreshQueued = false;
+    quint64 m_ferdiumOwnerGeneration = 0;
+    quint32 m_ferdiumDirectCount = 0;
+    quint32 m_ferdiumIndirectCount = 0;
+    bool m_ferdiumServiceOwned = false;
+    bool m_ferdiumFallbackSuppressed = false;
+    bool m_ferdiumPropertiesMatchConnected = false;
+    bool m_ferdiumQueryInFlight = false;
+    bool m_ferdiumQueryPending = false;
     bool m_notificationWatcherRegistered = false;
     int m_revision = 0;
     quint64 m_notificationOwnerGeneration = 0;

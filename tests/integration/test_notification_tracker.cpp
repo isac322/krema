@@ -10,6 +10,7 @@
 
 #include "../notification/fixtures/dbuspeers.h"
 
+#include "models/dockmodel.h"
 #include "models/notificationtracker.h"
 
 #include <catch2/catch_session.hpp>
@@ -101,6 +102,18 @@ QImage blankBadge()
 {
     QImage image(16, 16, QImage::Format_ARGB32);
     image.fill(Qt::transparent);
+    return image;
+}
+
+QImage topRightChatBadge(QRgb color, int pixels, bool bottomRightRed = false)
+{
+    QImage image = blankBadge();
+    for (int pixel = 0; pixel < pixels; ++pixel) {
+        image.setPixel(8 + pixel % 8, pixel / 8, color);
+    }
+    if (bottomRightRed) {
+        image.setPixel(15, 15, qRgba(240, 40, 40, 255));
+    }
     return image;
 }
 
@@ -832,6 +845,228 @@ TEST_CASE("Slack SNI adapter uses bounded IconThemePath PNG fallback", "[notific
         return tracker.sniChatUnreadState(QStringLiteral("slack")) == 0;
     }));
 }
+
+TEST_CASE("WebCord SNI pixels transition through unread mention and rest", "[notification][sni][webcord][chat]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.WebCord"));
+    item.setId(QStringLiteral("WebCord_status_icon_1"));
+    item.setTitle(QStringLiteral("WebCord"));
+    item.setIconPixmap(blankBadge());
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("webcord")) == QStringLiteral("WebCord");
+    }));
+    CHECK(tracker.sniChatUnreadState(QStringLiteral("webcord")) == 0);
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("webcord")) == 0);
+
+    item.setIconPixmap(topRightChatBadge(qRgba(80, 170, 230, 180), 25));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("webcord")) == 1;
+    }));
+    CHECK(tracker.sniChatUnreadState(QStringLiteral("io.github.spacingbat3.webcord.desktop")) == 1);
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("webcord")) == 0);
+
+    item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 180), 25));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("webcord")) == 2;
+    }));
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("webcord")) == 0);
+
+    item.setIconPixmap(blankBadge());
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("webcord")) == 0;
+    }));
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("webcord")) == 0);
+}
+
+TEST_CASE("WebCord SNI pixel thresholds reject small translucent and misplaced badges", "[notification][sni][webcord][pixels]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.WebCordPixels"));
+    item.setId(QStringLiteral("io.github.spacingbat3.webcord"));
+    item.setTitle(QStringLiteral("WebCord"));
+    item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 255), 25));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("webcord")) == 2;
+    }));
+
+    const QImage rejected[] = {
+        topRightChatBadge(qRgba(240, 40, 40, 255), 24),
+        topRightChatBadge(qRgba(80, 170, 230, 255), 24),
+        topRightChatBadge(qRgba(240, 40, 40, 179), 25),
+        topRightChatBadge(qRgba(80, 170, 230, 179), 25),
+        topRightChatBadge(qRgba(160, 160, 160, 255), 25),
+        slackBadge(qRgba(240, 40, 40, 255)),
+    };
+    for (const auto &image : rejected) {
+        item.setIconPixmap(image);
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("webcord")) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(QStringLiteral("webcord")) == 0);
+        item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 255), 25));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("webcord")) == 2;
+        }));
+    }
+}
+
+TEST_CASE("Discord and Vesktop SNI pixels exclude voice state and clear on rest", "[notification][sni][discord][vesktop][pixels]")
+{
+    for (const QString &appId : {QStringLiteral("discord"), QStringLiteral("vesktop")}) {
+        INFO(appId.toStdString());
+        const QString alias = appId == QStringLiteral("discord")
+            ? QStringLiteral("com.discord.app") : QStringLiteral("dev.vencord.vesktop");
+        krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.DiscordPixels"));
+        item.setId(alias + QStringLiteral("_status_icon_1"));
+        item.setTitle(appId);
+        item.setIconPixmap(blankBadge());
+        REQUIRE(item.start());
+        krema::test::StatusNotifierWatcherPeer watcher;
+        watcher.setRegisteredItems({item.itemAddress()});
+        REQUIRE(watcher.start());
+        ScopedTracker scoped;
+        auto &tracker = scoped.tracker;
+        REQUIRE(waitFor([&] {
+            return tracker.sniTitle(appId) == appId;
+        }));
+        CHECK(tracker.sniChatUnreadState(appId) == 0);
+
+        item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 180), 12));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 1;
+        }));
+        CHECK(tracker.sniChatUnreadState(alias + QStringLiteral(".desktop")) == 1);
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+
+        const QImage rejected[] = {
+            topRightChatBadge(qRgba(240, 40, 40, 255), 11),
+            topRightChatBadge(qRgba(240, 40, 40, 179), 12),
+            topRightChatBadge(qRgba(240, 40, 40, 255), 12, true),
+            topRightChatBadge(qRgba(80, 170, 230, 255), 25),
+            slackBadge(qRgba(240, 40, 40, 255)),
+            blankBadge(),
+        };
+        for (const auto &image : rejected) {
+            item.setIconPixmap(image);
+            REQUIRE(waitFor([&] {
+                return tracker.sniChatUnreadState(appId) == 0;
+            }));
+            CHECK(tracker.sniChatMentionCount(appId) == 0);
+            item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 255), 12));
+            REQUIRE(waitFor([&] {
+                return tracker.sniChatUnreadState(appId) == 1;
+            }));
+        }
+        item.setIconPixmap(blankBadge());
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 0;
+        }));
+    }
+}
+
+TEST_CASE("Discord family SNI chat state honors per-app and global badge gates", "[notification][sni][discord][webcord][vesktop][settings]")
+{
+    for (const QString &appId : {QStringLiteral("discord"), QStringLiteral("vesktop"), QStringLiteral("webcord")}) {
+        INFO(appId.toStdString());
+        auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+        KConfigGroup badges = config->group(QStringLiteral("Badges"));
+        KConfigGroup application = config->group(QStringLiteral("Applications")).group(appId);
+        const bool hadGlobalSetting = badges.hasKey(QStringLiteral("InTaskManager"));
+        const QVariant previousGlobalSetting = badges.readEntry(QStringLiteral("InTaskManager"), QVariant());
+        const bool hadAppSetting = application.hasKey(QStringLiteral("ShowBadges"));
+        const QVariant previousAppSetting = application.readEntry(QStringLiteral("ShowBadges"), QVariant());
+        const auto restore = qScopeGuard([&] {
+            if (hadGlobalSetting) {
+                badges.writeEntry(QStringLiteral("InTaskManager"), previousGlobalSetting, KConfig::Notify);
+            } else {
+                badges.deleteEntry(QStringLiteral("InTaskManager"), KConfig::Notify);
+            }
+            if (hadAppSetting) {
+                application.writeEntry(QStringLiteral("ShowBadges"), previousAppSetting, KConfig::Notify);
+            } else {
+                application.deleteEntry(QStringLiteral("ShowBadges"), KConfig::Notify);
+            }
+            config->sync();
+        });
+        badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
+        application.writeEntry(QStringLiteral("ShowBadges"), true, KConfig::Notify);
+        config->sync();
+
+        krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.DiscordSettings"));
+        item.setId(appId);
+        item.setTitle(appId);
+        item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 255), 25));
+        REQUIRE(item.start());
+        krema::test::StatusNotifierWatcherPeer watcher;
+        watcher.setRegisteredItems({item.itemAddress()});
+        REQUIRE(watcher.start());
+        ScopedTracker scoped;
+        auto &tracker = scoped.tracker;
+        const int expectedState = appId == QStringLiteral("webcord") ? 2 : 1;
+        REQUIRE(waitFor([&] {
+            return tracker.badgesEnabled(appId) && tracker.sniChatUnreadState(appId) == expectedState;
+        }));
+
+        application.writeEntry(QStringLiteral("ShowBadges"), false, KConfig::Notify);
+        config->sync();
+        REQUIRE(waitFor([&] {
+            return !tracker.badgesEnabled(appId) && tracker.sniChatUnreadState(appId) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+        application.writeEntry(QStringLiteral("ShowBadges"), true, KConfig::Notify);
+        config->sync();
+        REQUIRE(waitFor([&] {
+            return tracker.badgesEnabled(appId) && tracker.sniChatUnreadState(appId) == expectedState;
+        }));
+
+        badges.writeEntry(QStringLiteral("InTaskManager"), false, KConfig::Notify);
+        config->sync();
+        REQUIRE(waitFor([&] {
+            return !tracker.badgesEnabled(appId) && tracker.sniChatUnreadState(appId) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+        badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
+        config->sync();
+        REQUIRE(waitFor([&] {
+            return tracker.badgesEnabled(appId) && tracker.sniChatUnreadState(appId) == expectedState;
+        }));
+    }
+}
+
+TEST_CASE("Unrelated SNI icons do not become Discord family chat badges", "[notification][sni][chat][unrelated]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.UnrelatedChatPixels"));
+    item.setId(QStringLiteral("org.example.paint"));
+    item.setTitle(QStringLiteral("Image Editor"));
+    item.setIconPixmap(topRightChatBadge(qRgba(240, 40, 40, 255), 25));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("org.example.paint")) == QStringLiteral("Image Editor");
+    }));
+    for (const QString &appId : {QStringLiteral("org.example.paint"), QStringLiteral("discord"),
+                               QStringLiteral("vesktop"), QStringLiteral("webcord")}) {
+        CHECK(tracker.sniChatUnreadState(appId) == 0);
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+    }
+}
+
 TEST_CASE("DND application inhibition is active without an Until deadline and clears", "[notification][dnd][settings]")
 {
     auto &notificationServer = NotificationManager::Server::self();
@@ -997,6 +1232,27 @@ TEST_CASE("DND thirty-day deadline arms safely and rechecks the real deadline", 
         CHECK_FALSE(timer->isActive());
         CHECK(changes.count() == 1);
     }
+}
+
+
+TEST_CASE("Discord, Vesktop, and WebCord window title adapters extract unread and max mention counts", "[notification][discord][vesktop][webcord][titles]")
+{
+    for (const QString &appId : {QStringLiteral("discord"), QStringLiteral("com.discordapp.Discord"),
+                                 QStringLiteral("vesktop"), QStringLiteral("dev.vencord.Vesktop.desktop")}) {
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Discord | #general")}) == 0);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("Discord | #general")}) == 0);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("• Discord | #general - Discord")}) == 1);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("• Discord | #general - Discord")}) == 0);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("• Discord | #a"), QStringLiteral("(3) Discord | #b"), QStringLiteral("(7) Discord | #c - Discord")}) == 2);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("• Discord | #a"), QStringLiteral("(3) Discord | #b"), QStringLiteral("(7) Discord | #c - Discord")}) == 7);
+    }
+    for (const QString &appId : {QStringLiteral("webcord"), QStringLiteral("io.github.spacingbat3.webcord.desktop")}) {
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("WebCord - #general")}) == 0);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("*[WebCord] - #general")}) == 1);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("*WebCord - #a"), QStringLiteral("[4] WebCord - #b (Server)"), QStringLiteral("[9] WebCord - #c")}) == 2);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("*WebCord - #a"), QStringLiteral("[4] WebCord - #b (Server)"), QStringLiteral("[9] WebCord - #c")}) == 9);
+    }
+    CHECK(krema::DockModel::chatUnreadStateForTitles(QStringLiteral("org.kde.dolphin"), {QStringLiteral("(5) Discord | #general")}) == 0);
 }
 
 int main(int argc, char *argv[])

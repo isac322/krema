@@ -37,6 +37,9 @@ const QString kObjectPath = QStringLiteral("/com/bhyoo/krema/PanelWatcher");
 // are skipped.
 // The report is debounced so a burst of geometry changes (a panel resizing,
 // KWin re-placing every layer surface) is sent once, and only when it differs.
+// A panel frame is the only supported geometry exposed by KWin: Plasma may
+// include transparent floating padding in it, and KWin has no supported
+// painted-surface mask API.
 const char kScript[] = R"JS(
 var kremaPid = %1;
 var lastReport = "";
@@ -58,7 +61,7 @@ function report() {
     var windows = workspace.windowList();
     for (var j = 0; j < windows.length; ++j) {
         var w = windows[j];
-        if (!w.dock || w.deleted || !w.output) {
+        if (!w.dock || w.deleted || w.hidden || !w.output) {
             continue;
         }
         var entry = outputs[w.output.name];
@@ -101,6 +104,7 @@ function track(w) {
     if (w.dock) {
         w.frameGeometryChanged.connect(schedule);
         w.outputChanged.connect(schedule);
+        w.hiddenChanged.connect(schedule);
     }
 }
 

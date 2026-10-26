@@ -122,7 +122,12 @@ void DockShell::connectSettingsSignals()
     // Per-screen overrideable: iconSize, maxZoomFactor, floating → use ScreenSettings signals
     connect(ss, &ScreenSettings::iconSizeChanged, m_view.get(), &DockView::updateSize);
     connect(ss, &ScreenSettings::maxZoomFactorChanged, m_view.get(), &DockView::updateSize);
-    // The preview popup follows the panel's floating gap and animated input extent.
+    // The preview shares the displayed dock depth, not only its target inset.
+    connect(m_view.get(), &DockView::displayedEdgeDistanceChanged, m_previewController.get(), [this]() {
+        if (m_previewController->isVisible()) {
+            m_previewController->updateEdge();
+        }
+    });
     connect(m_view.get(), &DockView::floatingPaddingChanged, m_previewController.get(), &PreviewController::updateEdge);
     connect(ss, &ScreenSettings::floatingChanged, m_view.get(), &DockView::refreshFloatingPadding);
     // Floating margin is global-only; it resizes the gap exactly like toggling floating.

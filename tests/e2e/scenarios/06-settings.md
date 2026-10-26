@@ -752,6 +752,7 @@ restored reserved strip after restart. Its shadow checks keep the visible gap
 unchanged while shadow containment enlarges the surface.
 `tests/unit/test_surface_geometry.cpp` covers the panel-bar and surface
 heights for non-default margins.
+`tests/kwin/test_panel_margin.cpp` (ctest `krema_panel_margin_tests`, test case `"Floating margin animates the native dock bar on every edge"` `[panel-margin][motion]`) covers the actual KWin global-coordinate dock-bar motion on all four edges: it samples an intermediate 8 px → 48 px change, reverses to 8 px, verifies native bar containment while the allocation envelope grows, observes envelope release after reversal, and requires final convergence. It exercises the native dock bar, not a genuine Plasma panel.
 `tests/appium/test_08_reservation.py::test_set021_floating_margin_reference_choice_autosaves_live_and_persists`
 covers the End key reaching the 128 px maximum and its reserved strip on the
 bottom edge. Step 3's Home key and steps 6 and 8 remain manual checks.
@@ -786,41 +787,27 @@ fixture window's identity and frame geometry.
 5. Select "Screen edge" again, close Settings, and restart Krema. Reopen
    Settings → Layout & Position and verify the row shows "Screen edge" and
    the reserved strip is unchanged from before the restart.
-6. Add an always-visible Plasma panel (visibility "Always visible", so it
-   reserves space) on the dock's edge. With "Panels", verify the dock rests
-   the margin in px beyond the panel's inner edge (the side facing the
-   screen centre) and the change applies live when the panel is added,
-   resized, or removed. Select "Screen edge" and verify the dock moves back
-   to the margin from the screen edge, overlapping the panel area. With
-   "Floating" off and "Panels", verify the dock sits flush against the
-   panel's inner edge.
-7. Set that panel to "Auto hide", "Dodge windows", or "Windows go below".
-   Verify that with "Panels" the dock ignores it and measures from the
-   screen edge.
-8. Run Krema where KWin scripting is unavailable (for example, the KWin
-   Scripting D-Bus interface is missing). Verify that with "Panels" the dock
-   falls back to the screen edge and Settings still works.
+6. Add an always-visible Plasma panel (visibility "Always visible", so it reserves space) on the dock's edge. With "Panels", verify the dock rests the margin in px beyond the panel's inner edge (the side facing the screen centre) and the change applies live when the panel is added, resized, or removed. Turn "Floating" off and verify the dock follows the visible same-edge panel surface flush to its inner edge. Resize the visible panel through 48 px → 72 px → 48 px and verify the dock follows each depth update. Select "Screen edge" and verify the dock moves back to the margin from the screen edge, overlapping the panel area. Then reveal a Dodge/Auto-hide panel with no exclusive zone and verify its visible edge-touching frame is followed.
+7. Put the panel into "Auto hide" or "Dodge windows" and exercise both its hidden and revealed states. With "Panels", verify a hidden panel frame is ignored and the dock returns to the screen-edge reference; when the panel is visible again, its edge-touching frame is followed. Interrupt a hide/reveal or resize transition and verify the dock settles at the current visible panel depth without a stale gap or overlap. For a visible panel that reserves no exclusive zone, apply the same visible-frame rule.
+8. Run Krema where KWin scripting is unavailable (for example, the KWin Scripting D-Bus interface is missing). Verify that with "Panels" the dock falls back to the screen edge and Settings still works.
 
 **Expected:**
-- "Panels" is the default; with no space-reserving panel on the dock's
-  edge, it places the dock exactly as "Screen edge" does.
-- With an always-visible panel on the same edge, the gap is measured from
-  the panel's inner edge; panels that do not reserve space are ignored.
-- The choice applies live without restarting Krema, also while "Floating"
-  is off, and persists in `kremarc` as `FloatingMarginReference`.
+- "Panels" is the default; with no visible same-edge panel surface, it places the dock exactly as "Screen edge" does.
+- With an always-visible panel on the same edge, the gap is measured from the panel's inner edge; a visible edge-touching panel frame also contributes when its exclusive zone is zero.
+- Hidden auto-hide and dodge panel frames are ignored; when such a panel is visible, its same-edge frame is followed.
+- The choice applies live without restarting Krema, also while "Floating" is off, and persists in `kremarc` as `FloatingMarginReference`.
+- Panel-depth changes animate the displayed dock edge distance while the native allocation envelope remains sufficient for the transition; previews follow the displayed depth.
 - With "Panels" beside a panel, nothing of Krema takes input over the panel.
-  In Auto hide and Dodge the hidden dock is revealed from the outer screen
-  edge by default, or from the panel's inner edge with Reveal trigger set
-  to "Dock position" (SET-023).
-- "Screen edge" is the v0.12.0 placement: with reservation on, KWin's
-  layer-shell order still decides, so next to a full-width panel that
-  started first the dock rests on that panel's reserved space.
+- In Auto hide and Dodge the hidden dock is revealed from the outer screen edge by default, or from the panel's inner edge with Reveal trigger set to "Dock position" (SET-023).
+- "Screen edge" is the v0.12.0 placement: with reservation on, KWin's layer-shell order still decides, so next to a full-width panel that started first the dock rests on that panel's reserved space.
 - Without KWin scripting the dock uses the screen edge.
 
 **Verification:** AT-SPI (row name, current choice, enabled state),
 `kremarc` (`FloatingMarginReference`, `FloatingMargin`), KWin (maximized
-frame and work area against the full output), process identity, screenshot
-of the dock beside the Plasma panel when DRM capture is available.
+frame and work area against the full output, panel visibility and frame
+geometry, dock input region, and preview position), process identity,
+and screenshot of the dock beside the Plasma panel when DRM capture is
+available.
 **Automated (Tier 2):**
 `tests/appium/test_08_reservation.py::test_set021_floating_margin_reference_choice_autosaves_live_and_persists`
 covers steps 1–5 on the bottom edge.
@@ -831,13 +818,24 @@ started both before and after Krema: with "Panels" the dock bar rests the
 margin beyond the panel surface, live margin changes follow, the panel is
 not pushed, KWin's MaximizeArea ends above the dock bar, and the dock's
 input region leaves the panel band below it click-through; "Screen edge"
-returns to the margin from the screen edge; a panel reserving nothing is
-ignored. The same suite's "Panels mode uses same-edge panels and screen
+returns to the margin from the screen edge. The no-reservation stand-in
+also covers the visible edge-touching zero-zone contract natively: it asserts
+`panelDockGap=8` while `reservationCoversDock` remains true. Genuine Plasma
+hidden/dodge events remain separate manual/video checks below.
+The same suite's "Panels mode uses same-edge panels and screen
 references across all dock edges" case covers the 4×4 native panel matrix, so
 unrelated panel edges do not change the normal edge gap. Resizing a real
 Plasma panel, "Floating" off beside a panel, and step 8 (no KWin scripting)
 remain manual checks. The source-built KWin E2E runs on a virtual compositor;
 it does not reproduce the user's physical desktop.
+
+**Manual:** In a genuine Plasma 6 session, repeat the panel cases with
+"Floating" off and panel heights 48 px → 72 px → 48 px on Top, Bottom,
+Left, and Right. Exercise Dodge/Auto-hide hide and reveal, including an
+interrupted hide/reveal or resize transition. Observe the dock's displayed
+edge, the maximized window's work area and frame, panel click delivery, and
+an open preview while the panel depth changes. The native stand-in panel
+tests above do not provide this genuine-Plasma evidence.
 
 ---
 

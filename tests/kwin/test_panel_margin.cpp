@@ -79,6 +79,7 @@
 #include <QPainter>
 #include <QPlatformSurfaceEvent>
 #include <QProcess>
+#include <QQuickItem>
 #include <QQuickStyle>
 #include <QRasterWindow>
 #include <QScopeGuard>
@@ -955,16 +956,15 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
         return standInUnpushed(p) && panelDockGap(p.standIns.first(), p.dockBar, kEdgeBottom) == 40 && reservationCoversDock(p);
     });
 
-    // A panel that reserves nothing is ignored: the gap is measured from the
-    // screen edge again. Plasma gives auto hide, dodge and windows-go-below
-    // panels exclusive zone -1 (plasma-workspace shell/panelview.cpp).
+    // A non-reserving panel still provides the visible frame for the gap,
+    // with no extra Krema margin. Reservation remains Krema-owned.
     app().settings->setFloatingMargin(8);
     panel.reset();
     panel = std::make_unique<StandInPanel>(-1, outputName);
     REQUIRE(panel->waitForStarted());
     pids = {panel->pid()};
     requireSettles(*manager, pids, "non-reserving panel, Panels, margin 8", [](const Placement &p) {
-        return standInUnpushed(p) && edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
+        return standInUnpushed(p) && panelDockGap(p.standIns.first(), p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 }
 
@@ -1088,6 +1088,151 @@ TEST_CASE("Panels mode uses same-edge panels and screen references across all do
     requireSettles(*manager, {}, "reserved-on, no panel, bottom, Screen edge, floating, margin 40", [](const Placement &p) {
         return edgeGap(p.output, p.dockBar, kEdgeBottom) == 40 && p.maximizeArea != p.output && reservationCoversDock(p);
     });
+}
+
+TEST_CASE("Floating margin animates the native dock bar on every edge", "[panel-margin][motion]")
+{
+    constexpr int kStartMargin = 8;
+    constexpr int kTargetMargin = 48;
+    constexpr int edges[] = {0, 1, 2, 3};
+
+    auto *settings = app().settings.get();
+    const int oldEdge = settings->edge();
+    const int oldVisibilityMode = settings->visibilityMode();
+    const bool oldReserve = settings->reserveScreenSpace();
+    const bool oldFloating = settings->floating();
+    const int oldMargin = settings->floatingMargin();
+    const int oldReference = settings->floatingMarginReference();
+    const bool oldShadow = settings->shadowEnabled();
+    configure(1, kStartMargin, kEdgeBottom, true, false);
+    const auto restore = qScopeGuard([=] {
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(oldVisibilityMode);
+        settings->setReserveScreenSpace(oldReserve);
+        settings->setFloating(oldFloating);
+        settings->setFloatingMargin(oldMargin);
+        settings->setFloatingMarginReference(oldReference);
+        settings->setShadowEnabled(oldShadow);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    QQuickItem *panel = nullptr;
+    for (auto *item : view->rootObject()->childItems()) {
+        if (item->property("restEdgePos").isValid()) {
+            panel = item;
+            break;
+        }
+    }
+    REQUIRE(panel);
+
+    for (const int edge : edges) {
+        DYNAMIC_SECTION("edge " << edge)
+        {
+            platform->setEdge(static_cast<krema::DockPlatform::Edge>(edge));
+            view->setEdge(static_cast<krema::DockPlatform::Edge>(edge));
+            settings->setReserveScreenSpace(false);
+            settings->setFloatingMarginReference(1);
+            settings->setFloating(true);
+            settings->setFloatingMargin(kStartMargin);
+            requireSettles(*manager, {}, "motion start margin", [&](const Placement &p) {
+                return edgeGap(p.output, p.dockBar, edge) == kStartMargin;
+            });
+
+            const QSize initialSurfaceSize = view->size();
+            bool barContained = true;
+            int largestSurfaceExtent = edge < 2 ? initialSurfaceSize.height() : initialSurfaceSize.width();
+            QSize sampledSurfaceSize = initialSurfaceSize;
+
+            const auto sample = [&](int target, bool &sawIntermediate, int &stableTargetSamples) {
+                // Observe the painted item, not the coalesced input-region report.
+                const QRect panelRect = panel->mapRectToScene(QRectF(0, 0, panel->width(), panel->height())).toAlignedRect();
+                const QSize surfaceSize = view->size();
+                const QRect surfaceRect(QPoint(), surfaceSize);
+                sampledSurfaceSize = surfaceSize;
+                const bool contained = panelRect.x() >= surfaceRect.x() && panelRect.y() >= surfaceRect.y() && panelRect.right() <= surfaceRect.right()
+                    && panelRect.bottom() <= surfaceRect.bottom();
+                barContained = barContained && contained;
+
+                const int gap = edgeGap(surfaceRect, panelRect, edge);
+                if (gap > kStartMargin && gap < kTargetMargin) {
+                    sawIntermediate = true;
+                }
+                if (gap == target) {
+                    ++stableTargetSamples;
+                } else {
+                    stableTargetSamples = 0;
+                }
+                largestSurfaceExtent = std::max(largestSurfaceExtent, edge < 2 ? surfaceSize.height() : surfaceSize.width());
+                return gap;
+            };
+
+            settings->setFloatingMargin(kTargetMargin);
+            bool sawForwardIntermediate = false;
+            int forwardStableSamples = 0;
+            const bool foundIntermediate = QTest::qWaitFor(
+                [&] {
+                    const int gap = sample(kTargetMargin, sawForwardIntermediate, forwardStableSamples);
+                    return sawForwardIntermediate && gap < kTargetMargin;
+                },
+                kTimeoutMs);
+            REQUIRE(foundIntermediate);
+            REQUIRE(largestSurfaceExtent > (edge < 2 ? initialSurfaceSize.height() : initialSurfaceSize.width()));
+
+            settings->setFloatingMargin(kStartMargin);
+            // Exercise a same-event-loop retarget: the final state must still
+            // return to the exact bar gap and native surface extent from 8.
+            settings->setFloatingMargin(kTargetMargin);
+            settings->setFloatingMargin(kStartMargin);
+            bool sawReverseIntermediate = false;
+            int reverseStableSamples = 0;
+            int lastSampleGap = 0;
+            const bool reversed = QTest::qWaitFor(
+                [&] {
+                    const int gap = sample(kStartMargin, sawReverseIntermediate, reverseStableSamples);
+                    lastSampleGap = gap;
+                    return gap == kStartMargin && reverseStableSamples >= 2 && sampledSurfaceSize == initialSurfaceSize;
+                },
+                kTimeoutMs);
+            const auto *root = view->rootObject();
+            const QVariant displayedEdgeDistance = root ? root->property("displayedEdgeDistance") : QVariant{};
+            CAPTURE(edge,
+                    lastSampleGap,
+                    sampledSurfaceSize.width(),
+                    sampledSurfaceSize.height(),
+                    initialSurfaceSize.width(),
+                    initialSurfaceSize.height(),
+                    reverseStableSamples);
+            INFO("sampledSurfaceSize: " << sampledSurfaceSize.width() << "x" << sampledSurfaceSize.height()
+                                        << ", initialSurfaceSize: " << initialSurfaceSize.width() << "x" << initialSurfaceSize.height());
+            INFO("displayedEdgeDistance: " << displayedEdgeDistance.toString().toStdString());
+            REQUIRE(reversed);
+
+            bool sawFinalIntermediate = false;
+            int finalStableSamples = 0;
+            settings->setFloatingMargin(kTargetMargin);
+            const bool converged = QTest::qWaitFor(
+                [&] {
+                    sample(kTargetMargin, sawFinalIntermediate, finalStableSamples);
+                    return sawFinalIntermediate && finalStableSamples >= 2;
+                },
+                kTimeoutMs);
+            REQUIRE(converged);
+            REQUIRE(barContained);
+
+            const auto finalPlacement = measure(*manager, {}, {}, false);
+            REQUIRE(finalPlacement);
+            REQUIRE(edgeGap(finalPlacement->output, finalPlacement->dockBar, edge) == kTargetMargin);
+        }
+    }
 }
 
 TEST_CASE("Screen-edge zone-0 panel shifts the shadow boundary without changing the visible gap", "[panel-margin][shadow]")

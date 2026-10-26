@@ -11,14 +11,14 @@
 namespace krema
 {
 
-/// Distance from one screen edge to the inner edge of the always-visible
-/// panels on that edge.
+/// Distance from one screen edge to the inner edge of the visible
+/// same-edge panel surface.
 struct PanelInset {
     /// Depth of the space those panels reserve (their exclusive zones).
     int reserved = 0;
     /// Depth the dock must clear: the reserved depth, or the far side of a
-    /// panel surface in that band when it is deeper (a floating Plasma panel
-    /// reserves less than its surface, which also holds the floating gap).
+    /// visible same-edge panel surface when it is deeper. A visible panel may
+    /// reserve no space, so this can exceed reserved when reserved is zero.
     int total = 0;
 
     friend bool operator==(const PanelInset &, const PanelInset &) = default;
@@ -57,14 +57,19 @@ inline EdgeSpan edgeSpan(const QRect &output, const QRect &rect, int edge)
 ///
 /// @p anchor is Krema's probe surface: a 1 px layer surface on the Bottom
 /// layer anchored to @p edge only. The compositor places it right inside the
-/// space every always-visible panel reserves on that edge, whatever order the
+/// space every reserving panel reserves on that edge, whatever order the
 /// panels started in, so its distance from the edge is the reserved depth.
-/// Panels that auto-hide, dodge windows or let windows cover them reserve
-/// nothing, leave the probe at the edge, and are ignored.
+/// Panels that auto-hide, dodge windows or let windows go below reserve
+/// nothing, leaving the probe at the edge. When such a panel is visible, its
+/// same-edge frame still contributes to total. The frame may include
+/// transparent floating padding; KWin exposes no supported painted-surface
+/// mask API.
 ///
-/// @p panels are the frames of the other dock-type surfaces on the output;
-/// those lying along @p edge and overlapping the reserved band extend the
-/// inset to their far side.
+/// @p panels are the visible frames of the other dock-type surfaces on the
+/// output. For a positive reserved depth, those lying along @p edge and
+/// overlapping the reserved band extend the inset to their far side. With no
+/// reservation, an edge-touching or edge-crossing visible frame still
+/// contributes to total.
 inline PanelInset computePanelInset(const QRect &output, const QRect &anchor, const QList<QRect> &panels, int edge)
 {
     if (output.isEmpty() || anchor.isNull()) {
@@ -85,10 +90,6 @@ inline PanelInset computePanelInset(const QRect &output, const QRect &anchor, co
     }
 
     const int reserved = std::max(outer, 0);
-    if (reserved == 0) {
-        return {};
-    }
-
     int total = reserved;
     for (const QRect &panel : panels) {
         if (!panel.intersects(output)) {
@@ -101,7 +102,9 @@ inline PanelInset computePanelInset(const QRect &output, const QRect &anchor, co
             continue;
         }
         const auto span = detail::edgeSpan(output, panel, edge);
-        if (span.outer < reserved && span.inner > 0) {
+        const bool inReservedBand = reserved > 0 && span.inner > 0 && span.outer < reserved;
+        const bool visibleAtEdgeWithoutReserve = reserved == 0 && span.outer <= 0;
+        if (inReservedBand || visibleAtEdgeWithoutReserve) {
             total = std::max(total, span.inner);
         }
     }

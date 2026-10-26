@@ -164,16 +164,15 @@ Quick reference: which scenarios to re-run when a source file changes.
 
 | Changed File | Re-run Scenarios |
 |---|---|
-| `src/qml/main.qml` (including the drag ghost) | 01, 02, 03, 04, 05, 06, 07 |
+| `src/qml/main.qml` (including the drag ghost) | 01, 02, 03, 04, 05, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
 | `src/qml/DockItem.qml` | 01, 02, 05, 06 |
 | `src/qml/ZoomAnimationProfile.qml` | 02, 06 |
 | `src/qml/shadowgeometry.js` | 06 |
 | `src/utils/zoomcalculator.h` | 01, 02, 05, 06, 07 |
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` (including the fallback icon) | 01, 03 |
-| `src/shell/previewcontroller.*` | 01, 03, 04, 06 |
-| `src/shell/dockshell.*` | 01, 06 |
-| `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
+| `src/shell/previewcontroller.*` | 01, 03, 04, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
+| `src/shell/dockshell.*` | 01, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
 | `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/desktopactions.*` | 04 |
@@ -188,13 +187,13 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/config/krema.kcfg` | 02, 03, 05, 06, 07 |
 | `src/platform/waylanddockplatform.*` | 01, 06, 07 |
 | `src/platform/kwinpointermotionwatcher.*` | 01 |
-| `src/platform/kwinpanelwatcher.*` | 06, 07 |
-| `src/utils/panelinset.h` | 06, 07 |
+| `src/platform/kwinpanelwatcher.*` | 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
+| `src/utils/panelinset.h` | 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
 | `src/platform/pointerfocustracker.*` | 02, 03, 04 |
 | `src/app/application.*` | 01, 06, 07 |
 | `src/qml/SettingsDialog.qml` | 04, 06 |
 | `src/shell/settingswindow.*` | 04, 06, 07 |
-| `src/shell/dockview.*` | 02, 06, 07 |
+| `src/shell/dockview.*` | 02, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
 | `src/models/dockmodel.*` | 01, 02, 03, 04, 05, 06 |
 | `src/models/taskiconprovider.*` | 01, 03, 05 |
 | `src/shell/multidockmanager.*` | 02, 03, 06, 07 |
@@ -231,3 +230,9 @@ that visual clearance can be smaller than the nominal spacing.
 
 These rows describe acceptance checks, not recorded successes. The exact
 automated nodes and run status are maintained in `tests/appium/README.md`.
+
+The panel-motion source changes map to SET-021, VIS-004, VIS-009, and
+VIS-010 above. Native stand-in panel tests establish geometry and input
+contracts, but genuine-Plasma panel visibility, resize, interrupted-motion,
+preview, and workarea evidence requires a manual/private Plasma session and
+is not claimed by the automated coverage.

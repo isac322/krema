@@ -111,9 +111,6 @@ Item {
             return item
         }
 
-
-
-
         function dockEdges() {
             return [
                 { tag: "top", edge: 0 },
@@ -883,6 +880,122 @@ Item {
             verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
         }
 
+        // --- Element Desktop and Ferdium chat presentation ---
+        function elementApps() {
+            return [
+                { tag: "io-element-element", appId: "io.element.element", name: "Element",
+                  unreadTitle: "Element *", mentionTitle: "Element [4]", mentionCount: 4 },
+                { tag: "im-riot-riot", appId: "im.riot.riot", name: "Element",
+                  unreadTitle: "Element [offline] •", mentionTitle: "Element [12]", mentionCount: 12 },
+                { tag: "element", appId: "element", name: "Element",
+                  unreadTitle: "Element •", mentionTitle: "Element [3]", mentionCount: 3 },
+                { tag: "element-desktop", appId: "element-desktop", name: "Element",
+                  unreadTitle: "Element *", mentionTitle: "Element [9]", mentionCount: 9 },
+            ]
+        }
+
+        function ferdiumApps() {
+            return [
+                { tag: "ferdium", appId: "ferdium", name: "Ferdium" },
+                { tag: "org-ferdium-ferdium", appId: "org.ferdium.ferdium", name: "Ferdium" },
+            ]
+        }
+
+        function test_elementTitleStates_data() {
+            return elementApps()
+        }
+
+        function test_elementTitleStates(data) {
+            let item = makeItem({
+                display: data.name, AppId: data.appId,
+                LauncherUrlWithoutIcon: "applications:" + data.appId + ".desktop",
+                IsWindow: true, ChatUnreadState: 0, ChatMentionCount: 0,
+            })
+            DockModel.tasksModel.setTaskData(0, "display", data.unreadTitle)
+            DockModel.setTaskChat(0, 1, 0)
+            tryCompare(item, "displayName", data.unreadTitle)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._chatMentionCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            verify(item.accessibleDescription.indexOf("Unread messages") >= 0)
+
+            DockModel.tasksModel.setTaskData(0, "display", data.mentionTitle)
+            DockModel.setTaskChat(0, 2, data.mentionCount)
+            tryCompare(item, "_chatUnreadState", 2)
+            compare(item._chatMentionCount, data.mentionCount)
+            compare(item._badgeCount, data.mentionCount)
+            compare(T.badgeLabel(item).text, data.mentionCount.toString())
+            verify(item.accessibleDescription.indexOf("notifications") >= 0)
+        }
+
+        function test_elementGroupedTitlesUseMaximumMentionCount() {
+            let item = makeItem({
+                display: "Element", AppId: "io.element.element", IsWindow: false,
+                IsGroupParent: true, ChildCount: 3, ChatUnreadState: 1, ChatMentionCount: 0,
+            })
+            DockModel.tasksModel.addChildTask(0, {
+                display: "Element [3]", IsWindow: true, ChatUnreadState: 2, ChatMentionCount: 3
+            })
+            DockModel.tasksModel.addChildTask(0, {
+                display: "Element [11]", IsWindow: true, ChatUnreadState: 2, ChatMentionCount: 11
+            })
+            DockModel.setTaskChat(0, 1, 1)
+            tryCompare(item, "_chatUnreadState", 2)
+            tryCompare(item, "_chatMentionCount", 11)
+            compare(item._badgeCount, 11)
+            DockModel.tasksModel.removeChildTask(0, 1)
+            DockModel.setTaskChat(0, 1, 1)
+            tryCompare(item, "_chatMentionCount", 3)
+        }
+
+        function test_ferdiumSniStates_data() {
+            return ferdiumApps()
+        }
+
+        function test_ferdiumSniStates(data) {
+            let item = makeItem({
+                display: data.name, AppId: data.appId,
+                LauncherUrlWithoutIcon: "applications:" + data.appId + ".desktop",
+                IsWindow: true,
+            })
+            NotificationTracker.setSniChat(data.appId, 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._chatMentionCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            NotificationTracker.setSniChat(data.appId, 2, 6)
+            tryCompare(item, "_chatUnreadState", 2)
+            compare(item._chatMentionCount, 6)
+            compare(item._badgeCount, 6)
+        }
+
+        function test_ferdiumUnityAndSettingsPrecedence_data() {
+            return ferdiumApps()
+        }
+
+        function test_ferdiumUnityAndSettingsPrecedence(data) {
+            let item = makeItem({
+                display: data.name, AppId: data.appId,
+                LauncherUrlWithoutIcon: "applications:" + data.appId + ".desktop",
+                IsWindow: true, ChatUnreadState: 2, ChatMentionCount: 3,
+            })
+            NotificationTracker.setSniChat(data.appId, 2, 3)
+            NotificationTracker.setBadgesEnabledForApp(data.appId, false)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            LauncherEntryTracker.setEntry("applications:" + data.appId + ".desktop", {
+                count: 7, countVisible: true
+            })
+            tryCompare(item, "_badgeCount", 7)
+            verify(T.badge(item).visible)
+            LauncherEntryTracker.setEntry("applications:" + data.appId + ".desktop", { countVisible: false })
+            NotificationTracker.setBadgesEnabledForApp(data.appId, true)
+            tryCompare(item, "_badgeCount", 3)
+            verify(item.accessibleDescription.indexOf("notifications") >= 0)
+        }
+
         // --- Mattermost SNI chat presentation ---
 
         function test_mattermostSniTransitions_data() {
@@ -1012,20 +1125,20 @@ Item {
         function test_telegramTitleFallbackPresentation_data() {
             let rows = []
             const titleCases = [
-                { tag: "single", title: "Telegram (3)", state: 2, count: 3,
+                { tag: "single", title: "Telegram (3)", state: 1, count: 3,
                   roles: { IsWindow: true } },
-                { tag: "en-dash", title: "Chats — (5)", state: 2, count: 5,
+                { tag: "en-dash", title: "Chats – (5)", state: 1, count: 5,
                   roles: { IsWindow: true } },
-                { tag: "hyphen", title: "Chats - (7)", state: 2, count: 7,
+                { tag: "hyphen", title: "Chats - (7)", state: 1, count: 7,
                   roles: { IsWindow: true } },
                 { tag: "zero-count", title: "Telegram (0)", state: 0, count: 0,
                   roles: { IsWindow: true } },
                 { tag: "suffix-extra", title: "Telegram (3) - muted", state: 0, count: 0,
                   roles: { IsWindow: true } },
-                { tag: "group", title: "Telegram", state: 2, count: 6,
+                { tag: "group", title: "Telegram", state: 1, count: 6,
                   roles: { IsWindow: false, IsGroupParent: true },
                   children: [{ display: "Telegram (6)", IsWindow: true,
-                               ChatUnreadState: 2, ChatMentionCount: 6 }] },
+                               ChatUnreadState: 1, ChatMentionCount: 6 }] },
                 { tag: "rest", title: "Telegram", state: 0, count: 0,
                   roles: { IsWindow: true } },
             ]
@@ -1048,9 +1161,26 @@ Item {
                 verify(T.badge(item).visible)
                 compare(T.badge(item).isDot, false)
                 compare(T.badgeLabel(item).text, data.count.toString())
+                verify(Qt.colorEqual(T.badge(item).color,
+                                     data.state === 2 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.linkColor))
             } else {
                 verify(!T.badge(item).visible)
             }
+        }
+
+        function test_telegramTitleFallbackPromotesRestToUnread() {
+            let item = makeTelegramItem(telegramApps()[0])
+            DockModel.tasksModel.setTaskData(0, "display", "Telegram")
+            DockModel.setTaskChat(0, 0, 0)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._badgeCount, 0)
+
+            DockModel.tasksModel.setTaskData(0, "display", "Telegram (2)")
+            DockModel.setTaskChat(0, 1, 2)
+            tryCompare(item, "_chatUnreadState", 1)
+            tryCompare(item, "_chatMentionCount", 2)
+            compare(item._badgeCount, 2)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
         }
 
         function test_telegramSemanticBadgePresentation() {
@@ -1074,7 +1204,8 @@ Item {
             verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
             verify(item.accessibleDescription.indexOf("Unread messages") < 0)
 
-            NotificationTracker.setSniChat("org.telegram.desktop", 2, 4)
+            DockModel.tasksModel.setTaskData(0, "display", "Telegram (4)")
+            DockModel.setTaskChat(0, 1, 4)
             tryCompare(item, "_badgeCount", 4)
             compare(T.badge(item).isDot, false)
             compare(T.badgeLabel(item).text, "4")
@@ -1083,6 +1214,7 @@ Item {
                 ? "#000000" : "#ffffff"
             verify(Qt.colorEqual(T.badgeLabel(item).color, expectedText))
             verify(item.accessibleDescription.indexOf("4 notifications") >= 0)
+            DockModel.setTaskChat(0, 0, 0)
             DockSettings.badgeDisplayMode = 2
             NotificationTracker.setSniChat("org.telegram.desktop", 1, 0)
             tryCompare(item, "_chatUnreadState", 1)
@@ -1092,6 +1224,11 @@ Item {
             verify(T.badge(item).visible)
             compare(T.badge(item).isDot, true)
             verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            DockSettings.badgeDisplayMode = 0
+            NotificationTracker.setSniChat("org.telegram.desktop", 0, 0)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
         }
 
         function test_telegramBadgeSettingsAndUnityPrecedence_data() {
@@ -1115,7 +1252,9 @@ Item {
                     NotificationTracker.setBadgesEnabledForApp(appId, enabled)
             }
 
-            NotificationTracker.setSniChat(appId, 2, 3)
+            DockModel.tasksModel.setTaskData(0, "display", "Telegram (3)")
+            DockModel.setTaskChat(0, 1, 3)
+            NotificationTracker.setSniChat(appId, 2, 0)
             NotificationTracker.setUnread(appId, 9)
             tryCompare(item, "_badgeCount", 3)
 
@@ -1141,6 +1280,9 @@ Item {
             LauncherEntryTracker.setEntry(url, { countVisible: false })
             tryCompare(item, "_badgeCount", 3)
             compare(T.badgeLabel(item).text, "3")
+            DockModel.setTaskChat(0, 0, 0)
+            tryCompare(item, "_badgeCount", 9)
+            compare(T.badgeLabel(item).text, "9")
         }
 
 

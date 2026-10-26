@@ -53,10 +53,10 @@ def _edge_cases(reserved: bool):
             marks=pytest.mark.kremarc(
                 {
                     "PinnedLaunchers": [],
-                    "VisibilityMode": config.ALWAYS_VISIBLE,
                     "ReserveScreenSpace": reserved,
                     "Edge": edge,
                     "Floating": False,
+                    "ShadowEnabled": False,
                 }
             ),
             id=name,
@@ -220,7 +220,7 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
     else:
         if not has_state(krema.wait_for_item(name), "showing"):
             reveal_dock(krema, name)
-        open_settings(krema, name)
+        krema.open_settings(name)
     open_page(krema, "Behavior")
 
 
@@ -376,6 +376,7 @@ def test_vis009_live_icon_size_and_floating_update_maximized_consumer(krema: Kre
 
 
 FLOATING_SWITCH = f"{SETTINGS}//check_box[@name='Floating']"
+SHADOW_SWITCH = f"{SETTINGS}//check_box[@name='Enable shadow']"
 FLOATING_MARGIN_SLIDER = f"{SETTINGS}//slider[@name='Floating margin']"
 FLOATING_MARGIN_MAX = 128
 #: FormComboBoxDelegate row choosing what the floating gap is measured from
@@ -394,10 +395,10 @@ def _floating_margin_cases():
             marks=pytest.mark.kremarc(
                 {
                     "PinnedLaunchers": [],
-                    "VisibilityMode": config.ALWAYS_VISIBLE,
                     "ReserveScreenSpace": True,
                     "Edge": edge,
                     "Floating": True,
+                    "ShadowEnabled": False,
                 }
             ),
             id=name,
@@ -414,11 +415,48 @@ def _reserved_depth(observation: dict, edge: int) -> int:
     return screen.width - work.width
 
 
+def _visible_gap(observation: dict, edge: int) -> int:
+    """The screen-to-item gap, a stable proxy for the visible panel rest edge."""
+    icon, screen = Rect(*observation["icon"]), Rect(*observation["screen"])
+    if edge == config.EDGE_TOP:
+        return icon.y - screen.y
+    if edge == config.EDGE_BOTTOM:
+        return screen.y + screen.height - (icon.y + icon.height)
+    if edge == config.EDGE_LEFT:
+        return icon.x - screen.x
+    return screen.x + screen.width - (icon.x + icon.width)
+
+
+def _surface_depth(observation: dict, edge: int) -> int:
+    """Surface extent inward from the selected screen edge."""
+    surface, screen = Rect(*observation["surface"]), Rect(*observation["screen"])
+    if edge == config.EDGE_TOP:
+        return surface.y + surface.height - screen.y
+    if edge == config.EDGE_BOTTOM:
+        return screen.y + screen.height - surface.y
+    if edge == config.EDGE_LEFT:
+        return surface.x + surface.width - screen.x
+    return screen.x + screen.width - surface.x
+
+
 def _set_floating(krema: Krema, floating: bool) -> None:
     switch = scroll_into_view(krema, FLOATING_SWITCH)
     if has_state(switch, "checked") != floating:
         click_el(krema, switch)
     wait_until(lambda: has_state(krema.wait_for(FLOATING_SWITCH), "checked") == floating, message=f"floating={floating}")
+    _park()
+
+
+def _set_shadow(krema: Krema, enabled: bool) -> None:
+    open_page(krema, "Shadow")
+    switch = scroll_into_view(krema, SHADOW_SWITCH)
+    if has_state(switch, "checked") != enabled:
+        click_el(krema, switch)
+    wait_until(lambda: has_state(krema.wait_for(SHADOW_SWITCH), "checked") == enabled, message=f"shadow={enabled}")
+    wait_until(
+        lambda: config.as_bool(config_value(krema, "ShadowEnabled") or "false") == enabled,
+        message=f"shadow autosaved={enabled}",
+    )
     _park()
 
 
@@ -443,6 +481,7 @@ def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, app
     _park()
     wider = _geometry(krema, win, edge, True, "margin-18")
     assert _reserved_depth(wider, edge) - _reserved_depth(default, edge) == 10, (default, wider)
+    assert _visible_gap(wider, edge) - _visible_gap(default, edge) == 10, (default, wider)
     assert wider["window"] == default["window"]
 
     # Floating off removes the gap entirely, whatever the saved margin.
@@ -453,13 +492,47 @@ def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, app
     )
     flat = _geometry(krema, win, edge, True, "margin-18-floating-off")
     assert _reserved_depth(default, edge) - _reserved_depth(flat, edge) == 8, (default, flat)
+    assert _visible_gap(default, edge) - _visible_gap(flat, edge) == 8, (default, flat)
     assert config_value(krema, "FloatingMargin") == "18", "turning Floating off keeps the saved margin"
 
     _set_floating(krema, True)
     restored = _geometry(krema, win, edge, True, "margin-18-floating-on")
     assert _reserved_depth(restored, edge) == _reserved_depth(wider, edge), (wider, restored)
+    assert _visible_gap(restored, edge) == _visible_gap(wider, edge), (wider, restored)
     assert restored["window"] == default["window"]
-    assert krema.pid == pid, "floating margin changes must apply live"
+
+    # Unit/QML tests cover inward containment; Appium observes the
+    # user-visible no-dead-band behavior.
+    # Shadow containment may enlarge the KWin surface, but must not move the
+    # visible panel or its maximized consumer away from the requested margin.
+    _set_shadow(krema, True)
+    shadowed = _geometry(krema, win, edge, True, "margin-18-shadow-on")
+    assert _visible_gap(shadowed, edge) == _visible_gap(wider, edge), (wider, shadowed)
+    assert shadowed["frame"] == wider["frame"], (wider, shadowed)
+    assert shadowed["workarea"] == wider["workarea"], (wider, shadowed)
+    assert _reserved_depth(shadowed, edge) == _reserved_depth(wider, edge), (wider, shadowed)
+    assert shadowed["window"] == wider["window"] == default["window"], (wider, shadowed)
+    assert _surface_depth(shadowed, edge) >= _surface_depth(wider, edge), (wider, shadowed)
+
+    # Floating off removes the visible gap even while shadow is on.
+    open_page(krema, "Layout & Position")
+    _set_floating(krema, False)
+    shadowed_flat = _geometry(krema, win, edge, True, "margin-18-shadow-floating-off")
+    assert _visible_gap(flat, edge) == 0, flat
+    assert _visible_gap(shadowed_flat, edge) == _visible_gap(flat, edge), (flat, shadowed_flat)
+    assert shadowed_flat["frame"] == flat["frame"], (flat, shadowed_flat)
+    assert shadowed_flat["workarea"] == flat["workarea"], (flat, shadowed_flat)
+    assert _reserved_depth(shadowed_flat, edge) == _reserved_depth(flat, edge), (flat, shadowed_flat)
+    assert shadowed_flat["window"] == flat["window"] == default["window"], (flat, shadowed_flat)
+
+    _set_floating(krema, True)
+    restored_shadow = _geometry(krema, win, edge, True, "margin-18-shadow-restored")
+    assert _visible_gap(restored_shadow, edge) == _visible_gap(shadowed, edge), (shadowed, restored_shadow)
+    assert restored_shadow["frame"] == shadowed["frame"], (shadowed, restored_shadow)
+    assert restored_shadow["workarea"] == shadowed["workarea"], (shadowed, restored_shadow)
+    assert _reserved_depth(restored_shadow, edge) == _reserved_depth(shadowed, edge), (shadowed, restored_shadow)
+    assert restored_shadow["window"] == shadowed["window"], (shadowed, restored_shadow)
+    _set_shadow(krema, False)
 
     close_settings(krema)
     _park()
@@ -479,6 +552,7 @@ def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, app
         "ReserveScreenSpace": True,
         "Edge": config.EDGE_BOTTOM,
         "Floating": True,
+        "ShadowEnabled": False,
     }
 )
 def test_set021_floating_margin_reference_choice_autosaves_live_and_persists(krema: Krema, apps: TestWindows) -> None:
@@ -506,6 +580,7 @@ def test_set021_floating_margin_reference_choice_autosaves_live_and_persists(kre
     _park()
     screen_edge = _geometry(krema, win, edge, True, "reference-screen-edge")
     assert _reserved_depth(screen_edge, edge) == _reserved_depth(panels, edge), "with no panel, Panels equals Screen edge"
+    assert _visible_gap(screen_edge, edge) == _visible_gap(panels, edge), "reference choice must not change the visible gap without panels"
     assert screen_edge["window"] == panels["window"]
 
     # Floating off: the dock is flush with the reference, so the reference
@@ -516,12 +591,16 @@ def test_set021_floating_margin_reference_choice_autosaves_live_and_persists(kre
         message="floating margin disabled while the dock is not floating",
     )
     assert has_state(scroll_into_view(krema, REFERENCE_ROW_XPATH), "enabled"), "the gap reference stays enabled with Floating off"
+    flat = _geometry(krema, win, edge, True, "reference-floating-off")
+    assert _visible_gap(panels, edge) - _visible_gap(flat, edge) == 8, (panels, flat)
     choose(krema, REFERENCE_ROW, PANELS_REFERENCE)
     wait_until(
         lambda: config_value(krema, "FloatingMarginReference") in ("1", None),
         message="gap reference autosaved back to the Panels default",
     )
     _set_floating(krema, True)
+    restored = _geometry(krema, win, edge, True, "reference-floating-on")
+    assert _visible_gap(restored, edge) == _visible_gap(panels, edge), (panels, restored)
 
     focus_slider(krema, FLOATING_MARGIN_SLIDER, 1, FLOATING_MARGIN_MAX)
     inp.key("end")
@@ -533,6 +612,7 @@ def test_set021_floating_margin_reference_choice_autosaves_live_and_persists(kre
     _park()
     widest = _geometry(krema, win, edge, True, "margin-max")
     assert _reserved_depth(widest, edge) - _reserved_depth(panels, edge) == FLOATING_MARGIN_MAX - 8, (panels, widest)
+    assert _visible_gap(widest, edge) - _visible_gap(panels, edge) == FLOATING_MARGIN_MAX - 8, (panels, widest)
     assert widest["window"] == panels["window"]
 
     choose(krema, REFERENCE_ROW, SCREEN_EDGE_REFERENCE)

@@ -227,10 +227,11 @@ Run the multi-screen cases with:
 
 ## TC VIS-009: Optional reservation reflows maximized windows on every edge
 
-**Precondition:** A real KWin session with one output and no other panel
-reserving space. Launch a fixture window, maximize it in KWin, and verify
-its maximized state and frame geometry. Use `Always visible`. Keep this
-same maximized window alive throughout each toggle.
+**Precondition:** A source-built KWin E2E session on the virtual compositor
+with one output and no other panel reserving space. Launch a fixture window,
+maximize it in KWin, and verify its maximized state and frame geometry. Use
+`Always visible`. Keep this same maximized window alive throughout each
+toggle.
 
 **Steps:**
 1. Open Settings → Behavior. At the bottom edge, toggle `Reserve screen
@@ -267,6 +268,9 @@ same maximized window alive throughout each toggle.
   needed for the toggle itself.
 - All four edges reserve only the current resting panel bar and floating
   gap (the current Floating margin), not the full zoom/tooltip surface.
+  Shadow overflow enlarges only the containing surface; any outward shadow
+  beyond the output boundary is clipped by that output, not turned into an
+  extra visible gap or reservation.
 - The chosen reservation setting survives restart independently of edge,
   floating mode, floating margin, icon size, and visibility mode.
 - Auto Hide and Dodge Windows reserve no space with either saved value.
@@ -277,7 +281,7 @@ their actual differences; source calls, sent commands, and configuration
 values alone are insufficient. Screenshots may supplement these checks.
 Missing DRM/ScreenShot2 capture must not skip the geometry/input/persistence
 path; report only the pixel checks as unavailable.
-**Automated (Tier 2, native run passed):**
+**Automated (Tier 2):**
 `tests/appium/test_08_reservation.py::test_vis009_reservation_off_maximized_window_uses_full_output`,
 `test_vis009_already_maximized_window_reflows_on_live_reservation_toggle`,
 and `test_vis009_live_icon_size_and_floating_update_maximized_consumer`
@@ -297,16 +301,16 @@ frame/workarea/output bounds, and resting icon/surface bounds for reserved
 states. No test requires screenshots. SET-015 maps the native control;
 four-edge restart combinations beyond the bottom-edge node remain manual
 acceptance checks.
-`test_vis009_live_floating_margin_update_maximized_consumer` (pending its
-first recorded run) checks on all four edges that a Floating margin change
-moves the maximized fixture by exactly the margin delta, that Floating off
-removes the whole margin, and that the margin survives restart; SET-020
-maps its control checks.
+`test_vis009_live_floating_margin_update_maximized_consumer` checks on all
+four edges that a Floating margin change moves the maximized fixture by
+exactly the margin delta, that Floating off removes the whole margin, and
+that the margin survives restart; its shadow checks keep the visible gap
+fixed while the containing surface grows. SET-020 maps its control checks.
 
 These checks establish the frame/workarea/input/AT-SPI contract without
-requiring screenshots or live PipeWire thumbnails. Installed-package Tier 3,
-other-edge restart combinations beyond the bottom-edge node, and the user's
-original desktop root cause remain unverified.
+requiring screenshots or live PipeWire thumbnails. The source-built KWin E2E
+runs on a virtual compositor; the user's original physical desktop root
+cause remains unverified.
 
 ---
 
@@ -351,17 +355,20 @@ panel, KWin pointer position.
 from the screen edge without stealing panel clicks, or from the dock
 position") covers steps 1–4 in Auto hide on the bottom edge with a stand-in
 panel process that logs its clicks and real pointer input through KWin's
-fake-input protocol. `tests/unit/test_input_region.cpp` checks the input
-regions with and without the external edge trigger. Dodge windows, step 5,
-and the fallback without KWin scripting remain manual checks; SET-023 maps
-the settings control.
+fake-input protocol. The same suite's "Panels mode uses only same-edge panels
+across all dock edges" case covers the 4×4 native panel matrix; unrelated
+panel edges must not change the dock's normal edge gap. `tests/unit/test_input_region.cpp`
+checks the input regions with and without the external edge trigger. Dodge
+windows, step 5, and the fallback without KWin scripting remain manual checks;
+SET-023 maps the settings control.
 
 ---
 
 ## TC VIS-011: Panel-relative edge switches retain one compositor reservation
 
-**Precondition:** A real KWin session with a maximized consumer window and
-the dock in `Always visible` mode with screen-space reservation enabled.
+**Precondition:** A source-built KWin E2E session on the virtual compositor
+with a maximized consumer window and the dock in `Always visible` mode with
+screen-space reservation enabled.
 
 **Steps:**
 1. Record the consumer's initial KWin `MaximizeArea` and frame geometry.

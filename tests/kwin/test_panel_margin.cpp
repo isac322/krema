@@ -46,6 +46,8 @@
 #include "platform/waylanddockplatform.h"
 #undef private
 #include "krema.h"
+#include "config/screensettings.h"
+
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
@@ -164,15 +166,16 @@ App &app()
     return *instance;
 }
 
-// Always visible + Reserve screen space + Floating on the bottom edge, with
-// the given gap reference and margin. Set before the manager exists, or live.
-void configure(int reference, int margin)
+// Always visible on the selected edge, with the given gap reference, margin,
+// floating state, and reservation state. Set before the manager exists, or live.
+void configure(int reference, int margin, int edge = kEdgeBottom, bool floating = true, bool reserve = true)
 {
     auto *s = app().settings.get();
-    s->setEdge(kEdgeBottom);
+    s->setEdge(edge);
     s->setVisibilityMode(static_cast<int>(krema::DockPlatform::VisibilityMode::AlwaysVisible));
-    s->setReserveScreenSpace(true);
-    s->setFloating(true);
+    s->setReserveScreenSpace(reserve);
+    s->setFloating(floating);
+    s->setShadowEnabled(false);
     s->setFloatingMargin(margin);
     s->setFloatingMarginReference(reference);
 }
@@ -421,8 +424,8 @@ private:
 class StandInPanel : public HelperProcess
 {
 public:
-    StandInPanel(int zone, const QString &outputName, const QString &clickLog = {})
-        : HelperProcess({QLatin1String(kPanelArg), QString::number(zone), QString::number(kEdgeBottom), outputName, clickLog},
+    StandInPanel(int zone, const QString &outputName, const QString &clickLog = {}, int edge = kEdgeBottom)
+        : HelperProcess({QLatin1String(kPanelArg), QString::number(zone), QString::number(edge), outputName, clickLog},
                         QProcessEnvironment::systemEnvironment())
     {
     }
@@ -609,9 +612,11 @@ std::string describe(const std::optional<Placement> &p)
 }
 
 /// The dock's placement as KWin reports it, after KWin runs @p action.
-std::optional<Placement> measure(krema::MultiDockManager &manager, const QSet<qint64> &standInPids, const QString &action = {}, bool requirePanelRect = true)
+std::optional<Placement> measureShell(krema::DockShell *shell,
+                                      const QSet<qint64> &standInPids,
+                                      const QString &action = {},
+                                      bool requirePanelRect = true)
 {
-    auto *shell = manager.primaryShell();
     if (!shell || !shell->view()->screen() || !shell->view()->isExposed()) {
         return std::nullopt;
     }
@@ -654,6 +659,14 @@ std::optional<Placement> measure(krema::MultiDockManager &manager, const QSet<qi
     return p;
 }
 
+std::optional<Placement> measure(krema::MultiDockManager &manager,
+                                 const QSet<qint64> &standInPids,
+                                 const QString &action = {},
+                                 bool requirePanelRect = true)
+{
+    return measureShell(manager.primaryShell(), standInPids, action, requirePanelRect);
+}
+
 /// Waits until @p accept holds for a fresh measurement; reports the last one.
 template<typename Accept>
 void requireSettles(krema::MultiDockManager &manager, const QSet<qint64> &standInPids, const char *what, Accept accept)
@@ -669,16 +682,85 @@ void requireSettles(krema::MultiDockManager &manager, const QSet<qint64> &standI
     REQUIRE(settled);
 }
 
-/// The stand-in panel is mapped and still flush with the bottom edge.
-bool standInUnpushed(const Placement &p)
+template<typename Accept>
+void requireShellSettles(krema::DockShell *shell, const QSet<qint64> &standInPids, const char *what, Accept accept)
 {
-    return p.standIns.size() == 1 && p.standIns.first().height() == kPanelDepth && p.standIns.first().y() + kPanelDepth == p.outputBottom();
+    std::optional<Placement> last;
+    const bool settled = QTest::qWaitFor(
+        [&] {
+            last = measureShell(shell, standInPids);
+            return last && accept(*last);
+        },
+        kTimeoutMs);
+    INFO(what << ": " << describe(last));
+    REQUIRE(settled);
 }
 
-/// Maximized windows end at or above the dock bar.
-bool reservationCoversDock(const Placement &p)
+/// Distance from the output edge to the outward side of @p rect.
+int edgeGap(const QRect &output, const QRect &rect, int edge)
 {
-    return !p.maximizeArea.isEmpty() && p.maximizeArea.y() + p.maximizeArea.height() <= p.dockBar.y();
+    switch (edge) {
+    case 0:
+        return rect.y() - output.y();
+    case 1:
+        return output.y() + output.height() - (rect.y() + rect.height());
+    case 2:
+        return rect.x() - output.x();
+    case 3:
+        return output.x() + output.width() - (rect.x() + rect.width());
+    default:
+        return -1;
+    }
+}
+
+/// Distance between the inner side of @p panel and the outward side of @p dock.
+int panelDockGap(const QRect &panel, const QRect &dock, int edge)
+{
+    switch (edge) {
+    case 0:
+        return dock.y() - (panel.y() + panel.height());
+    case 1:
+        return panel.y() - (dock.y() + dock.height());
+    case 2:
+        return dock.x() - (panel.x() + panel.width());
+    case 3:
+        return panel.x() - (dock.x() + dock.width());
+    default:
+        return -1;
+    }
+}
+
+/// The stand-in panel is mapped and still flush with the selected edge.
+bool standInUnpushed(const Placement &p, int edge = kEdgeBottom)
+{
+    if (p.standIns.size() != 1) {
+        return false;
+    }
+    const QRect panel = p.standIns.first();
+    if (edge == 0 || edge == 1) {
+        return panel.height() == kPanelDepth && edgeGap(p.output, panel, edge) == 0;
+    }
+    return panel.width() == kPanelDepth && edgeGap(p.output, panel, edge) == 0;
+}
+
+/// KWin's maximize area remains on the content side of the visible dock bar.
+bool reservationCoversDock(const Placement &p, int edge = kEdgeBottom)
+{
+    if (p.maximizeArea.isEmpty()) {
+        return false;
+    }
+    switch (edge) {
+    case 0:
+        return p.maximizeArea.y() >= p.dockBar.y() + p.dockBar.height();
+    case 1:
+        return p.maximizeArea.y() + p.maximizeArea.height() <= p.dockBar.y();
+    case 2:
+        return p.maximizeArea.x() >= p.dockBar.x() + p.dockBar.width();
+    case 3:
+        return p.maximizeArea.x() + p.maximizeArea.width() <= p.dockBar.x();
+    default:
+        return false;
+    }
 }
 
 std::unique_ptr<krema::MultiDockManager> startDock()
@@ -827,7 +909,7 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
 
     // No panel: Panels measures from the screen edge.
     requireSettles(*manager, {}, "no panel, Panels", [](const Placement &p) {
-        return p.dockBottom() == p.outputBottom() - 8 && reservationCoversDock(p);
+        return edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 
     // An always-visible floating panel appears on the dock's edge: the dock
@@ -837,7 +919,7 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     REQUIRE(panel->waitForStarted());
     QSet<qint64> pids{panel->pid()};
     requireSettles(*manager, pids, "reserving panel, Panels, margin 8", [](const Placement &p) {
-        return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - kPanelDepth - 8 && reservationCoversDock(p);
+        return standInUnpushed(p) && panelDockGap(p.standIns.first(), p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 
     // Input: the panel's band below the dock stays click-through, the dock
@@ -863,14 +945,14 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     // Screen edge: back to the old placement, the margin from the screen edge.
     app().settings->setFloatingMarginReference(0);
     requireSettles(*manager, pids, "reserving panel, Screen edge, margin 8", [](const Placement &p) {
-        return p.dockBottom() == p.outputBottom() - 8;
+        return edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 
     // Panels again with a wider margin, applied live.
     app().settings->setFloatingMarginReference(1);
     app().settings->setFloatingMargin(40);
     requireSettles(*manager, pids, "reserving panel, Panels, margin 40", [](const Placement &p) {
-        return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - kPanelDepth - 40 && reservationCoversDock(p);
+        return standInUnpushed(p) && panelDockGap(p.standIns.first(), p.dockBar, kEdgeBottom) == 40 && reservationCoversDock(p);
     });
 
     // A panel that reserves nothing is ignored: the gap is measured from the
@@ -882,8 +964,313 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     REQUIRE(panel->waitForStarted());
     pids = {panel->pid()};
     requireSettles(*manager, pids, "non-reserving panel, Panels, margin 8", [](const Placement &p) {
-        return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - 8 && reservationCoversDock(p);
+        return standInUnpushed(p) && edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
+}
+
+TEST_CASE("Panels mode uses same-edge panels and screen references across all dock edges", "[panel-margin][all-edges]")
+{
+    constexpr int edges[] = {0, 1, 2, 3};
+    constexpr int references[] = {0, 1};
+    constexpr bool floatingStates[] = {false, true};
+    constexpr int margins[] = {8, 40};
+    auto *settings = app().settings.get();
+    const int oldEdge = settings->edge();
+    const int oldVisibilityMode = settings->visibilityMode();
+    const bool oldReserve = settings->reserveScreenSpace();
+    const bool oldFloating = settings->floating();
+    const int oldMargin = settings->floatingMargin();
+    const int oldReference = settings->floatingMarginReference();
+    const bool oldShadow = settings->shadowEnabled();
+    configure(1, 8, kEdgeBottom, true, false);
+    const auto restore = qScopeGuard([=] {
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(oldVisibilityMode);
+        settings->setReserveScreenSpace(oldReserve);
+        settings->setFloating(oldFloating);
+        settings->setShadowEnabled(oldShadow);
+        settings->setFloatingMargin(oldMargin);
+        settings->setFloatingMarginReference(oldReference);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    const QString outputName = view->screen()->name();
+
+    // Independent no-panel controls cover every dock edge before any panel is
+    // mapped, so no other exclusive zone affects the absolute bar geometry.
+    for (const int dockEdge : edges) {
+        for (const bool floating : floatingStates) {
+            for (const int margin : margins) {
+                platform->setEdge(static_cast<krema::DockPlatform::Edge>(dockEdge));
+                view->setEdge(static_cast<krema::DockPlatform::Edge>(dockEdge));
+                app().settings->setFloating(floating);
+                app().settings->setFloatingMargin(margin);
+                app().settings->setFloatingMarginReference(1);
+                const QByteArray label = QStringLiteral("no panel, edge %1, floating %2, margin %3")
+                                             .arg(dockEdge)
+                                             .arg(floating)
+                                             .arg(margin)
+                                             .toLocal8Bit();
+                requireSettles(*manager, {}, label.constData(), [&](const Placement &p) {
+                    return edgeGap(p.output, p.dockBar, dockEdge) == (floating ? margin : 0);
+                });
+            }
+        }
+    }
+
+    // Each 4x4 panel/dock-edge cell is exercised live for both references,
+    // both floating states, and both margins. KWin frame plus visible bar
+    // geometry remains the only oracle.
+    for (const int panelEdge : edges) {
+        DYNAMIC_SECTION("panel edge " << panelEdge)
+        {
+            StandInPanel panel(kPanelZone, outputName, {}, panelEdge);
+            REQUIRE(panel.waitForStarted());
+            const QSet<qint64> pids{panel.pid()};
+
+            for (const int dockEdge : edges) {
+                for (const int reference : references) {
+                    for (const bool floating : floatingStates) {
+                        for (const int margin : margins) {
+                            platform->setEdge(static_cast<krema::DockPlatform::Edge>(dockEdge));
+                            view->setEdge(static_cast<krema::DockPlatform::Edge>(dockEdge));
+                            app().settings->setReserveScreenSpace(false);
+                            app().settings->setFloatingMarginReference(reference);
+                            app().settings->setFloating(floating);
+                            app().settings->setFloatingMargin(margin);
+                            const int requestedGap = floating ? margin : 0;
+                            const QByteArray label = QStringLiteral("panel edge %1, dock edge %2, reference %3, floating %4, margin %5")
+                                                         .arg(panelEdge)
+                                                         .arg(dockEdge)
+                                                         .arg(reference == 1 ? QStringLiteral("Panels") : QStringLiteral("Screen edge"))
+                                                         .arg(floating)
+                                                         .arg(margin)
+                                                         .toLocal8Bit();
+                            requireSettles(*manager, pids, label.constData(), [&](const Placement &p) {
+                                if (!standInUnpushed(p, panelEdge)) {
+                                    return false;
+                                }
+                                if (panelEdge == dockEdge) {
+                                    if (reference == 1) {
+                                        // Panels uses zone -1 and places the bar relative to the panel frame.
+                                        return panelDockGap(p.standIns.first(), p.dockBar, dockEdge) == requestedGap;
+                                    }
+                                    // AlwaysVisible Screen edge uses zone 0 even with reservation off.
+                                    // KWin therefore offsets it by the panel's fixture reservation (SET-021).
+                                    return edgeGap(p.output, p.dockBar, dockEdge) == kPanelZone + requestedGap;
+                                }
+                                return edgeGap(p.output, p.dockBar, dockEdge) == requestedGap;
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Re-enable reservation after the absolute geometry matrix and verify the
+    // real KWin work area still excludes the visible dock bar.
+    app().settings->setReserveScreenSpace(true);
+    app().settings->setFloatingMarginReference(0);
+    app().settings->setFloating(true);
+    app().settings->setFloatingMargin(40);
+    platform->setEdge(krema::DockPlatform::Edge::Bottom);
+    view->setEdge(krema::DockPlatform::Edge::Bottom);
+    requireSettles(*manager, {}, "reserved-on, no panel, bottom, Screen edge, floating, margin 40", [](const Placement &p) {
+        return edgeGap(p.output, p.dockBar, kEdgeBottom) == 40 && p.maximizeArea != p.output && reservationCoversDock(p);
+    });
+}
+
+TEST_CASE("Screen-edge zone-0 panel shifts the shadow boundary without changing the visible gap", "[panel-margin][shadow]")
+{
+    auto *settings = app().settings.get();
+    const int oldEdge = settings->edge();
+    const int oldVisibilityMode = settings->visibilityMode();
+    const bool oldReserve = settings->reserveScreenSpace();
+    const bool oldFloating = settings->floating();
+    const int oldMargin = settings->floatingMargin();
+    const int oldReference = settings->floatingMarginReference();
+    const bool oldShadow = settings->shadowEnabled();
+    const int oldLightX = settings->shadowLightX();
+    const int oldLightY = settings->shadowLightY();
+    const int oldLightZ = settings->shadowLightZ();
+    const int oldElevation = settings->shadowElevation();
+    const double oldRadius = settings->shadowLightRadius();
+    constexpr int requestedGap = 8;
+    configure(0, requestedGap, 0, true, false);
+    settings->setShadowEnabled(true);
+    settings->setShadowLightY(40);
+    settings->setShadowLightZ(100);
+    settings->setShadowElevation(50);
+    settings->setShadowLightRadius(1.0);
+    const auto restore = qScopeGuard([=] {
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(oldVisibilityMode);
+        settings->setReserveScreenSpace(oldReserve);
+        settings->setFloating(oldFloating);
+        settings->setFloatingMargin(oldMargin);
+        settings->setFloatingMarginReference(oldReference);
+        settings->setShadowEnabled(oldShadow);
+        settings->setShadowLightX(oldLightX);
+        settings->setShadowLightY(oldLightY);
+        settings->setShadowLightZ(oldLightZ);
+        settings->setShadowElevation(oldElevation);
+        settings->setShadowLightRadius(oldRadius);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const QString outputName = view->screen()->name();
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    REQUIRE(settings->shadowEnabled());
+    REQUIRE_FALSE(settings->reserveScreenSpace());
+    StandInPanel panel(kPanelZone, outputName, {}, 0);
+    REQUIRE(panel.waitForStarted());
+    const QSet<qint64> pids{panel.pid()};
+
+    requireSettles(*manager, pids, "Screen edge, zone 0, same-edge panel, shadow enabled", [&](const Placement &p) {
+        if (!standInUnpushed(p, 0)) {
+            return false;
+        }
+        const QRect localSurface(QPoint(), view->size());
+        const QRect localPanel = view->visibilityController()->panelRect();
+        const int frameOffset = edgeGap(p.output, p.dockFrame, 0);
+        const int visibleOffset = edgeGap(p.output, p.dockBar, 0);
+        const int localGap = edgeGap(localSurface, localPanel, 0);
+        // KWin's zone-0 layer surface starts after the panel reservation.
+        // The visible bar keeps the requested local gap; shadowOverflow is
+        // larger, so its outward lobe reaches this shifted surface boundary
+        // and is intentionally clipped there rather than moving the bar.
+        return platform->m_layerWindow && platform->m_layerWindow->exclusionZone() == 0 && frameOffset == kPanelZone
+            && visibleOffset == kPanelZone + requestedGap && localGap == requestedGap
+            && view->floatingPadding() == requestedGap && view->shadowOverflow() > requestedGap;
+    });
+}
+
+TEST_CASE("Per-screen Floating overrides follow and diverge from the global setting", "[panel-margin][screen-settings]")
+{
+    REQUIRE(QGuiApplication::screens().size() >= 2);
+    auto *settings = app().settings.get();
+    const int oldMonitorMode = settings->monitorMode();
+    const int oldEdge = settings->edge();
+    const int oldVisibilityMode = settings->visibilityMode();
+    const bool oldReserve = settings->reserveScreenSpace();
+    const bool oldFloating = settings->floating();
+    const int oldMargin = settings->floatingMargin();
+    const int oldReference = settings->floatingMarginReference();
+    const bool oldShadow = settings->shadowEnabled();
+
+    const auto screens = QGuiApplication::screens();
+    const QString firstName = screens.at(0)->name();
+    const QString secondName = screens.at(1)->name();
+    const auto restore = qScopeGuard([&] {
+        for (const QString &name : {firstName, secondName}) {
+            krema::ScreenSettings screenSettings(name, settings);
+            screenSettings.clearOverrides();
+            screenSettings.save();
+        }
+        settings->setMonitorMode(oldMonitorMode);
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(oldVisibilityMode);
+        settings->setReserveScreenSpace(oldReserve);
+        settings->setFloating(oldFloating);
+        settings->setFloatingMargin(oldMargin);
+        settings->setFloatingMarginReference(oldReference);
+        settings->setShadowEnabled(oldShadow);
+    });
+
+    configure(0, 40, kEdgeBottom, false, true);
+    settings->setMonitorMode(krema::MultiDockManager::AllScreens);
+
+    // Seed one real per-screen override before shell creation; the other
+    // output deliberately has no override and must follow the global value.
+    {
+        krema::ScreenSettings firstSettings(firstName, settings);
+        firstSettings.clearOverrides();
+        firstSettings.setFloating(true);
+        firstSettings.save();
+        krema::ScreenSettings secondSettings(secondName, settings);
+        secondSettings.clearOverrides();
+        secondSettings.save();
+    }
+    settings->setFloating(false);
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return manager->shells().size() == 2;
+        },
+        kTimeoutMs));
+    const auto shellFor = [&](const QString &name) -> krema::DockShell * {
+        for (auto *shell : manager->shells()) {
+            if (shell && shell->view()->screen() && shell->view()->screen()->name() == name) {
+                return shell;
+            }
+        }
+        return nullptr;
+    };
+    auto *firstShell = shellFor(firstName);
+    auto *secondShell = shellFor(secondName);
+    REQUIRE(firstShell);
+    REQUIRE(secondShell);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return firstShell->view()->isExposed() && secondShell->view()->isExposed();
+        },
+        kTimeoutMs));
+    auto *firstScreenSettings = firstShell->findChild<krema::ScreenSettings *>();
+    auto *secondScreenSettings = secondShell->findChild<krema::ScreenSettings *>();
+    REQUIRE(firstScreenSettings);
+    REQUIRE(secondScreenSettings);
+    CHECK(firstScreenSettings->floating());
+    CHECK_FALSE(secondScreenSettings->hasOverrides());
+    CHECK_FALSE(secondScreenSettings->floating());
+
+    const auto requireFloatingState = [&](bool firstFloating, bool secondFloating, const char *what) {
+        requireShellSettles(firstShell, {}, what, [&](const Placement &p) {
+            return edgeGap(p.output, p.dockBar, kEdgeBottom) == (firstFloating ? 40 : 0) && p.maximizeArea != p.output
+                && reservationCoversDock(p, kEdgeBottom);
+        });
+        requireShellSettles(secondShell, {}, what, [&](const Placement &p) {
+            return edgeGap(p.output, p.dockBar, kEdgeBottom) == (secondFloating ? 40 : 0) && p.maximizeArea != p.output
+                && reservationCoversDock(p, kEdgeBottom);
+        });
+    };
+
+    // Per-screen true wins over global false; the non-overridden second output
+    // follows global false.
+    requireFloatingState(true, false, "screen override true, global false");
+
+    settings->setFloating(true);
+    // The override remains true and the non-overridden output follows global
+    // true in the opposite direction.
+    requireFloatingState(true, true, "screen override true, global true");
+
+    // Per-screen false wins over global true.
+    firstScreenSettings->setFloating(false);
+    requireFloatingState(false, true, "screen override false, global true");
+
+    // clearOverrides() emits the effective-value notification; clearOverride()
+    // alone would leave the live dock with the stale value.
+    firstScreenSettings->clearOverrides();
+    CHECK_FALSE(firstScreenSettings->hasOverrides());
+    requireFloatingState(true, true, "screen overrides cleared, global true");
 }
 
 TEST_CASE("Panel probe ownership survives transient exposure loss during edge switches", "[panel-margin][issue-135]")

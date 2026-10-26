@@ -26,7 +26,7 @@
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
 #include <QDBusMessage>
-#include <QDBusReply>
+#include <QDBusPendingReply>
 #include <QDBusServiceWatcher>
 #include <QScopeGuard>
 #include <QSignalSpy>
@@ -615,7 +615,10 @@ TEST_CASE("DND application inhibition is active without an Until deadline and cl
                                  QDBusConnection::sessionBus());
     const auto restore = qScopeGuard([&] {
         if (cookie != 0) {
-            notifications.call(QStringLiteral("UnInhibit"), cookie);
+            QDBusPendingReply<> release = notifications.asyncCall(QStringLiteral("UnInhibit"), cookie);
+            waitFor([&] {
+                return release.isFinished();
+            });
         }
         if (hadUntil) {
             dnd.writeEntry(QStringLiteral("Until"), previousUntil, KConfig::Notify);
@@ -642,10 +645,15 @@ TEST_CASE("DND application inhibition is active without an Until deadline and cl
         return !tracker.dndActive();
     }));
 
-    const QDBusReply<uint> inhibition = notifications.call(QStringLiteral("Inhibit"),
-                                                           QStringLiteral("org.krema.test"),
-                                                           QStringLiteral("deterministic DND gate"),
-                                                           QVariantMap());
+    // Keep the event loop running while the in-process D-Bus server handles the call.
+    QDBusPendingReply<uint> inhibition = notifications.asyncCall(QStringLiteral("Inhibit"),
+                                                                QStringLiteral("org.krema.test"),
+                                                                QStringLiteral("deterministic DND gate"),
+                                                                QVariantMap());
+    REQUIRE(waitFor([&] {
+        return inhibition.isFinished();
+    }));
+    CAPTURE(inhibition.error().name().toStdString(), inhibition.error().message().toStdString());
     REQUIRE(inhibition.isValid());
     cookie = inhibition.value();
     REQUIRE(cookie != 0);
@@ -655,8 +663,12 @@ TEST_CASE("DND application inhibition is active without an Until deadline and cl
         return tracker.dndActive();
     }));
 
-    const QDBusMessage release = notifications.call(QStringLiteral("UnInhibit"), cookie);
-    REQUIRE(release.type() == QDBusMessage::ReplyMessage);
+    QDBusPendingReply<> release = notifications.asyncCall(QStringLiteral("UnInhibit"), cookie);
+    REQUIRE(waitFor([&] {
+        return release.isFinished();
+    }));
+    CAPTURE(release.error().name().toStdString(), release.error().message().toStdString());
+    REQUIRE(release.isValid());
     cookie = 0;
     CHECK_FALSE(settings.notificationsInhibitedByApplication());
     REQUIRE(waitFor([&] {

@@ -246,15 +246,28 @@ Item {
             verify(DockVisibility.panelRect.y > stage.height / 2, "bottom dock panel must sit in the lower half")
         }
 
-        function test_shadowReserveKeepsOutwardEdgeInsideSurface_data() {
+        function test_visibleGapUsesRequestedPaddingAndKeepsInwardShadowReserve_data() {
             return dockEdges()
         }
 
-        function test_shadowReserveKeepsOutwardEdgeInsideSurface(data) {
+        function test_visibleGapUsesRequestedPaddingAndKeepsInwardShadowReserve(data) {
             DockView.edge = data.edge
-            DockView.floatingPadding = 0
-            DockView.shadowOverflow = 60
+            const requestedGap = 12
+            const shadowReserve = 60
+            DockView.floatingPadding = requestedGap
+            DockView.shadowOverflow = shadowReserve
             addTasks(["A", "B"])
+
+            // Match the secondary surface extent used by production:
+            // visible panel depth + the larger inward reserve + floating gap.
+            const panelDepth = DockSettings.iconSize + Kirigami.Units.largeSpacing * 2
+            const surfaceDepth = panelDepth + Math.max(DockView.animationOverflowHeight(), shadowReserve)
+                + requestedGap
+            if (data.edge === 0 || data.edge === 1)
+                root.height = surfaceDepth
+            else
+                root.width = surfaceDepth
+
             makeDock(2)
             const panel = DockVisibility.panelRect
             const outwardGap = data.edge === 0
@@ -264,8 +277,24 @@ Item {
                     : data.edge === 2
                         ? panel.x
                         : stage.width - panel.x - panel.width
-            verify(outwardGap >= DockView.shadowOverflow,
-                   data.tag + " outward gap was " + outwardGap)
+            const inwardGap = data.edge === 0
+                ? stage.height - panel.y - panel.height
+                : data.edge === 1
+                    ? panel.y
+                    : data.edge === 2
+                        ? stage.width - panel.x - panel.width
+                        : panel.x
+            // The visible gap follows the requested padding. Only the
+            // opposite side checks shadow reserve; an outward shadow may be
+            // clipped by the physical output edge.
+            compare(outwardGap, requestedGap,
+                    data.tag + " visible outward gap was " + outwardGap)
+            verify(panel.x >= 0 && panel.y >= 0
+                   && panel.x + panel.width <= stage.width
+                   && panel.y + panel.height <= stage.height,
+                   data.tag + " panel escaped allocated surface")
+            verify(inwardGap >= shadowReserve,
+                   data.tag + " surface lost inward shadow reserve: " + inwardGap)
         }
 
         function test_verticalDockStacksItems() {

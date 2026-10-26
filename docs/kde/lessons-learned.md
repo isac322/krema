@@ -557,3 +557,9 @@ Qt 6.8.2 source; do not change production timing to accommodate an int getter.
 **Key lesson:** Test the platform boundary that failed, not a nearby healthy
 case. A timeout signal does not advance time, a stop/start is not a gapless
 handover, and false-to-false cannot prove that owner loss cleared state.
+
+## 25. Keep requested gap, render reserve, and window reservation separate (2026-10, issue #90)
+
+**Evidence:** With an 18 px requested gap, the old implementation produced 32 px of inward render reserve and a 27 px window reservation; the new implementation kept the effective gap at 18 px.
+
+**Key lesson:** Treat the requested gap, the inward render reserve needed to contain shadows, and the window-system reservation as separate quantities. Shadow containment must not silently change either the visible gap or the reserved work area.

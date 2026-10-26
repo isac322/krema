@@ -13,8 +13,8 @@ Background and bug histories: `docs/kde/lessons-learned.md`.
 - Unset `QT_WAYLAND_SHELL_INTEGRATION` after the dock is initialized.
 
 ## Surface sizing
-- Surface height MUST include animation overflow (zoom, bounce, etc.).
-- Formula: `surfaceHeight = panelHeight + max(animationOverflow, tooltipReserve, shadowOverflow) + max(floatingPadding, shadowOverflow)`, where `animationOverflow` includes the transformed icon cell and the largest launch/attention bounce. Shadow overflow reserves both the inward and outward projected edges.
+- Surface height MUST include animation overflow (zoom, bounce, etc.) and inward shadow reserve.
+- Requested floating padding controls the visible screen-side gap and the screen reservation. A shadow that extends beyond the requested gap MAY be clipped at the layer-surface or physical output boundary; it MUST NOT move the dock or create extra reserved/preview dead space.
 
 ## Input region / hit box
 - Always set the input region explicitly: an empty `QRegion` accepts ALL input, not none.

@@ -3,7 +3,7 @@
 ## Features
 - settings-window: Sidebar of 8 pages plus About (Icons, Layout & Position, Panel Style, Shadow, Animations & Badges, Behavior, Monitors & Desktops, Window Preview, About Krema, About KDE), settings search, one window per open
 - settings-icons: Icon size, spacing, scale, icon opacity (active, inactive/launcher, minimized), zoom factor, zoom style cards, zoom animation preset cards and custom zoom-in/zoom-out timing, with a live desktop preview (real wallpaper, miniature dock with real theme icons) and measurement guides
-- settings-layout: Screen edge picker on the live desktop preview, floating, floating margin, gap reference (screen edge or panels), corner radius
+- settings-layout: Screen edge picker on the live desktop preview, floating, effective per-screen Floating state, floating margin, gap reference (screen edge or panels), corner radius
 - settings-visual-pickers: Card pickers (ChoiceCard) and screen edge radios that work by mouse, keyboard, and AT-SPI
 - settings-click-actions: Independent single and grouped left-click choices
 - settings-click-persistence: Six policy pairs apply live, save, and restore
@@ -614,8 +614,14 @@ on, dock visible.
    and floating disabled. Increase the shadow inset while keeping the pointer
    in the preview's overlapping area. Verify the preview follows the panel;
    its newly exposed edge receives input and its transparent surroundings do
-   not. Repeat with settings that constrain the preview surface depth, then
-   hide the preview and verify its surface stops intercepting pointer input.
+   not. The visible gap remains the requested floating padding: shadow
+   overflow enlarges only the containing surface, and the preview margin uses
+   the visible panel depth plus animation reserve without a shadow-only
+   dead-band. If the requested gap is smaller than the outward shadow, pixels
+   may be clipped at the layer-surface/output boundary; reservation and preview
+   placement remain at the requested gap. Repeat with settings that constrain
+   the preview surface depth, then hide the preview and verify its surface
+   stops intercepting pointer input.
 
 **Expected:**
 - Scene drags, wheel input, advanced sliders, the "Result" inset, and the
@@ -624,17 +630,21 @@ on, dock visible.
   `ShadowLightZ`, `ShadowLightRadius`, `ShadowElevation`,
   `ShadowIntensity`).
 - Low light heights retain projected shadow edges on every dock edge.
-- Preview positioning and input regions follow live shadow settings and
-  native surface resizes, even when popup content dimensions stay unchanged.
+- Preview positioning stays aligned with the visible panel and requested animation reserve during shadow changes. Shadow-only changes do not move the preview or change its mask; native layer-shell surface resizes still update the preview mask and content.
+  The visible gap and reservation use the requested floating padding; shadow
+  overflow does not create a shadow-sized gap. If the requested gap is smaller
+  than the outward shadow, pixels may be clipped at the layer-surface/output
+  boundary; preview placement remains at the requested gap.
 
 **Verification:** AT-SPI (slider values, "Light position" description,
 expander description), screenshot (3D scene, "Result" inset, dock shadow),
 `kremarc`.
 **Automated:** `qml_tst_shadow_geometry` covers low-height, extreme valid,
-and high-height control projection; `qml_tst_dock_main` covers panel placement
-on all edges; `krema_preview_tests` cases "Preview margins follow the
-shadow-inset panel on every edge" and "Visible preview input follows shadow
-and native surface resizes" cover live preview geometry and input masks.
+and high-height control projection; `qml_tst_dock_main` covers visible gap
+and inward shadow reserve on all edges; `krema_preview_tests` cases
+"Preview margins follow the visible panel gap and animation reserve on every
+edge" and "Visible preview input follows shadow and native surface resizes"
+cover live preview geometry and input masks.
 Scene gestures and advanced-control persistence remain manual checks.
 
 ---
@@ -694,10 +704,11 @@ window's identity and frame geometry.
    edge" picker. Before each repetition, press Home and then Right seven
    times to restore 8 px, and record the new edge's fixture frame as the
    baseline, so step 2 again measures 8 → 18 px.
-5. Turn "Floating" off. Verify the slider becomes disabled, the dock sits
-   flush against the screen edge (gap 0), the reserved strip shrinks by the
-   full margin, and `FloatingMargin` stays 18. Turn "Floating" on again and
-   verify the 18 px gap and reserved strip return.
+5. Turn "Floating" off. Verify the effective per-screen Floating state
+   makes the visible gap 0 (the dock sits flush against the screen edge),
+   the reserved strip shrinks by the full margin, and `FloatingMargin` stays
+   18. Turn "Floating" on again and verify the 18 px gap and reserved strip
+   return.
 6. Select `Auto hide`, then `Dodge windows`, close Settings, and move the
    pointer away. Verify the dock hides fully past the screen edge; reveal it
    from the edge and verify it rests at the 18 px gap. Hovering inside the
@@ -709,18 +720,23 @@ window's identity and frame geometry.
 8. With a Plasma panel already reserving the dock's edge, verify the dock
    rests next to that panel and the margin is the distance from the panel,
    not from the screen edge (the default "Measure gap from: Panels";
-   SET-021 covers the reference choice).
+   SET-021 covers the reference choice). A panel on another edge must not
+   change the normal edge gap; SET-021 covers the same-edge panel matrix.
 
 **Expected:**
 - The gap follows the slider immediately on all four edges, from 1 to 128 px
   (default 8, the previous fixed gap); no restart is needed.
-- With reservation on, the reserved strip is the panel bar plus the margin,
-  and existing maximized windows reflow live.
-- With "Floating" off the gap is 0 whatever the saved margin (the dock is
-  flush with its reference); the slider is disabled but keeps its value.
+- With reservation on, the reserved strip is the panel bar plus the requested
+  floating margin, and existing maximized windows reflow live. Shadow overflow
+  does not add a shadow-sized gap or reservation; it enlarges only the
+  containing surface.
+- With "Floating" off, the effective per-screen Floating state makes the
+  visible gap 0 whatever the configured global margin (the dock is flush with
+  its reference); the slider is disabled but keeps its value.
 - Auto Hide and Dodge Windows hide the dock completely and reveal it at the
   configured gap.
-- The value persists in `kremarc` as `FloatingMargin` and survives restart.
+- The configured global margin persists in `kremarc` as `FloatingMargin` and
+  survives restart.
 
 **Verification:** AT-SPI (slider name, value, value text, enabled state),
 KWin (maximized frame and work area against the full output), `kremarc`
@@ -732,7 +748,8 @@ covers steps 1, 2, 4, 5, and 7 on all four edges: the fresh 8 px default,
 a keyboard Page Up to 18 px with autosave, the maximized fixture's reserved
 strip growing by exactly 10 px, the disabled slider and full-margin
 shrink with Floating off, the retained value, live application, and the
-restored reserved strip after restart.
+restored reserved strip after restart. Its shadow checks keep the visible gap
+unchanged while shadow containment enlarges the surface.
 `tests/unit/test_surface_geometry.cpp` covers the panel-bar and surface
 heights for non-default margins.
 `tests/appium/test_08_reservation.py::test_set021_floating_margin_reference_choice_autosaves_live_and_persists`
@@ -815,8 +832,12 @@ margin beyond the panel surface, live margin changes follow, the panel is
 not pushed, KWin's MaximizeArea ends above the dock bar, and the dock's
 input region leaves the panel band below it click-through; "Screen edge"
 returns to the margin from the screen edge; a panel reserving nothing is
-ignored. Resizing a real Plasma panel, "Floating" off beside a panel, and
-step 8 (no KWin scripting) remain manual checks.
+ignored. The same suite's "Panels mode uses same-edge panels and screen
+references across all dock edges" case covers the 4×4 native panel matrix, so
+unrelated panel edges do not change the normal edge gap. Resizing a real
+Plasma panel, "Floating" off beside a panel, and step 8 (no KWin scripting)
+remain manual checks. The source-built KWin E2E runs on a virtual compositor;
+it does not reproduce the user's physical desktop.
 
 ---
 

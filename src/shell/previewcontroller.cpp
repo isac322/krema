@@ -531,11 +531,9 @@ void PreviewController::applyEdgeLayout()
 
     const auto edge = m_dockView->platform()->edge();
     const bool vertical = (edge == DockPlatform::Edge::Left || edge == DockPlatform::Edge::Right);
-    // The margin puts the popup right past the dock's zoom area. It counts from
-    // where the compositor places the surface: exclusive zone 0 moves it out of
-    // other surfaces' exclusive zones. When AlwaysVisible reserves the panel
-    // bar, that zone is already behind the popup origin; otherwise include it,
-    // less the space other panels reserve when the dock is drawn past them.
+    // The margin puts the popup right past the dock's visible panel bar and
+    // animated input extent. Exclusive zones and existing panel insets still
+    // determine where the compositor places the surface.
     const auto *visibility = m_dockView->visibilityController();
     const bool dockReservesPanelBar =
         visibility && visibility->mode() == static_cast<int>(DockPlatform::VisibilityMode::AlwaysVisible) && m_settings->reserveScreenSpace();

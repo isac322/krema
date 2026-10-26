@@ -46,16 +46,21 @@ inline int animationOverflowHeight(int iconSize, int padding, double maxZoomFact
 }
 
 /// Total surface height including dock, inward animation / tooltip / shadow reserve,
-/// outward shadow / floating reserve, and the dock content.
+/// and the configured floating gap at the anchored screen-side boundary.
 inline int surfaceHeight(int iconSize, int padding, double maxZoomFactor, int tooltipReserve, int floatingPadding, int shadowOverflow = 0)
 {
     const int dockHeight = iconSize + padding * 2;
     const int overflow = animationOverflowHeight(iconSize, padding, maxZoomFactor);
 
     const int topOverflow = std::max({overflow, tooltipReserve, shadowOverflow});
-    // The shader effect is symmetric around the panel. Keep equivalent room
-    // on the outward side so any light direction remains inside the surface.
-    const int bottomOverflow = std::max(floatingPadding, shadowOverflow);
+    // The anchored boundary is also the layer-surface boundary: KWin can clip
+    // pixels outside it even when it lies inside the output (for example, when
+    // ReserveScreenSpace is false and a same-edge panel establishes a zone-0
+    // boundary). Keep the requested screen-side gap authoritative; shadow
+    // pixels that extend past that boundary when the gap is smaller than the
+    // outward shadow are accepted as clipped rather than moving the dock or
+    // changing the gap.
+    const int bottomOverflow = floatingPadding;
 
     return dockHeight + topOverflow + bottomOverflow;
 }
@@ -66,11 +71,10 @@ inline int panelBarHeight(int iconSize, int padding, int floatingPadding)
     return iconSize + padding * 2 + floatingPadding;
 }
 
-/// Screen-space reservation needed when the panel is inset for shadow overflow.
-inline int screenReserveDepth(int iconSize, int padding, int floatingPadding, int shadowOverflow, int reservedInset)
+/// Screen-space reservation needed for the visible panel bar after panel inset.
+inline int screenReserveDepth(int iconSize, int padding, int floatingPadding, int reservedInset)
 {
-    const int panelEdgeOffset = std::max(floatingPadding, shadowOverflow);
-    return iconSize + padding * 2 + panelEdgeOffset - reservedInset;
+    return iconSize + padding * 2 + floatingPadding - reservedInset;
 }
 
 } // namespace krema

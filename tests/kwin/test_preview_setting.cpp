@@ -46,7 +46,6 @@
 #include <QWidget>
 #include <QtQml>
 
-#include <algorithm>
 #include <cmath>
 #include <memory>
 
@@ -276,7 +275,7 @@ TEST_CASE(
     }
 }
 
-TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[preview][shadow]")
+TEST_CASE("Preview margins follow the visible panel gap and animation reserve on every edge", "[preview][shadow]")
 {
     const int edge = GENERATE(0, 1, 2, 3);
     auto *settings = app().settings.get();
@@ -354,12 +353,15 @@ TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[previ
             return margins.right();
         }
     };
-    // The preview must meet the actual resting panel plus animation extent,
-    // both initially and when a shadow setting moves an already-open surface.
+    // The visible gap is the requested panel inset. The native preview margin
+    // follows the visible panel depth plus animation extent, without a
+    // shadow-only dead-band.
     for (const bool shadow : {false, true, false}) {
         settings->setShadowEnabled(shadow);
         int depth = 0;
         int gap = 0;
+        int expectedGap = 0;
+        int expectedMargin = 0;
         const bool followsPanel = QTest::qWaitFor(
             [&] {
                 const QRect panel = dock->visibilityController()->panelRect();
@@ -384,16 +386,26 @@ TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[previ
                     gap = dock->width() - panel.x() - panel.width();
                     break;
                 }
+                expectedGap = dock->floatingPadding();
+                expectedMargin = depth + dock->animationOverflowHeight();
                 // QML publishes its panel rectangle asynchronously. Do not accept
                 // the previous rectangle and margin immediately after a toggle.
-                if (std::abs(gap - std::max(dock->floatingPadding(), dock->shadowOverflow())) > 4) {
+                if (gap != expectedGap) {
                     return false;
                 }
                 // QML's visible background omits the 4 px indicator gap.
-                return margin() >= depth + dock->animationOverflowHeight() && margin() <= depth + dock->animationOverflowHeight() + 4;
+                return margin() >= expectedMargin && margin() <= expectedMargin + 4;
             },
             kTimeoutMs);
-        CAPTURE(edge, shadow, depth, gap, margin(), dock->shadowOverflow(), dock->animationOverflowHeight());
+        CAPTURE(edge,
+                shadow,
+                depth,
+                gap,
+                expectedGap,
+                margin(),
+                expectedMargin,
+                dock->shadowOverflow(),
+                dock->animationOverflowHeight());
         REQUIRE(followsPanel);
     }
 }
@@ -523,19 +535,19 @@ TEST_CASE("Visible preview input follows shadow and native surface resizes", "[p
     } else {
         settings->setShadowLightX(250);
     }
+    int unchangedPolls = 0;
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return (edge == 1 ? preview->height() : preview->width()) < oldDepth;
-        },
-        kTimeoutMs));
-    REQUIRE(QTest::qWaitFor(
-        [&] {
-            return preview->mask() == popupRegion();
+            const int depth = edge == 1 ? preview->height() : preview->width();
+            const bool unchanged = depth == oldDepth && preview->mask() == oldMask && QSizeF(popup->width(), popup->height()) == contentSize;
+            unchangedPolls = unchanged ? unchangedPolls + 1 : 0;
+            return unchangedPolls > 20;
         },
         kTimeoutMs));
     REQUIRE(controller->isVisible());
+    REQUIRE((edge == 1 ? preview->height() : preview->width()) == oldDepth);
+    REQUIRE(preview->mask() == oldMask);
     REQUIRE(QSizeF(popup->width(), popup->height()) == contentSize);
-    REQUIRE_FALSE((preview->mask() - oldMask).isEmpty());
 
     // A layer-shell configure can change size without calling updateEdge.
     // The mask must follow that native event too, with content unchanged.

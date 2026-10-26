@@ -163,7 +163,8 @@ int DockView::backgroundStyleType() const
 
 int DockView::floatingPadding() const
 {
-    return m_panelInset.total + (m_settings->floating() ? m_settings->floatingMargin() : 0);
+    const bool floating = m_screenSettings ? m_screenSettings->floating() : m_settings->floating();
+    return m_panelInset.total + (floating ? m_settings->floatingMargin() : 0);
 }
 
 int DockView::shadowOverflow() const
@@ -299,7 +300,7 @@ void DockView::setScreenSettings(ScreenSettings *screenSettings)
 int DockView::panelBarHeight() const
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
-    return krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), shadowOverflow(), 0);
+    return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
 }
 
 DockPlatform *DockView::platform() const
@@ -368,10 +369,9 @@ void DockView::updateSize()
         m_platform->setSize(QSize(0, h));
     }
 
-    // Reserve the panel bar and any extra inward shadow offset when
-    // screen-space reservation is enabled. While measuring from panels the
-    // reservation starts past theirs.
-    const int exclusiveZone = krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), shadowOverflow, m_panelInset.reserved);
+    // Reserve only the visible panel bar; panel-relative insets are subtracted
+    // when the dock is measured past existing panels.
+    const int exclusiveZone = krema::screenReserveDepth(iconSize, s_padding, floatingPadding(), m_panelInset.reserved);
     m_platform->setExclusiveZone(m_settings->reserveScreenSpace() ? exclusiveZone : 0);
 
     if (m_visibilityController) {

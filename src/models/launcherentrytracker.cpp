@@ -39,6 +39,10 @@ static QStringList fallbackDesktopIds(const QString &desktopFile)
         candidates = {QStringLiteral("vesktop.desktop"), QStringLiteral("dev.vencord.vesktop.desktop")};
     } else if (stem == QLatin1String("webcord") || stem == QLatin1String("io.github.spacingbat3.webcord")) {
         candidates = {QStringLiteral("webcord.desktop"), QStringLiteral("io.github.spacingbat3.webcord.desktop")};
+    } else if (stem == QLatin1String("mattermost") || stem == QLatin1String("mattermost-desktop")
+               || stem == QLatin1String("com.mattermost.desktop") || stem == QLatin1String("com.mattermost")) {
+        candidates = {QStringLiteral("mattermost.desktop"), QStringLiteral("mattermost-desktop.desktop"),
+                      QStringLiteral("com.mattermost.Desktop.desktop"), QStringLiteral("com.mattermost.desktop.desktop")};
     } else {
         return {};
     }

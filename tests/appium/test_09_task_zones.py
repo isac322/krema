@@ -236,12 +236,12 @@ def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
     wait_until(
         lambda: all(
             (krema.screen_rect(item).height if vertical else krema.screen_rect(item).width) == 48
-            for item in krema.items()
+            for item in krema.items(include_trash=True)
         ),
         message="all dock items to return to their unzoomed primary extent",
     )
     wait_stable(
-        lambda: tuple(krema.screen_rect(item) for item in krema.items()),
+        lambda: tuple(krema.screen_rect(item) for item in krema.items(include_trash=True)),
         duration=0.6,
     )
 
@@ -251,21 +251,32 @@ def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
     rect = krema.screen_rect(separator)
     assert rect.width > 0 and rect.height > 0, f"separator must have positive extents: {rect}"
     before = krema.screen_rect(krema.wait_for_item(PINNED_B))
+    trash = krema.screen_rect(krema.wait_for_item("Trash"))
     after = krema.screen_rect(krema.wait_for_item(UNPINNED_A))
     if edge in (config.EDGE_TOP, config.EDGE_BOTTOM):
         assert rect.height > rect.width
-        left_gap = rect.x - (before.x + before.width)
-        right_gap = after.x - (rect.x + rect.width)
-        assert abs(left_gap - REST_ICON_SPACING) <= 1, f"pinned/separator gap was {left_gap}px: {before} {rect}"
-        assert abs(right_gap - REST_ICON_SPACING) <= 1, f"separator/running gap was {right_gap}px: {rect} {after}"
-        assert before.x + before.width <= rect.center[0] <= after.x
+        pinned_trash_gap = trash.x - (before.x + before.width)
+        trash_separator_gap = rect.x - (trash.x + trash.width)
+        separator_running_gap = after.x - (rect.x + rect.width)
+        assert abs(pinned_trash_gap - REST_ICON_SPACING) <= 1, f"pinned/Trash gap was {pinned_trash_gap}px: {before} {trash}"
+        assert abs(trash_separator_gap - REST_ICON_SPACING) <= 1, f"Trash/separator gap was {trash_separator_gap}px: {trash} {rect}"
+        assert abs(separator_running_gap - REST_ICON_SPACING) <= 1, f"separator/running gap was {separator_running_gap}px: {rect} {after}"
+        assert before.x + before.width <= trash.x
+        assert trash.x + trash.width <= rect.x
+        assert rect.x + rect.width <= after.x
+        assert before.x + before.width <= trash.center[0] <= rect.center[0] <= after.x
     else:
         assert rect.width > rect.height
-        top_gap = rect.y - (before.y + before.height)
-        bottom_gap = after.y - (rect.y + rect.height)
-        assert abs(top_gap - REST_ICON_SPACING) <= 1, f"pinned/separator gap was {top_gap}px: {before} {rect}"
-        assert abs(bottom_gap - REST_ICON_SPACING) <= 1, f"separator/running gap was {bottom_gap}px: {rect} {after}"
-        assert before.y + before.height <= rect.center[1] <= after.y
+        pinned_trash_gap = trash.y - (before.y + before.height)
+        trash_separator_gap = rect.y - (trash.y + trash.height)
+        separator_running_gap = after.y - (rect.y + rect.height)
+        assert abs(pinned_trash_gap - REST_ICON_SPACING) <= 1, f"pinned/Trash gap was {pinned_trash_gap}px: {before} {trash}"
+        assert abs(trash_separator_gap - REST_ICON_SPACING) <= 1, f"Trash/separator gap was {trash_separator_gap}px: {trash} {rect}"
+        assert abs(separator_running_gap - REST_ICON_SPACING) <= 1, f"separator/running gap was {separator_running_gap}px: {rect} {after}"
+        assert before.y + before.height <= trash.y
+        assert trash.y + trash.height <= rect.y
+        assert rect.y + rect.height <= after.y
+        assert before.y + before.height <= trash.center[1] <= rect.center[1] <= after.y
 
     # At maximum zoom the two adjacent delegates remain real hit targets; the
     # allocated separator slot must not steal pointer input or disappear while

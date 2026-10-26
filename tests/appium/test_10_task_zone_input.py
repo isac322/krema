@@ -33,7 +33,8 @@ APP_IDS = (*PINNED_IDS, KWRITE_ID, KFIND_ID)
 EXTRA_APP_ID = "org.kde.krema.taskzoneextra"
 EXTRA_COLD_NAME = "Krema Extra Test Window"
 EXTRA_NAME = "Newly launched"
-ICON_SIZE = 48
+TRASH_NAME = "Trash"
+
 GROUP_TITLES = ("Group 1", "Group 2", "Group 3")
 F12 = 0x0100003B
 
@@ -159,7 +160,7 @@ def _focused_names(krema: Krema, names: tuple[str, ...]) -> list[str]:
 
 
 def _focus(krema: Krema, names: tuple[str, ...], expected: str, stage: str) -> None:
-    wait_until(lambda: _focused_names(krema, names) == [expected], message=f"only native task {expected!r} focused")
+    wait_until(lambda: _focused_names(krema, names) == [expected], message=f"only native dock item {expected!r} focused")
     _divider(krema, True)
     _record(krema, stage, expected=expected, native_focused=_focused_names(krema, names), accessible_process_pid=krema.pid)
 
@@ -201,31 +202,47 @@ def _client_activation(krema: Krema, expected: TestWindow, windows: list[TestWin
     _record(krema, stage, expected_pid=expected.pid, own_native_frames=states)
 
 
-def _traverse(krema: Krema, apps: TestWindows, windows: dict[str, TestWindow], names: tuple[str, ...], edge: int, stage: str) -> None:
+def _traverse(
+    krema: Krema,
+    apps: TestWindows,
+    windows: dict[str, TestWindow],
+    names: tuple[str, ...],
+    edge: int,
+    stage: str,
+    *,
+    pinned_count: int,
+) -> None:
+    navigation_names = (*names[:pinned_count], TRASH_NAME, *names[pinned_count:])
     _expect_order(krema, names)
+    wait_until(
+        lambda: tuple(krema.item_names(include_trash=True)) == navigation_names,
+        message=f"native dock task and Trash order {navigation_names}",
+    )
     _park(krema)
     krema.click_item(names[-1])
     _active(krema, windows[names[-1]], f"{stage}-before-navigation")
     _park(krema)
     invoke_shortcut("focus-dock")
-    initial = wait_until(lambda: (f if len(f := _focused_names(krema, names)) == 1 else None), message="one native focused controlled task")[0]
-    _focus(krema, names, initial, f"{stage}-initial")
+    initial = wait_until(lambda: (f if len(f := _focused_names(krema, navigation_names)) == 1 else None), message="one native focused dock item")[0]
+    _focus(krema, navigation_names, initial, f"{stage}-initial")
     krema.wait_keyboard_focus()
     previous, following = ("Up", "Down") if _vertical(edge) else ("Left", "Right")
-    for index in range(names.index(initial) - 1, -1, -1):
+    for index in range(navigation_names.index(initial) - 1, -1, -1):
         inp.key(previous)
-        _focus(krema, names, names[index], f"{stage}-canonicalize")
-    _focus(krema, names, names[0], f"{stage}-first")
-    visits = [names[0]]
-    for name in names[1:]:
+        _focus(krema, navigation_names, navigation_names[index], f"{stage}-canonicalize")
+    _focus(krema, navigation_names, navigation_names[0], f"{stage}-first")
+    visits = [navigation_names[0]]
+    for name in navigation_names[1:]:
         inp.key(following)
-        _focus(krema, names, name, f"{stage}-forward")
+        _focus(krema, navigation_names, name, f"{stage}-forward")
         visits.append(name)
-    for name in reversed(names[:-1]):
+    for name in reversed(navigation_names[:-1]):
         inp.key(previous)
-        _focus(krema, names, name, f"{stage}-reverse")
+        _focus(krema, navigation_names, name, f"{stage}-reverse")
         visits.append(name)
-    assert visits == [*names, *reversed(names[:-1])]
+    assert visits == [*navigation_names, *reversed(navigation_names[:-1])]
+    task_visits = [name for name in visits if name != TRASH_NAME]
+    assert task_visits == [*names, *reversed(names[:-1])]
     _record(krema, stage, visits=visits, forward=following, backward=previous)
     inp.key("Return")
     target = windows[names[0]]
@@ -269,15 +286,15 @@ def test_kbd010_task_navigation_survives_native_launch_and_close(krema: Krema, a
     _record(krema, "cold-pinned-fixture", app_id=EXTRA_APP_ID, native_cold_names=cold_names, extra_cold_name=cold_name)
     initial = (PINNED_A, PINNED_B, cold_name, UNPINNED_A, UNPINNED_B)
     windows = _matrix(apps, krema, initial)
-    _traverse(krema, apps, windows, initial, edge, "initial-cold-pinned")
+    _traverse(krema, apps, windows, initial, edge, "initial-cold-pinned", pinned_count=3)
     extra = apps.open(EXTRA_NAME, app_id=EXTRA_APP_ID, accessible=True)
     windows[EXTRA_NAME] = extra
     launched = (PINNED_A, PINNED_B, EXTRA_NAME, UNPINNED_A, UNPINNED_B)
-    _traverse(krema, apps, windows, launched, edge, "after-pinned-launch")
+    _traverse(krema, apps, windows, launched, edge, "after-pinned-launch", pinned_count=3)
     apps.close(windows.pop(UNPINNED_B))
     krema.wait_for_no_item(UNPINNED_B)
     closed = (PINNED_A, PINNED_B, EXTRA_NAME, UNPINNED_A)
-    _traverse(krema, apps, windows, closed, edge, "after-unpinned-close")
+    _traverse(krema, apps, windows, closed, edge, "after-unpinned-close", pinned_count=3)
 
 
 def _entry(krema: Krema, edge: int, target: Rect) -> list[tuple[int, int]]:

@@ -1090,6 +1090,74 @@ TEST_CASE("Panels mode uses same-edge panels and screen references across all do
     });
 }
 
+TEST_CASE("Screen-edge zone-0 panel shifts the shadow boundary without changing the visible gap", "[panel-margin][shadow]")
+{
+    auto *settings = app().settings.get();
+    const int oldEdge = settings->edge();
+    const int oldVisibilityMode = settings->visibilityMode();
+    const bool oldReserve = settings->reserveScreenSpace();
+    const bool oldFloating = settings->floating();
+    const int oldMargin = settings->floatingMargin();
+    const int oldReference = settings->floatingMarginReference();
+    const bool oldShadow = settings->shadowEnabled();
+    const int oldLightX = settings->shadowLightX();
+    const int oldLightY = settings->shadowLightY();
+    const int oldLightZ = settings->shadowLightZ();
+    const int oldElevation = settings->shadowElevation();
+    const double oldRadius = settings->shadowLightRadius();
+    constexpr int requestedGap = 8;
+    configure(0, requestedGap, 0, true, false);
+    settings->setShadowEnabled(true);
+    settings->setShadowLightY(40);
+    settings->setShadowLightZ(100);
+    settings->setShadowElevation(50);
+    settings->setShadowLightRadius(1.0);
+    const auto restore = qScopeGuard([=] {
+        settings->setEdge(oldEdge);
+        settings->setVisibilityMode(oldVisibilityMode);
+        settings->setReserveScreenSpace(oldReserve);
+        settings->setFloating(oldFloating);
+        settings->setFloatingMargin(oldMargin);
+        settings->setFloatingMarginReference(oldReference);
+        settings->setShadowEnabled(oldShadow);
+        settings->setShadowLightX(oldLightX);
+        settings->setShadowLightY(oldLightY);
+        settings->setShadowLightZ(oldLightZ);
+        settings->setShadowElevation(oldElevation);
+        settings->setShadowLightRadius(oldRadius);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    const QString outputName = view->screen()->name();
+    StandInPanel panel(kPanelZone, outputName, {}, 0);
+    REQUIRE(panel.waitForStarted());
+    const QSet<qint64> pids{panel.pid()};
+
+    requireSettles(*manager, pids, "Screen edge, zone 0, same-edge panel, shadow enabled", [&](const Placement &p) {
+        if (!standInUnpushed(p, 0)) {
+            return false;
+        }
+        const QRect localSurface(QPoint(), view->size());
+        const QRect localPanel = view->visibilityController()->panelRect();
+        const int frameOffset = edgeGap(p.output, p.dockFrame, 0);
+        const int visibleOffset = edgeGap(p.output, p.dockBar, 0);
+        const int localGap = edgeGap(localSurface, localPanel, 0);
+        // KWin's zone-0 layer surface starts after the panel reservation.
+        // The visible bar keeps the requested local gap; shadowOverflow is
+        // larger, so its outward lobe reaches this shifted surface boundary
+        // and is intentionally clipped there rather than moving the bar.
+        return frameOffset == kPanelZone && visibleOffset == kPanelZone + requestedGap && localGap == requestedGap
+            && view->floatingPadding() == requestedGap && view->shadowOverflow() > requestedGap;
+    });
+}
+
 TEST_CASE("Per-screen Floating overrides follow and diverge from the global setting", "[panel-margin][screen-settings]")
 {
     REQUIRE(QGuiApplication::screens().size() >= 2);

@@ -535,11 +535,13 @@ TEST_CASE("Visible preview input follows shadow and native surface resizes", "[p
     } else {
         settings->setShadowLightX(250);
     }
+    int unchangedPolls = 0;
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return (edge == 1 ? preview->height() : preview->width()) == oldDepth
-                && preview->mask() == oldMask
-                && QSizeF(popup->width(), popup->height()) == contentSize;
+            const int depth = edge == 1 ? preview->height() : preview->width();
+            const bool unchanged = depth == oldDepth && preview->mask() == oldMask && QSizeF(popup->width(), popup->height()) == contentSize;
+            unchangedPolls = unchanged ? unchangedPolls + 1 : 0;
+            return unchangedPolls > 20;
         },
         kTimeoutMs));
     REQUIRE(controller->isVisible());

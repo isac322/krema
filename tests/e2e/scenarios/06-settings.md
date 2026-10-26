@@ -617,10 +617,11 @@ on, dock visible.
    not. The visible gap remains the requested floating padding: shadow
    overflow enlarges only the containing surface, and the preview margin uses
    the visible panel depth plus animation reserve without a shadow-only
-   dead-band. Any outward shadow beyond the output boundary is clipped by
-   that output. Repeat with settings that constrain the preview surface depth,
-   then hide the preview and verify its surface stops intercepting pointer
-   input.
+   dead-band. If the requested gap is smaller than the outward shadow, pixels
+   may be clipped at the layer-surface/output boundary; reservation and preview
+   placement remain at the requested gap. Repeat with settings that constrain
+   the preview surface depth, then hide the preview and verify its surface
+   stops intercepting pointer input.
 
 **Expected:**
 - Scene drags, wheel input, advanced sliders, the "Result" inset, and the
@@ -632,7 +633,9 @@ on, dock visible.
 - Preview positioning and input regions follow live shadow settings and
   native surface resizes, even when popup content dimensions stay unchanged.
   The visible gap and reservation use the requested floating padding; shadow
-  overflow does not create a shadow-sized gap.
+  overflow does not create a shadow-sized gap. If the requested gap is smaller
+  than the outward shadow, pixels may be clipped at the layer-surface/output
+  boundary; preview placement remains at the requested gap.
 
 **Verification:** AT-SPI (slider values, "Light position" description,
 expander description), screenshot (3D scene, "Result" inset, dock shadow),
@@ -830,12 +833,12 @@ margin beyond the panel surface, live margin changes follow, the panel is
 not pushed, KWin's MaximizeArea ends above the dock bar, and the dock's
 input region leaves the panel band below it click-through; "Screen edge"
 returns to the margin from the screen edge; a panel reserving nothing is
-ignored. The same suite's "Panels mode uses only same-edge panels across all
-dock edges" case covers the 4×4 native panel matrix, so unrelated panel edges
-do not change the normal edge gap. Resizing a real Plasma panel, "Floating"
-off beside a panel, and step 8 (no KWin scripting) remain manual checks. The
-source-built KWin E2E runs on a virtual compositor; it does not reproduce the
-user's physical desktop.
+ignored. The same suite's "Panels mode uses same-edge panels and screen
+references across all dock edges" case covers the 4×4 native panel matrix, so
+unrelated panel edges do not change the normal edge gap. Resizing a real
+Plasma panel, "Floating" off beside a panel, and step 8 (no KWin scripting)
+remain manual checks. The source-built KWin E2E runs on a virtual compositor;
+it does not reproduce the user's physical desktop.
 
 ---
 

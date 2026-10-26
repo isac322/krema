@@ -122,9 +122,8 @@ void DockShell::connectSettingsSignals()
     // Per-screen overrideable: iconSize, maxZoomFactor, floating → use ScreenSettings signals
     connect(ss, &ScreenSettings::iconSizeChanged, m_view.get(), &DockView::updateSize);
     connect(ss, &ScreenSettings::maxZoomFactorChanged, m_view.get(), &DockView::updateSize);
-    // The preview popup follows the panel's floating gap and shadow inset.
+    // The preview popup follows the panel's floating gap and animated input extent.
     connect(m_view.get(), &DockView::floatingPaddingChanged, m_previewController.get(), &PreviewController::updateEdge);
-    connect(m_view.get(), &DockView::shadowOverflowChanged, m_previewController.get(), &PreviewController::updateEdge);
     connect(ss, &ScreenSettings::floatingChanged, m_view.get(), &DockView::refreshFloatingPadding);
     // Floating margin is global-only; it resizes the gap exactly like toggling floating.
     connect(s, &KremaSettings::FloatingMarginChanged, m_view.get(), &DockView::refreshFloatingPadding);
@@ -140,6 +139,8 @@ void DockShell::connectSettingsSignals()
 
     // Shadow overflow is part of the surface's interior reserve so low light
     // heights do not clip the projected shadow at the QQuickWindow boundary.
+    // Keep these updateSize connections: they recompute the surface geometry
+    // and publish the shadowOverflow property after resizing.
     connect(s, &KremaSettings::ShadowEnabledChanged, m_view.get(), &DockView::updateSize);
     connect(s, &KremaSettings::ShadowLightXChanged, m_view.get(), &DockView::updateSize);
     connect(s, &KremaSettings::ShadowLightYChanged, m_view.get(), &DockView::updateSize);

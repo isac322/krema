@@ -53,8 +53,13 @@ inline int surfaceHeight(int iconSize, int padding, double maxZoomFactor, int to
     const int overflow = animationOverflowHeight(iconSize, padding, maxZoomFactor);
 
     const int topOverflow = std::max({overflow, tooltipReserve, shadowOverflow});
-    // Shadow overflow must not move the panel away from its anchored boundary.
-    // Keep the screen-side gap equal to the configured floating padding.
+    // The anchored boundary is also the layer-surface boundary: KWin can clip
+    // pixels outside it even when it lies inside the output (for example, when
+    // ReserveScreenSpace is false and a same-edge panel establishes a zone-0
+    // boundary). Keep the requested screen-side gap authoritative; shadow
+    // pixels that extend past that boundary when the gap is smaller than the
+    // outward shadow are accepted as clipped rather than moving the dock or
+    // changing the gap.
     const int bottomOverflow = floatingPadding;
 
     return dockHeight + topOverflow + bottomOverflow;

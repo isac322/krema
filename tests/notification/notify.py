@@ -28,6 +28,10 @@ DBUS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
 SLACK_SNI_SERVICE = "org.krema.e2e.SlackSni"
 SLACK_SNI_PATH = "/StatusNotifierItem"
 SLACK_SNI_CONTROL_INTERFACE = "org.krema.e2e.SlackSni"
+CHAT_SNI_SERVICE = "org.krema.e2e.ChatSni"
+CHAT_SNI_PATH = "/StatusNotifierItem"
+CHAT_SNI_CONTROL_INTERFACE = "org.krema.e2e.ChatSni"
+NOTIFICATION_CONTROL_INTERFACE = "org.krema.e2e.NotificationControl"
 
 def notification_interface():
     bus = dbus.SessionBus()
@@ -52,6 +56,13 @@ def send(args: argparse.Namespace) -> None:
 
 def close(args: argparse.Namespace) -> None:
     notification_interface().CloseNotification(dbus.UInt32(args.notification_id))
+
+
+def expire(args: argparse.Namespace) -> None:
+    """Let the popup time out, like Plasma: broadcast reason 1, keep watchers' copy."""
+    bus = dbus.SessionBus()
+    proxy = bus.get_object(NOTIFICATION_SERVICE, NOTIFICATION_PATH)
+    dbus.Interface(proxy, NOTIFICATION_CONTROL_INTERFACE).Expire(dbus.UInt32(args.notification_id))
 
 
 
@@ -227,6 +238,91 @@ class SlackSniServer(dbus.service.Object):
     def GetAll(self, _interface_name: str):
         return dbus.Dictionary(self._props, signature="sv")
 
+
+def _badge_icon_pixmap(badge: str) -> dbus.Array:
+    """22x22 transparent icon, optionally with a 6x6 badge: ``rest`` or ``R,G,B@corner``."""
+    size = 22
+    pixels = bytearray(size * size * 4)
+    if badge != "rest":
+        color, _, corner = badge.partition("@")
+        red, green, blue = (int(part) for part in color.split(","))
+        top = corner.startswith("top")
+        right = corner.endswith("right")
+        ys = range(1, 7) if top else range(size - 7, size - 1)
+        xs = range(size - 7, size - 1) if right else range(1, 7)
+        for y in ys:
+            for x in xs:
+                offset = (y * size + x) * 4
+                pixels[offset:offset + 4] = bytes((255, red, green, blue))
+    return dbus.Array(
+        [dbus.Struct((dbus.Int32(size), dbus.Int32(size), dbus.ByteArray(bytes(pixels))), signature=None)],
+        signature="(iiay)",
+    )
+
+
+def chat_sni(args: argparse.Namespace) -> None:
+    bus = dbus.SessionBus()
+    proxy = bus.get_object(CHAT_SNI_SERVICE, CHAT_SNI_PATH)
+    dbus.Interface(proxy, CHAT_SNI_CONTROL_INTERFACE).SetChatState(
+        dbus.String(args.badge),
+        dbus.String(args.icon_name),
+        dbus.String(args.tooltip_title),
+        dbus.String(args.tooltip_body),
+    )
+
+
+class ChatSniServer(dbus.service.Object):
+    """Test-owned chat-app StatusNotifierItem with a scriptable icon and tooltip."""
+
+    def __init__(self, bus: dbus.Bus, item_id: str, title: str) -> None:
+        self._bus_name = dbus.service.BusName(
+            CHAT_SNI_SERVICE,
+            bus=bus,
+            allow_replacement=True,
+            replace_existing=True,
+            do_not_queue=True,
+        )
+        super().__init__(self._bus_name, CHAT_SNI_PATH)
+        self._props: dict[str, object] = {
+            "Category": dbus.String("ApplicationStatus"),
+            "Id": dbus.String(item_id),
+            "Title": dbus.String(title),
+            "Status": dbus.String("Active"),
+            "IconName": dbus.String(""),
+            "OverlayIconName": dbus.String(""),
+            "AttentionIconName": dbus.String(""),
+            "IconThemePath": dbus.String(""),
+            "IconPixmap": _badge_icon_pixmap("rest"),
+            "OverlayIconPixmap": dbus.Array([], signature="(iiay)"),
+            "AttentionIconPixmap": dbus.Array([], signature="(iiay)"),
+            "ToolTip": _slack_tooltip(title, ""),
+        }
+
+    @dbus.service.method(CHAT_SNI_CONTROL_INTERFACE, in_signature="ssss")
+    def SetChatState(self, badge: str, icon_name: str, tooltip_title: str, tooltip_body: str) -> None:
+        self._props["IconPixmap"] = _badge_icon_pixmap(str(badge))
+        self._props["IconName"] = dbus.String(icon_name)
+        self._props["ToolTip"] = _slack_tooltip(str(tooltip_title), str(tooltip_body))
+        self.NewIcon()
+        self.NewToolTip()
+
+    @dbus.service.signal(SNI_ITEM_INTERFACE)
+    def NewIcon(self) -> None:
+        pass
+
+    @dbus.service.signal(SNI_ITEM_INTERFACE)
+    def NewToolTip(self) -> None:
+        pass
+
+    @dbus.service.method(DBUS_PROPERTIES_INTERFACE, in_signature="ss", out_signature="v")
+    def Get(self, _interface_name: str, property_name: str):
+        return self._props[str(property_name)]
+
+    @dbus.service.method(DBUS_PROPERTIES_INTERFACE, in_signature="s", out_signature="a{sv}")
+    def GetAll(self, _interface_name: str):
+        return dbus.Dictionary(self._props, signature="sv")
+
+
 class NotificationServer(dbus.service.Object):
     """Minimal fd.o server plus KDE watcher registration for a private session."""
 
@@ -322,6 +418,14 @@ class NotificationServer(dbus.service.Object):
     def NotificationClosed(self, notification_id, reason):
         pass
 
+    @dbus.service.method(NOTIFICATION_CONTROL_INTERFACE, in_signature="u")
+    def Expire(self, notification_id):
+        notification_id = int(notification_id)
+        if notification_id not in self._notifications:
+            return
+        self._notifications.discard(notification_id)
+        self.NotificationClosed(dbus.UInt32(notification_id), dbus.UInt32(1))
+
     @dbus.service.method(
         MANAGER_INTERFACE,
         sender_keyword="sender",
@@ -342,6 +446,18 @@ class NotificationServer(dbus.service.Object):
             self._watchers.discard(str(sender))
 
 
+def _register_sni(bus: dbus.Bus, service: str, path: str):
+    """Register one item with the session's watcher, or host a minimal watcher."""
+    item_addr = f"{service}{path}"
+    if bus.name_has_owner(SNI_WATCHER_SERVICE):
+        proxy = bus.get_object(SNI_WATCHER_SERVICE, SNI_WATCHER_PATH)
+        dbus.Interface(proxy, SNI_WATCHER_INTERFACE).RegisterStatusNotifierItem(service)
+        return None
+    watcher = StatusNotifierWatcherServer(bus, [item_addr])
+    watcher.StatusNotifierItemRegistered(dbus.String(item_addr))
+    return watcher
+
+
 def serve(args: argparse.Namespace) -> None:
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
@@ -349,13 +465,10 @@ def serve(args: argparse.Namespace) -> None:
     sni_watcher = None
     if args.with_slack_sni:
         sni_item = SlackSniServer(bus)
-        item_addr = f"{SLACK_SNI_SERVICE}{SLACK_SNI_PATH}"
-        if bus.name_has_owner(SNI_WATCHER_SERVICE):
-            proxy = bus.get_object(SNI_WATCHER_SERVICE, SNI_WATCHER_PATH)
-            dbus.Interface(proxy, SNI_WATCHER_INTERFACE).RegisterStatusNotifierItem(SLACK_SNI_SERVICE)
-        else:
-            sni_watcher = StatusNotifierWatcherServer(bus, [item_addr])
-            sni_watcher.StatusNotifierItemRegistered(dbus.String(item_addr))
+        sni_watcher = _register_sni(bus, SLACK_SNI_SERVICE, SLACK_SNI_PATH)
+    elif args.chat_sni_id:
+        sni_item = ChatSniServer(bus, args.chat_sni_id, args.chat_sni_title)
+        sni_watcher = _register_sni(bus, CHAT_SNI_SERVICE, CHAT_SNI_PATH)
     server = NotificationServer(
         bus,
         Path(args.ready_file),
@@ -388,11 +501,22 @@ def parser() -> argparse.ArgumentParser:
     dismiss.add_argument("notification_id", type=int)
     dismiss.set_defaults(handler=close)
 
+    expiry = commands.add_parser("expire", help="time out a notification popup (NotificationClosed reason 1)")
+    expiry.add_argument("notification_id", type=int)
+    expiry.set_defaults(handler=expire)
+
     sni = commands.add_parser("slack-sni", help="update the test-owned Slack StatusNotifierItem")
     sni.add_argument("--state", choices=("rest", "unread", "highlight"), required=True)
     sni.add_argument("--tooltip-title", required=True)
     sni.add_argument("--tooltip-body", default="")
     sni.set_defaults(handler=slack_sni)
+
+    chat = commands.add_parser("chat-sni", help="update the test-owned chat-app StatusNotifierItem")
+    chat.add_argument("--badge", default="rest", help="'rest' or 'R,G,B@top-right|bottom-right|top-left|bottom-left'")
+    chat.add_argument("--icon-name", default="")
+    chat.add_argument("--tooltip-title", required=True)
+    chat.add_argument("--tooltip-body", default="")
+    chat.set_defaults(handler=chat_sni)
 
     server = commands.add_parser("serve", help="own fd.o notifications for a private E2E session")
     server.add_argument("--ready-file", required=True)
@@ -400,6 +524,8 @@ def parser() -> argparse.ArgumentParser:
     server.add_argument("--allow-replacement", action="store_true")
     server.add_argument("--replace-existing", action="store_true")
     server.add_argument("--with-slack-sni", action="store_true")
+    server.add_argument("--chat-sni-id", default="", help="host a chat-app StatusNotifierItem with this Id")
+    server.add_argument("--chat-sni-title", default="")
     server.set_defaults(handler=serve)
     return root
 

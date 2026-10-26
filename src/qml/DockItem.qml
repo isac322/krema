@@ -114,19 +114,35 @@ Item {
             _id = _id.slice(0, -8)
         return _id === "slack" || _id === "com.slack.slack" || _id === "com.slack"
     }
-
-    // Chat state from the SNI adapter (gated by Plasma badge preferences).
+    readonly property bool _isDiscordOrVesktopApp: {
+        let _id = _appId.trim().toLowerCase()
+        if (_id.endsWith(".desktop"))
+            _id = _id.slice(0, -8)
+        return _id === "discord" || _id === "com.discordapp.discord" || _id === "com.discord.app"
+            || _id === "vesktop" || _id === "dev.vencord.vesktop" || _id === "dev.vencord"
+    }
+    // Chat state is supplied by both grouped task data and SNI adapters.
+    // Slack uses its SNI tray item (IconPixmap + ToolTip) as its sole authority.
+    // Adapter state is read only while Plasma allows application badges.
     readonly property int _chatUnreadState: {
+        let _taskRev = DockModel.chatStateRevision
         let _sniRev = NotificationTracker.revision
         if (_appId.length === 0 || !NotificationTracker.badgesEnabled(_appId))
             return 0
-        return NotificationTracker.sniChatUnreadState(_appId)
+        if (_isSlackApp)
+            return NotificationTracker.sniChatUnreadState(_appId)
+        return Math.max(DockModel.taskChatUnreadState(index),
+                        NotificationTracker.sniChatUnreadState(_appId))
     }
     readonly property int _chatMentionCount: {
+        let _taskRev = DockModel.chatStateRevision
         let _sniRev = NotificationTracker.revision
         if (_appId.length === 0 || !NotificationTracker.badgesEnabled(_appId))
             return 0
-        return NotificationTracker.sniChatMentionCount(_appId)
+        if (_isSlackApp)
+            return NotificationTracker.sniChatMentionCount(_appId)
+        return Math.max(DockModel.taskChatMentionCount(index),
+                        NotificationTracker.sniChatMentionCount(_appId))
     }
 
     // === Persistent notification and chat badge ===
@@ -163,7 +179,7 @@ Item {
     readonly property bool _badgeOnLeft: DockSettings.badgePosition === 1
         || (DockSettings.badgePosition === 2 && DockView.edge === 2)
     readonly property color _badgeBgColor: {
-        if (_chatUnreadState === 2)
+        if (_chatUnreadState === 2 || (_isDiscordOrVesktopApp && _badgeCount > 0))
             return Kirigami.Theme.negativeTextColor
         if (_chatUnreadState === 1)
             return Kirigami.Theme.linkColor
@@ -177,7 +193,7 @@ Item {
         return Kirigami.Theme.highlightColor
     }
     readonly property color _badgeTextColor: {
-        if (_chatUnreadState === 2 || _chatUnreadState === 1)
+        if (_chatUnreadState === 2 || _chatUnreadState === 1 || (_isDiscordOrVesktopApp && _badgeCount > 0))
             return Kirigami.ColorUtils.brightnessForColor(_badgeBgColor) === Kirigami.ColorUtils.Light
                 ? "#000000" : "#ffffff"
         if (DockSettings.badgeUseAccentColor)

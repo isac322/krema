@@ -13,6 +13,8 @@ QtObject {
     property int currentDesktop: 1
     // 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     property int virtualDesktopMode: 0
+    // Bumped when task chat state/count changes so DockItem bindings refresh.
+    property int chatStateRevision: 0
     // Fixtures supply prepartitioned task rows and their pinned boundary;
     // production DockModel's sorting is exercised by the model/native suites.
     property int pinnedTaskCount: 0
@@ -26,6 +28,29 @@ QtObject {
     function isOnCurrentDesktop(i) { let v = _role(i, "IsOnCurrentDesktop"); return v === undefined ? true : !!v }
     function childCount(i) { return tasksModel.rowCount(tasksModel.index(i, 0)) }
     function isDesktopFile(url) { return url.toString().endsWith(".desktop") }
+    // Presentation fixtures provide title-classifier output as roles, including
+    // independent maxima across grouped children.
+    function _taskChatMaximum(i, role) {
+        let maximum = _role(i, "IsWindow") ? Number(_role(i, role) || 0) : 0
+        for (let child = 0; child < childCount(i); ++child)
+            maximum = Math.max(maximum, Number(tasksModel.get(i, role, child) || 0))
+        return maximum
+    }
+    function taskChatUnreadState(i) { return _taskChatMaximum(i, "ChatUnreadState") }
+    function taskChatMentionCount(i) { return _taskChatMaximum(i, "ChatMentionCount") }
+    function setTaskChatUnreadState(i, state) {
+        tasksModel.setTaskData(i, "ChatUnreadState", state)
+        chatStateRevision++
+    }
+    function setTaskChatMentionCount(i, count) {
+        tasksModel.setTaskData(i, "ChatMentionCount", count)
+        chatStateRevision++
+    }
+    function setTaskChat(i, state, count) {
+        tasksModel.setTaskData(i, "ChatUnreadState", state)
+        tasksModel.setTaskData(i, "ChatMentionCount", count)
+        chatStateRevision++
+    }
 
     function publishDelegateGeometry(i, delegate) {
         delegateGeometryRequests = delegateGeometryRequests.concat([{
@@ -50,6 +75,7 @@ QtObject {
         tasksModel.reset()
         currentDesktop = 1
         virtualDesktopMode = 0
+        chatStateRevision = 0
         pinnedTaskCount = 0
         resetDelegateGeometryRequests()
     }

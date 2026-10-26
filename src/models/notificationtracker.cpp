@@ -249,6 +249,7 @@ enum class SniChatClient : quint8 {
     Discord,
     Vesktop,
     WebCord,
+    Mattermost,
 };
 
 static QString normalizedSniId(const QString &rawId)
@@ -269,11 +270,14 @@ static SniChatClient sniChatClientForId(const QString &rawId)
         || id == QLatin1String("com.discord.app")) {
         return SniChatClient::Discord;
     }
-    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop")) {
+    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop") || id == QLatin1String("dev.vencord")) {
         return SniChatClient::Vesktop;
     }
     if (id == QLatin1String("webcord") || id == QLatin1String("io.github.spacingbat3.webcord")) {
         return SniChatClient::WebCord;
+    }
+    if (id == QLatin1String("mattermost") || id == QLatin1String("mattermost-desktop") || id == QLatin1String("com.mattermost") || id == QLatin1String("com.mattermost.desktop")) {
+        return SniChatClient::Mattermost;
     }
     return SniChatClient::None;
 }
@@ -371,6 +375,31 @@ static int slackMentionCount(const QString &title, const QString &subTitle)
     bool ok = false;
     const int count = digits.toInt(&ok);
     return (ok && count > 0) ? count : 0;
+}
+
+static int mattermostPixelState(const QImage &image, const QString &toolTipTitle)
+{
+    int mentionPixels = 0;
+    int unreadPixels = 0;
+    if (!image.isNull()) {
+        const int xStart = (image.width() + 1) / 2;
+        const int yStart = (image.height() + 1) / 2;
+        for (int y = yStart; y < image.height(); ++y) {
+            for (int x = xStart; x < image.width(); ++x) {
+                const QColor pixel = image.pixelColor(x, y);
+                if (pixel.alpha() >= 180 && pixel.red() >= 210 && pixel.green() <= 90 && pixel.blue() <= 80) {
+                    ++mentionPixels;
+                } else if (pixel.alpha() >= 180 && pixel.red() <= 120 && pixel.green() >= 130 && pixel.blue() >= 220
+                           && pixel.blue() - pixel.red() >= 90) {
+                    ++unreadPixels;
+                }
+            }
+        }
+    }
+    if (mentionPixels >= 10 || toolTipTitle.contains(QStringLiteral("mentioned"), Qt::CaseInsensitive)) {
+        return 2;
+    }
+    return unreadPixels >= 10 || toolTipTitle.contains(QStringLiteral("unread channel"), Qt::CaseInsensitive) ? 1 : 0;
 }
 } // namespace
 
@@ -1006,8 +1035,9 @@ void NotificationTracker::updateSniChatState(SniEntry &entry)
         entry.chatUnreadState = entry.chatMentionCount > 0 ? 2 : pixelState;
         return;
     }
-    entry.chatMentionCount = 0;
-    if (chatClient == SniChatClient::WebCord) {
+    if (chatClient == SniChatClient::Mattermost) {
+        entry.chatUnreadState = mattermostPixelState(entry.iconImage, entry.toolTipTitle);
+    } else if (chatClient == SniChatClient::WebCord) {
         entry.chatUnreadState = webCordPixelState(entry.iconImage);
     } else if (chatClient == SniChatClient::Discord || chatClient == SniChatClient::Vesktop) {
         entry.chatUnreadState = discordPixelState(entry.iconImage);

@@ -41,6 +41,7 @@ windows is used rather than summing windows for the same account.
 | Discord | `• Discord` / `(N) Discord` window titles and red SNI badge | Positive title mention count; tray is state-only |
 | Vesktop | `• Discord` / `(N) Discord` window titles and red SNI badge | Positive title mention count; tray is state-only |
 | WebCord | `*WebCord` / `[N] WebCord` window titles and blue/red SNI badges | Positive title mention count; red tray mention is state-only |
+| Mattermost Desktop | Lower-right quadrant of the SNI `IconPixmap`; tooltip title fallback | Mention / Unread state |
 
 Electron `_status_icon_N` tray identity suffixes are stripped before
 desktop-service lookup. Generic `chrome_status_icon_` items can also match an
@@ -348,6 +349,23 @@ does not add child counts. A positive Unity Launcher count remains the primary n
 badge, followed by a positive chat mention count and then the Freedesktop unread count.
 Global and per-application Plasma badge settings gate all of these chat states.
 
+### Mattermost Desktop support
+
+Krema uses these exact Mattermost Desktop aliases:
+
+- `mattermost`
+- `mattermost-desktop`
+- `com.mattermost.desktop`
+
+The adapter decodes the SNI `IconPixmap` tray icon and scans only its lower-right quadrant (`x >= width / 2`, `y >= height / 2`):
+
+- **Mention** (`2`): at least 10 pixels with alpha `>= 180`, red `>= 210`, green `<= 90`, and blue `<= 80`
+- **Unread** (`1`): at least 10 pixels with alpha `>= 180`, red `<= 120`, green `>= 130`, blue `>= 220`, and `blue - red >= 90`
+
+If pixel detection finds no state, a case-insensitive tooltip-title match for `mentioned` produces Mention, and `unread channel` produces Unread. Mention takes precedence when both states are present. Global and per-application badge settings gate both states, and a positive Unity Launcher count remains authoritative.
+
+Mattermost states use the shared chat semantics: Mention uses the red attention treatment, Unread uses the blue unread treatment, Dot mode keeps the state color without a number, and accessibility text names the active state.
+
 
 ### Feasibility Assessment
 
@@ -439,7 +457,7 @@ ports its backend semantics and applies the same settings.
 Priority  Source                                     Count    Coverage
 --------  ------                                     -----    --------
 1 (best)  LauncherEntryTracker.count                 Exact    KDE apps, Slack (Unity API)
-2         Chat adapters                              State/#  Slack, Discord, Vesktop, WebCord
+2         Chat adapters                              State/#  Slack, Discord, Vesktop, WebCord, Mattermost
 3         NotificationTracker.unreadCount            Unread#  Apps using org.freedesktop.Notifications
 4         NotificationTracker.sniNeedsAttention      Boolean  Apps with SNI attention state
 5         IsDemandingAttention                       Boolean  X11 urgency hint apps

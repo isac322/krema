@@ -90,6 +90,29 @@ Item {
                 IsWindow: true
             })
         }
+        function telegramApps() {
+            return [
+                { tag: "org-telegram-desktop", appId: "org.telegram.desktop", name: "Telegram" },
+                { tag: "telegram", appId: "telegram", name: "Telegram" },
+                { tag: "telegram-desktop", appId: "telegram-desktop", name: "Telegram" },
+                { tag: "telegramdesktop", appId: "telegramdesktop", name: "Telegram" },
+            ]
+        }
+
+        function makeTelegramItem(app, roles, children) {
+            let item = makeItem(Object.assign({
+                display: app.name,
+                AppId: app.appId,
+                LauncherUrlWithoutIcon: "applications:" + app.appId + ".desktop",
+                IsWindow: true
+            }, roles || {}))
+            for (let child of (children || []))
+                DockModel.tasksModel.addChildTask(0, child)
+            return item
+        }
+
+
+
 
         function dockEdges() {
             return [
@@ -974,6 +997,142 @@ Item {
             tryCompare(item, "_badgeCount", 7)
             verify(T.badge(item).visible)
         }
+        // --- Telegram title fallback and chat badge presentation ---
+
+        function test_telegramTitleFallbackPresentation_data() {
+            let rows = []
+            const titleCases = [
+                { tag: "single", title: "Telegram (3)", state: 2, count: 3,
+                  roles: { IsWindow: true } },
+                { tag: "en-dash", title: "Chats — (5)", state: 2, count: 5,
+                  roles: { IsWindow: true } },
+                { tag: "hyphen", title: "Chats - (7)", state: 2, count: 7,
+                  roles: { IsWindow: true } },
+                { tag: "zero-count", title: "Telegram (0)", state: 0, count: 0,
+                  roles: { IsWindow: true } },
+                { tag: "suffix-extra", title: "Telegram (3) - muted", state: 0, count: 0,
+                  roles: { IsWindow: true } },
+                { tag: "group", title: "Telegram", state: 2, count: 6,
+                  roles: { IsWindow: false, IsGroupParent: true },
+                  children: [{ display: "Telegram (6)", IsWindow: true,
+                               ChatUnreadState: 2, ChatMentionCount: 6 }] },
+                { tag: "rest", title: "Telegram", state: 0, count: 0,
+                  roles: { IsWindow: true } },
+            ]
+            for (let app of telegramApps()) {
+                for (let titleCase of titleCases)
+                    rows.push(Object.assign({}, titleCase, { tag: app.tag + "-" + titleCase.tag, app: app }))
+            }
+            return rows
+        }
+
+        function test_telegramTitleFallbackPresentation(data) {
+            let item = makeTelegramItem(data.app, data.roles, data.children)
+            DockModel.tasksModel.setTaskData(0, "display", data.title)
+            DockModel.setTaskChat(0, data.state, data.count)
+            tryCompare(item, "displayName", data.title)
+            tryCompare(item, "_chatUnreadState", data.state)
+            tryCompare(item, "_chatMentionCount", data.count)
+            compare(item._badgeCount, data.count)
+            if (data.count > 0) {
+                verify(T.badge(item).visible)
+                compare(T.badge(item).isDot, false)
+                compare(T.badgeLabel(item).text, data.count.toString())
+            } else {
+                verify(!T.badge(item).visible)
+            }
+        }
+
+        function test_telegramSemanticBadgePresentation() {
+            let item = makeTelegramItem(telegramApps()[0])
+
+            NotificationTracker.setSniChat("org.telegram.desktop", 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._badgeCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            compare(T.badgeLabel(item).visible, false)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
+            verify(item.accessibleDescription.indexOf("Unread messages") >= 0)
+
+            NotificationTracker.setSniChat("org.telegram.desktop", 2, 0)
+            tryCompare(item, "_chatUnreadState", 2)
+            compare(item._badgeCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+            verify(item.accessibleDescription.indexOf("Unread messages") < 0)
+
+            NotificationTracker.setSniChat("org.telegram.desktop", 2, 4)
+            tryCompare(item, "_badgeCount", 4)
+            compare(T.badge(item).isDot, false)
+            compare(T.badgeLabel(item).text, "4")
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            let expectedText = Kirigami.ColorUtils.brightnessForColor(T.badge(item).color) === Kirigami.ColorUtils.Light
+                ? "#000000" : "#ffffff"
+            verify(Qt.colorEqual(T.badgeLabel(item).color, expectedText))
+            verify(item.accessibleDescription.indexOf("4 notifications") >= 0)
+            DockSettings.badgeDisplayMode = 2
+            NotificationTracker.setSniChat("org.telegram.desktop", 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            verify(!T.badge(item).visible)
+            NotificationTracker.setSniChat("org.telegram.desktop", 2, 0)
+            tryCompare(item, "_chatUnreadState", 2)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+        }
+
+        function test_telegramBadgeSettingsAndUnityPrecedence_data() {
+            let rows = []
+            for (let app of telegramApps()) {
+                for (let global of [false, true])
+                    rows.push({ tag: app.tag + (global ? "-global" : "-application"),
+                                app: app, global: global })
+            }
+            return rows
+        }
+
+        function test_telegramBadgeSettingsAndUnityPrecedence(data) {
+            let item = makeTelegramItem(data.app)
+            let appId = data.app.appId
+            let url = "applications:" + appId + ".desktop"
+            let setEnabled = enabled => {
+                if (data.global)
+                    NotificationTracker.setBadgesEnabled(enabled)
+                else
+                    NotificationTracker.setBadgesEnabledForApp(appId, enabled)
+            }
+
+            NotificationTracker.setSniChat(appId, 2, 3)
+            NotificationTracker.setUnread(appId, 9)
+            tryCompare(item, "_badgeCount", 3)
+
+            setEnabled(false)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            setEnabled(true)
+            tryCompare(item, "_badgeCount", 3)
+
+            LauncherEntryTracker.setEntry(url, { count: 7, countVisible: true })
+            tryCompare(item, "_badgeCount", 7)
+            compare(T.badgeLabel(item).text, "7")
+            verify(item.accessibleDescription.indexOf("7 notifications") >= 0)
+
+            LauncherEntryTracker.setEntry(url, { count: 0, countVisible: true })
+            tryCompare(item, "_badgeCount", 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+
+            LauncherEntryTracker.setEntry(url, { countVisible: false })
+            tryCompare(item, "_badgeCount", 3)
+            compare(T.badgeLabel(item).text, "3")
+        }
+
 
         function test_noBadgeWithoutNotifications() {
             let item = makeItem({ IsWindow: true })

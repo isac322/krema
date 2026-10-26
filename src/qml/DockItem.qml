@@ -115,18 +115,28 @@ Item {
         return _id === "slack" || _id === "com.slack.slack" || _id === "com.slack"
     }
 
-    // Chat state from the SNI adapter (gated by Plasma badge preferences).
+    // Chat state is supplied by both grouped task data and SNI adapters.
+    // Slack uses its SNI tray item (IconPixmap + ToolTip) as its sole authority.
+    // Adapter state is read only while Plasma allows application badges.
     readonly property int _chatUnreadState: {
+        let _taskRev = DockModel.chatStateRevision
         let _sniRev = NotificationTracker.revision
         if (_appId.length === 0 || !NotificationTracker.badgesEnabled(_appId))
             return 0
-        return NotificationTracker.sniChatUnreadState(_appId)
+        if (_isSlackApp)
+            return NotificationTracker.sniChatUnreadState(_appId)
+        return Math.max(DockModel.taskChatUnreadState(index),
+                        NotificationTracker.sniChatUnreadState(_appId))
     }
     readonly property int _chatMentionCount: {
+        let _taskRev = DockModel.chatStateRevision
         let _sniRev = NotificationTracker.revision
         if (_appId.length === 0 || !NotificationTracker.badgesEnabled(_appId))
             return 0
-        return NotificationTracker.sniChatMentionCount(_appId)
+        if (_isSlackApp)
+            return NotificationTracker.sniChatMentionCount(_appId)
+        return Math.max(DockModel.taskChatMentionCount(index),
+                        NotificationTracker.sniChatMentionCount(_appId))
     }
 
     // === Persistent notification and chat badge ===

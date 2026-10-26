@@ -34,6 +34,7 @@ EXTRA_APP_ID = "org.kde.krema.taskzoneextra"
 EXTRA_COLD_NAME = "Krema Extra Test Window"
 EXTRA_NAME = "Newly launched"
 TRASH_NAME = "Trash"
+ICON_SIZE = 48
 
 GROUP_TITLES = ("Group 1", "Group 2", "Group 3")
 F12 = 0x0100003B

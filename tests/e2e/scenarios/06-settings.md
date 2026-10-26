@@ -630,8 +630,7 @@ on, dock visible.
   `ShadowLightZ`, `ShadowLightRadius`, `ShadowElevation`,
   `ShadowIntensity`).
 - Low light heights retain projected shadow edges on every dock edge.
-- Preview positioning and input regions follow live shadow settings and
-  native surface resizes, even when popup content dimensions stay unchanged.
+- Preview positioning stays aligned with the visible panel and requested animation reserve during shadow changes. Shadow-only changes do not move the preview or change its mask; native layer-shell surface resizes still update the preview mask and content.
   The visible gap and reservation use the requested floating padding; shadow
   overflow does not create a shadow-sized gap. If the requested gap is smaller
   than the outward shadow, pixels may be clipped at the layer-surface/output

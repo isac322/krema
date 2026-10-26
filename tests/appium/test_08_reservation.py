@@ -220,7 +220,7 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
     else:
         if not has_state(krema.wait_for_item(name), "showing"):
             reveal_dock(krema, name)
-        open_settings(krema, name)
+        krema.open_settings(name)
     open_page(krema, "Behavior")
 
 

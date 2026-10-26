@@ -1136,6 +1136,10 @@ TEST_CASE("Screen-edge zone-0 panel shifts the shadow boundary without changing 
         kTimeoutMs));
     auto *view = manager->primaryShell()->view();
     const QString outputName = view->screen()->name();
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    REQUIRE(settings->shadowEnabled());
+    REQUIRE_FALSE(settings->reserveScreenSpace());
     StandInPanel panel(kPanelZone, outputName, {}, 0);
     REQUIRE(panel.waitForStarted());
     const QSet<qint64> pids{panel.pid()};
@@ -1153,7 +1157,8 @@ TEST_CASE("Screen-edge zone-0 panel shifts the shadow boundary without changing 
         // The visible bar keeps the requested local gap; shadowOverflow is
         // larger, so its outward lobe reaches this shifted surface boundary
         // and is intentionally clipped there rather than moving the bar.
-        return frameOffset == kPanelZone && visibleOffset == kPanelZone + requestedGap && localGap == requestedGap
+        return platform->m_layerWindow && platform->m_layerWindow->exclusionZone() == 0 && frameOffset == kPanelZone
+            && visibleOffset == kPanelZone + requestedGap && localGap == requestedGap
             && view->floatingPadding() == requestedGap && view->shadowOverflow() > requestedGap;
     });
 }

@@ -21,7 +21,7 @@
 - src/utils/panelinset.h
 - src/utils/inputregion.h
 - src/utils/inputregion.cpp
-- src/shell/dockview.h
+- src/shell/previewcontroller.cpp
 - src/shell/dockview.cpp
 - src/app/application.cpp
 - src/qml/settings/BehaviorPage.qml
@@ -114,19 +114,26 @@ geometry in all states; screenshot when capture is available.
 **Steps:**
 1. Screenshot — verify dock visible (no overlap)
 2. Move/resize window to overlap dock area
-3. Wait 500ms
-4. Screenshot — verify dock hidden
+3. During the hide transition, sample the dock frame and displayed edge; wait 500ms
+4. Screenshot — verify dock has moved out and is hidden
 5. Move window away from dock area
-6. Wait 500ms
-7. Screenshot — verify dock visible again
+6. During the reveal transition, sample the dock frame and displayed edge; wait 500ms
+7. Screenshot — verify dock is visible again at its resting edge distance
+8. Interrupt one hide/reveal transition by moving the window back across the dock area; verify the final state follows the current overlap, not the stale transition target
 
 **Expected:**
-- Dock hides when ANY window overlaps its area
-- Dock shows when no windows overlap
+- Dock hides when ANY window overlaps its area, with the normal movement animation rather than only a visibility-state change
+- Dock shows when no windows overlap, animating back to its displayed resting edge distance
+- The native surface remains large enough during the transition; the dock and any open preview remain drawable and input-stable
+- An interrupted transition settles at the current overlap state without a stale offset
 
-**Verification:** screenshot (hide/show based on window overlap)
+**Verification:** screenshot (hide/show based on window overlap), KWin
+frame/displayed-edge samples, and input/preview behavior during movement
 
 **Automated:** tests/appium/test_07_visibility.py::test_vis004_dodge_windows_hides_while_a_window_overlaps_the_dock, tests/appium/test_07_visibility.py::test_vis004_dodge_windows_hides_for_an_inactive_overlapping_window
+cover the virtual-session window-overlap hide/show checks; they do not cover
+the genuine Plasma panel visibility, resize, or interrupted-transition cases
+listed in SET-021 and VIS-010.
 
 ---
 
@@ -249,8 +256,11 @@ toggle.
 4. Repeat each edge with floating mode off and on. Change icon size on the
    Icons page and the Floating margin on the Layout & Position page while
    reservation is enabled and verify the existing maximized frame updates to
-   the current panel-bar thickness plus margin (SET-020). Move the pointer
-   away before sampling; hover zoom/tooltip surface space is not reserved.
+   the current panel-bar thickness plus margin (SET-020). During each live
+   update, observe the displayed dock edge animate while the native allocation
+   envelope remains sufficient; an open preview follows the displayed depth.
+   Move the pointer away before sampling; hover zoom/tooltip surface space is
+   not reserved.
 5. Disable reservation, restart Krema, and observe the same maximized
    fixture using the full output. Enable reservation, restart again, and
    verify the saved setting restores reserved geometry. Check the Behavior
@@ -268,7 +278,10 @@ toggle.
   needed for the toggle itself.
 - All four edges reserve only the current resting panel bar and floating
   gap (the current Floating margin), not the full zoom/tooltip surface.
-  Shadow overflow enlarges only the containing surface; any outward shadow
+- Panel-depth, Floating, and floating-margin changes animate the displayed
+  dock depth without shrinking the native allocation envelope mid-transition;
+  the dock and any open preview follow the displayed depth.
+- Shadow overflow enlarges only the containing surface; any outward shadow
   beyond the output boundary is clipped by that output, not turned into an
   extra visible gap or reservation.
 - The chosen reservation setting survives restart independently of edge,
@@ -306,11 +319,20 @@ four edges that a Floating margin change moves the maximized fixture by
 exactly the margin delta, that Floating off removes the whole margin, and
 that the margin survives restart; its shadow checks keep the visible gap
 fixed while the containing surface grows. SET-020 maps its control checks.
+`tests/kwin/test_panel_margin.cpp` (ctest `krema_panel_margin_tests`, test
+case "Floating margin animates the native dock bar on every edge"
+`[panel-margin][motion]`) additionally samples the native dock bar's
+intermediate 8 px → 48 px motion, reversal to 8 px, surface containment
+while the native allocation envelope grows, envelope release after reversal,
+and final convergence on all four edges. It does not represent a genuine
+Plasma panel.
 
 These checks establish the frame/workarea/input/AT-SPI contract without
 requiring screenshots or live PipeWire thumbnails. The source-built KWin E2E
 runs on a virtual compositor; the user's original physical desktop root
-cause remains unverified.
+cause remains unverified. The automated cases do not assert animation pixels,
+preview movement, or genuine-Plasma panel visibility transitions; those remain
+manual acceptance checks in SET-021 and VIS-010.
 
 ---
 
@@ -322,27 +344,34 @@ windows` and a window over the dock's resting place), "Measure gap from" set
 to "Panels", "Reveal trigger" set to "Screen edge" (the default). The dock is
 hidden past the panel.
 **Steps:**
-1. Move the pointer onto the panel, away from the outer screen edge, and
-   click it.
+1. Move the pointer onto the panel, away from the outer screen edge, and click it.
 2. Push the pointer against the outer screen edge over the panel and click.
 3. Move the pointer up across the panel onto the dock, then away.
 4. Set "Reveal trigger" to "Dock position". Repeat step 2, then move the
    pointer to the panel's inner edge (the side facing the screen centre).
 5. Repeat step 3 with "Hide delay (ms)" at 0.
+6. On each edge, repeat with "Floating" off and panel heights 48 px → 72 px
+   → 48 px. While the panel is visible, interrupt a hide/reveal or resize
+   transition and verify the dock settles against the current panel frame.
+   Keep a preview open during one transition and verify it follows the
+   displayed dock depth.
 
 **Expected:**
 - Step 1: the dock stays hidden and the panel gets the click.
 - Step 2: the dock is revealed after the show delay, and the click still
   reaches the panel: Krema's surface takes no input over the panel band.
-  KWin watches the 4 px outer screen-edge strip, and the hidden dock
-  surface keeps only a 1x1 input placeholder (never an empty input region,
-  which would accept input on the whole surface).
 - Step 3: the dock stays shown while the pointer crosses the panel and rests
   on it, then hides after the hide delay once the pointer leaves.
 - Step 4: with "Dock position" the outer screen edge leaves the dock hidden;
   the strip at the panel's inner edge reveals it.
 - Step 5: leaving the screen edge toward the dock grants at least 250 ms to
   cross the panel, so a 0 ms hide delay does not hide the dock mid-way.
+- Visible panel-depth changes animate the displayed dock edge distance while
+  the native allocation envelope remains sufficient; an open preview follows
+  the displayed depth.
+- A hidden dodge or auto-hide panel frame is ignored; when the panel is
+  visible again, its edge-touching frame is followed, including with no
+  exclusive zone.
 - Without KWin scripting, panel-relative placement is unavailable; both reveal
   choices use the dock surface's screen-edge strip.
 
@@ -358,9 +387,21 @@ panel process that logs its clicks and real pointer input through KWin's
 fake-input protocol. The same suite's "Panels mode uses only same-edge panels
 across all dock edges" case covers the 4×4 native panel matrix; unrelated
 panel edges must not change the dock's normal edge gap. `tests/unit/test_input_region.cpp`
-checks the input regions with and without the external edge trigger. Dodge
-windows, step 5, and the fallback without KWin scripting remain manual checks;
-SET-023 maps the settings control.
+checks the input regions with and without the external edge trigger.
+The same suite's test case "Floating margin animates the native dock bar on
+every edge" `[panel-margin][motion]` samples the native dock bar's
+intermediate 8 px → 48 px motion, reversal to 8 px, surface containment
+while the native allocation envelope grows, envelope release after reversal,
+and final convergence on all four edges. It exercises the native dock bar,
+not a genuine Plasma panel, and does not cover preview movement.
+These automated stand-in cases do not cover genuine Plasma panel hide/reveal,
+48 px → 72 px → 48 px resizing, interrupted transitions, or preview
+movement. Dodge windows, step 5, and the fallback without KWin scripting
+remain manual checks; SET-023 maps the settings control.
+**Manual:** In a genuine Plasma 6 session, perform step 6 on all four edges
+and record panel clicks, dock input, maximized workarea/frame geometry,
+visible dock movement, and preview position. This evidence is separate from
+the native stand-in coverage.
 
 ---
 

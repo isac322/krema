@@ -24,6 +24,28 @@ Item {
 
     // C++ singletons: DockView, DockModel, DockActions, DockContextMenu, DockVisibility, DockSettings, PreviewController
 
+    // The native surface keeps an allocation envelope while this displayed
+    // distance moves. This keeps the old and new bar extents drawable on all
+    // edges; setPanelRect/input handling remains immediate in the surface frame.
+    property real targetEdgeDistance: DockView.floatingPadding
+    property real displayedEdgeDistance: targetEdgeDistance
+    onTargetEdgeDistanceChanged: {
+        DockView.beginFloatingPaddingTransition()
+        displayedEdgeDistance = targetEdgeDistance
+    }
+    Behavior on displayedEdgeDistance {
+        enabled: dockPanel.animationsReady && Kirigami.Units.longDuration > 0
+        NumberAnimation {
+            duration: Kirigami.Units.longDuration
+            easing.type: Easing.InOutQuad
+        }
+    }
+    Binding {
+        target: DockView
+        property: "displayedEdgeDistance"
+        value: root.displayedEdgeDistance
+    }
+
     // Hovered item tracking (for custom tooltip and click targeting)
     property int hoveredIndex: -1
     // A separator is a real primary-axis slot, not an overlay in the normal
@@ -1045,7 +1067,7 @@ Item {
             // The visible gap is independent of shadow containment. Keep the
             // panel at the requested floating margin; the surface still
             // includes shadow overflow for containment.
-            let fp = DockView.floatingPadding
+            let fp = root.displayedEdgeDistance
             switch (DockView.edge) {
             case 0: // Top
                 return fp
@@ -1065,19 +1087,36 @@ Item {
         x: DockView.isVertical ? _panelEdgePos : restX
         y: DockView.isVertical ? restY : _panelEdgePos
 
-        property real _panelEdgePos: {
+        property real revealFraction: DockVisibility.dockVisible ? 1.0 : 0.0
+
+        readonly property real _panelEdgePos: {
             let sp = Kirigami.Units.largeSpacing
+            let hiddenEdgePos
             switch (DockView.edge) {
             case 0: // Top
-                return DockVisibility.dockVisible ? restEdgePos : -height - sp
+                hiddenEdgePos = -height - sp
+                break
             case 1: // Bottom
-                return DockVisibility.dockVisible ? restEdgePos : parent.height + sp
+                hiddenEdgePos = parent.height + sp
+                break
             case 2: // Left
-                return DockVisibility.dockVisible ? restEdgePos : -width - sp
+                hiddenEdgePos = -width - sp
+                break
             case 3: // Right
-                return DockVisibility.dockVisible ? restEdgePos : parent.width + sp
+                hiddenEdgePos = parent.width + sp
+                break
+            default:
+                return 0
             }
-            return 0
+            return hiddenEdgePos + (restEdgePos - hiddenEdgePos) * revealFraction
+        }
+
+        Behavior on revealFraction {
+            enabled: dockPanel.animationsReady
+            NumberAnimation {
+                duration: Kirigami.Units.longDuration
+                easing.type: Easing.InOutQuad
+            }
         }
 
         // Visible background. Rests on the panel extent and grows by the
@@ -1145,21 +1184,6 @@ Item {
             }
         }
 
-        Behavior on x {
-            enabled: dockPanel.animationsReady && DockView.isVertical
-            NumberAnimation {
-                duration: Kirigami.Units.longDuration
-                easing.type: Easing.InOutQuad
-            }
-        }
-
-        Behavior on y {
-            enabled: dockPanel.animationsReady && !DockView.isVertical
-            NumberAnimation {
-                duration: Kirigami.Units.longDuration
-                easing.type: Easing.InOutQuad
-            }
-        }
 
         // Fade animation
         opacity: DockVisibility.dockVisible ? 1.0 : 0.0

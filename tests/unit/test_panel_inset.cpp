@@ -16,11 +16,58 @@ TEST_CASE("Panel inset from the probe surface", "[panel-inset]")
         REQUIRE(krema::computePanelInset(output, QRect(), {QRect(0, 724, 1024, 44)}, 1) == krema::PanelInset{});
     }
 
-    SECTION("Probe at the screen edge: no panel reserves space, panels there are ignored")
+    SECTION("Probe at the screen edge: a visible panel with no reservation still clears its surface")
     {
-        // An auto-hide / dodge / windows-go-below panel reserves nothing.
+        // An auto-hide / dodge / windows-go-below panel reserves nothing, but
+        // its visible frame still occupies space the dock must clear.
         const QRect probe(511, 767, 2, 1);
-        REQUIRE(krema::computePanelInset(output, probe, {QRect(262, 708, 500, 60)}, 1) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, probe, {QRect(262, 708, 500, 60)}, 1) == krema::PanelInset{0, 60});
+    }
+
+    SECTION("Zero-reservation visible panels at every edge clear their surface")
+    {
+        REQUIRE(krema::computePanelInset(output, QRect(511, 0, 2, 1), {QRect(262, 0, 500, 60)}, 0) == krema::PanelInset{0, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(511, 767, 2, 1), {QRect(262, 708, 500, 60)}, 1) == krema::PanelInset{0, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(0, 383, 1, 2), {QRect(0, 184, 60, 400)}, 2) == krema::PanelInset{0, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(1023, 383, 1, 2), {QRect(964, 184, 60, 400)}, 3) == krema::PanelInset{0, 60});
+    }
+
+    SECTION("Zero-reservation visible panels crossing the edge still contribute")
+    {
+        REQUIRE(krema::computePanelInset(output, QRect(511, 0, 2, 1), {QRect(262, -12, 500, 20)}, 0) == krema::PanelInset{0, 8});
+        REQUIRE(krema::computePanelInset(output, QRect(511, 767, 2, 1), {QRect(262, 760, 500, 20)}, 1) == krema::PanelInset{0, 8});
+        REQUIRE(krema::computePanelInset(output, QRect(0, 383, 1, 2), {QRect(-12, 184, 20, 400)}, 2) == krema::PanelInset{0, 8});
+        REQUIRE(krema::computePanelInset(output, QRect(1023, 383, 1, 2), {QRect(1016, 184, 20, 400)}, 3) == krema::PanelInset{0, 8});
+    }
+
+    SECTION("Zero-reservation panels inset from the edge are ignored")
+    {
+        REQUIRE(krema::computePanelInset(output, QRect(511, 0, 2, 1), {QRect(262, 8, 500, 40)}, 0) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, QRect(511, 767, 2, 1), {QRect(262, 720, 500, 40)}, 1) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, QRect(0, 383, 1, 2), {QRect(8, 184, 40, 400)}, 2) == krema::PanelInset{});
+        REQUIRE(krema::computePanelInset(output, QRect(1023, 383, 1, 2), {QRect(976, 184, 40, 400)}, 3) == krema::PanelInset{});
+    }
+
+    SECTION("Perpendicular and other-output panels are ignored at zero reservation")
+    {
+        const QList<QRect> panels{
+            QRect(0, 0, 48, 768), // left panel on this output
+            QRect(0, 0, 1024, 44), // top panel on this output
+            QRect(1024, 708, 1024, 60), // bottom panel of the next output
+        };
+        REQUIRE(krema::computePanelInset(output, QRect(511, 767, 2, 1), panels, 1) == krema::PanelInset{});
+    }
+
+    SECTION("A displaced panel overlapping a reserved band extends its total depth")
+    {
+        const QRect probe(511, 723, 2, 1);
+        REQUIRE(krema::computePanelInset(output, probe, {QRect(262, 700, 500, 48)}, 1) == krema::PanelInset{44, 68});
+    }
+
+    SECTION("A panel crossing a reserved edge extends its total depth")
+    {
+        const QRect probe(511, 723, 2, 1);
+        REQUIRE(krema::computePanelInset(output, probe, {QRect(262, 700, 500, 100)}, 1) == krema::PanelInset{44, 68});
     }
 
     SECTION("Non-floating bottom panel: the reserved depth")

@@ -539,9 +539,12 @@ void PreviewController::applyEdgeLayout()
         visibility && visibility->mode() == static_cast<int>(DockPlatform::VisibilityMode::AlwaysVisible) && m_settings->reserveScreenSpace();
     const int animationOverflow = m_dockView->animationOverflowHeight();
     const int otherPanels = m_dockView->reservedPanelInset();
-    // Meet the dock's animated input extent. An extra gap here would leave
-    // neither surface receiving pointer motion during the transfer.
-    const int dockMargin = (dockReservesPanelBar ? 0 : m_dockView->panelBarHeight() - otherPanels) + animationOverflow;
+    const int displayedPanelBar = m_dockView->displayedPanelBarHeight();
+    const int nativeReservedBehind = dockReservesPanelBar ? m_dockView->panelBarHeight() : otherPanels;
+    // Meet the dock's displayed input extent. The native reservation moves
+    // immediately, so compensate for its target position to follow the
+    // displayed bar without adding an input dead-band.
+    const int dockMargin = displayedPanelBar - nativeReservedBehind + animationOverflow;
 
     const QRect screenGeo = m_dockView->screen() ? m_dockView->screen()->geometry() : QRect(0, 0, 1920, 1080);
 
@@ -585,8 +588,7 @@ void PreviewController::applyEdgeLayout()
     // available extent excludes the dock-side margin imposed by the anchor.
     constexpr int previewDepth = 400;
     const int contentExtent = static_cast<int>(std::ceil(vertical ? m_contentWidth : m_contentHeight));
-    const int reservedBehind = dockReservesPanelBar ? m_dockView->panelBarHeight() : otherPanels;
-    const int availableExtent = (vertical ? screenGeo.width() : screenGeo.height()) - dockMargin - reservedBehind;
+    const int availableExtent = (vertical ? screenGeo.width() : screenGeo.height()) - dockMargin - nativeReservedBehind;
     const int depth = qBound(1, qMax(previewDepth, contentExtent), qMax(1, availableExtent));
     QSize size;
     if (vertical) {

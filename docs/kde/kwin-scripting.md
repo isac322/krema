@@ -61,10 +61,19 @@ against a real plasmashell 6.7.5 panel on `kwin_wayland --virtual`):
   `screensChanged()`, `virtualScreenGeometryChanged()`.
 - `workspace.screens`: outputs with `name` and `geometry` (`QRect`).
 - Window properties `dock` (layer-shell scope `"dock"`; any other scope is a
-  normal window), `pid`, `deleted`, `output` (signal `outputChanged`),
-  `frameGeometry` (`QRectF`, signal `frameGeometryChanged`). Layer-shell
-  panels are in `windowList()`; a floating Plasma panel's frame includes its
-  floating gap (44 px panel: 60 px surface, 44 px reserved).
+  normal window), `pid`, `deleted`, `hidden`, `output` (signals
+  `outputChanged`, `hiddenChanged`), and `frameGeometry` (`QRectF`, signal
+  `frameGeometryChanged`). Hidden frames are omitted from reports, and a
+  `hiddenChanged` event schedules the same debounced report as geometry/output
+  changes. Layer-shell panels are in `windowList()`; a floating Plasma panel's
+  frame includes its floating gap (44 px panel: 60 px surface, 44 px
+  reserved).
+- The panel report keeps two separate measurements: the probe frame gives the
+  exclusive-zone depth (`reserved`), while visible same-edge panel frames give
+  the physical surface depth (`total`). Thus a visible auto-hide, dodge, or
+  windows-go-below panel can have `reserved == 0` while still extending
+  `total`. KWin exposes the frame, not a painted-surface mask; Plasma's frame
+  can include transparent floating padding.
 - `new QTimer()` (`singleShot`, `interval`, `timeout`, `start()`) works in JS
   scripts; used to debounce reports.
 - There is no per-window exclusive-zone property and no signal when only the
@@ -81,7 +90,8 @@ on that edge, regardless of start order, and KWin moves it when that space
 changes (auto-hide on/off, panel height, plasmashell restart). On the Top
 layer the same surface, started first, takes the screen edge and pushes the
 panel inward instead. Panels that auto-hide, dodge windows or let windows go
-below reserve nothing, so the probe stays at the screen edge.
+below reserve nothing, so the probe stays at the screen edge; if one is
+visible, its same-edge frame is still reported and contributes to `total`.
 
 A layer surface anchored to an edge and both perpendicular edges (like the
 dock) is placed before a custom-length panel on that edge whatever the start

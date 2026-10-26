@@ -44,6 +44,7 @@ class DockView : public QQuickView
     Q_PROPERTY(QColor backgroundColor READ backgroundColor NOTIFY backgroundColorChanged)
     Q_PROPERTY(int backgroundStyleType READ backgroundStyleType NOTIFY backgroundStyleTypeChanged)
     Q_PROPERTY(int floatingPadding READ floatingPadding NOTIFY floatingPaddingChanged)
+    Q_PROPERTY(qreal displayedEdgeDistance READ displayedEdgeDistance WRITE setDisplayedEdgeDistance NOTIFY displayedEdgeDistanceChanged)
     Q_PROPERTY(int shadowOverflow READ shadowOverflow NOTIFY shadowOverflowChanged)
     Q_PROPERTY(int iconCacheVersion READ iconCacheVersion NOTIFY iconCacheVersionChanged)
     Q_PROPERTY(int edge READ edge NOTIFY edgeChanged)
@@ -69,6 +70,8 @@ public:
     [[nodiscard]] QColor backgroundColor() const;
     [[nodiscard]] int backgroundStyleType() const;
     [[nodiscard]] int floatingPadding() const;
+    [[nodiscard]] qreal displayedEdgeDistance() const;
+    void setDisplayedEdgeDistance(qreal distance);
     [[nodiscard]] int shadowOverflow() const;
     [[nodiscard]] int iconCacheVersion() const;
     [[nodiscard]] int edge() const;
@@ -87,6 +90,8 @@ public:
     /// measured from the screen edge, so it includes the panel inset.
     /// Used for preview surface margin to ensure seamless input region adjacency.
     [[nodiscard]] int panelBarHeight() const;
+    /// Same depth as panelBarHeight(), following the displayed motion target.
+    [[nodiscard]] int displayedPanelBarHeight() const;
     /// Outward visual extent needed by zoomed and bouncing icons.
     Q_INVOKABLE int animationOverflowHeight() const;
 
@@ -101,6 +106,9 @@ public:
     /// resize the surface, reflow the input region and reservation, and emit
     /// floatingPaddingChanged().
     void refreshFloatingPadding();
+    /// Begin/end the native surface allocation envelope around a QML edge-distance animation.
+    Q_INVOKABLE void beginFloatingPaddingTransition();
+    Q_INVOKABLE void releaseFloatingPaddingEnvelope();
 
     /// Apply the FloatingMarginReference setting: measure the gap from the
     /// screen edge, or from the always-visible panels on the dock's edge
@@ -155,6 +163,7 @@ Q_SIGNALS:
     void edgeChanged();
     void sideTooltipReserveChanged();
     void pointerInsideChanged();
+    void displayedEdgeDistanceChanged();
 
 private:
     void handleScreenChanged(QScreen *newScreen);
@@ -177,9 +186,11 @@ private:
     int m_iconCacheVersion = 0;
     int m_sideTooltipReserve = 0;
     DockPlatform::Edge m_edge = DockPlatform::Edge::Bottom;
-    QMetaObject::Connection m_screenGeometryConnection;
     std::shared_ptr<KWinPanelWatcher> m_panelWatcher;
+    QMetaObject::Connection m_screenGeometryConnection;
     PanelInset m_panelInset;
+    int m_surfaceFloatingPadding = -1;
+    qreal m_displayedEdgeDistance = 0;
 
     static constexpr int s_padding = 8;
     /// Minimum tooltip reserve; covers the tooltip height above/below a horizontal panel.

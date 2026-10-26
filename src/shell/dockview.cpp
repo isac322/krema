@@ -161,6 +161,24 @@ int DockView::backgroundStyleType() const
     return m_settings->backgroundStyle();
 }
 
+qreal DockView::displayedEdgeDistance() const
+{
+    return m_displayedEdgeDistance;
+}
+
+void DockView::setDisplayedEdgeDistance(qreal distance)
+{
+    distance = std::max<qreal>(0, distance);
+    if (qFuzzyCompare(m_displayedEdgeDistance, distance)) {
+        return;
+    }
+    m_displayedEdgeDistance = distance;
+    if (qFuzzyCompare(m_displayedEdgeDistance, qreal(floatingPadding()))) {
+        releaseFloatingPaddingEnvelope();
+    }
+    Q_EMIT displayedEdgeDistanceChanged();
+}
+
 int DockView::floatingPadding() const
 {
     const bool floating = m_screenSettings ? m_screenSettings->floating() : m_settings->floating();
@@ -225,8 +243,32 @@ void DockView::refreshPanelInset()
     refreshFloatingPadding();
 }
 
+void DockView::beginFloatingPaddingTransition()
+{
+    const int target = floatingPadding();
+    if (m_surfaceFloatingPadding < target) {
+        m_surfaceFloatingPadding = target;
+    }
+}
+
+void DockView::releaseFloatingPaddingEnvelope()
+{
+    const int target = floatingPadding();
+    if (m_surfaceFloatingPadding == target) {
+        return;
+    }
+    m_surfaceFloatingPadding = target;
+    updateSize();
+}
+
 void DockView::refreshFloatingPadding()
 {
+    beginFloatingPaddingTransition();
+    // Release the envelope immediately when cancellation leaves the displayed
+    // distance at the new target before the animation callback can run.
+    if (qFuzzyCompare(m_displayedEdgeDistance, qreal(floatingPadding()))) {
+        m_surfaceFloatingPadding = floatingPadding();
+    }
     updateSize();
     if (m_visibilityController) {
         // Keep the panels' band click-through (the dock surface covers it).
@@ -303,6 +345,12 @@ int DockView::panelBarHeight() const
     return krema::panelBarHeight(iconSize, s_padding, floatingPadding());
 }
 
+int DockView::displayedPanelBarHeight() const
+{
+    const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
+    return krema::panelBarHeight(iconSize, s_padding, qRound(m_displayedEdgeDistance));
+}
+
 DockPlatform *DockView::platform() const
 {
     return m_platform.get();
@@ -348,11 +396,15 @@ void DockView::updateSize()
 {
     const int iconSize = m_screenSettings ? m_screenSettings->iconSize() : m_settings->iconSize();
     const double maxZoom = m_screenSettings ? m_screenSettings->maxZoomFactor() : m_settings->maxZoomFactor();
-    // Horizontal docks open the tooltip above/below the panel (fits s_tooltipReserve);
-    // vertical docks open it beside the panel, so the reserve must fit its full width.
+    // Allocate the largest edge distance seen during a displayed transition;
+    // the QML panel itself follows displayedEdgeDistance independently.
+    const int targetPadding = floatingPadding();
+    if (m_surfaceFloatingPadding < 0) {
+        m_surfaceFloatingPadding = targetPadding;
+    }
     const int tooltipReserve = isVertical() ? std::max(s_tooltipReserve, m_sideTooltipReserve) : s_tooltipReserve;
     const int shadowOverflow = this->shadowOverflow();
-    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, floatingPadding(), shadowOverflow);
+    const int h = krema::surfaceHeight(iconSize, s_padding, maxZoom, tooltipReserve, m_surfaceFloatingPadding, shadowOverflow);
     const QRect screenGeo = screen() ? screen()->geometry() : QRect();
 
     if (isVertical()) {

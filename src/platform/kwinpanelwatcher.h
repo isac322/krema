@@ -26,7 +26,8 @@ namespace krema
  * KWin's scripting API sees every layer-shell surface, so this loads a KWin
  * script (org.kde.kwin.Scripting) that reports, for each output, the frame
  * of Krema's probe surface (see WaylandDockPlatform) and of every other
- * dock-type surface, whenever one of them is added, removed or moves.
+ * visible dock-type surface, whenever one of them is added, removed, shown,
+ * hidden or moves.
  * KWin re-places the probe whenever a panel's reserved space changes, so
  * those changes are reported too. The script is reloaded when KWin restarts.
  *
@@ -42,7 +43,9 @@ public:
         QRect geometry;
         /// Frame of Krema's probe surface on this output; null when absent.
         QRect anchor;
-        /// Frames of the other processes' dock-type surfaces on this output.
+        /// Frames of the other visible processes' dock-type surfaces on this
+        /// output. A frame can include transparent floating padding because
+        /// KWin exposes no supported painted-surface mask API.
         QList<QRect> panels;
     };
 
@@ -62,7 +65,9 @@ public:
     [[nodiscard]] std::optional<QPoint> cursorPos() const;
 public Q_SLOTS:
     /// Called by the KWin script over D-Bus with a JSON object keyed by output
-    /// name: {"geometry": [x,y,w,h], "anchor": [x,y,w,h] | null, "panels": [[x,y,w,h], ...]}.
+    /// name: {"geometry": [x,y,w,h], "anchor": [x,y,w,h] | null, "panels":
+    /// [[x,y,w,h], ...]}. Panels are visible frames; the probe-derived
+    /// exclusive-zone depth may still be zero while panels is non-empty.
     Q_SCRIPTABLE void updatePanels(const QString &json);
     /// Called by the KWin script on pointer motion while at least one dock
     /// watches the outer screen edge.

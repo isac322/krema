@@ -83,7 +83,8 @@ def _observe(krema: Krema, win: TestWindow, with_icon: bool) -> dict:
         icon = krema.screen_rect(krema.wait_for_item(win.title))
         observation["icon"] = list(icon)
         observation["icon_center"] = list(icon.center)
-        observation["surface"] = list(krema.surface_rect("dock"))
+        surface = krema.surface_rect("dock")
+        observation["surface"] = list(surface) if surface is not None else None
     return observation
 
 
@@ -124,8 +125,12 @@ def _geometry(krema: Krema, win: TestWindow, edge: int, reserved: bool, stage: s
             return False
         if not reserved:
             return True
-        frame, icon = Rect(*observation["frame"]), Rect(*observation["icon"])
-        surface = Rect(*observation["surface"])
+        icon_data = observation.get("icon")
+        surface_data = observation.get("surface")
+        if icon_data is None or surface_data is None:
+            return False
+        frame, icon = Rect(*observation["frame"]), Rect(*icon_data)
+        surface = Rect(*surface_data)
         inside = (
             surface.x <= icon.x and icon.x + icon.width <= surface.x + surface.width
             and surface.y <= icon.y and icon.y + icon.height <= surface.y + surface.height

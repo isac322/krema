@@ -369,7 +369,7 @@ def hover_ready(k: Krema, name: str = "Alpha") -> None:
         # the preview is gone first.
         k.move_away()
     rest = wait_stable(lambda: Rect.of(k.wait_for_item(name)))
-    k.hover_item(name)
+    k.hover_item(name, rest=k.to_screen(rest))
     wait_until(lambda: zoomed_width(k, name, rest) > icon, timeout=5, message=f"dock item {name} hovered (zoomed)")
 
 

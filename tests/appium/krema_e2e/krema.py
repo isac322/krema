@@ -403,10 +403,22 @@ class Krema:
         return wait_stable(lambda: self.item_center(name))
 
     # ------------------------------------------------------------------- input
-    def hover_item(self, name: str, steps: int = 5, step_ms: int = 40) -> None:
-        """Glide the pointer onto dock item ``name`` from just above the dock
-        (gradual, so enter/hover handlers run like with a real mouse)."""
-        rest = wait_stable(lambda: self.screen_rect(self.wait_for_item(name)))
+    def hover_item(
+        self,
+        name: str,
+        steps: int = 5,
+        step_ms: int = 40,
+        *,
+        rest: Rect | None = None,
+    ) -> None:
+        """Glide onto dock item ``name`` from just above the dock.
+
+        ``rest`` is an optional unzoomed screen-space rect captured while the
+        pointer was away. Supplying it avoids mistaking Qt < 6.9's transformed
+        top-left AT-SPI extent for the unzoomed rectangle.
+        """
+        if rest is None:
+            rest = wait_stable(lambda: self.screen_rect(self.wait_for_item(name)))
         if EXTENTS_IGNORE_SCALE:
             self._rest_item_rects[name] = rest
         x, y = rest.center

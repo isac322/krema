@@ -90,6 +90,7 @@ enum class ChatTitleAdapter {
     Discord,
     WebCord,
     Telegram,
+    Element,
 };
 
 ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
@@ -108,6 +109,10 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
     if (appId == QLatin1String("org.telegram") || appId == QLatin1String("org.telegram.desktop") || appId == QLatin1String("telegram")
         || appId == QLatin1String("telegram-desktop") || appId == QLatin1String("telegramdesktop")) {
         return ChatTitleAdapter::Telegram;
+    }
+    if (appId == QLatin1String("io.element.element") || appId == QLatin1String("im.riot.riot")
+        || appId == QLatin1String("element") || appId == QLatin1String("element-desktop")) {
+        return ChatTitleAdapter::Element;
     }
     return ChatTitleAdapter::None;
 }
@@ -148,6 +153,31 @@ ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapte
         QStringLiteral("^\\s*•\\s+Discord(?:\\b|\\s*\\||.*-\\s*Discord\\s*$)"));
     static const QRegularExpression webCordMention(QStringLiteral("^\\s*\\[([1-9][0-9]*)\\]\\s+WebCord\\b"));
     static const QRegularExpression webCordUnread(QStringLiteral("^\\s*\\*+\\s*\\[?WebCord\\]?\\b"));
+    static const QRegularExpression elementMention(QStringLiteral("^Element\\s*\\[([1-9][0-9]*)\\]"));
+    static const QRegularExpression elementUnread(QStringLiteral("^Element\\s*(?:\\[offline\\]\\s*)?[\\*•]"));
+
+    if (adapter == ChatTitleAdapter::Element) {
+        ChatTitleState result;
+        bool hasMention = false;
+        bool hasUnread = false;
+        for (const QString &title : titles) {
+            const QRegularExpressionMatch mentionMatch = elementMention.match(title);
+            if (mentionMatch.hasMatch()) {
+                hasMention = true;
+                bool ok = false;
+                const int count = mentionMatch.captured(1).toInt(&ok);
+                if (ok) {
+                    result.mentionCount = std::max(result.mentionCount, count);
+                }
+                continue;
+            }
+            if (elementUnread.match(title).hasMatch()) {
+                hasUnread = true;
+            }
+        }
+        result.unreadState = hasMention ? 2 : (hasUnread ? 1 : 0);
+        return result;
+    }
 
     const QRegularExpression &mentionPattern = adapter == ChatTitleAdapter::WebCord ? webCordMention : discordMention;
     const QRegularExpression &unreadPattern = adapter == ChatTitleAdapter::WebCord ? webCordUnread : discordUnread;

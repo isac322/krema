@@ -282,8 +282,12 @@ def test_tzone002_separator_accessibility_geometry_and_single_zone_visibility(
     # allocated separator slot must not steal pointer input or disappear while
     # either is hovered.
     for name in (PINNED_B, UNPINNED_A):
+        inp.move(*park)
+        wait_stable(
+            lambda: tuple(krema.screen_rect(item) for item in krema.items(include_trash=True)),
+            duration=0.6,
+        )
         krema.hover_item(name)
-        wait_until(lambda: krema.screen_rect(krema.wait_for_item(name)).width >= 48, message=f"{name} hover target")
         assert _separator(krema) is not None
         # Older Qt reports unscaled AT-SPI extents during hover. Observe the
         # real consumer at the existing pointer instead of inferring a hit box.

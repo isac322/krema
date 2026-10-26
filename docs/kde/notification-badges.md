@@ -16,7 +16,7 @@ Krema combines five badge sources:
 2. `NotificationTracker` (C++) — unread notifications via `RegisterWatcher` (canonical desktop identity)
 3. `NotificationTracker` (C++) — SNI `NeedsAttention` (boolean)
 4. `model.IsDemandingAttention` — EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` (boolean, all apps)
-5. Chat adapters — application-specific SNI icons and tooltips (unread / mention state, and reported counts)
+5. Chat adapters — application-specific SNI icons and task-window titles (unread / mention state, and reported counts)
 
 Most Electron apps do not send Unity Launcher API signals on Linux. Their chat
 state can instead be recovered from the app's own tray or window metadata.
@@ -37,7 +37,10 @@ windows is used rather than summing windows for the same account.
 
 | App | State source | Count source |
 | --- | --- | --- |
-| Slack Desktop (`slack`, `com.slack.Slack`) | Lower-right pink mention / cyan unread tray badge (or positive tooltip highlight count) | Localized `unreadHighlights` count in SNI `ToolTip` (sole numeric authority; desktop popup toasts are ignored) |
+| Slack Desktop | Lower-right pink mention / cyan unread tray badge | Positive notification count in tray tooltip |
+| Discord | `• Discord` / `(N) Discord` window titles and red SNI badge | Positive title mention count; tray is state-only |
+| Vesktop | `• Discord` / `(N) Discord` window titles and red SNI badge | Positive title mention count; tray is state-only |
+| WebCord | `*WebCord` / `[N] WebCord` window titles and blue/red SNI badges | Positive title mention count; red tray mention is state-only |
 
 Electron `_status_icon_N` tray identity suffixes are stripped before
 desktop-service lookup. Generic `chrome_status_icon_` items can also match an
@@ -244,7 +247,7 @@ enum ItemStatus {
 
 ### Apps That Use SNI NeedsAttention
 
-- **Discord** (Linux native app): Sets `NeedsAttention` on mentions/DMs
+- **Discord, Vesktop, and WebCord**: use the app-specific tray badge states documented below
 - **Telegram**: Sets `NeedsAttention` on new messages
 - **KDE applications** (most): Use SNI with attention for urgent events
 - **Spotify**: Uses SNI but typically stays at `Active`
@@ -307,6 +310,46 @@ bool matchSniToDockItem(const QString &sniId, const QString &appId) {
     return canonicalDesktopIdentity(sniId) == canonicalDesktopIdentity(appId);
 }
 ```
+
+### Discord, Vesktop, and WebCord support
+
+Krema has explicit chat-state adapters for these three Electron applications. Window-title
+matching and SNI matching use separate, exact alias sets; an unrelated Chrome or PWA app ID
+does not receive these states.
+
+| App | Window/task aliases | SNI aliases | Window-title states | Tray-icon states |
+|-----|--------------------|-------------|---------------------|------------------|
+| Discord | `discord`, `com.discordapp.discord`, `com.discord.app` | `discord`, `com.discordapp.discord`, `com.discord.app` | `• Discord...` = unread; `(N) Discord...` = mention count `N` | Red top-right badge = unread |
+| Vesktop | `vesktop`, `dev.vencord.vesktop`, `dev.vencord` | `vesktop`, `dev.vencord.vesktop`, `dev.vencord` | `• Discord...` = unread; `(N) Discord...` = mention count `N` | Red top-right badge = unread |
+| WebCord | `webcord`, `io.github.spacingbat3.webcord` | `webcord`, `io.github.spacingbat3.webcord` | `*WebCord` = unread; `[N] WebCord` = mention count `N` | Blue top-right badge = unread; red top-right badge = mention |
+
+`N` is a positive decimal integer. The effective title patterns are:
+
+- Discord/Vesktop unread: `^\s*•\s+(?:(?:Discord|Vesktop)(?:\b|\s*\||.*-\s*(?:Discord|Vesktop)\s*$)|\S.*?\s+[|-]\s*(?:Discord|Vesktop)\s*$)`
+- Discord/Vesktop mention: `^\s*(?:•\s*)?\(([1-9][0-9]*)\)\s+(?:(?:Discord|Vesktop)(?:\b|\s*\||.*-\s*(?:Discord|Vesktop)\s*$)|\S.*?\s+[|-]\s*(?:Discord|Vesktop)\s*$)`
+- WebCord unread: `^\s*\*+\s*\[?WebCord\]?\b`
+- WebCord mention: `^\s*\[([1-9][0-9]*)\]\s+WebCord\b`
+
+Examples include `• Discord - #general`, `• #general | Server - Discord`, `(3) #general | Server - Discord`,
+`*WebCord`, and `[3] WebCord`. Other title forms produce no title-derived chat state.
+
+Tray detection reads the decoded SNI icon image. For Discord and Vesktop, an unread badge
+requires at least 12 opaque-enough red pixels (alpha ≥ 180, red ≥ 200, green and blue ≤ 100)
+in the top-right half, with no matching red pixels in the bottom-right half; the exclusion
+prevents voice-state indicators from becoming unread badges. Because Discord and Vesktop use
+the same tray badge for ordinary unreads and mentions, a positive numeric count (from Unity
+`LauncherEntry`, window title `(N)`, or active `org.freedesktop.Notifications` mention/DM toasts
+retained across `Expired` popup timeouts while the SNI unread badge remains active) renders in
+the negative/red badge color, and returning the tray icon to rest clears retained toast counts.
+For WebCord, an unread badge requires at least 25 pixels with alpha ≥ 180, red ≤ 170, green ≥ 150,
+blue ≥ 210, and blue − red ≥ 50 in the top-right half; a mention state requires at least 25 pixels
+with alpha ≥ 180, red ≥ 200, green ≤ 90, and blue ≤ 90 in that same region, or a `WebCord - N mention(s)`
+SNI tooltip count.
+For grouped tasks, Krema takes the maximum state and mention count across the group; it
+does not add child counts. A positive Unity Launcher count remains the primary numeric
+badge, followed by a positive chat mention count and then the Freedesktop unread count.
+Global and per-application Plasma badge settings gate all of these chat states.
+
 
 ### Feasibility Assessment
 
@@ -398,9 +441,10 @@ ports its backend semantics and applies the same settings.
 Priority  Source                                     Count    Coverage
 --------  ------                                     -----    --------
 1 (best)  LauncherEntryTracker.count                 Exact    KDE apps, Slack (Unity API)
-2         NotificationTracker.unreadCount            Unread#  Apps using org.freedesktop.Notifications
-3         NotificationTracker.sniNeedsAttention      Boolean  Discord, Telegram, tray apps
-4         IsDemandingAttention                       Boolean  X11 urgency hint apps
+2         Chat adapters                              State/#  Slack, Discord, Vesktop, WebCord
+3         NotificationTracker.unreadCount            Unread#  Apps using org.freedesktop.Notifications
+4         NotificationTracker.sniNeedsAttention      Boolean  Apps with SNI attention state
+5         IsDemandingAttention                       Boolean  X11 urgency hint apps
 ```
 
 ### Combined Badge Logic (`src/qml/DockItem.qml`)
@@ -410,7 +454,9 @@ readonly property int _badgeCount: {
     let _rev = NotificationTracker.revision  // reactive dependency
     if (_launcherCountVisible)               // 1st: Unity API exact count
         return _launcherCount
-    if (_appId.length > 0) {                 // 2nd: unread notification count
+    if (_chatMentionCount > 0)               // 2nd: chat adapter count
+        return _chatMentionCount
+    if (_appId.length > 0) {                 // 3rd: unread notification count
         let n = NotificationTracker.unreadCount(_appId)
         if (n > 0) return n
     }
@@ -425,8 +471,8 @@ readonly property bool _isDemandingAttention: {
 }
 ```
 
-Both trackers are C++ singletons with a `revision` property for reactive QML bindings and
-`Q_INVOKABLE` lookups, so QML never iterates notifications per dock item.
+The C++ trackers and chat adapters expose revision-backed lookups, so QML never iterates
+notifications per dock item.
 
 ---
 

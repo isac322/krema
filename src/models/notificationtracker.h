@@ -144,6 +144,11 @@ private:
     void ensureSniMetadataQueried(const QString &key, SniEntry &entry);
     void clearSniItems();
     [[nodiscard]] const SniEntry *sniEntryForApp(const QString &appId) const;
+    enum class ChatRetention : quint8 { None, Pending, Committed };
+    [[nodiscard]] ChatRetention chatSniRetention(const QString &appId) const;
+    [[nodiscard]] bool chatSniRetainsNotifications(const QString &appId) const;
+    void clearChatNotificationsUnlessRetained(const QString &appId);
+    void replayDeferredChatClears(const QString &itemId);
     [[nodiscard]] QString sniKeyForMessage(const QDBusMessage &message) const;
 
     // Notification settings (badges enabled, blacklist)
@@ -180,6 +185,9 @@ private:
         quint64 generation = 0;
     };
     QHash<QString, SniEntry> m_sniItems;
+    // Read-state clears that only an in-flight sibling SNI query blocked, keyed by
+    // canonical notification key; replayed once that query settles.
+    QHash<QString, QString> m_deferredChatClears;
 
     QDBusServiceWatcher m_notificationServiceWatcher;
     QDBusServiceWatcher m_sniWatcherServiceWatcher;

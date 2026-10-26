@@ -119,6 +119,24 @@ QImage topRightChatBadge(QRgb color, int pixels, bool bottomRightRed = false)
     return image;
 }
 
+QImage lowerRightChatBadge(QRgb color, int pixels)
+{
+    QImage image = blankBadge();
+    for (int pixel = 0; pixel < pixels; ++pixel) {
+        image.setPixel(8 + pixel % 8, 8 + pixel / 8, color);
+    }
+    return image;
+}
+
+QImage lowerLeftChatBadge(QRgb color, int pixels)
+{
+    QImage image = blankBadge();
+    for (int pixel = 0; pixel < pixels; ++pixel) {
+        image.setPixel(pixel % 8, 8 + pixel / 8, color);
+    }
+    return image;
+}
+
 } // namespace
 
 TEST_CASE("Notification tracker canonicalizes identities and keeps replacements at one", "[notification][tracker]")
@@ -1067,6 +1085,239 @@ TEST_CASE("Unrelated SNI icons do not become Discord family chat badges", "[noti
         CHECK(tracker.sniChatUnreadState(appId) == 0);
         CHECK(tracker.sniChatMentionCount(appId) == 0);
     }
+}
+
+TEST_CASE("Mattermost SNI aliases transition through unread mention and rest", "[notification][sni][mattermost][chat]")
+{
+    for (const QString &appId : {QStringLiteral("mattermost"), QStringLiteral("mattermost-desktop"),
+                               QStringLiteral("com.mattermost.desktop")}) {
+        INFO(appId.toStdString());
+        krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.Mattermost"));
+        item.setId(appId + QStringLiteral("_status_icon_1"));
+        item.setTitle(QStringLiteral("Team Chat"));
+        item.setIconPixmap(blankBadge());
+        REQUIRE(item.start());
+        krema::test::StatusNotifierWatcherPeer watcher;
+        watcher.setRegisteredItems({item.itemAddress()});
+        REQUIRE(watcher.start());
+        ScopedTracker scoped;
+        auto &tracker = scoped.tracker;
+        REQUIRE(waitFor([&] {
+            return tracker.sniTitle(appId) == QStringLiteral("Team Chat");
+        }));
+        CHECK(tracker.sniChatUnreadState(appId) == 0);
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+
+        item.setIconPixmap(lowerRightChatBadge(qRgba(120, 130, 220, 180), 10));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 1;
+        }));
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+
+        item.setIconPixmap(lowerRightChatBadge(qRgba(210, 90, 80, 180), 10));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 2;
+        }));
+        for (const QString &alias : {QStringLiteral("mattermost"), QStringLiteral("mattermost-desktop"),
+                                   QStringLiteral("com.mattermost.desktop")}) {
+            CHECK(tracker.sniChatUnreadState(alias + QStringLiteral(".desktop")) == 2);
+            CHECK(tracker.sniChatMentionCount(alias) == 0);
+        }
+
+        item.setIconPixmap(blankBadge());
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+    }
+}
+
+TEST_CASE("Mattermost SNI thresholds reject small translucent off-color and misplaced badges", "[notification][sni][mattermost][pixels]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.MattermostPixels"));
+    item.setId(QStringLiteral("mattermost"));
+    item.setIconPixmap(lowerRightChatBadge(qRgba(210, 90, 80, 180), 10));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 2;
+    }));
+
+    const QImage rejected[] = {
+        lowerRightChatBadge(qRgba(210, 90, 80, 180), 9),
+        lowerRightChatBadge(qRgba(120, 130, 220, 180), 9),
+        lowerRightChatBadge(qRgba(210, 90, 80, 179), 10),
+        lowerRightChatBadge(qRgba(209, 90, 80, 180), 10),
+        lowerRightChatBadge(qRgba(210, 91, 80, 180), 10),
+        lowerRightChatBadge(qRgba(210, 90, 81, 180), 10),
+        lowerRightChatBadge(qRgba(120, 130, 220, 179), 10),
+        lowerRightChatBadge(qRgba(121, 130, 220, 180), 10),
+        lowerRightChatBadge(qRgba(120, 129, 220, 180), 10),
+        lowerRightChatBadge(qRgba(120, 130, 219, 180), 10),
+        lowerRightChatBadge(qRgba(160, 160, 160, 255), 10),
+        topRightChatBadge(qRgba(210, 90, 80, 180), 10),
+        topRightChatBadge(qRgba(120, 130, 220, 180), 10),
+        lowerLeftChatBadge(qRgba(210, 90, 80, 180), 10),
+        lowerLeftChatBadge(qRgba(120, 130, 220, 180), 10),
+    };
+    for (const auto &image : rejected) {
+        item.setIconPixmap(image);
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(QStringLiteral("mattermost")) == 0);
+        item.setIconPixmap(lowerRightChatBadge(qRgba(210, 90, 80, 180), 10));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 2;
+        }));
+    }
+
+    QImage mixed = lowerRightChatBadge(qRgba(120, 130, 220, 180), 10);
+    for (int pixel = 0; pixel < 9; ++pixel) {
+        mixed.setPixel(8 + pixel % 8, 12 + pixel / 8, qRgba(210, 90, 80, 180));
+    }
+    item.setIconPixmap(mixed);
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 1;
+    }));
+    mixed.setPixel(9, 13, qRgba(210, 90, 80, 180));
+    item.setIconPixmap(mixed);
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 2;
+    }));
+}
+
+TEST_CASE("Mattermost SNI tooltip title fallbacks preserve mention precedence without inventing counts", "[notification][sni][mattermost][tooltip]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.MattermostTooltip"));
+    item.setId(QStringLiteral("mattermost-desktop"));
+    item.setTitle(QStringLiteral("Mattermost"));
+    item.setIconPixmap(blankBadge());
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniTitle(QStringLiteral("mattermost")) == QStringLiteral("Mattermost");
+    }));
+
+    struct ToolTipCase {
+        QString title;
+        QString subTitle;
+        QImage image;
+        int state;
+    };
+    const ToolTipCase cases[] = {
+        {QStringLiteral("2 UNREAD CHANNELS"), {}, blankBadge(), 1},
+        {QStringLiteral("You were MENTIONED in 3 channels"), {}, blankBadge(), 2},
+        {QStringLiteral("Unread channels; you were mentioned"), {}, blankBadge(), 2},
+        {QStringLiteral("Unread channels"), {}, lowerRightChatBadge(qRgba(210, 90, 80, 180), 10), 2},
+        {QStringLiteral("Mentioned"), {}, lowerRightChatBadge(qRgba(120, 130, 220, 180), 10), 2},
+        {QStringLiteral("Mattermost"), QStringLiteral("Mentioned in unread channels"), blankBadge(), 0},
+        {QStringLiteral("3 notifications"), {}, blankBadge(), 0},
+        {QStringLiteral("Mattermost"), {}, blankBadge(), 0},
+    };
+    for (const auto &test : cases) {
+        INFO(test.title.toStdString());
+        item.setIconPixmap(test.image);
+        item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{{}, {}, test.title, test.subTitle}));
+        REQUIRE(waitFor([&] {
+            return tracker.sniToolTipTitle(QStringLiteral("mattermost")) == test.title
+                && tracker.sniToolTipSubTitle(QStringLiteral("mattermost")) == test.subTitle
+                && tracker.sniChatUnreadState(QStringLiteral("mattermost")) == test.state;
+        }));
+        CHECK(tracker.sniChatMentionCount(QStringLiteral("mattermost")) == 0);
+    }
+}
+
+TEST_CASE("Mattermost SNI chat state honors per-app and global badge gates", "[notification][sni][mattermost][settings]")
+{
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup badges = config->group(QStringLiteral("Badges"));
+    KConfigGroup application = config->group(QStringLiteral("Applications")).group(QStringLiteral("mattermost"));
+    const bool hadGlobalSetting = badges.hasKey(QStringLiteral("InTaskManager"));
+    const QVariant previousGlobalSetting = badges.readEntry(QStringLiteral("InTaskManager"), QVariant());
+    const bool hadAppSetting = application.hasKey(QStringLiteral("ShowBadges"));
+    const QVariant previousAppSetting = application.readEntry(QStringLiteral("ShowBadges"), QVariant());
+    const auto restore = qScopeGuard([&] {
+        if (hadGlobalSetting) {
+            badges.writeEntry(QStringLiteral("InTaskManager"), previousGlobalSetting, KConfig::Notify);
+        } else {
+            badges.deleteEntry(QStringLiteral("InTaskManager"), KConfig::Notify);
+        }
+        if (hadAppSetting) {
+            application.writeEntry(QStringLiteral("ShowBadges"), previousAppSetting, KConfig::Notify);
+        } else {
+            application.deleteEntry(QStringLiteral("ShowBadges"), KConfig::Notify);
+        }
+        config->sync();
+    });
+    badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
+    application.writeEntry(QStringLiteral("ShowBadges"), true, KConfig::Notify);
+    config->sync();
+
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.MattermostSettings"));
+    item.setId(QStringLiteral("com.mattermost.desktop"));
+    item.setIconPixmap(lowerRightChatBadge(qRgba(210, 90, 80, 180), 10));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.badgesEnabled(QStringLiteral("mattermost"))
+            && tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 2;
+    }));
+
+    application.writeEntry(QStringLiteral("ShowBadges"), false, KConfig::Notify);
+    config->sync();
+    REQUIRE(waitFor([&] {
+        return !tracker.badgesEnabled(QStringLiteral("mattermost"))
+            && tracker.sniChatUnreadState(QStringLiteral("com.mattermost.desktop")) == 0;
+    }));
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("mattermost")) == 0);
+    application.writeEntry(QStringLiteral("ShowBadges"), true, KConfig::Notify);
+    config->sync();
+    REQUIRE(waitFor([&] {
+        return tracker.badgesEnabled(QStringLiteral("mattermost"))
+            && tracker.sniChatUnreadState(QStringLiteral("mattermost-desktop")) == 2;
+    }));
+
+    badges.writeEntry(QStringLiteral("InTaskManager"), false, KConfig::Notify);
+    config->sync();
+    REQUIRE(waitFor([&] {
+        return !tracker.badgesEnabled(QStringLiteral("mattermost"))
+            && tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 0;
+    }));
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("mattermost")) == 0);
+    badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
+    config->sync();
+    REQUIRE(waitFor([&] {
+        return tracker.badgesEnabled(QStringLiteral("mattermost"))
+            && tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 2;
+    }));
+
+    // Mention toast survives reason=1 popup timeout while Mattermost is in mention state (2),
+    // and clears immediately when Mattermost transitions to unread-only (1) or normal (0).
+    notify(tracker, 720, QStringLiteral("Mattermost"), QStringLiteral("com.mattermost.Desktop"));
+    CHECK(tracker.unreadCount(QStringLiteral("mattermost")) == 1);
+    tracker.NotificationClosed(720, 1);
+    CHECK(tracker.unreadCount(QStringLiteral("mattermost")) == 1);
+
+    item.setIconPixmap(lowerRightChatBadge(qRgba(120, 130, 220, 180), 10));
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{
+        QString(), {}, QStringLiteral("Mattermost: You have unread channels"), QString()}));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("mattermost")) == 1
+            && tracker.unreadCount(QStringLiteral("mattermost")) == 0;
+    }));
 }
 
 TEST_CASE("DND application inhibition is active without an Until deadline and clears", "[notification][dnd][settings]")

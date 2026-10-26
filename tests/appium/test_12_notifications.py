@@ -417,3 +417,51 @@ def test_not004_webcord_tray_tooltip_mentions_without_window(
         )
     finally:
         _finish([], server)
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher("mattermost.desktop")]})
+def test_not005_mattermost_mention_count_clears_when_mentions_are_read(
+    krema: Krema, apps: TestWindows, tmp_path: Path
+) -> None:
+    """Mattermost: a mention popup stays counted after timing out and clears when only unread remains."""
+    _install_app(krema, "mattermost.desktop", "Mattermost", "mattermost")
+    krema.start()
+    apps.open("Mattermost", app_id="mattermost")
+    krema.wait_for_item("Mattermost")
+    description = _dock_description(krema, "Mattermost")
+    token = uuid.uuid4().hex[:10]
+    tracked_ids: list[int] = []
+    server: subprocess.Popen[str] | None = None
+    try:
+        server = _start_server(tmp_path, chat_sni=("mattermost", "Mattermost"))
+        _chat_sni("Mattermost", badge="230,40,40@bottom-right")
+        wait_until(
+            lambda: "Mention notification" in description(),
+            message=lambda: f"Mattermost red tray badge to show a mention (got {description()!r})",
+        )
+
+        toast_id = _notify(token, "mattermost-mention", desktop_entry="mattermost")
+        tracked_ids.append(toast_id)
+        wait_until(
+            lambda: "1 notifications" in description(),
+            message=lambda: f"Mattermost mention popup to add a count (got {description()!r})",
+        )
+        _expire(toast_id)
+        assert _holds(lambda: "1 notifications" in description()), (
+            f"Mattermost mention count must survive the popup timing out (got {description()!r})"
+        )
+
+        _chat_sni("Mattermost", badge="40,150,240@bottom-right")
+        wait_until(
+            lambda: "Unread messages" in description() and "notifications" not in description(),
+            message=lambda: f"Mattermost count to clear once mentions are read, keeping unread (got {description()!r})",
+        )
+
+        _chat_sni("Mattermost")
+        wait_until(
+            lambda: "Unread messages" not in description() and "notifications" not in description(),
+            message=lambda: f"Mattermost badge to clear at rest (got {description()!r})",
+        )
+    finally:
+        _finish(tracked_ids, server)

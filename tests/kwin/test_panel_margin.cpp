@@ -164,15 +164,16 @@ App &app()
     return *instance;
 }
 
-// Always visible + Reserve screen space + Floating on the bottom edge, with
+// Always visible + Reserve screen space + Floating on the selected edge, with
 // the given gap reference and margin. Set before the manager exists, or live.
-void configure(int reference, int margin)
+void configure(int reference, int margin, int edge = kEdgeBottom)
 {
     auto *s = app().settings.get();
-    s->setEdge(kEdgeBottom);
+    s->setEdge(edge);
     s->setVisibilityMode(static_cast<int>(krema::DockPlatform::VisibilityMode::AlwaysVisible));
     s->setReserveScreenSpace(true);
     s->setFloating(true);
+    s->setShadowEnabled(false);
     s->setFloatingMargin(margin);
     s->setFloatingMarginReference(reference);
 }
@@ -421,8 +422,8 @@ private:
 class StandInPanel : public HelperProcess
 {
 public:
-    StandInPanel(int zone, const QString &outputName, const QString &clickLog = {})
-        : HelperProcess({QLatin1String(kPanelArg), QString::number(zone), QString::number(kEdgeBottom), outputName, clickLog},
+    StandInPanel(int zone, const QString &outputName, const QString &clickLog = {}, int edge = kEdgeBottom)
+        : HelperProcess({QLatin1String(kPanelArg), QString::number(zone), QString::number(edge), outputName, clickLog},
                         QProcessEnvironment::systemEnvironment())
     {
     }
@@ -669,16 +670,71 @@ void requireSettles(krema::MultiDockManager &manager, const QSet<qint64> &standI
     REQUIRE(settled);
 }
 
-/// The stand-in panel is mapped and still flush with the bottom edge.
-bool standInUnpushed(const Placement &p)
+/// Distance from the output edge to the outward side of @p rect.
+int edgeGap(const QRect &output, const QRect &rect, int edge)
 {
-    return p.standIns.size() == 1 && p.standIns.first().height() == kPanelDepth && p.standIns.first().y() + kPanelDepth == p.outputBottom();
+    switch (edge) {
+    case 0:
+        return rect.y() - output.y();
+    case 1:
+        return output.y() + output.height() - (rect.y() + rect.height());
+    case 2:
+        return rect.x() - output.x();
+    case 3:
+        return output.x() + output.width() - (rect.x() + rect.width());
+    default:
+        return -1;
+    }
 }
 
-/// Maximized windows end at or above the dock bar.
-bool reservationCoversDock(const Placement &p)
+/// Distance between the inner side of @p panel and the outward side of @p dock.
+int panelDockGap(const QRect &panel, const QRect &dock, int edge)
 {
-    return !p.maximizeArea.isEmpty() && p.maximizeArea.y() + p.maximizeArea.height() <= p.dockBar.y();
+    switch (edge) {
+    case 0:
+        return dock.y() - (panel.y() + panel.height());
+    case 1:
+        return panel.y() - (dock.y() + dock.height());
+    case 2:
+        return dock.x() - (panel.x() + panel.width());
+    case 3:
+        return panel.x() - (dock.x() + dock.width());
+    default:
+        return -1;
+    }
+}
+
+/// The stand-in panel is mapped and still flush with the selected edge.
+bool standInUnpushed(const Placement &p, int edge = kEdgeBottom)
+{
+    if (p.standIns.size() != 1) {
+        return false;
+    }
+    const QRect panel = p.standIns.first();
+    if (edge == 0 || edge == 1) {
+        return panel.height() == kPanelDepth && edgeGap(p.output, panel, edge) == 0;
+    }
+    return panel.width() == kPanelDepth && edgeGap(p.output, panel, edge) == 0;
+}
+
+/// KWin's maximize area remains on the content side of the visible dock bar.
+bool reservationCoversDock(const Placement &p, int edge = kEdgeBottom)
+{
+    if (p.maximizeArea.isEmpty()) {
+        return false;
+    }
+    switch (edge) {
+    case 0:
+        return p.maximizeArea.y() >= p.dockBar.y() + p.dockBar.height();
+    case 1:
+        return p.maximizeArea.y() + p.maximizeArea.height() <= p.dockBar.y();
+    case 2:
+        return p.maximizeArea.x() >= p.dockBar.x() + p.dockBar.width();
+    case 3:
+        return p.maximizeArea.x() + p.maximizeArea.width() <= p.dockBar.x();
+    default:
+        return false;
+    }
 }
 
 std::unique_ptr<krema::MultiDockManager> startDock()
@@ -827,7 +883,7 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
 
     // No panel: Panels measures from the screen edge.
     requireSettles(*manager, {}, "no panel, Panels", [](const Placement &p) {
-        return p.dockBottom() == p.outputBottom() - 8 && reservationCoversDock(p);
+        return edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 
     // An always-visible floating panel appears on the dock's edge: the dock
@@ -837,7 +893,7 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     REQUIRE(panel->waitForStarted());
     QSet<qint64> pids{panel->pid()};
     requireSettles(*manager, pids, "reserving panel, Panels, margin 8", [](const Placement &p) {
-        return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - kPanelDepth - 8 && reservationCoversDock(p);
+        return standInUnpushed(p) && panelDockGap(p.standIns.first(), p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 
     // Input: the panel's band below the dock stays click-through, the dock
@@ -863,14 +919,14 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     // Screen edge: back to the old placement, the margin from the screen edge.
     app().settings->setFloatingMarginReference(0);
     requireSettles(*manager, pids, "reserving panel, Screen edge, margin 8", [](const Placement &p) {
-        return p.dockBottom() == p.outputBottom() - 8;
+        return edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
 
     // Panels again with a wider margin, applied live.
     app().settings->setFloatingMarginReference(1);
     app().settings->setFloatingMargin(40);
     requireSettles(*manager, pids, "reserving panel, Panels, margin 40", [](const Placement &p) {
-        return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - kPanelDepth - 40 && reservationCoversDock(p);
+        return standInUnpushed(p) && panelDockGap(p.standIns.first(), p.dockBar, kEdgeBottom) == 40 && reservationCoversDock(p);
     });
 
     // A panel that reserves nothing is ignored: the gap is measured from the
@@ -882,8 +938,56 @@ TEST_CASE("Panels mode measures the gap from a panel started after Krema", "[pan
     REQUIRE(panel->waitForStarted());
     pids = {panel->pid()};
     requireSettles(*manager, pids, "non-reserving panel, Panels, margin 8", [](const Placement &p) {
-        return standInUnpushed(p) && p.dockBottom() == p.outputBottom() - 8 && reservationCoversDock(p);
+        return standInUnpushed(p) && edgeGap(p.output, p.dockBar, kEdgeBottom) == 8 && reservationCoversDock(p);
     });
+}
+
+TEST_CASE("Panels mode uses only same-edge panels across all dock edges", "[panel-margin][all-edges]")
+{
+    constexpr int edges[] = {0, 1, 2, 3};
+    configure(1, 8, kEdgeBottom);
+    const auto restore = qScopeGuard([] {
+        configure(1, 8, kEdgeBottom);
+    });
+
+    auto manager = startDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            auto *shell = manager->primaryShell();
+            return shell && shell->view()->isExposed() && shell->view()->screen();
+        },
+        kTimeoutMs));
+    auto *view = manager->primaryShell()->view();
+    auto *platform = dynamic_cast<krema::WaylandDockPlatform *>(view->platform());
+    REQUIRE(platform);
+    const QString outputName = view->screen()->name();
+
+    // KWin's frame geometry and the translated visible panel rect are the
+    // oracle here; no production inset or surface-size formula is reused.
+    for (const int panelEdge : edges) {
+        DYNAMIC_SECTION("panel edge " << panelEdge)
+        {
+            StandInPanel panel(kPanelZone, outputName, {}, panelEdge);
+            REQUIRE(panel.waitForStarted());
+            const QSet<qint64> pids{panel.pid()};
+
+            for (const int dockEdge : edges) {
+                INFO("panel edge " << panelEdge << ", dock edge " << dockEdge);
+                platform->setEdge(static_cast<krema::DockPlatform::Edge>(dockEdge));
+                view->setEdge(static_cast<krema::DockPlatform::Edge>(dockEdge));
+                const QByteArray label = QStringLiteral("panel edge %1, dock edge %2").arg(panelEdge).arg(dockEdge).toLocal8Bit();
+                requireSettles(*manager, pids, label.constData(), [&](const Placement &p) {
+                    if (!standInUnpushed(p, panelEdge) || p.maximizeArea == p.output || !reservationCoversDock(p, dockEdge)) {
+                        return false;
+                    }
+                    if (panelEdge == dockEdge) {
+                        return panelDockGap(p.standIns.first(), p.dockBar, dockEdge) == 8;
+                    }
+                    return edgeGap(p.output, p.dockBar, dockEdge) == 8;
+                });
+            }
+        }
+    }
 }
 
 TEST_CASE("Panel probe ownership survives transient exposure loss during edge switches", "[panel-margin][issue-135]")

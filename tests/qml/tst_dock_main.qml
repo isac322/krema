@@ -264,8 +264,23 @@ Item {
                     : data.edge === 2
                         ? panel.x
                         : stage.width - panel.x - panel.width
-            verify(outwardGap >= DockView.shadowOverflow,
-                   data.tag + " outward gap was " + outwardGap)
+            const inwardGap = data.edge === 0
+                ? stage.height - panel.y - panel.height
+                : data.edge === 1
+                    ? panel.y
+                    : data.edge === 2
+                        ? stage.width - panel.x - panel.width
+                        : panel.x
+            // Visible gap follows the requested padding; shadow reserve is
+            // checked separately against the allocated surface below.
+            compare(outwardGap, DockView.floatingPadding,
+                    data.tag + " visible outward gap was " + outwardGap)
+            verify(panel.x >= 0 && panel.y >= 0
+                   && panel.x + panel.width <= stage.width
+                   && panel.y + panel.height <= stage.height,
+                   data.tag + " panel escaped allocated surface")
+            verify(inwardGap >= DockView.shadowOverflow,
+                   data.tag + " surface lost shadow reserve: " + inwardGap)
         }
 
         function test_verticalDockStacksItems() {

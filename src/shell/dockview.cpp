@@ -163,7 +163,8 @@ int DockView::backgroundStyleType() const
 
 int DockView::floatingPadding() const
 {
-    return m_panelInset.total + (m_settings->floating() ? m_settings->floatingMargin() : 0);
+    const bool floating = m_screenSettings ? m_screenSettings->floating() : m_settings->floating();
+    return m_panelInset.total + (floating ? m_settings->floatingMargin() : 0);
 }
 
 int DockView::shadowOverflow() const

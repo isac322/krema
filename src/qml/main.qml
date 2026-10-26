@@ -1042,8 +1042,10 @@ Item {
         // Rest slot coordinates stay at the visible panel position even
         // while the actual panel is slid off-screen for AutoHide/Dodge.
         readonly property real restEdgePos: {
-            // Keep the outward shadow edge inside the layer-shell surface.
-            let fp = Math.max(DockView.floatingPadding, DockView.shadowOverflow)
+            // The visible gap is independent of shadow containment. Keep the
+            // panel at the requested floating margin; the surface still
+            // includes shadow overflow for containment.
+            let fp = DockView.floatingPadding
             switch (DockView.edge) {
             case 0: // Top
                 return fp

@@ -46,7 +46,6 @@
 #include <QWidget>
 #include <QtQml>
 
-#include <algorithm>
 #include <cmath>
 #include <memory>
 
@@ -276,7 +275,7 @@ TEST_CASE(
     }
 }
 
-TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[preview][shadow]")
+TEST_CASE("Preview margins follow the visible panel gap and shadow containment on every edge", "[preview][shadow]")
 {
     const int edge = GENERATE(0, 1, 2, 3);
     auto *settings = app().settings.get();
@@ -354,12 +353,15 @@ TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[previ
             return margins.right();
         }
     };
-    // The preview must meet the actual resting panel plus animation extent,
-    // both initially and when a shadow setting moves an already-open surface.
+    // The visible gap is the requested panel inset, while the native preview
+    // margin must also clear the dock's shadow and animation extent.
     for (const bool shadow : {false, true, false}) {
         settings->setShadowEnabled(shadow);
         int depth = 0;
         int gap = 0;
+        int expectedGap = 0;
+        int expectedMargin = 0;
+        int shadowContainment = 0;
         const bool followsPanel = QTest::qWaitFor(
             [&] {
                 const QRect panel = dock->visibilityController()->panelRect();
@@ -384,16 +386,30 @@ TEST_CASE("Preview margins follow the shadow-inset panel on every edge", "[previ
                     gap = dock->width() - panel.x() - panel.width();
                     break;
                 }
+                expectedGap = dock->floatingPadding();
+                shadowContainment = dock->shadowOverflow() > expectedGap
+                    ? dock->shadowOverflow() - expectedGap
+                    : 0;
+                expectedMargin = depth + dock->animationOverflowHeight() + shadowContainment;
                 // QML publishes its panel rectangle asynchronously. Do not accept
                 // the previous rectangle and margin immediately after a toggle.
-                if (std::abs(gap - std::max(dock->floatingPadding(), dock->shadowOverflow())) > 4) {
+                if (std::abs(gap - expectedGap) > 4) {
                     return false;
                 }
                 // QML's visible background omits the 4 px indicator gap.
-                return margin() >= depth + dock->animationOverflowHeight() && margin() <= depth + dock->animationOverflowHeight() + 4;
+                return margin() >= expectedMargin && margin() <= expectedMargin + 4;
             },
             kTimeoutMs);
-        CAPTURE(edge, shadow, depth, gap, margin(), dock->shadowOverflow(), dock->animationOverflowHeight());
+        CAPTURE(edge,
+                shadow,
+                depth,
+                gap,
+                expectedGap,
+                margin(),
+                expectedMargin,
+                shadowContainment,
+                dock->shadowOverflow(),
+                dock->animationOverflowHeight());
         REQUIRE(followsPanel);
     }
 }

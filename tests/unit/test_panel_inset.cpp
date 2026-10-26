@@ -61,6 +61,14 @@ TEST_CASE("Panel inset from the probe surface", "[panel-inset]")
         REQUIRE(krema::computePanelInset(output, probe, {QRect(0, 0, 48, 768), QRect(0, 724, 1024, 44)}, 1) == krema::PanelInset{44, 44});
     }
 
+    SECTION("Same-edge floating panels retain their total surface extension")
+    {
+        REQUIRE(krema::computePanelInset(output, QRect(511, 44, 2, 1), {QRect(262, 0, 500, 60)}, 0) == krema::PanelInset{44, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(511, 723, 2, 1), {QRect(262, 708, 500, 60)}, 1) == krema::PanelInset{44, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(44, 383, 1, 2), {QRect(0, 184, 60, 400)}, 2) == krema::PanelInset{44, 60});
+        REQUIRE(krema::computePanelInset(output, QRect(979, 383, 1, 2), {QRect(964, 184, 60, 400)}, 3) == krema::PanelInset{44, 60});
+    }
+
     SECTION("Output not at the origin")
     {
         const QRect second(1024, 0, 1024, 768);

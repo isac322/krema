@@ -621,6 +621,8 @@ Item {
         // corridor can overlap an adjacent item's visible slot.
         if (_inPreviewTransfer(x, y)) {
             _previewTransferActive = true
+            hoveredIndex = -1
+            hoveredName = ""
             dockPanel.mouseX = anchorX
             dockPanel.mouseY = anchorY
             _zoomActive = zoomActive

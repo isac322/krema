@@ -16,7 +16,7 @@ Krema combines five badge sources:
 2. `NotificationTracker` (C++) — unread notifications via `RegisterWatcher` (canonical desktop identity)
 3. `NotificationTracker` (C++) — SNI `NeedsAttention` (boolean)
 4. `model.IsDemandingAttention` — EWMH `_NET_WM_STATE_DEMANDS_ATTENTION` (boolean, all apps)
-5. Chat adapters — application-specific SNI icons and task-window titles (unread / mention state, and reported counts)
+5. Chat adapters — application-specific SNI icons, task-window titles, and Ferdium D-Bus properties (unread / mention state, and reported counts)
 
 Most Electron apps do not send Unity Launcher API signals on Linux. Their chat
 state can instead be recovered from the app's own tray or window metadata.
@@ -43,6 +43,8 @@ windows is used rather than summing windows for the same account.
 | WebCord | `*WebCord` / `[N] WebCord` window titles and blue/red SNI badges | Positive title mention count; red tray mention is state-only |
 | Mattermost Desktop | Lower-right quadrant of the SNI `IconPixmap`; tooltip title fallback | Mention / Unread state |
 | Telegram Desktop | Theme icon names or bottom-right composited SNI `IconPixmap` badge | Positive window-title unread count as a fallback |
+| Element Desktop | `Element [N]` mention / `Element *` or `Element •` unread titles, optionally `[offline]` | Highest positive title mention count across parent and child windows |
+| Ferdium Desktop | Direct/indirect D-Bus counts; top-right red/teal SNI fallback | Direct-message count only; indirect and SNI states have no numeric count |
 
 Electron `_status_icon_N` tray identity suffixes are stripped before
 desktop-service lookup. Generic `chrome_status_icon_` items can also match an
@@ -82,6 +84,48 @@ matching count, not their sum. A positive title count changes None to Unread
 without downgrading an existing Mention state. Number mode shows the count;
 the resulting chat state determines whether the badge uses the mention or unread
 color. Visible Unity counts retain priority.
+
+#### Element Desktop (unreleased)
+
+Element recognizes `io.element.element`, `im.riot.riot`, `element`, and
+`element-desktop`. Titles starting with `Element`, optional whitespace, and
+`[N]` produce Mention with count `N`; `N` must match `[1-9][0-9]*`, so zero
+and leading-zero counts do not match. Titles starting with `Element`,
+optional whitespace, an optional literal `[offline]` plus optional whitespace,
+and `*` or `•` produce Unread. Resting titles such as `Element` produce None.
+
+Grouped rows inspect parent and child titles, keep the highest positive
+mention count rather than adding window counts, and let any Mention title
+outrank Unread. The shared badge settings, semantic colors, count precedence,
+display modes, and accessibility state apply unchanged.
+
+#### Ferdium Desktop (unreleased)
+
+Ferdium recognizes `org.ferdium.ferdium` and `ferdium`. Krema reads the
+`org.ferdium.Ferdium` interface on service `org.ferdium.Ferdium` at
+`/org/ferdium` through D-Bus properties:
+
+- `UnreadDirectMessageCount` (`u`): a positive value produces Mention and
+  supplies the numeric count.
+- `UnreadIndirectMessageCount` (`u`): considered only when the direct count
+  is zero; a positive value produces Unread without a numeric count.
+
+When both counts are zero, the tracked Ferdium SNI icon supplies a
+state-only fallback. The top-right quadrant (`x >= width / 2`,
+`y < height / 2`) needs at least 25 red pixels (`alpha >= 180`,
+`red >= 200`, `green <= 90`, `blue <= 90`) for Mention. Otherwise, at least
+25 teal pixels (`alpha >= 100`, `red <= 35`, `70 <= green <= 120`,
+`blue >= 115`) produce Unread. Red Mention wins if both markers qualify.
+Neither fallback supplies a numeric count; the shared semantic colors,
+display modes, accessibility text, and Plasma badge gates still apply.
+Visible Unity counts retain priority.
+
+The service owner watcher handles late appearance, disappearance, direct
+owner replacement, and reappearance. Owner loss clears stored Ferdium
+counts and icon-derived state; a nonempty new owner triggers a fresh
+property query. `PropertiesChanged` also refreshes the properties.
+Generation checks reject replies from previous owners, while in-flight
+refresh requests coalesce rather than adding a polling timer.
 
 
 ## Input boundaries and service lifecycle
@@ -491,7 +535,7 @@ ports its backend semantics and applies the same settings.
 Priority  Source                                     Count    Coverage
 --------  ------                                     -----    --------
 1 (best)  LauncherEntryTracker.count                 Exact    KDE apps, Slack (Unity API)
-2         Chat adapters                              State/#  Slack, Discord, Vesktop, WebCord, Mattermost
+2         Chat adapters                              State/#  Slack, Discord, Vesktop, WebCord, Mattermost, Telegram, Element, Ferdium
 3         NotificationTracker.unreadCount            Unread#  Apps using org.freedesktop.Notifications
 4         NotificationTracker.sniNeedsAttention      Boolean  Apps with SNI attention state
 5         IsDemandingAttention                       Boolean  X11 urgency hint apps

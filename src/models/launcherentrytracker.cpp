@@ -53,6 +53,14 @@ static QStringList fallbackDesktopIds(const QString &desktopFile)
                || stem == QLatin1String("telegramdesktop")) {
         candidates = {QStringLiteral("org.telegram.desktop.desktop"), QStringLiteral("telegram.desktop"),
                       QStringLiteral("telegram-desktop.desktop"), QStringLiteral("telegramdesktop.desktop")};
+    } else if (stem == QLatin1String("io.element.element") || stem == QLatin1String("im.riot.riot")
+               || stem == QLatin1String("element") || stem == QLatin1String("element-desktop")) {
+        candidates = {QStringLiteral("io.element.Element.desktop"), QStringLiteral("io.element.element.desktop"),
+                      QStringLiteral("element-desktop.desktop"), QStringLiteral("element.desktop"),
+                      QStringLiteral("im.riot.Riot.desktop")};
+    } else if (stem == QLatin1String("ferdium") || stem == QLatin1String("org.ferdium.ferdium")) {
+        candidates = {QStringLiteral("org.ferdium.Ferdium.desktop"), QStringLiteral("org.ferdium.ferdium.desktop"),
+                      QStringLiteral("ferdium.desktop")};
     } else {
         return {};
     }

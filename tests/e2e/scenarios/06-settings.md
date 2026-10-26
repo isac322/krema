@@ -614,8 +614,13 @@ on, dock visible.
    and floating disabled. Increase the shadow inset while keeping the pointer
    in the preview's overlapping area. Verify the preview follows the panel;
    its newly exposed edge receives input and its transparent surroundings do
-   not. Repeat with settings that constrain the preview surface depth, then
-   hide the preview and verify its surface stops intercepting pointer input.
+   not. The visible gap remains the requested floating padding: shadow
+   overflow enlarges only the containing surface, and the preview margin uses
+   the visible panel depth plus animation reserve without a shadow-only
+   dead-band. Any outward shadow beyond the output boundary is clipped by
+   that output. Repeat with settings that constrain the preview surface depth,
+   then hide the preview and verify its surface stops intercepting pointer
+   input.
 
 **Expected:**
 - Scene drags, wheel input, advanced sliders, the "Result" inset, and the
@@ -626,15 +631,18 @@ on, dock visible.
 - Low light heights retain projected shadow edges on every dock edge.
 - Preview positioning and input regions follow live shadow settings and
   native surface resizes, even when popup content dimensions stay unchanged.
+  The visible gap and reservation use the requested floating padding; shadow
+  overflow does not create a shadow-sized gap.
 
 **Verification:** AT-SPI (slider values, "Light position" description,
 expander description), screenshot (3D scene, "Result" inset, dock shadow),
 `kremarc`.
 **Automated:** `qml_tst_shadow_geometry` covers low-height, extreme valid,
-and high-height control projection; `qml_tst_dock_main` covers panel placement
-on all edges; `krema_preview_tests` cases "Preview margins follow the
-shadow-inset panel on every edge" and "Visible preview input follows shadow
-and native surface resizes" cover live preview geometry and input masks.
+and high-height control projection; `qml_tst_dock_main` covers visible gap
+and inward shadow reserve on all edges; `krema_preview_tests` cases
+"Preview margins follow the visible panel gap and animation reserve on every
+edge" and "Visible preview input follows shadow and native surface resizes"
+cover live preview geometry and input masks.
 Scene gestures and advanced-control persistence remain manual checks.
 
 ---
@@ -716,8 +724,10 @@ window's identity and frame geometry.
 **Expected:**
 - The gap follows the slider immediately on all four edges, from 1 to 128 px
   (default 8, the previous fixed gap); no restart is needed.
-- With reservation on, the reserved strip is the panel bar plus the margin,
-  and existing maximized windows reflow live.
+- With reservation on, the reserved strip is the panel bar plus the requested
+  floating margin, and existing maximized windows reflow live. Shadow overflow
+  does not add a shadow-sized gap or reservation; it enlarges only the
+  containing surface.
 - With "Floating" off, the effective per-screen Floating state makes the
   visible gap 0 whatever the configured global margin (the dock is flush with
   its reference); the slider is disabled but keeps its value.

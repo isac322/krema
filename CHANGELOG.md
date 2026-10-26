@@ -22,8 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Floating gaps followed the effective per-screen Floating state and configured global margin independently of shadow containment; shadows enlarged only the surface and reservation needed to contain them, and panel-relative placement used same-edge panels only.
-- Dock shadows no longer clipped at low light heights, and window previews followed the panel's shadow inset on every dock edge and stayed interactive after live shadow changes (#118)
+- Floating gaps follow the effective per-screen Floating state and configured
+  global margin independently of shadow containment; shadows enlarge only the
+  containing surface, while screen reservations and previews keep the
+  requested margin, and panel-relative placement uses same-edge panels only.
+- Dock shadows no longer clip at low light heights; window previews keep the
+  requested floating gap and stay interactive after live shadow changes while
+  their containing surfaces resize to hold the shadow (#118)
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)

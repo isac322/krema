@@ -268,9 +268,9 @@ toggle.
   needed for the toggle itself.
 - All four edges reserve only the current resting panel bar and floating
   gap (the current Floating margin), not the full zoom/tooltip surface.
-  Floating state and margin changes apply to the visible gap independently of
-  shadow containment; shadows may enlarge only the containing surface and
-  reservation.
+  Shadow overflow enlarges only the containing surface; any outward shadow
+  beyond the output boundary is clipped by that output, not turned into an
+  extra visible gap or reservation.
 - The chosen reservation setting survives restart independently of edge,
   floating mode, floating margin, icon size, and visibility mode.
 - Auto Hide and Dodge Windows reserve no space with either saved value.

@@ -501,12 +501,37 @@ def test_vis009_live_floating_margin_update_maximized_consumer(krema: Krema, app
     assert _visible_gap(restored, edge) == _visible_gap(wider, edge), (wider, restored)
     assert restored["window"] == default["window"]
 
+    # Unit/QML tests cover inward containment; Appium observes the
+    # user-visible no-dead-band behavior.
     # Shadow containment may enlarge the KWin surface, but must not move the
-    # visible panel away from the requested margin.
+    # visible panel or its maximized consumer away from the requested margin.
     _set_shadow(krema, True)
     shadowed = _geometry(krema, win, edge, True, "margin-18-shadow-on")
     assert _visible_gap(shadowed, edge) == _visible_gap(wider, edge), (wider, shadowed)
-    assert _surface_depth(shadowed, edge) > _surface_depth(wider, edge), (wider, shadowed)
+    assert shadowed["frame"] == wider["frame"], (wider, shadowed)
+    assert shadowed["workarea"] == wider["workarea"], (wider, shadowed)
+    assert _reserved_depth(shadowed, edge) == _reserved_depth(wider, edge), (wider, shadowed)
+    assert shadowed["window"] == wider["window"] == default["window"], (wider, shadowed)
+    assert _surface_depth(shadowed, edge) >= _surface_depth(wider, edge), (wider, shadowed)
+
+    # Floating off removes the visible gap even while shadow is on.
+    open_page(krema, "Layout & Position")
+    _set_floating(krema, False)
+    shadowed_flat = _geometry(krema, win, edge, True, "margin-18-shadow-floating-off")
+    assert _visible_gap(flat, edge) == 0, flat
+    assert _visible_gap(shadowed_flat, edge) == _visible_gap(flat, edge), (flat, shadowed_flat)
+    assert shadowed_flat["frame"] == flat["frame"], (flat, shadowed_flat)
+    assert shadowed_flat["workarea"] == flat["workarea"], (flat, shadowed_flat)
+    assert _reserved_depth(shadowed_flat, edge) == _reserved_depth(flat, edge), (flat, shadowed_flat)
+    assert shadowed_flat["window"] == flat["window"] == default["window"], (flat, shadowed_flat)
+
+    _set_floating(krema, True)
+    restored_shadow = _geometry(krema, win, edge, True, "margin-18-shadow-restored")
+    assert _visible_gap(restored_shadow, edge) == _visible_gap(shadowed, edge), (shadowed, restored_shadow)
+    assert restored_shadow["frame"] == shadowed["frame"], (shadowed, restored_shadow)
+    assert restored_shadow["workarea"] == shadowed["workarea"], (shadowed, restored_shadow)
+    assert _reserved_depth(restored_shadow, edge) == _reserved_depth(shadowed, edge), (shadowed, restored_shadow)
+    assert restored_shadow["window"] == shadowed["window"], (shadowed, restored_shadow)
     _set_shadow(krema, False)
 
     close_settings(krema)

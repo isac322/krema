@@ -112,6 +112,7 @@ class Krema:
         self.process: subprocess.Popen | None = None
         self.driver: webdriver.Remote | None = None
         self._starts = 0
+        self._rest_item_rects: dict[str, Rect] = {}
         for d in ("config", "data", "cache", "state"):
             (self.home / d).mkdir(parents=True, exist_ok=True)
         cfg = DEFAULT_CONFIG if config is None else config
@@ -149,6 +150,7 @@ class Krema:
         """Launch krema, attach a webdriver session to its AT-SPI tree and
         wait until the dock tool bar exists and KWin has mapped the dock."""
         assert self.process is None, "already running"
+        self._rest_item_rects.clear()
         # KDBusService(Unique): a previous instance must be gone first.
         wait_until(lambda: not dbus.has_name("org.kde.krema"), timeout=timeout, message="previous krema to release org.kde.krema")
         self._starts += 1
@@ -374,6 +376,25 @@ class Krema:
         """Screen coordinates of the centre of dock item ``name``."""
         return self.screen_rect(self.wait_for_item(name)).center
 
+    def _input_item_center(self, name: str) -> tuple[int, int]:
+        """Screen point to use for pointer input on ``name``.
+
+        Qt < 6.9 exposes a zoomed item's transformed origin with its base
+        size. Recover the painted extent from the item's resting rect so a
+        click on an already-hovered item remains inside its transformed hit
+        target. The public ``item_center`` contract intentionally remains the
+        raw AT-SPI centre.
+        """
+        current = self.screen_rect(self.wait_for_item(name))
+        if not EXTENTS_IGNORE_SCALE:
+            return current.center
+
+        rest = self._rest_item_rects.get(name)
+        if rest is None or (rest.width, rest.height) != (current.width, current.height):
+            rest = current
+            self._rest_item_rects[name] = rest
+        return painted_rect(current, rest).center
+
     def settled_item_center(self, name: str) -> tuple[int, int]:
         """``item_center`` once it stops moving. Adding or removing an item
         animates the panel width (main.qml ``Behavior on width``) and shifts
@@ -383,17 +404,19 @@ class Krema:
 
     # ------------------------------------------------------------------- input
     def hover_item(self, name: str, steps: int = 5, step_ms: int = 40) -> None:
-        """Glide the pointer onto item ``name`` from just above the dock
+        """Glide the pointer onto dock item ``name`` from just above the dock
         (gradual, so enter/hover handlers run like with a real mouse)."""
-        x, y = self.settled_item_center(name)
+        rest = wait_stable(lambda: self.screen_rect(self.wait_for_item(name)))
+        if EXTENTS_IGNORE_SCALE:
+            self._rest_item_rects[name] = rest
+        x, y = rest.center
         dock = self.surface_rect("dock") or Rect(0, env.SCREEN_HEIGHT - 1, env.SCREEN_WIDTH, 1)
         start = (x, max(0, dock.y - 40))
-        # Teleport to ``start`` and glide down in one inputsynth run.
         inp.move_path([start, *inp.line(start, (x, y), steps)], step_ms)
 
     def click_item(self, name: str, button: str = "left") -> None:
-        """Real pointer click on the centre of dock item ``name``."""
-        inp.click(*self.settled_item_center(name), button=button)
+        """Real pointer click on the painted centre of dock item ``name``."""
+        inp.click(*wait_stable(lambda: self._input_item_center(name)), button=button)
 
     def scroll_item(self, name: str, dy: int = 15) -> None:
         inp.scroll(*self.settled_item_center(name), dy=dy)

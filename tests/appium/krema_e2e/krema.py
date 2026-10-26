@@ -245,15 +245,26 @@ class Krema:
     def toolbar(self) -> WebElement:
         return self.wait_for(TOOLBAR_XPATH)
 
-    def items(self) -> list[WebElement]:
-        """Dock item buttons in visual order."""
-        return self.find_all(ITEMS_XPATH)
+    def items(self, *, include_trash: bool = False) -> list[WebElement]:
+        """Dock item buttons in visual order.
 
-    def item_names(self) -> list[str]:
-        """Accessible names of the dock items in order. Resolved apps use the
-        .desktop Name (``Krema Test Window``); pinned launchers whose desktop
-        file is missing show the desktop id (``org.kde.dolphin.desktop``)."""
-        return [e.get_attribute("name") for e in self.items()]
+        Task-focused consumers exclude the virtual Trash row by default.
+        Pass ``include_trash=True`` when the Trash item itself is under test.
+        """
+        items = self.find_all(ITEMS_XPATH)
+        if include_trash:
+            return items
+        return [item for item in items if item.get_attribute("name") != "Trash"]
+
+    def item_names(self, *, include_trash: bool = False) -> list[str]:
+        """Accessible names of dock task items in order.
+
+        Resolved apps use the .desktop Name (``Krema Test Window``); pinned
+        launchers whose desktop file is missing show the desktop id
+        (``org.kde.dolphin.desktop``). The virtual Trash row is omitted unless
+        ``include_trash`` is true.
+        """
+        return [element.get_attribute("name") for element in self.items(include_trash=include_trash)]
 
     def item(self, name: str) -> WebElement | None:
         return self.find(f"{ITEMS_XPATH}[@name={_xpath_str(name)}]")

@@ -226,6 +226,11 @@ int taskRow(const QSet<QString> &titles)
     }
     return -1;
 }
+int visualRow(int taskRow)
+{
+    return taskRow >= 0 ? app().model->visualIndex(taskRow) : -1;
+}
+
 
 QRectF restSlot(QQuickView *view, QQuickItem *delegate)
 {
@@ -277,7 +282,8 @@ QRectF waitForPublished(krema::MultiDockManager &manager, const QSet<QString> &t
             }
             auto *shell = manager.primaryShell();
             auto *view = shell ? shell->view() : nullptr;
-            const int row = taskRow(titles);
+            const int sourceRow = taskRow(titles);
+            const int row = visualRow(sourceRow);
             auto *delegate = view && view->isExposed() && view->rootObject() && row >= 0 ? findDelegate(view->rootObject(), row) : nullptr;
             if (!delegate || !delegate->parentItem() || delegate->width() <= 0 || delegate->height() <= 0) {
                 stableMatches = 0;
@@ -461,8 +467,15 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
     const int group = taskRow({kWindowA, kWindowB});
     REQUIRE(group >= 0);
     CHECK(app().model->tasksModel()->index(group, 0).data(TaskManager::AbstractTasksModel::IsGroupParent).toBool());
+    int groupVisual = -1;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            groupVisual = visualRow(group);
+            return groupVisual >= 0;
+        },
+        kTimeoutMs));
     auto *groupView = manager->primaryShell()->view();
-    auto *groupDelegate = groupView && groupView->rootObject() ? findDelegate(groupView->rootObject(), group) : nullptr;
+    auto *groupDelegate = groupView && groupView->rootObject() ? findDelegate(groupView->rootObject(), groupVisual) : nullptr;
     QPointer<QQuickItem> groupProxy;
     if (groupDelegate) {
         groupProxy = qobject_cast<QQuickItem *>(groupDelegate->property("delegateGeometryTarget").value<QObject *>());

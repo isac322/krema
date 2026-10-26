@@ -66,6 +66,11 @@ int taskRow(const QString &title)
     }
     return -1;
 }
+int visualRow(int taskRow)
+{
+    return taskRow >= 0 ? model().visualIndex(taskRow) : -1;
+}
+
 bool taskHasDecoration(const QString &title)
 {
     const int row = taskRow(title);
@@ -189,7 +194,8 @@ TEST_CASE("TaskManager named icon reaches DockModel and provider", "[task-icons]
     REQUIRE(QTest::qWaitFor(
         [] {
             const int row = taskRow(kHealthyTitle);
-            return row >= 0 && appIdMatches(model().appId(row), kHealthyAppId) && model().iconName(row) == kHealthyIcon
+            const int dockRow = visualRow(row);
+            return row >= 0 && dockRow >= 0 && appIdMatches(model().appId(dockRow), kHealthyAppId) && model().iconName(dockRow) == kHealthyIcon
                 && taskHasDecoration(kHealthyTitle);
         },
         kTimeoutMs));
@@ -201,8 +207,8 @@ TEST_CASE("TaskManager named icon reaches DockModel and provider", "[task-icons]
     REQUIRE(index.isValid());
 
     INFO("TaskManager AppId: " << index.data(AbstractTasksModel::AppId).toString().toStdString());
-    REQUIRE(appIdMatches(model().appId(row), kHealthyAppId));
-    CHECK(model().iconName(row) == kHealthyIcon);
+    REQUIRE(appIdMatches(model().appId(visualRow(row)), kHealthyAppId));
+    CHECK(model().iconName(visualRow(row)) == kHealthyIcon);
 
     const QIcon decoration = index.data(Qt::DecorationRole).value<QIcon>();
     REQUIRE_FALSE(decoration.isNull());
@@ -266,6 +272,13 @@ TEST_CASE("TaskManager nameless client artwork reaches the raw icon provider", "
 
     const int row = taskRow(kRawTitle);
     REQUIRE(row >= 0);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return visualRow(taskRow(kRawTitle)) >= 0;
+        },
+        kTimeoutMs));
+    const int dockRow = visualRow(row);
+    REQUIRE(dockRow >= 0);
     const QModelIndex index = model().tasksModel()->index(row, 0);
     REQUIRE(index.isValid());
     const QIcon decoration = index.data(Qt::DecorationRole).value<QIcon>();
@@ -289,9 +302,9 @@ TEST_CASE("TaskManager nameless client artwork reaches the raw icon provider", "
     // The oracle is the generated PNG, never another production-rendered icon.
     CHECK(taskPixmap.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied) == expectedArtwork);
 
-    const QString taskManagerAppId = model().appId(row);
+    const QString taskManagerAppId = model().appId(dockRow);
     REQUIRE_FALSE(taskManagerAppId.isEmpty());
-    const QString rawKey = model().iconName(row);
+    const QString rawKey = model().iconName(dockRow);
     INFO("TaskManager AppId: " << taskManagerAppId.toStdString());
     INFO("DockModel icon key: " << rawKey.toStdString());
     REQUIRE(rawKey.startsWith(QStringLiteral("raw:")));
@@ -323,16 +336,23 @@ TEST_CASE("TaskManager keeps an unresolved app identity on the placeholder path"
 
     const int row = taskRow(kUnresolvedTitle);
     REQUIRE(row >= 0);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return visualRow(taskRow(kUnresolvedTitle)) >= 0;
+        },
+        kTimeoutMs));
+    const int dockRow = visualRow(row);
+    REQUIRE(dockRow >= 0);
     const QModelIndex index = model().tasksModel()->index(row, 0);
     REQUIRE(index.isValid());
 
-    const QString taskManagerAppId = model().appId(row);
+    const QString taskManagerAppId = model().appId(dockRow);
     INFO("TaskManager AppId: " << taskManagerAppId.toStdString());
     REQUIRE_FALSE(taskManagerAppId.isEmpty());
     // TaskManager may preserve the raw Wayland app_id or return a resolved
     // executable/KService identity, depending on the Plasma version.
 
-    const QString iconName = model().iconName(row);
+    const QString iconName = model().iconName(dockRow);
     INFO("DecorationRole icon name: " << iconName.toStdString());
     CHECK((iconName.isEmpty() || iconName == kGenericIcon || iconName == QStringLiteral("wayland")
            || iconName == QStringLiteral("unknown")));

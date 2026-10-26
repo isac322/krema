@@ -167,6 +167,11 @@ int windowRow(const QString &title)
     }
     return -1;
 }
+int visualRow(int taskRow)
+{
+    return taskRow >= 0 ? app().model->visualIndex(taskRow) : -1;
+}
+
 
 } // namespace
 
@@ -215,7 +220,14 @@ TEST_CASE(
             return windowRow(kHoveredTitle) >= 0;
         },
         kTimeoutMs));
-    const int hoveredRow = windowRow(kHoveredTitle);
+    int hoveredRow = -1;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            const int taskRow = windowRow(kHoveredTitle);
+            hoveredRow = visualRow(taskRow);
+            return taskRow >= 0 && hoveredRow >= 0;
+        },
+        kTimeoutMs));
 
     // Hover the window task the way the mouse does (hoveredIndex change). The
     // manager may still replace the shell while it adopts the output order,
@@ -258,7 +270,9 @@ TEST_CASE(
             return windowRow(kOtherTitle) >= 0;
         },
         kTimeoutMs));
-    REQUIRE(root->property("hoveredIndex").toInt() == windowRow(kHoveredTitle));
+    const int currentHoveredRow = visualRow(windowRow(kHoveredTitle));
+    REQUIRE(currentHoveredRow >= 0);
+    REQUIRE(root->property("hoveredIndex").toInt() == currentHoveredRow);
 
     if (previewEnabled) {
         // Healthy control: the insertion opens the hovered window's preview.
@@ -487,7 +501,14 @@ TEST_CASE("Visible preview input follows shadow and native surface resizes", "[p
         },
         kTimeoutMs));
     auto *controller = shell->previewController();
-    controller->showPreview(windowRow(kHoveredTitle), edge == 1 ? dock->x() + dock->width() / 2 : dock->y() + dock->height() / 2, 48);
+    int previewRow = -1;
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            previewRow = visualRow(windowRow(kHoveredTitle));
+            return previewRow >= 0;
+        },
+        kTimeoutMs));
+    controller->showPreview(previewRow, edge == 1 ? dock->x() + dock->width() / 2 : dock->y() + dock->height() / 2, 48);
     controller->setPreviewHovered(true);
     REQUIRE(controller->isVisible());
     QQuickView *preview = nullptr;

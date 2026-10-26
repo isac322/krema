@@ -136,6 +136,11 @@ int launcherRow(const QUrl &url)
     }
     return -1;
 }
+int visualRow(int taskRow)
+{
+    return taskRow >= 0 ? model().visualIndex(taskRow) : -1;
+}
+
 
 // Resolve fresh indices after focus, minimization, or grouping changes.
 QModelIndex windowIndex(const QString &title)
@@ -314,7 +319,7 @@ TEST_CASE("Left-click on a grouped app cycles through its windows", "[grouped-ac
     QStringList sequence{activeGroupWindow()};
     for (int click = 0; click < 3; ++click) {
         const QString before = sequence.last();
-        actions.activate(groupRow());
+        actions.activate(visualRow(groupRow()));
         INFO("click " << click + 1 << ", active before: " << before.toStdString());
         REQUIRE(QTest::qWaitFor(
             [&] {
@@ -351,7 +356,8 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
     });
     const bool pinned = QTest::qWaitFor(
         [&] {
-            return launcherRow(url) >= 0;
+            const int row = launcherRow(url);
+            return row >= 0 && visualRow(row) >= 0;
         },
         kTimeoutMs);
     if (!pinned) {
@@ -368,7 +374,7 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
 
     krema::DockActions actions(&model());
     for (int tick = 0; tick < 3; ++tick) {
-        actions.cycleWindows(launcherRow(url), tick % 2 == 0);
+        actions.cycleWindows(visualRow(launcherRow(url)), tick % 2 == 0);
     }
     // A launch writes the marker within a second; give it ample time.
     QTest::qWait(3000);
@@ -376,7 +382,7 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
 
     // Control: a left-click on the same launcher does launch, so the
     // assertion above is not vacuous.
-    actions.activate(launcherRow(url));
+    actions.activate(visualRow(launcherRow(url)));
     CHECK(QTest::qWaitFor(
         [&] {
             return QFile::exists(marker);
@@ -402,14 +408,17 @@ TEST_CASE("A launcher pinned by file URL counts as pinned and toggles off", "[gr
     INFO("launchers " << tasks->launcherList().join(u'|').toStdString());
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return launcherRow(url) >= 0;
+            const int row = launcherRow(url);
+            return row >= 0 && visualRow(row) >= 0;
         },
         kTimeoutMs));
-    INFO("row url " << tasks->index(launcherRow(url), 0).data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl().toString().toStdString());
-    CHECK(model().isPinned(launcherRow(url)));
+    const int sourceRow = launcherRow(url);
+    const int dockRow = visualRow(sourceRow);
+    INFO("row url " << tasks->index(sourceRow, 0).data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl().toString().toStdString());
+    CHECK(model().isPinned(dockRow));
 
     krema::DockActions actions(&model());
-    actions.togglePinned(launcherRow(url));
+    actions.togglePinned(dockRow);
     CHECK(tasks->launcherPosition(url) == -1);
     CHECK(QTest::qWaitFor(
         [&] {
@@ -476,15 +485,15 @@ TEST_CASE("Clicking a group returns to its most recently used window", "[grouped
 
     SECTION("left-click")
     {
-        actions.activate(groupRow());
+        actions.activate(visualRow(groupRow()));
     }
     SECTION("wheel up (backward) enters at the same window")
     {
-        actions.cycleWindows(groupRow(), false);
+        actions.cycleWindows(visualRow(groupRow()), false);
     }
     SECTION("wheel down (forward) enters at the same window")
     {
-        actions.cycleWindows(groupRow(), true);
+        actions.cycleWindows(visualRow(groupRow()), true);
     }
 
     REQUIRE(QTest::qWaitFor(
@@ -526,7 +535,7 @@ TEST_CASE("Single-window minimize clicks honor actual focus and minimized state"
     krema::DockActions actions(&model());
     SECTION("active single minimizes")
     {
-        actions.activateOrMinimize(otherWindowIndex().row());
+        actions.activateOrMinimize(visualRow(otherWindowIndex().row()));
         REQUIRE(QTest::qWaitFor(
             [] {
                 return otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
@@ -541,7 +550,7 @@ TEST_CASE("Single-window minimize clicks honor actual focus and minimized state"
                 return activeGroupWindow() == kWindowA && !otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
             },
             kTimeoutMs));
-        actions.activateOrMinimize(otherWindowIndex().row());
+        actions.activateOrMinimize(visualRow(otherWindowIndex().row()));
         REQUIRE(QTest::qWaitFor(
             [] {
                 return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool();
@@ -562,7 +571,7 @@ TEST_CASE("Single-window minimize clicks honor actual focus and minimized state"
                 return activeGroupWindow() == kWindowA;
             },
             kTimeoutMs));
-        actions.activateOrMinimize(otherWindowIndex().row());
+        actions.activateOrMinimize(visualRow(otherWindowIndex().row()));
         REQUIRE(QTest::qWaitFor(
             [] {
                 return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool();
@@ -599,7 +608,7 @@ TEST_CASE("Default activation keeps an active single window focused and unminimi
         kTimeoutMs));
 
     krema::DockActions actions(&model());
-    actions.activate(otherWindowIndex().row());
+    actions.activate(visualRow(otherWindowIndex().row()));
     // Observe a subsequent compositor state change instead of checking before
     // an erroneous asynchronous minimize request could have reached KWin.
     model().tasksModel()->requestToggleMinimized(windowIndex(kWindowA));
@@ -655,7 +664,7 @@ TEST_CASE("Active grouped-window clicks minimize only the current child", "[grou
     REQUIRE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimizable).toBool());
 
     krema::DockActions actions(&model());
-    actions.activateOrMinimize(groupRow());
+    actions.activateOrMinimize(visualRow(groupRow()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
@@ -746,7 +755,7 @@ TEST_CASE(
     REQUIRE(otherWindowIndex().data(AbstractTasksModel::IsActive).toBool());
 
     krema::DockActions actions(&model());
-    actions.activateOrMinimize(groupRow());
+    actions.activateOrMinimize(visualRow(groupRow()));
     REQUIRE(QTest::qWaitFor(
         [&] {
             return activeGroupWindow() == lastUsed && !windowIndex(lastUsed).data(AbstractTasksModel::IsMinimized).toBool();
@@ -783,7 +792,7 @@ TEST_CASE(
         },
         kTimeoutMs));
     krema::DockActions actions(&model());
-    actions.activateOrMinimize(groupRow());
+    actions.activateOrMinimize(visualRow(groupRow()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
@@ -798,7 +807,7 @@ TEST_CASE(
         },
         kTimeoutMs));
     REQUIRE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool());
-    actions.activateOrMinimize(groupRow());
+    actions.activateOrMinimize(visualRow(groupRow()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowB).data(AbstractTasksModel::IsActive).toBool();
@@ -850,7 +859,7 @@ TEST_CASE(
     }
     SECTION("past-the-end index")
     {
-        invalidIndex = tasks->rowCount();
+        invalidIndex = model().items()->rowCount();
     }
     CAPTURE(invalidIndex);
     // Record consumer state through real model notifications so an accidental
@@ -897,13 +906,13 @@ TEST_CASE("Minimize-click targeting tracks single-group-single window membership
     REQUIRE_FALSE(windowIndex(kWindowA).data(AbstractTasksModel::IsGroupParent).toBool());
 
     krema::DockActions actions(&model());
-    actions.activateOrMinimize(windowIndex(kWindowA).row());
+    actions.activateOrMinimize(visualRow(windowIndex(kWindowA).row()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
         },
         kTimeoutMs));
-    actions.activateOrMinimize(windowIndex(kWindowA).row());
+    actions.activateOrMinimize(visualRow(windowIndex(kWindowA).row()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
@@ -920,7 +929,7 @@ TEST_CASE("Minimize-click targeting tracks single-group-single window membership
         kTimeoutMs));
     auto *tasks = model().tasksModel();
     REQUIRE(tasks->index(groupRow(), 0).data(AbstractTasksModel::IsGroupParent).toBool());
-    actions.activateOrMinimize(groupRow());
+    actions.activateOrMinimize(visualRow(groupRow()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowB).data(AbstractTasksModel::IsActive).toBool();
@@ -941,7 +950,7 @@ TEST_CASE("Minimize-click targeting tracks single-group-single window membership
             return windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
         },
         kTimeoutMs));
-    actions.activateOrMinimize(windowIndex(kWindowA).row());
+    actions.activateOrMinimize(visualRow(windowIndex(kWindowA).row()));
     REQUIRE(QTest::qWaitFor(
         [] {
             return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();

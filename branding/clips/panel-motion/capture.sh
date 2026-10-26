@@ -5,7 +5,7 @@ set -Eeuo pipefail
 : "${KREMA_BINARY:?Set KREMA_BINARY to the built Krema executable}"
 : "${OUT:?Set OUT to a new artifact directory outside the checkout}"
 export DISPLAY="${DISPLAY:-:99}"
-export PANEL_MOTION_SOURCE="${PANEL_MOTION_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
+export PANEL_MOTION_SOURCE="${PANEL_MOTION_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 export KREMA_BINARY OUT
 
 # Never share a user's session bus, Plasma configuration, or running compositor.

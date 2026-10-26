@@ -57,6 +57,16 @@ static QStringList fallbackDesktopIds(const QString &desktopFile)
         return {QStringLiteral("org.telegram.desktop.desktop"), QStringLiteral("telegram.desktop"),
                 QStringLiteral("telegram-desktop.desktop"), QStringLiteral("telegramdesktop.desktop")};
     }
+    if (stem == QLatin1String("io.element.element") || stem == QLatin1String("im.riot.riot")
+        || stem == QLatin1String("element") || stem == QLatin1String("element-desktop")) {
+        return {QStringLiteral("io.element.Element.desktop"), QStringLiteral("io.element.element.desktop"),
+                QStringLiteral("element-desktop.desktop"), QStringLiteral("element.desktop"),
+                QStringLiteral("im.riot.Riot.desktop")};
+    }
+    if (stem == QLatin1String("ferdium") || stem == QLatin1String("org.ferdium.ferdium")) {
+        return {QStringLiteral("org.ferdium.Ferdium.desktop"), QStringLiteral("org.ferdium.ferdium.desktop"),
+                QStringLiteral("ferdium.desktop")};
+    }
     return {};
 }
 

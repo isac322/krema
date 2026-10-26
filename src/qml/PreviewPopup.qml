@@ -30,7 +30,7 @@ Item {
         if (!PreviewController.visible || PreviewController.parentIndex < 0)
             return
         let parentIdx = PreviewController.parentIndex
-        let parentModelIdx = DockModel.tasksModel.index(parentIdx, 0)
+        let parentModelIdx = DockModel.taskModelIndex(parentIdx)
         let isWindowOrGroup = parentModelIdx.valid && (
             Boolean(DockModel.tasksModel.data(
                 parentModelIdx, TaskManager.AbstractTasksModel.IsWindow))
@@ -210,10 +210,10 @@ Item {
             if (PreviewController.visible && PreviewController.parentIndex >= 0) {
                 // Child removed: check if parent still valid
                 let parentIdx = PreviewController.parentIndex
-let parentModelIdx = DockModel.taskModelIndex(parentIdx)
-if (!parentModelIdx || !parentModelIdx.valid) {
-    if (PreviewController.previewKeyboardActive)
-        PreviewController.endPreviewKeyboardNav()
+                let parentModelIdx = DockModel.taskModelIndex(parentIdx)
+                if (!parentModelIdx || !parentModelIdx.valid) {
+                    if (PreviewController.previewKeyboardActive)
+                        PreviewController.endPreviewKeyboardNav()
                     PreviewController.hidePreview()
                 } else {
                     root.rebuildChildModel()
@@ -226,10 +226,10 @@ if (!parentModelIdx || !parentModelIdx.valid) {
     // The visible popup container
     Rectangle {
         id: popup
-visible: PreviewController.visible
-    && PreviewController.parentIndex >= 0
-    && root.hasWindowContent
-    && !DockModel.isTrash(PreviewController.parentIndex)
+        visible: PreviewController.visible
+            && PreviewController.parentIndex >= 0
+            && root.hasWindowContent
+            && !DockModel.isTrash(PreviewController.parentIndex)
         Accessible.role: Accessible.PopupMenu
         Accessible.name: PreviewController.appName
             ? i18n("Preview for %1", PreviewController.appName)

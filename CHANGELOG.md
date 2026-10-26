@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Kept dock item names current as pinned applications opened, grouped, and closed.
 - Floating gaps used the effective per-screen Floating state and configured global margin. Shadows no longer shifted the requested gap, screen reservation, or preview position; same-edge panel behavior remained unchanged.
 - Dock shadows no longer clipped at low light heights by their containing surfaces; when the requested gap is smaller than the outward shadow, pixels may still clip at the layer-surface/output boundary. Screen reservation and window preview placement keep the requested gap, and previews stay interactive after native surface resizes (#118)
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations

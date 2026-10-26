@@ -63,7 +63,6 @@ DockItemsModel::DockItemsModel(TaskManager::TasksModel *tasksModel, TrashManager
                 || roles.contains(TaskManager::AbstractTasksModel::LauncherUrl) || roles.contains(TaskManager::AbstractTasksModel::HasLauncher)
                 || roles.contains(TaskManager::AbstractTasksModel::IsGroupParent)) {
                 scheduleRebuild();
-                return;
             }
             const int first = std::max(0, topLeft.row());
             const int last = std::min(bottomRight.row(), m_tasksModel->rowCount() - 1);
@@ -244,6 +243,23 @@ void DockItemsModel::rebuild()
     }
 
     if (rows == m_visualRows) {
+        // Equal row numbers do not guarantee the same source task (a launcher
+        // can become a window in place). Refresh task ranges without targeting
+        // the Trash row, while avoiding an unnecessary model reset.
+        int taskRangeStart = -1;
+        for (int visualRow = 0; visualRow <= m_visualRows.size(); ++visualRow) {
+            const bool isTask = visualRow < m_visualRows.size() && m_visualRows.at(visualRow) >= 0;
+            if (isTask) {
+                if (taskRangeStart < 0) {
+                    taskRangeStart = visualRow;
+                }
+                continue;
+            }
+            if (taskRangeStart >= 0) {
+                Q_EMIT dataChanged(index(taskRangeStart), index(visualRow - 1), {});
+                taskRangeStart = -1;
+            }
+        }
         return;
     }
 

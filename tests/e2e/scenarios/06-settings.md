@@ -1005,6 +1005,14 @@ test-owned `tests/notification/notify.py serve` process, which owns
     `1 notifications`; time the popup out and verify the count stays. Switch the
     tray badge to blue (unread only) and verify the count clears while
     `Unread messages` remains; return the tray icon to rest and verify both clear.
+11. Pin an `org.telegram.desktop.desktop` launcher with no window. Host a
+    StatusNotifierItem with the updater-style Id
+    `org.telegram.desktop._<32 hex>`. Set its tooltip to `Telegram (6)` and
+    verify `6 notifications`. With tooltip `Telegram`, set icon name
+    `…-attention-symbolic` and verify `Mention notification`, then
+    `…-mute-symbolic` and verify `Unread messages`, then `…-panel` and verify
+    the badge clears. Open a window titled `Telegram (3)` and verify
+    `3 notifications`; close it and verify the count clears.
 
 **Expected Result:**
 - A real external `Notify` reaches the running Krema watcher and increments
@@ -1016,6 +1024,9 @@ test-owned `tests/notification/notify.py serve` process, which owns
   without any window, and clears with the tooltip.
 - Mattermost keeps a timed-out mention popup counted while its tray shows a
   mention, and drops the count once only unread channels remain.
+- Telegram's tray tooltip count reaches the launcher without a window, active
+  and muted tray icons map to mention and unread, and a `Telegram (N)` window
+  title serves as the count fallback.
 - The owner handover has one non-empty old owner and one non-empty new owner;
   the replacement server re-registers once, and its notification is visible.
 - A 30-day DND deadline is accepted and safely armed by the Qt integration
@@ -1053,9 +1064,9 @@ and `tests/appium/test_12_notifications.py::test_not002_slack_sni_chat_badge_lif
 verifies Slack `StatusNotifierItem` (`IconPixmap` + `ToolTip`) rest/unread/highlight/read-clear
 badge synchronization and desktop toast `Notify` count suppression in a running KWin session.
 `test_not003_discord_keeps_expired_popup_count_until_read`,
-`test_not004_webcord_tray_tooltip_mentions_without_window`, and
-`test_not005_mattermost_mention_count_clears_when_mentions_are_read` cover
-steps 8 to 10.
+`test_not004_webcord_tray_tooltip_mentions_without_window`,
+`test_not005_mattermost_mention_count_clears_when_mentions_are_read`, and
+`test_not006_telegram_tray_states_and_title_count` cover steps 8 to 11.
 SNI, Unity, DND, portal, and Jobs protocol coverage remains in the wire-level
 notification catalog; no animation pixel assertion is required here.
 `tests/integration/test_notification_tracker.cpp` (`krema_notification_tracker_tests`)

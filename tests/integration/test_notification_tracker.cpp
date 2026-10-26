@@ -127,6 +127,121 @@ QImage lowerRightChatBadge(QRgb color, int pixels)
     }
     return image;
 }
+QImage telegramBadge(QRgb activeColor, int activePixels, QRgb grayColor = qRgba(128, 128, 128, 255), int grayPixels = 0)
+{
+    QImage image = blankBadge();
+    for (int pixel = 0; pixel < activePixels; ++pixel) {
+        image.setPixel(10 + pixel % 6, 10 + pixel / 6, activeColor);
+    }
+    for (int pixel = 0; pixel < grayPixels; ++pixel) {
+        image.setPixel(8 + pixel % 8, 8 + pixel / 8, grayColor);
+    }
+    return image;
+}
+
+} // namespace
+
+TEST_CASE("Telegram SNI icon names map attention and mute states for every alias", "[notification][sni][telegram][chat]")
+{
+    for (const QString &appId : {QStringLiteral("org.telegram.desktop"),
+                                 QStringLiteral("telegram"),
+                                 QStringLiteral("telegram-desktop"),
+                                 QStringLiteral("telegramdesktop")}) {
+        INFO(appId.toStdString());
+        krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.TelegramIconName"));
+        item.setId(appId);
+        item.setIconName(QStringLiteral("telegram-symbolic"));
+        item.setIconPixmap(blankBadge());
+        REQUIRE(item.start());
+        krema::test::StatusNotifierWatcherPeer watcher;
+        watcher.setRegisteredItems({item.itemAddress()});
+        REQUIRE(watcher.start());
+        ScopedTracker scoped;
+        auto &tracker = scoped.tracker;
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 0;
+        }));
+
+        item.setIconName(QStringLiteral("telegram-attention-symbolic"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 2;
+        }));
+
+        // Attention wins if a producer includes both state words.
+        item.setIconName(QStringLiteral("telegram-attention-mute-symbolic"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 2;
+        }));
+
+        item.setIconName(QStringLiteral("telegram-mute-symbolic"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 1;
+        }));
+
+        item.setIconName(QStringLiteral("telegram-symbolic"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(appId) == 0);
+    }
+}
+
+TEST_CASE("Telegram SNI composited pixels distinguish active and muted counters at thresholds", "[notification][sni][telegram][pixels]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.TelegramPixels"));
+    item.setId(QStringLiteral("telegram"));
+    item.setIconName(QStringLiteral("telegram-symbolic"));
+    item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 12));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 2;
+    }));
+
+    // A colored blue Telegram base icon with no red/gray counter must stay idle (0).
+    item.setIconPixmap(telegramBadge(qRgba(30, 80, 240, 255), 36));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
+    }));
+
+    item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 0, qRgba(128, 128, 128, 255), 12));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 1;
+    }));
+
+    // An active badge wins only when it has strictly more qualifying pixels.
+    item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 13, qRgba(128, 128, 128, 255), 12));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 2;
+    }));
+    item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 12, qRgba(128, 128, 128, 255), 13));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 1;
+    }));
+
+    const QImage belowThreshold[] = {
+        telegramBadge(qRgba(240, 40, 40, 255), 11),
+        telegramBadge(qRgba(240, 40, 40, 199), 12),
+        telegramBadge(qRgba(128, 128, 128, 255), 0, qRgba(128, 128, 128, 255), 11),
+    };
+    for (const auto &image : belowThreshold) {
+        item.setIconPixmap(image);
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
+        }));
+        CHECK(tracker.sniChatMentionCount(QStringLiteral("telegram")) == 0);
+    }
+
+    item.setIconPixmap(blankBadge());
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
+    }));
+}
+
 
 QImage lowerLeftChatBadge(QRgb color, int pixels)
 {
@@ -136,8 +251,6 @@ QImage lowerLeftChatBadge(QRgb color, int pixels)
     }
     return image;
 }
-
-} // namespace
 
 TEST_CASE("Notification tracker canonicalizes identities and keeps replacements at one", "[notification][tracker]")
 {
@@ -1682,6 +1795,53 @@ TEST_CASE("A popup that expires while the Discord tray icon is being re-read is 
     REQUIRE(waitFor([&] {
         return tracker.sniChatUnreadState(QStringLiteral("discord")) == 0
             && tracker.unreadCount(QStringLiteral("discord")) == 0;
+    }));
+}
+
+TEST_CASE("Telegram window title adapter extracts unread fallback counts across single and grouped windows", "[notification][telegram][titles]")
+{
+    for (const QString &appId : {QStringLiteral("org.telegram.desktop"), QStringLiteral("Telegram.desktop"),
+                                 QStringLiteral("telegram-desktop"), QStringLiteral("org.telegram.desktop._0123456789abcdef0123456789abcdef.desktop")}) {
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Telegram")}) == 0);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("Telegram")}) == 0);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Telegram (4)")}) == 1);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("Telegram (4)")}) == 4);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("(2) Dev Chat – (5)"), QStringLiteral("Telegram (9)")}) == 9);
+    }
+}
+
+TEST_CASE("Telegram SNI ToolTip count and updater instance IDs populate tray-only unread state and count", "[notification][sni][telegram][tooltip]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.TelegramTooltip"));
+    item.setId(QStringLiteral("org.telegram.desktop._0123456789abcdef0123456789abcdef"));
+    item.setTitle(QStringLiteral("Telegram"));
+    item.setIconPixmap(blankBadge());
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{
+        QString(), {}, QStringLiteral("Telegram (6)"), QString()}));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatMentionCount(QStringLiteral("org.telegram.desktop")) == 6
+            && tracker.sniChatUnreadState(QStringLiteral("org.telegram.desktop")) == 1;
+    }));
+
+    item.setIconName(QStringLiteral("org.telegram.desktop-attention-symbolic"));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("org.telegram.desktop")) == 2
+            && tracker.sniChatMentionCount(QStringLiteral("org.telegram.desktop")) == 6;
+    }));
+
+    item.setIconName(QStringLiteral("org.telegram.desktop-panel"));
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{
+        QString(), {}, QStringLiteral("Telegram"), QString()}));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("org.telegram.desktop")) == 0
+            && tracker.sniChatMentionCount(QStringLiteral("org.telegram.desktop")) == 0;
     }));
 }
 

@@ -42,6 +42,7 @@ windows is used rather than summing windows for the same account.
 | Vesktop | `• Discord` / `(N) Discord` window titles and red SNI badge | Positive title mention count; tray is state-only |
 | WebCord | `*WebCord` / `[N] WebCord` window titles and blue/red SNI badges | Positive title mention count; red tray mention is state-only |
 | Mattermost Desktop | Lower-right quadrant of the SNI `IconPixmap`; tooltip title fallback | Mention / Unread state |
+| Telegram Desktop | Theme icon names or bottom-right composited SNI `IconPixmap` badge | Positive window-title unread count as a fallback |
 
 Electron `_status_icon_N` tray identity suffixes are stripped before
 desktop-service lookup. Generic `chrome_status_icon_` items can also match an
@@ -50,6 +51,37 @@ network-order ARGB only after dimensions and payload length are validated; image
 are limited to 256 × 256. An app's `IconThemePath` PNG fallback is limited to
 256 KiB. `NewIcon`, `NewIconThemePath`, and metadata property changes refresh
 state through a coalesced in-flight/pending query, with no polling timer.
+
+#### Telegram Desktop (unreleased)
+
+The Telegram adapter recognizes `org.telegram.desktop`, `telegram`,
+`telegram-desktop`, and `telegramdesktop`. It uses the same badge display modes,
+Plasma badge preferences, count precedence, and asynchronous SNI refresh path
+as the other chat adapters.
+
+Theme `IconName` values are matched case-insensitively: a name containing
+`attention` produces Mention; otherwise, a name containing `mute` produces
+Unread. `attention` wins if both appear. Either match takes precedence over
+pixel detection; names with neither token fall through to the tray image.
+
+For composited `IconPixmap` badges, the adapter scans the bottom-right quadrant
+(`x >= width * 5 / 10`, `y >= height * 5 / 10`) and ignores pixels with alpha below
+200. It counts active red pixels (`r >= 200`, `g <= 110`, `b <= 120`) and muted gray
+pixels (`abs(r - g) <= 10`, `abs(g - b) <= 10`, `70 <= r <= 190`); blue pixels are
+ignored so Telegram's colored application logo does not count as a badge. At least
+12 active pixels, outnumbering gray pixels, produce Mention; otherwise, at least 12
+gray pixels produce Unread. An image without either badge leaves the tray state at
+None. Tray pixels provide a state, not a numeric count; Krema renders that state with
+its semantic mention or unread color rather than copying the tray badge color.
+
+Window titles supply a positive unread count when no chat count is reported.
+The adapter accepts `^Telegram\s*\(([1-9][0-9]*)\)\s*$` or a title suffix matching
+`[–-]\s*\(([1-9][0-9]*)\)\s*$`, for example `Telegram (4)`, `Alice – (4)`, or
+`Project - (4)`. Zero counts do not match. Grouped windows use the highest
+matching count, not their sum. A positive title count changes None to Unread
+without downgrading an existing Mention state. Number mode shows the count;
+the resulting chat state determines whether the badge uses the mention or unread
+color. Visible Unity counts retain priority.
 
 
 ## Input boundaries and service lifecycle

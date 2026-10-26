@@ -703,7 +703,7 @@ AT-SPI lookup (XPath tags are role names with `_`: `tool_bar`, `button`,
 |---|---|
 | `find(xpath) -> WebElement \| None`, `find_all(xpath) -> list`, `wait_for(xpath, timeout=10)` | Generic lookup in krema's tree. |
 | `toolbar()` | The `[tool bar] "Krema Dock"`. |
-| `items()`, `item_names() -> list[str]` | Dock item buttons in visual order. |
+| `items(include_trash=False)`, `item_names(include_trash=False) -> list[str]` | Dock task buttons in visual order; the virtual Trash row is excluded by default and can be included explicitly. |
 | `item(name)`, `wait_for_item(name, timeout=10)`, `wait_for_no_item(name, timeout=10)` | One dock item by accessible name. |
 | `focused_item() -> str \| None` | Name of the item with the `focused` state. |
 | `wait_keyboard_focus(surface="dock")` | Wait until KWin gives the surface keyboard focus (its window is KWin's active window). Call it before the first key after entering keyboard navigation: the `focused` state appears before KWin applies the layer surface's keyboard interactivity, and an earlier key goes to the previously active window. |

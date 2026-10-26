@@ -183,8 +183,9 @@ Item {
             onClicked: {
                 // childIndex < 0 = single window (parent row IS the window)
                 let modelIndex = (root.childIndex < 0)
-                    ? DockModel.tasksModel.index(root.parentIndex, 0)
-                    : DockModel.tasksModel.makeModelIndex(root.parentIndex, root.childIndex)
+                    ? DockModel.taskModelIndex(root.parentIndex)
+                    : DockModel.tasksModel.makeModelIndex(
+                        DockModel.taskIndex(root.parentIndex), root.childIndex)
                 DockModel.tasksModel.requestClose(modelIndex)
             }
 
@@ -214,8 +215,9 @@ Item {
             onClicked: {
                 // childIndex < 0 = single window (parent row IS the window)
                 let modelIndex = (root.childIndex < 0)
-                    ? DockModel.tasksModel.index(root.parentIndex, 0)
-                    : DockModel.tasksModel.makeModelIndex(root.parentIndex, root.childIndex)
+                    ? DockModel.taskModelIndex(root.parentIndex)
+                    : DockModel.tasksModel.makeModelIndex(
+                        DockModel.taskIndex(root.parentIndex), root.childIndex)
                 DockModel.tasksModel.requestActivate(modelIndex)
                 PreviewController.hidePreview()
             }

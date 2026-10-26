@@ -6,7 +6,7 @@
 - dnd-pin-membership: Reordering preserves pinned membership; enabled separation clamps drops to the source zone
 - dnd-visual-feedback: Visual feedback during drag (placeholder, opacity change)
 - dnd-file-drop: Drop file onto app icon to open with that app
-- dnd-task-zones: Separation constrains drags to the source zone and preserves free reorder when disabled
+- dnd-trash: Drop URLs into Trash and keep Trash at its persisted pinned coordinate
 
 ## Affected Files
 - src/qml/main.qml
@@ -16,7 +16,10 @@
 - src/models/dockactions.cpp
 - src/models/dockmodel.h
 - src/models/dockmodel.cpp
-- src/shell/dockvisibilitycontroller.h
+- src/models/dockitemsmodel.h
+- src/models/dockitemsmodel.cpp
+- src/models/trashmanager.h
+- src/models/trashmanager.cpp
 - src/shell/dockvisibilitycontroller.cpp
 
 **Tier:** Tier 2 (Appium) for real drag input and KWin state. Tier 1 QML
@@ -174,3 +177,36 @@ held-left/right release-order controls).
 
 **Verification:** AT-SPI item order and drag feedback, persisted pin membership, and the post-release task order for both option states.
 **Automated (native Tier 2 coverage):** `tests/appium/test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `tests/appium/test_09_task_zones.py::test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both pinned-to-running and running-to-pinned directions; exact nearest-valid source-zone positions and membership asserted; visual drop-indicator/drag ghost/paint remain unverified)
+
+---
+
+## TC DND-007: Drop Into Trash and Reorder Around Its Slot
+
+**Precondition:** The dock contains at least two pinned launchers and the Trash
+item. Record the ordered AT-SPI button names and the persisted `TrashSlot`.
+Prepare a disposable file outside Trash.
+**Steps:**
+1. Drag the disposable file from the file manager onto the Trash dock item.
+2. Wait for the KIO operation to settle, then open Trash and verify the file is
+   present.
+3. Drag one pinned launcher from before Trash to a position after Trash (and a
+   second launcher in the opposite direction), using the required press-hold
+   gesture.
+4. Wait for the dock to settle; record the button order and `TrashSlot`.
+5. Restart Krema and inspect the order again.
+
+**Expected:**
+- Dropping a URL on Trash moves it to KIO Trash; it does not activate a task or
+  open a preview.
+- Trash remains a normal visual, keyboard, zoom, and drop row while task
+  reordering skips it as a TasksModel source row.
+- Reordering pinned launchers updates their order without making Trash a task,
+  and Trash remains at its saved pinned-launcher coordinate.
+- The Trash position and launcher order survive restart.
+
+**Verification:** KIO Trash contents, AT-SPI ordered button names, accessible
+Trash state/icon, `kremarc` `TrashSlot` and `PinnedLaunchers`, and post-restart
+order.
+**Automated:** Not currently covered. The existing Appium suite has real drag
+input but no file-manager/KIO Trash fixture; URL drop and persisted Trash
+reorder remain manual pending coverage.

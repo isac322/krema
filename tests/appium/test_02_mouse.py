@@ -232,12 +232,21 @@ def test_mouse001_click_without_motion_on_an_item_that_appeared_under_the_pointe
     spot = wait_stable(lambda: krema.item_center("Probe"), duration=0.5)
     apps.close(probe)
     krema.wait_for_no_item("Probe")
-    # The dock is empty: whatever the pointer enters here, no item is under it.
+    # Trash is a persistent dock row even when no task windows remain.  The
+    # pointer therefore rests on Trash while the next task is inserted; its
+    # zoom can shift the new task's settled centre.
+    wait_until(
+        lambda: krema.item_names(include_trash=True) == ["Trash"],
+        message="persistent Trash row after Probe closes",
+    )
     inp.move(*spot)
 
     first = apps.open("First", app_id=APP1)
     krema.wait_for_item("First")
-    assert wait_stable(lambda: krema.item_center("First"), duration=0.5) == spot, "item reappears under the pointer"
+    wait_until(
+        lambda: krema.item_names(include_trash=True) == ["First", "Trash"],
+        message="First task alongside persistent Trash",
+    )
     kwin.set_minimized(first.internal_id, True)
     wait_until(lambda: (w := first.refresh()) is not None and w.minimized, message="First to be minimized")
     assert kwin.cursor_pos() == spot

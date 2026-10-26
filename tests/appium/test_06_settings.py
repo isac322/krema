@@ -369,7 +369,7 @@ def hover_ready(k: Krema, name: str = "Alpha") -> None:
         # the preview is gone first.
         k.move_away()
     rest = wait_stable(lambda: Rect.of(k.wait_for_item(name)))
-    k.hover_item(name)
+    k.hover_item(name, rest=k.to_screen(rest))
     wait_until(lambda: zoomed_width(k, name, rest) > icon, timeout=5, message=f"dock item {name} hovered (zoomed)")
 
 
@@ -418,8 +418,12 @@ def panel_band(krema: Krema, tag: str) -> list[tuple[int, int, int]]:
     x = ir.x - 1
     while x > 0 and sum(img.getpixel((x, cy))) > 30:
         x -= 1
-    left, right = x + 4, ir.x - 2
-    assert right - left >= 3, f"no panel padding left of {ir}: panel starts at x={x}"
+    gap = ir.x - x
+    # Rounded/rasterized edges can move the detected edge by a few pixels.
+    # Keep a stable three-pixel band beside the item, but require the
+    # detected panel-to-item gap to remain real rather than sampling the edge.
+    assert gap >= 5, f"no panel padding left of {ir}: panel edge x={x}, gap={gap}px"
+    left, right = ir.x - 5, ir.x - 2
     return list(img.crop((left, ir.y + 14, right, ir.y + ir.height - 14)).getdata())
 
 

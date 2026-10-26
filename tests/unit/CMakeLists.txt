@@ -14,6 +14,7 @@ add_executable(krema_unit_tests
     test_settings_migration.cpp
     test_taskiconprovider.cpp
     test_desktop_actions.cpp
+    test_trash.cpp
 )
 
 # Catch2's fatal assertions must unwind scoped fixtures.

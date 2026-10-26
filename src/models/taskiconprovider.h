@@ -85,10 +85,11 @@ private:
     static constexpr int kRawIconCacheCapacity = 256;
 
     static constexpr int kAlphaThreshold = 25;
-    static constexpr qreal kMinContentRatio = 0.92;
+    /// Below this effective ratio, artwork is a clear outlier and may be cropped/upscaled.
+    static constexpr qreal kOutlierContentRatio = 0.70;
     static constexpr qreal kMaxEffectiveScale = 1.5;
-    static constexpr qreal kMinMarginRatio = 0.06;
     static constexpr qreal kEdgeToEdgeFill = 0.88;
+
 };
 
 } // namespace krema

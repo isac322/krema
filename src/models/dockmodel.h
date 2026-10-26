@@ -6,6 +6,9 @@
 #include <QObject>
 #include <QUrl>
 
+#include "dockitemsmodel.h"
+#include "trashmanager.h"
+
 #include <taskmanager/activityinfo.h>
 #include <taskmanager/tasksmodel.h>
 #include <taskmanager/virtualdesktopinfo.h>
@@ -27,8 +30,11 @@ class DockModel : public QObject
     Q_OBJECT
 
     Q_PROPERTY(TaskManager::TasksModel *tasksModel READ tasksModel CONSTANT)
+    Q_PROPERTY(DockItemsModel *items READ items CONSTANT)
+    Q_PROPERTY(TrashManager *trashManager READ trashManager CONSTANT)
     Q_PROPERTY(QStringList pinnedLaunchers READ pinnedLaunchers WRITE setPinnedLaunchers NOTIFY pinnedLaunchersChanged)
     Q_PROPERTY(int pinnedTaskCount READ pinnedTaskCount NOTIFY pinnedTaskCountChanged)
+    Q_PROPERTY(int trashSlot READ trashSlot WRITE setTrashSlot NOTIFY trashSlotChanged)
     Q_PROPERTY(int virtualDesktopMode READ virtualDesktopMode WRITE setVirtualDesktopMode NOTIFY virtualDesktopModeChanged)
     Q_PROPERTY(QVariant currentDesktop READ currentDesktop NOTIFY currentDesktopChanged)
 
@@ -37,6 +43,8 @@ public:
     ~DockModel() override;
 
     [[nodiscard]] TaskManager::TasksModel *tasksModel() const;
+    [[nodiscard]] DockItemsModel *items() const;
+    [[nodiscard]] TrashManager *trashManager() const;
     [[nodiscard]] TaskManager::VirtualDesktopInfo *virtualDesktopInfo() const;
     [[nodiscard]] TaskManager::ActivityInfo *activityInfo() const;
 
@@ -48,18 +56,33 @@ public:
     void setSeparateLaunchers(bool separate);
     [[nodiscard]] int pinnedTaskCount() const;
 
-    /// Move the task at @p fromIndex to @p toIndex as an explicit user
-    /// reorder and save the new launcher order. Returns true on success.
+    /// Move source TasksModel rows. Callers holding visual rows must map them
+    /// with taskIndex() before calling this source-only method.
     bool moveTask(int fromIndex, int toIndex);
 
     /// Virtual desktop display mode: 0=ShowAll, 1=DimOtherDesktops, 2=CurrentOnly
     [[nodiscard]] int virtualDesktopMode() const;
     void setVirtualDesktopMode(int mode);
 
+    /// Identity of the virtual desktop the dock is currently showing.
     [[nodiscard]] QVariant currentDesktop() const;
 
+    [[nodiscard]] int trashSlot() const;
+    void setTrashSlot(int slot);
+
+    /// QML-facing row conversion: visual dock row to source task row.
+    /// Returns -1 for Trash or an invalid visual row.
+    Q_INVOKABLE int taskIndex(int visualIndex) const;
+    Q_INVOKABLE bool isTrash(int visualIndex) const;
+    Q_INVOKABLE int trashIndex() const;
+    /// Source-only conversion: source task row to visual dock row.
+    Q_INVOKABLE int visualIndex(int taskIndex) const;
+
+    /// The following index-taking methods accept visual dock rows from QML.
+    /// They map to TasksModel rows internally and reject the Trash row.
+    /// Check task-only C++ callers use taskModelIndex() or taskIndex() before
+    /// accessing TasksModel directly.
     /// Check if the task at @p index is on the current virtual desktop.
-    /// Returns true for launchers, tasks on all desktops, and tasks on current desktop.
     Q_INVOKABLE bool isOnCurrentDesktop(int index) const;
 
     /// Return the theme name or opaque raw source key for the task icon at @p index.
@@ -80,10 +103,10 @@ public:
     /// Return the number of child windows for the task at @p index.
     Q_INVOKABLE int childCount(int index) const;
 
-    /// Return a QModelIndex for use as DelegateModel.rootIndex.
+    /// Return a source QModelIndex for the visual task row at @p index.
     Q_INVOKABLE QModelIndex taskModelIndex(int index) const;
 
-    /// Publish the delegate geometry for a window task to KWin.
+    /// Publish the delegate geometry for the visual task row at @p index.
     Q_INVOKABLE void publishDelegateGeometry(int index, QObject *delegate);
 
     /// Return the TaskManager/KService desktop-entry or executable identity for
@@ -93,6 +116,7 @@ public:
 Q_SIGNALS:
     void pinnedLaunchersChanged();
     void pinnedTaskCountChanged();
+    void trashSlotChanged();
     void virtualDesktopModeChanged();
     void currentDesktopChanged();
 
@@ -124,9 +148,12 @@ private:
     bool m_partitionPending = false;
     bool m_reconcilingPartition = false;
     int m_pinnedTaskCount = 0;
+    int m_trashSlot = -1;
     int m_virtualDesktopMode = 0;
     QList<SettledRow> m_settledRows;
     std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
+    std::unique_ptr<TrashManager> m_trashManager;
+    std::unique_ptr<DockItemsModel> m_itemsModel;
     std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
     std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;
 };

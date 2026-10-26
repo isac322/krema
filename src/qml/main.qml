@@ -49,12 +49,18 @@ Item {
     // Hovered item tracking (for custom tooltip and click targeting)
     property int hoveredIndex: -1
     // A separator is a real primary-axis slot, not an overlay in the normal
-    // inter-icon gap. The boundary remains a model-free index so task and
-    // keyboard indices are unchanged.
-    readonly property int taskZoneBoundary: DockSettings.separateLaunchers
-        && DockModel.pinnedTaskCount > 0
-        && DockModel.pinnedTaskCount < dockRepeater.count
-        ? DockModel.pinnedTaskCount : -1
+    // inter-icon gap. The boundary remains a visual index and is not a
+    // keyboard-only stop.
+    readonly property int taskZoneBoundary: {
+        let trashSlot = DockModel.trashSlot
+        if (!DockSettings.separateLaunchers || DockModel.pinnedTaskCount <= 0)
+            return -1
+        for (let i = 0; i < dockRepeater.count; ++i) {
+            if (!DockModel.isTrash(i) && !DockModel.isPinned(i))
+                return i
+        }
+        return -1
+    }
     readonly property real taskZoneSeparatorThickness: 1
     readonly property real taskZoneGap: taskZoneBoundary >= 0
         ? DockSettings.iconSpacing + taskZoneSeparatorThickness : 0
@@ -339,7 +345,11 @@ Item {
         case Qt.Key_Enter:
         case Qt.Key_Space:
             if (hoveredIndex >= 0) {
-                DockActions.activate(hoveredIndex)
+                if (DockModel.isTrash(hoveredIndex)) {
+                    DockModel.trashManager.openTrash()
+                } else {
+                    DockActions.activate(hoveredIndex)
+                }
                 endKeyboardNavigation(false)
             }
             event.accepted = true
@@ -355,8 +365,13 @@ Item {
         case previewKey:
             // Open preview for the focused item (if it has windows); not for
             // a held hover that still awaits its post-menu reconcile.
-            if (hoveredIndex >= 0 && !_hoverHeld) {
-                let idx = DockModel.tasksModel.index(hoveredIndex, 0)
+            if (hoveredIndex >= 0 && !_hoverHeld && !DockModel.isTrash(hoveredIndex)) {
+                let taskIndex = DockModel.taskIndex(hoveredIndex)
+                if (taskIndex < 0) {
+                    event.accepted = true
+                    break
+                }
+                let idx = DockModel.tasksModel.index(taskIndex, 0)
                 let isWindow = DockModel.tasksModel.data(
                     idx, TaskManager.AbstractTasksModel.IsWindow)
                 if (isWindow) {
@@ -412,7 +427,7 @@ Item {
         id: dragHoldTimer
         interval: 300
         onTriggered: {
-            if (root.hoveredIndex >= 0) {
+            if (root.hoveredIndex >= 0 && !DockModel.isTrash(root.hoveredIndex)) {
                 root._dragPending = true
                 root._dragSourceIndex = root.hoveredIndex
             }
@@ -444,12 +459,13 @@ Item {
     function computeDropIndex(globalMousePos) {
         const separate = DockSettings.separateLaunchers
         const sourcePinned = separate && DockModel.isPinned(root._dragSourceIndex)
+        if (DockModel.isTrash(root._dragSourceIndex)) return -1
         if (DockView.isVertical) {
             let panelRelY = globalMousePos - dockPanel.y
             let items = []
             for (let i = 0; i < dockRepeater.count; i++) {
                 let item = dockRepeater.itemAt(i)
-                if (!item) continue
+                if (!item || DockModel.isTrash(i)) continue
                 if (separate && DockModel.isPinned(i) !== sourcePinned) continue
                 items.push({ idx: i, cx: _primaryRestSlotStart(item) + item.height / 2 })
             }
@@ -466,7 +482,7 @@ Item {
             let items = []
             for (let i = 0; i < dockRepeater.count; i++) {
                 let item = dockRepeater.itemAt(i)
-                if (!item) continue
+                if (!item || DockModel.isTrash(i)) continue
                 if (separate && DockModel.isPinned(i) !== sourcePinned) continue
                 items.push({ idx: i, cx: _primaryRestSlotStart(item) + item.width / 2 })
             }
@@ -501,8 +517,10 @@ Item {
     function _tryAutoPreview() {
         if (_hoverHeld) return
         if (!DockSettings.previewEnabled) return
-        if (hoveredIndex < 0 || PreviewController.visible) return
-        let idx = DockModel.tasksModel.index(hoveredIndex, 0)
+        if (hoveredIndex < 0 || PreviewController.visible || DockModel.isTrash(hoveredIndex)) return
+        let taskIndex = DockModel.taskIndex(hoveredIndex)
+        if (taskIndex < 0) return
+        let idx = DockModel.tasksModel.index(taskIndex, 0)
         let isWindow = DockModel.tasksModel.data(
             idx, TaskManager.AbstractTasksModel.IsWindow)
         if (isWindow) {
@@ -517,6 +535,7 @@ Item {
     // centre; mapToGlobal includes the item's transforms. The extent passed is
     // the base icon extent so the popup anchors symmetrically around the icon.
     function showPreviewForItem(index, item) {
+        if (DockModel.isTrash(index)) return
         let centre = item.mapToGlobal(item.width / 2, item.height / 2)
         let ext = DockView.isVertical ? item.height : item.width
         let pos = (DockView.isVertical ? centre.y : centre.x) - ext / 2
@@ -620,15 +639,19 @@ Item {
                 dockPanel.mouseY = -1
             }
         }
-        updateHoveredItem()
-        if (hoveredIndex < 0 && _inPreviewTransfer(x, y)) {
+        // Retain the source preview before hit-testing: the transparent
+        // corridor can overlap an adjacent item's visible slot.
+        if (_inPreviewTransfer(x, y)) {
             _previewTransferActive = true
+            hoveredIndex = -1
+            hoveredName = ""
             dockPanel.mouseX = anchorX
             dockPanel.mouseY = anchorY
             _zoomActive = zoomActive
             PreviewController.cancelHide()
             return
         }
+        updateHoveredItem()
         if (wasTransfer)
             PreviewController.hidePreviewDelayed()
         if (PreviewController.visible && hoveredIndex === PreviewController.parentIndex)
@@ -772,7 +795,7 @@ Item {
         _pointerOnDock = false
         _hoverReconciling = false
         // Keep zoom state when preview is visible (dock→preview mouse transition)
-        if (!PreviewController.visible) {
+        if (!PreviewController?.visible) {
             dockPanel.mouseX = -1
             dockPanel.mouseY = -1
             _zoomActive = false
@@ -780,7 +803,7 @@ Item {
         hoveredIndex = -1
         hoveredName = ""
         // Hide preview with delay (allows mouse to move to preview surface)
-        PreviewController.hidePreviewDelayed()
+        PreviewController?.hidePreviewDelayed()
         // Drag-out: if an active drag leaves the dock, unpin the launcher
         if (_dragActive) {
             if (DockModel.isPinned(_dragSourceIndex)) {
@@ -798,7 +821,7 @@ Item {
             dragHoldTimer.stop()
         }
         // preview visible이면 dock hover 상태 유지 (입력 영역 축소 방지)
-        if (!PreviewController.visible) {
+        if (!PreviewController?.visible) {
             DockVisibility.setHovered(false)
         }
     }
@@ -821,7 +844,7 @@ Item {
                 // releases it and the dock could never auto-hide again.
                 if (!DockView.pointerInside) {
                     root._pointerOnDock = false
-                    if (!PreviewController.visible)
+                    if (!PreviewController?.visible)
                         DockVisibility.setHovered(false)
                 }
                 return
@@ -904,7 +927,10 @@ Item {
 
             if (root._dragActive) {
                 // Execute reorder
-                if (root._dragTargetIndex >= 0 && root._dragTargetIndex !== root._dragSourceIndex) {
+                if (root._dragTargetIndex >= 0
+                        && root._dragTargetIndex !== root._dragSourceIndex
+                        && !DockModel.isTrash(root._dragSourceIndex)
+                        && !DockModel.isTrash(root._dragTargetIndex)) {
                     let item = dockRepeater.itemAt(root._dragSourceIndex)
                     let name = item ? item.displayName : ""
                     if (DockActions.moveTask(root._dragSourceIndex, root._dragTargetIndex)) {
@@ -931,25 +957,32 @@ Item {
             if (root._dragWasActive) return
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
-                let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
-                let isWindow = DockModel.tasksModel.data(
-                    idx, TaskManager.AbstractTasksModel.IsWindow)
-                let isGroup = DockModel.tasksModel.data(
-                    idx, TaskManager.AbstractTasksModel.IsGroupParent)
-                if (isWindow && isGroup && DockSettings.groupedWindowClickAction === 1) {
-                    tooltipItem.show = false
-                    tooltipTimer.stop()
-                    let item = dockRepeater.itemAt(root.hoveredIndex)
-                    if (item) root.showPreviewForItem(root.hoveredIndex, item)
-                } else if (isWindow && (isGroup
-                           ? DockSettings.groupedWindowClickAction === 2
-                           : DockSettings.singleWindowClickAction === 1)) {
-                    DockActions.activateOrMinimize(root.hoveredIndex)
+                if (DockModel.isTrash(root.hoveredIndex)) {
+                    DockModel.trashManager.openTrash()
                 } else {
-                    DockActions.activate(root.hoveredIndex)
+                    let taskIndex = DockModel.taskIndex(root.hoveredIndex)
+                    if (taskIndex < 0) return
+                    let idx = DockModel.tasksModel.index(taskIndex, 0)
+                    let isWindow = DockModel.tasksModel.data(
+                        idx, TaskManager.AbstractTasksModel.IsWindow)
+                    let isGroup = DockModel.tasksModel.data(
+                        idx, TaskManager.AbstractTasksModel.IsGroupParent)
+                    if (isWindow && isGroup && DockSettings.groupedWindowClickAction === 1) {
+                        tooltipItem.show = false
+                        tooltipTimer.stop()
+                        let item = dockRepeater.itemAt(root.hoveredIndex)
+                        if (item) root.showPreviewForItem(root.hoveredIndex, item)
+                    } else if (isWindow && (isGroup
+                               ? DockSettings.groupedWindowClickAction === 2
+                               : DockSettings.singleWindowClickAction === 1)) {
+                        DockActions.activateOrMinimize(root.hoveredIndex)
+                    } else {
+                        DockActions.activate(root.hoveredIndex)
+                    }
                 }
             } else if (mouse.button === Qt.MiddleButton) {
-                DockActions.newInstance(root.hoveredIndex)
+                if (!DockModel.isTrash(root.hoveredIndex))
+                    DockActions.newInstance(root.hoveredIndex)
             } else if (mouse.button === Qt.RightButton) {
                 DockContextMenu.showForTask(root.hoveredIndex)
             }
@@ -959,6 +992,8 @@ Item {
         onWheel: function(wheel) {
             if (root._hoverHeld) return
             if (root.hoveredIndex < 0) return
+            let taskIndex = DockModel.taskIndex(root.hoveredIndex)
+            if (taskIndex < 0) return
             if (wheel.angleDelta.y > 0) {
                 DockActions.cycleWindows(root.hoveredIndex, false)
             } else if (wheel.angleDelta.y < 0) {
@@ -1382,7 +1417,7 @@ Item {
 
             Repeater {
                 id: dockRepeater
-                model: DockModel.tasksModel
+                model: DockModel.items
                 property int layoutRevision: 0
                 onCountChanged: root.scheduleDelegateGeometryRefresh()
                 onItemAdded: {
@@ -1502,7 +1537,7 @@ Item {
             Accessible.ignored: !visible
 
             Connections {
-                target: DockModel.tasksModel
+                target: DockModel.items
                 function onLayoutChanged() { dockRepeater.layoutRevision++ }
                 function onRowsMoved() { dockRepeater.layoutRevision++ }
                 function onModelReset() { dockRepeater.layoutRevision++ }
@@ -1520,7 +1555,8 @@ Item {
             }
 
             onPositionChanged: function(drag) {
-                dropTargetIndex = root.computeExternalDropIndex(drag.x)
+                dropTargetIndex = root.computeExternalDropIndex(
+                    DockView.isVertical ? drag.y : drag.x)
             }
 
             onDropped: function(drop) {
@@ -1542,13 +1578,16 @@ Item {
                 let isLauncher = DockModel.isDesktopFile(firstUrl)
 
                 if (isLauncher) {
-                    // .desktop file → add as pinned launcher
+                    // .desktop file → add as pinned launcher, even on Trash
                     DockActions.addLauncher(firstUrl)
                 } else if (dropTargetIndex >= 0) {
-                    // Regular file(s) on an app icon → open with that app
-                    DockActions.openUrlsWithTask(dropTargetIndex, urls)
+                    if (DockModel.isTrash(dropTargetIndex)) {
+                        DockModel.trashManager.trashUrls(urls)
+                    } else {
+                        if (DockModel.taskIndex(dropTargetIndex) >= 0)
+                            DockActions.openUrlsWithTask(dropTargetIndex, urls)
+                    }
                 }
-                // else: regular file on dock background → no action
 
                 drop.accepted = true
                 dropTargetIndex = -1
@@ -1569,6 +1608,7 @@ Item {
         height: DockSettings.iconSize
         source: {
             if (!visible) return ""
+            if (DockModel.taskIndex(root._dragSourceIndex) < 0) return ""
             let iconCacheVersion = DockView.iconCacheVersion
             let name = DockModel.iconName(root._dragSourceIndex)
             return (name && name.length > 0) ? "image://icon/" + name + "?v=" + iconCacheVersion : ""
@@ -1686,11 +1726,14 @@ Item {
         id: tooltipTimer
         interval: DockSettings.previewHoverDelay
         onTriggered: {
-            if (root.hoveredIndex < 0 || root._hoverHeld) return
+            if (root.hoveredIndex < 0 || root._hoverHeld
+                    || DockModel.isTrash(root.hoveredIndex)) return
             // Row removed under the hover before the re-hit-test ran.
             if (root.hoveredIndex >= dockRepeater.count
                     || !dockRepeater.itemAt(root.hoveredIndex)) return
-            let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
+            let taskIndex = DockModel.taskIndex(root.hoveredIndex)
+            if (taskIndex < 0) return
+            let idx = DockModel.tasksModel.index(taskIndex, 0)
             let isWindow = DockModel.tasksModel.data(
                 idx, TaskManager.AbstractTasksModel.IsWindow)
             if (DockSettings.previewEnabled && isWindow) {
@@ -1778,11 +1821,11 @@ Item {
                 if (root._hoverHeld) return
                 if (root.hoveredIndex < 0) {
                     // Mouse left dock: start delayed preview hide
-                    PreviewController.hidePreviewDelayed()
+                    PreviewController?.hidePreviewDelayed()
                 } else if (!root.keyboardNavigating) {
                     // Moved to different icon (mouse): restart tooltip timer,
                     // hide preview with delay (allows moving to adjacent icon)
-                    PreviewController.hidePreviewDelayed()
+                    PreviewController?.hidePreviewDelayed()
                     tooltipTimer.restart()
                 }
                 // In keyboard mode: don't auto-trigger tooltip/preview

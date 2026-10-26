@@ -15,6 +15,10 @@ rule: document real KWin frame geometry and real app/input outcomes, and
 leave new coverage pending until its run is recorded. Missing DRM capture
 does not prevent the reservation geometry, settings, lifecycle, or drag
 checks; painted-divider and pixel checks need a capture-capable session.
+Trash open, confirmation, KIO drop, and persisted Trash-slot checks are
+documented as manual pending coverage because the existing Appium fixtures do
+not provide a file-manager URL-drop source or a native Trash confirmation
+dialog oracle.
 
 ## Convention
 
@@ -175,6 +179,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/shell/dockshell.*` | 01, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
 | `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
 | `src/models/dockcontextmenu.*` | 04 |
+| `src/models/trashmanager.*` | 04, 05 |
 | `src/models/desktopactions.*` | 04 |
 | `src/models/notificationtracker.*` | 01, 04, 06 |
 | `src/models/launcherentrytracker.*` | 01 |
@@ -195,6 +200,7 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/shell/settingswindow.*` | 04, 06, 07 |
 | `src/shell/dockview.*` | 02, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
 | `src/models/dockmodel.*` | 01, 02, 03, 04, 05, 06 |
+| `src/models/dockitemsmodel.*` | 01, 02, 03, 04, 05, 06 |
 | `src/models/taskiconprovider.*` | 01, 03, 05 |
 | `src/shell/multidockmanager.*` | 02, 03, 06, 07 |
 | `src/shell/edgetrigger.*` | 06 |

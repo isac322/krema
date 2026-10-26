@@ -617,8 +617,9 @@ Item {
                 dockPanel.mouseY = -1
             }
         }
-        updateHoveredItem()
-        if (hoveredIndex < 0 && _inPreviewTransfer(x, y)) {
+        // Retain the source preview before hit-testing: the transparent
+        // corridor can overlap an adjacent item's visible slot.
+        if (_inPreviewTransfer(x, y)) {
             _previewTransferActive = true
             dockPanel.mouseX = anchorX
             dockPanel.mouseY = anchorY
@@ -626,6 +627,7 @@ Item {
             PreviewController.cancelHide()
             return
         }
+        updateHoveredItem()
         if (wasTransfer)
             PreviewController.hidePreviewDelayed()
         if (PreviewController.visible && hoveredIndex === PreviewController.parentIndex)

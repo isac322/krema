@@ -988,11 +988,26 @@ test-owned `tests/notification/notify.py serve` process, which owns
    set DND `Until` 30 days ahead. Observe tracker activation, then rewrite to a
    short deadline and observe real wall-clock expiry and resumed attention.
    Do not advance or fake the clock. Return the SNI item to `Active`.
+8. Pin a `discord.desktop` launcher and open a `discord` test window. Host a
+   chat-app StatusNotifierItem with Id `discord_status_icon_1`. Set a red
+   top-right tray badge and verify `Unread messages`. Send a notification with
+   desktop entry `discord` and verify `1 notifications`. Time the popup out
+   (`NotificationClosed` reason 1 only, as Plasma does) and verify the count
+   stays. Return the tray icon to rest and verify the count and unread state
+   clear.
+9. Pin a `webcord.desktop` launcher with no window. Host a StatusNotifierItem
+   with Id `WebCord_status_icon_1` and set its tooltip to
+   `WebCord - 4 mentions`; verify `4 notifications`. Set the tooltip back to
+   `WebCord` and verify the badge clears.
 
 **Expected Result:**
 - A real external `Notify` reaches the running Krema watcher and increments
   the matching dock item's notification count.
 - External `CloseNotification` decrements and then clears that count.
+- A timed-out Discord popup stays counted while the Discord tray icon shows
+  unread, and the count clears as soon as the tray icon returns to rest.
+- A WebCord tray tooltip mention count drives the pinned launcher's badge
+  without any window, and clears with the tooltip.
 - The owner handover has one non-empty old owner and one non-empty new owner;
   the replacement server re-registers once, and its notification is visible.
 - A 30-day DND deadline is accepted and safely armed by the Qt integration
@@ -1029,6 +1044,8 @@ uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`,
 and `tests/appium/test_12_notifications.py::test_not002_slack_sni_chat_badge_lifecycle`
 verifies Slack `StatusNotifierItem` (`IconPixmap` + `ToolTip`) rest/unread/highlight/read-clear
 badge synchronization and desktop toast `Notify` count suppression in a running KWin session.
+`test_not003_discord_keeps_expired_popup_count_until_read` and
+`test_not004_webcord_tray_tooltip_mentions_without_window` cover steps 8 and 9.
 SNI, Unity, DND, portal, and Jobs protocol coverage remains in the wire-level
 notification catalog; no animation pixel assertion is required here.
 `tests/integration/test_notification_tracker.cpp` (`krema_notification_tracker_tests`)

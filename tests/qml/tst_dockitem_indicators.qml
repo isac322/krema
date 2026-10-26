@@ -54,6 +54,26 @@ Item {
             }, roles || {}))
         }
 
+        function discordFamilyApps() {
+            return [
+                { tag: "discord", appId: "discord", name: "Discord",
+                  unreadTitle: "• Discord - #general", mentionTitle: "(3) Discord - #general" },
+                { tag: "vesktop", appId: "vesktop", name: "Vesktop",
+                  unreadTitle: "• Discord | #general", mentionTitle: "(3) Discord | #general" },
+                { tag: "webcord", appId: "webcord", name: "WebCord",
+                  unreadTitle: "*WebCord", mentionTitle: "[3] WebCord" },
+            ]
+        }
+
+        function makeDiscordFamilyItem(app, roles) {
+            return makeItem(Object.assign({
+                display: app.name,
+                AppId: app.appId,
+                LauncherUrlWithoutIcon: "applications:" + app.appId + ".desktop",
+                IsWindow: true
+            }, roles || {}))
+        }
+
         function dockEdges() {
             return [
                 { tag: "top", edge: 0 },
@@ -552,7 +572,10 @@ Item {
         }
         function test_slackChatCountPrecedesNotificationUnreadAndUnityCount() {
             let item = makeSlackItem()
+            DockModel.setTaskChat(0, 2, 5)
             NotificationTracker.setUnread("slack", 9)
+            compare(item._chatUnreadState, 0)
+            compare(item._chatMentionCount, 0)
             compare(item._badgeCount, 0)
             verify(!item._showBadge)
 
@@ -621,6 +644,204 @@ Item {
             verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
         }
 
+
+        // --- Discord, Vesktop and WebCord chat presentation ---
+        // Task fixtures pair real titles with classifier-output roles rather
+        // than duplicating production DockModel's title regex in the mock.
+
+        function test_discordFamilyTaskTitleTransitions_data() {
+            return discordFamilyApps()
+        }
+
+        function test_discordFamilyTaskTitleTransitions(data) {
+            let item = makeDiscordFamilyItem(data)
+            compare(item._chatUnreadState, 0)
+            compare(item._chatMentionCount, 0)
+            verify(!T.badge(item).visible)
+
+            DockModel.tasksModel.setTaskData(0, "display", data.unreadTitle)
+            DockModel.setTaskChat(0, 1, 0)
+            tryCompare(item, "displayName", data.unreadTitle)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._badgeCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            compare(T.badgeLabel(item).visible, false)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
+            verify(item.accessibleDescription.indexOf("Unread messages") >= 0)
+
+            DockModel.tasksModel.setTaskData(0, "display", data.mentionTitle)
+            DockModel.setTaskChat(0, 2, 3)
+            tryCompare(item, "displayName", data.mentionTitle)
+            tryCompare(item, "_chatUnreadState", 2)
+            compare(item._chatMentionCount, 3)
+            compare(item._badgeCount, 3)
+            compare(T.badge(item).isDot, false)
+            compare(T.badgeLabel(item).text, "3")
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+            verify(item.accessibleDescription.indexOf("3 notifications") >= 0)
+
+            DockModel.tasksModel.setTaskData(0, "display", data.name)
+            DockModel.setTaskChat(0, 0, 0)
+            tryCompare(item, "displayName", data.name)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            verify(item.accessibleDescription.indexOf("Unread messages") < 0)
+            verify(item.accessibleDescription.indexOf("notifications") < 0)
+        }
+
+        function test_discordFamilySniTransitions_data() {
+            return discordFamilyApps()
+        }
+
+        function test_discordFamilySniTransitions(data) {
+            let item = makeDiscordFamilyItem(data)
+            compare(item._chatUnreadState, 0)
+            verify(!T.badge(item).visible)
+            NotificationTracker.setSniChat(data.appId, 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
+
+            // WebCord exposes a red mention state without an exact count.
+            // Discord/Vesktop obtain numeric mentions from their window titles.
+            if (data.appId === "webcord") {
+                NotificationTracker.setSniChat(data.appId, 2, 0)
+                tryCompare(item, "_chatUnreadState", 2)
+                compare(item._badgeCount, 0)
+                compare(T.badge(item).isDot, true)
+                verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+                verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+            } else {
+                NotificationTracker.setUnread(data.appId, 2)
+                tryCompare(item, "_badgeCount", 2)
+                compare(T.badge(item).isDot, false)
+                compare(T.badgeLabel(item).text, "2")
+                verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.negativeTextColor))
+                NotificationTracker.setUnread(data.appId, 0)
+                tryCompare(item, "_badgeCount", 0)
+                compare(T.badge(item).isDot, true)
+                verify(Qt.colorEqual(T.badge(item).color, Kirigami.Theme.linkColor))
+
+                DockModel.tasksModel.setTaskData(0, "display", data.mentionTitle)
+                DockModel.setTaskChat(0, 2, 3)
+                tryCompare(item, "_badgeCount", 3)
+                compare(item._chatUnreadState, 2)
+            }
+
+            NotificationTracker.setSniChat(data.appId, 0, 0)
+            DockModel.tasksModel.setTaskData(0, "display", data.name)
+            DockModel.setTaskChat(0, 0, 0)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+        }
+
+        function test_discordFamilyGroupedTasksAndSniUseMaximum_data() {
+            return discordFamilyApps()
+        }
+
+        function test_discordFamilyGroupedTasksAndSniUseMaximum(data) {
+            let item = makeDiscordFamilyItem(data, { IsWindow: false, IsGroupParent: true, ChildCount: 3 })
+            DockModel.tasksModel.addChildTask(0, {
+                display: data.unreadTitle, IsWindow: true, ChatUnreadState: 1, ChatMentionCount: 0
+            })
+            DockModel.tasksModel.addChildTask(0, {
+                display: data.mentionTitle, IsWindow: true, ChatUnreadState: 2, ChatMentionCount: 3
+            })
+            DockModel.tasksModel.addChildTask(0, {
+                display: data.mentionTitle.replace("3", "7"), IsWindow: true,
+                ChatUnreadState: 2, ChatMentionCount: 7
+            })
+            // Group labels are not window titles and cannot inflate the count.
+            DockModel.setTaskChat(0, 2, 99)
+            NotificationTracker.setSniChat(data.appId, 1, 0)
+            tryCompare(item, "_chatUnreadState", 2)
+            compare(item._chatMentionCount, 7)
+            compare(item._badgeCount, 7)
+            compare(T.badgeLabel(item).text, "7")
+
+            DockModel.tasksModel.removeChildTask(0, 2)
+            DockModel.setTaskChat(0, 2, 99)
+            tryCompare(item, "_chatMentionCount", 3)
+            compare(item._badgeCount, 3)
+            DockModel.tasksModel.removeChildTask(0, 1)
+            DockModel.setTaskChat(0, 2, 99)
+            tryCompare(item, "_chatUnreadState", 1)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            DockModel.tasksModel.removeChildTask(0, 0)
+            NotificationTracker.setSniChat(data.appId, 0, 0)
+            DockModel.setTaskChat(0, 2, 99)
+            tryCompare(item, "_chatUnreadState", 0)
+            verify(!T.badge(item).visible)
+        }
+
+        function test_discordFamilyUnityCountTakesPrecedence_data() {
+            return discordFamilyApps()
+        }
+
+        function test_discordFamilyUnityCountTakesPrecedence(data) {
+            let item = makeDiscordFamilyItem(data, {
+                display: data.mentionTitle, ChatUnreadState: 2, ChatMentionCount: 3
+            })
+            NotificationTracker.setUnread(data.appId, 9)
+            tryCompare(item, "_badgeCount", 3)
+            let url = "applications:" + data.appId + ".desktop"
+            LauncherEntryTracker.setEntry(url, { count: 7, countVisible: true })
+            tryCompare(item, "_badgeCount", 7)
+            compare(T.badgeLabel(item).text, "7")
+            LauncherEntryTracker.setEntry(url, { count: 0, countVisible: true })
+            tryCompare(item, "_badgeCount", 0)
+            compare(T.badge(item).isDot, true)
+            LauncherEntryTracker.setEntry(url, { countVisible: false })
+            tryCompare(item, "_badgeCount", 3)
+        }
+
+        function test_discordFamilyBadgeSettingsGateTaskAndSni_data() {
+            return discordFamilyApps()
+        }
+
+        function test_discordFamilyBadgeSettingsGateTaskAndSni(data) {
+            let item = makeDiscordFamilyItem(data, {
+                display: data.mentionTitle, ChatUnreadState: 2, ChatMentionCount: 3
+            })
+            NotificationTracker.setSniChat(data.appId, 1, 0)
+            NotificationTracker.setUnread(data.appId, 9)
+            tryCompare(item, "_badgeCount", 3)
+            NotificationTracker.setBadgesEnabledForApp(data.appId, false)
+            tryCompare(item, "_chatUnreadState", 0)
+            compare(item._chatMentionCount, 0)
+            compare(item._badgeCount, 0)
+            verify(!T.badge(item).visible)
+            NotificationTracker.setBadgesEnabledForApp(data.appId, true)
+            tryCompare(item, "_badgeCount", 3)
+            NotificationTracker.setBadgesEnabledForApp(data.appId, false)
+            LauncherEntryTracker.setEntry("applications:" + data.appId + ".desktop", {
+                count: 7, countVisible: true
+            })
+            tryCompare(item, "_badgeCount", 7)
+            verify(T.badge(item).visible)
+        }
+
+        function test_webcordZeroCountMentionSurvivesHiddenBadgeMode() {
+            let item = makeDiscordFamilyItem(discordFamilyApps()[2])
+            DockSettings.badgeDisplayMode = 2
+            NotificationTracker.setSniChat("webcord", 1, 0)
+            tryCompare(item, "_chatUnreadState", 1)
+            verify(!T.badge(item).visible)
+            NotificationTracker.setSniChat("webcord", 2, 0)
+            tryCompare(item, "_chatUnreadState", 2)
+            verify(T.badge(item).visible)
+            compare(T.badge(item).isDot, true)
+            compare(T.badgeLabel(item).visible, false)
+            verify(item.accessibleDescription.indexOf("Mention notification") >= 0)
+        }
 
         function test_noBadgeWithoutNotifications() {
             let item = makeItem({ IsWindow: true })

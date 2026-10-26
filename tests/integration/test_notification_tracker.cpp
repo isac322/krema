@@ -150,6 +150,7 @@ TEST_CASE("Telegram SNI icon names map attention and mute states for every alias
         INFO(appId.toStdString());
         krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.TelegramIconName"));
         item.setId(appId);
+        item.setTitle(QStringLiteral("Telegram"));
         item.setIconName(QStringLiteral("telegram-symbolic"));
         item.setIconPixmap(blankBadge());
         REQUIRE(item.start());
@@ -159,12 +160,31 @@ TEST_CASE("Telegram SNI icon names map attention and mute states for every alias
         ScopedTracker scoped;
         auto &tracker = scoped.tracker;
         REQUIRE(waitFor([&] {
-            return tracker.sniChatUnreadState(appId) == 0;
+            return tracker.sniTitle(appId) == QStringLiteral("Telegram") && tracker.sniChatUnreadState(appId) == 0;
+        }));
+
+        item.setIconName(QStringLiteral("telegram-mute-symbolic"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 1;
+        }));
+        item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 12));
+        item.setTitle(QStringLiteral("Muted counter"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniTitle(appId) == QStringLiteral("Muted counter") && tracker.sniChatUnreadState(appId) == 1;
         }));
 
         item.setIconName(QStringLiteral("telegram-attention-symbolic"));
         REQUIRE(waitFor([&] {
             return tracker.sniChatUnreadState(appId) == 2;
+        }));
+        item.setIconPixmap(telegramBadge(0, 0, qRgba(128, 128, 128, 255), 12));
+        item.setTitle(QStringLiteral("Active counter"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniTitle(appId) == QStringLiteral("Active counter") && tracker.sniChatUnreadState(appId) == 2;
+        }));
+        item.setIconName(QStringLiteral("telegram-mute-symbolic"));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(appId) == 1;
         }));
 
         // Attention wins if a producer includes both state words.
@@ -172,11 +192,12 @@ TEST_CASE("Telegram SNI icon names map attention and mute states for every alias
         REQUIRE(waitFor([&] {
             return tracker.sniChatUnreadState(appId) == 2;
         }));
-
-        item.setIconName(QStringLiteral("telegram-mute-symbolic"));
-        REQUIRE(waitFor([&] {
-            return tracker.sniChatUnreadState(appId) == 1;
-        }));
+        for (const QString &alias : {QStringLiteral("org.telegram.desktop"), QStringLiteral("telegram"),
+                                      QStringLiteral("telegram-desktop"), QStringLiteral("telegramdesktop")}) {
+            CHECK(tracker.sniChatUnreadState(alias) == 2);
+            CHECK(tracker.sniChatMentionCount(alias) == 0);
+        }
+        item.setIconPixmap(blankBadge());
 
         item.setIconName(QStringLiteral("telegram-symbolic"));
         REQUIRE(waitFor([&] {
@@ -201,6 +222,11 @@ TEST_CASE("Telegram SNI composited pixels distinguish active and muted counters 
     REQUIRE(waitFor([&] {
         return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 2;
     }));
+    item.setIconPixmap(blankBadge());
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
+    }));
+
 
     // A colored blue Telegram base icon with no red/gray counter must stay idle (0).
     item.setIconPixmap(telegramBadge(qRgba(30, 80, 240, 255), 36));
@@ -218,7 +244,7 @@ TEST_CASE("Telegram SNI composited pixels distinguish active and muted counters 
     REQUIRE(waitFor([&] {
         return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 2;
     }));
-    item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 12, qRgba(128, 128, 128, 255), 13));
+    item.setIconPixmap(telegramBadge(qRgba(240, 40, 40, 255), 12, qRgba(128, 128, 128, 255), 12));
     REQUIRE(waitFor([&] {
         return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 1;
     }));
@@ -227,6 +253,21 @@ TEST_CASE("Telegram SNI composited pixels distinguish active and muted counters 
         telegramBadge(qRgba(240, 40, 40, 255), 11),
         telegramBadge(qRgba(240, 40, 40, 199), 12),
         telegramBadge(qRgba(128, 128, 128, 255), 0, qRgba(128, 128, 128, 255), 11),
+        telegramBadge(qRgba(199, 110, 120, 200), 12),
+        telegramBadge(qRgba(200, 111, 120, 200), 12),
+        telegramBadge(qRgba(200, 110, 121, 200), 12),
+        telegramBadge(qRgba(90, 80, 200, 200), 12),
+        telegramBadge(qRgba(91, 80, 220, 200), 12),
+        telegramBadge(qRgba(0, 80, 199, 200), 12),
+        telegramBadge(qRgba(0, 80, 220, 199), 12),
+        telegramBadge(0, 0, qRgba(69, 69, 69, 200), 12),
+        telegramBadge(0, 0, qRgba(191, 191, 191, 200), 12),
+        telegramBadge(0, 0, qRgba(100, 111, 111, 200), 12),
+        telegramBadge(0, 0, qRgba(111, 111, 100, 200), 12),
+        telegramBadge(0, 0, qRgba(100, 100, 100, 199), 12),
+        lowerRightChatBadge(qRgba(30, 80, 240, 255), 12),
+        topRightChatBadge(qRgba(240, 40, 40, 255), 12),
+        topRightChatBadge(qRgba(128, 128, 128, 255), 12),
     };
     for (const auto &image : belowThreshold) {
         item.setIconPixmap(image);
@@ -234,22 +275,216 @@ TEST_CASE("Telegram SNI composited pixels distinguish active and muted counters 
             return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
         }));
         CHECK(tracker.sniChatMentionCount(QStringLiteral("telegram")) == 0);
+        item.setIconPixmap(telegramBadge(qRgba(200, 110, 120, 200), 12));
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 2;
+        }));
     }
 
     item.setIconPixmap(blankBadge());
     REQUIRE(waitFor([&] {
         return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
     }));
+    const QImage accepted[] = {
+        telegramBadge(qRgba(240, 40, 40, 255), 12),
+        telegramBadge(qRgba(200, 110, 120, 200), 12),
+        telegramBadge(0, 0, qRgba(70, 80, 90, 200), 12),
+        telegramBadge(0, 0, qRgba(190, 180, 170, 200), 12),
+    };
+    for (int index = 0; index < 4; ++index) {
+        item.setIconPixmap(accepted[index]);
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("telegram")) == (index < 2 ? 2 : 1);
+        }));
+        item.setIconPixmap(blankBadge());
+        REQUIRE(waitFor([&] {
+            return tracker.sniChatUnreadState(QStringLiteral("telegram")) == 0;
+        }));
+    }
 }
 
 
-QImage lowerLeftChatBadge(QRgb color, int pixels)
+static QImage lowerLeftChatBadge(QRgb color, int pixels)
 {
     QImage image = blankBadge();
     for (int pixel = 0; pixel < pixels; ++pixel) {
         image.setPixel(pixel % 8, 8 + pixel / 8, color);
     }
     return image;
+}
+
+TEST_CASE("Ferdium D-Bus direct and indirect unread lifecycle", "[notification][ferdium][dbus]")
+{
+    krema::test::FerdiumPeer ferdium;
+    ferdium.setUnreadDirectMessageCount(3);
+    ferdium.setUnreadIndirectMessageCount(5);
+    REQUIRE(ferdium.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 2
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 3;
+    }));
+    CHECK(tracker.sniChatUnreadState(QStringLiteral("org.ferdium.ferdium")) == 2);
+
+    ferdium.setUnreadDirectMessageCount(0);
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 0;
+    }));
+    ferdium.setUnreadIndirectMessageCount(0);
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 0
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 0;
+    }));
+}
+
+TEST_CASE("Ferdium SNI fallback and D-Bus precedence", "[notification][ferdium][sni][dbus]")
+{
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.Ferdium"));
+    item.setId(QStringLiteral("ferdium"));
+    item.setIconPixmap(topRightChatBadge(qRgba(230, 40, 40, 220), 64));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 2
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 0;
+    }));
+
+    item.setIconPixmap(topRightChatBadge(qRgba(20, 95, 160, 140), 64));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1;
+    }));
+
+    krema::test::FerdiumPeer ferdium;
+    ferdium.setUnreadDirectMessageCount(6);
+    REQUIRE(ferdium.start());
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 2
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 6;
+    }));
+    ferdium.setUnreadDirectMessageCount(0);
+    ferdium.setUnreadIndirectMessageCount(4);
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 0;
+    }));
+    ferdium.setUnreadIndirectMessageCount(0);
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1;
+    }));
+    const int revBeforeStop = tracker.revision();
+    ferdium.stop();
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 0
+            && tracker.revision() > revBeforeStop;
+    }));
+    // When Ferdium D-Bus service reappears with 0/0 counts, the persistent SNI
+    // entry refreshes its icon and restores the SNI fallback state.
+    REQUIRE(ferdium.start());
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1;
+    }));
+
+    // Also cover a Ferdium owner loss while a newly registered SNI item's
+    // initial Id/metadata query is still pending: exporting during the loss
+    // interval must not expose fallback state until the owner reappears.
+    item.stop();
+    watcher.setRegisteredItems({});
+    krema::test::StatusNotifierItemPeer delayedItem(QStringLiteral("org.example.fixture.FerdiumDelayed"));
+    delayedItem.setId(QStringLiteral("ferdium"));
+    delayedItem.setIconPixmap(topRightChatBadge(qRgba(230, 40, 40, 220), 64));
+    REQUIRE(delayedItem.claimServiceWithoutObject());
+    watcher.addItem(delayedItem.itemAddress());
+    ferdium.stop();
+    REQUIRE(delayedItem.exportObjectAndEmitReady());
+    QTest::qWait(50);
+    CHECK(tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 0);
+    REQUIRE(ferdium.start());
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 2;
+    }));
+}
+
+TEST_CASE("Ferdium owner replacement ignores stale updates", "[notification][ferdium][dbus][owner-handover]")
+{
+    krema::test::FerdiumPeer original;
+    original.setUnreadDirectMessageCount(4);
+    REQUIRE(original.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 4;
+    }));
+
+    const QString connectionName = QStringLiteral("ferdium-owner-replacement");
+    const auto replacementBus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, connectionName);
+    const auto disconnect = qScopeGuard([&] {
+        QDBusConnection::disconnectFromBus(connectionName);
+    });
+    REQUIRE(replacementBus.isConnected());
+    krema::test::FerdiumPeer replacement(replacementBus);
+    replacement.setUnreadIndirectMessageCount(6);
+    REQUIRE(replacement.start(true));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1
+            && tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 0;
+    }));
+    original.setUnreadDirectMessageCount(9);
+    QTest::qWait(50);
+    CHECK(tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 1);
+    CHECK(tracker.sniChatMentionCount(QStringLiteral("ferdium")) == 0);
+}
+
+TEST_CASE("Ferdium SNI fallback obeys badge settings", "[notification][ferdium][sni][settings]")
+{
+    auto config = KSharedConfig::openConfig(QStringLiteral("plasmanotifyrc"));
+    KConfigGroup badges = config->group(QStringLiteral("Badges"));
+    KConfigGroup application = config->group(QStringLiteral("Applications")).group(QStringLiteral("org.ferdium.ferdium"));
+    const bool hadGlobal = badges.hasKey(QStringLiteral("InTaskManager"));
+    const QVariant previousGlobal = badges.readEntry(QStringLiteral("InTaskManager"), QVariant());
+    const bool hadApp = application.hasKey(QStringLiteral("ShowBadges"));
+    const QVariant previousApp = application.readEntry(QStringLiteral("ShowBadges"), QVariant());
+    const auto restore = qScopeGuard([&] {
+        if (hadGlobal) badges.writeEntry(QStringLiteral("InTaskManager"), previousGlobal, KConfig::Notify);
+        else badges.deleteEntry(QStringLiteral("InTaskManager"), KConfig::Notify);
+        if (hadApp) application.writeEntry(QStringLiteral("ShowBadges"), previousApp, KConfig::Notify);
+        else application.deleteEntry(QStringLiteral("ShowBadges"), KConfig::Notify);
+        config->sync();
+    });
+    badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
+    application.writeEntry(QStringLiteral("ShowBadges"), true, KConfig::Notify);
+    config->sync();
+
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.FerdiumGated"));
+    item.setId(QStringLiteral("ferdium"));
+    item.setIconPixmap(topRightChatBadge(qRgba(230, 40, 40, 220), 64));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 2;
+    }));
+    badges.writeEntry(QStringLiteral("InTaskManager"), false, KConfig::Notify);
+    config->sync();
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 0;
+    }));
+    badges.writeEntry(QStringLiteral("InTaskManager"), true, KConfig::Notify);
+    application.writeEntry(QStringLiteral("ShowBadges"), false, KConfig::Notify);
+    config->sync();
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatUnreadState(QStringLiteral("ferdium")) == 0;
+    }));
 }
 
 TEST_CASE("Notification tracker canonicalizes identities and keeps replacements at one", "[notification][tracker]")
@@ -1842,6 +2077,53 @@ TEST_CASE("Telegram SNI ToolTip count and updater instance IDs populate tray-onl
     REQUIRE(waitFor([&] {
         return tracker.sniChatUnreadState(QStringLiteral("org.telegram.desktop")) == 0
             && tracker.sniChatMentionCount(QStringLiteral("org.telegram.desktop")) == 0;
+    }));
+}
+
+TEST_CASE("Element window title and SNI ToolTip adapters extract activity dot and max highlight counts", "[notification][element][titles]")
+{
+    for (const QString &appId : {QStringLiteral("io.element.Element"), QStringLiteral("im.riot.Riot.desktop"), QStringLiteral("element-desktop")}) {
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Element | #general")}) == 0);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Element * | #general")}) == 1);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Element [offline] • | #general")}) == 1);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Element [offline] [3] | #general")}) == 2);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("Element [offline] [3] | #general")}) == 3);
+        CHECK(krema::DockModel::chatUnreadStateForTitles(appId, {QStringLiteral("Element * | #a"), QStringLiteral("Element [2] | #b"), QStringLiteral("Element [6] | #c")}) == 2);
+        CHECK(krema::DockModel::chatMentionCountForTitles(appId, {QStringLiteral("Element * | #a"), QStringLiteral("Element [2] | #b"), QStringLiteral("Element [6] | #c")}) == 6);
+    }
+
+    krema::test::StatusNotifierItemPeer item(QStringLiteral("org.example.fixture.ElementTooltip"));
+    item.setId(QStringLiteral("element-desktop"));
+    item.setTitle(QStringLiteral("Element"));
+    item.setIconPixmap(blankBadge());
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{
+        QString(), {}, QStringLiteral("Element [offline] [5] | #matrix:matrix.org"), QString()}));
+    REQUIRE(item.start());
+    krema::test::StatusNotifierWatcherPeer watcher;
+    watcher.setRegisteredItems({item.itemAddress()});
+    REQUIRE(watcher.start());
+
+    ScopedTracker scoped;
+    auto &tracker = scoped.tracker;
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatMentionCount(QStringLiteral("io.element.Element.desktop")) == 5
+            && tracker.sniChatUnreadState(QStringLiteral("io.element.Element.desktop")) == 2;
+    }));
+
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{
+        QString(), {}, QStringLiteral("Element * | #matrix:matrix.org"), QString()}));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatMentionCount(QStringLiteral("io.element.Element.desktop")) == 0
+            && tracker.sniChatUnreadState(QStringLiteral("io.element.Element.desktop")) == 1;
+    }));
+
+    // A neutral tooltip means read, even if the icon itself contains red.
+    item.setIconPixmap(topRightChatBadge(qRgba(235, 55, 55, 255), 14));
+    item.setToolTip(QVariant::fromValue(krema::test::ToolTipData{
+        QString(), {}, QStringLiteral("Element | #matrix:matrix.org"), QString()}));
+    REQUIRE(waitFor([&] {
+        return tracker.sniChatMentionCount(QStringLiteral("io.element.Element.desktop")) == 0
+            && tracker.sniChatUnreadState(QStringLiteral("io.element.Element.desktop")) == 0;
     }));
 }
 

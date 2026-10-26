@@ -88,6 +88,8 @@ Krema brings back the beloved dock experience for KDE Plasma users who miss Latt
 - **Discord-family chat badges** — Discord and Vesktop recognize `• Discord` unread and `(N) Discord` mention titles; WebCord recognizes `*WebCord` unread and `[N] WebCord` mention titles. Their tray icons add unread or mention states, while Unity Launcher counts remain authoritative.
 - **Mattermost Desktop badges** — Recognizes `mattermost`, `mattermost-desktop`, and `com.mattermost.desktop`; detects Mention and Unread from lower-right tray-icon pixels or tooltip text, with Mention taking precedence
 - **Telegram Desktop badges (unreleased)** — Supports `org.telegram.desktop`, `telegram`, `telegram-desktop`, and `telegramdesktop`; reads theme icon names or composited tray badges, with window-title counts as a fallback
+- **Element Desktop badges (unreleased)** — Recognizes `io.element.element`, `im.riot.riot`, `element`, and `element-desktop`; `Element [N]` titles report a Mention count, while `Element *` / `Element •` titles, optionally with `[offline]`, report Unread. Grouped windows keep the highest mention count.
+- **Ferdium Desktop badges (unreleased)** — Uses direct-message D-Bus counts for numeric Mention badges and indirect-message counts for state-only Unread badges. When both counts are zero, top-right tray-icon markers provide a red Mention or teal Unread fallback; owner changes invalidate stale state.
 - **Badge Display Modes** — Choose between Number, Dot, or Off
 - **6 Attention Animations** — Bounce, Wiggle, Pulse, Glow, Dot Color, and Blink
 - **Task Progress Bar** — Progress indicator on dock icons (e.g. file copy in Dolphin)

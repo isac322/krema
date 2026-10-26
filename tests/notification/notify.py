@@ -32,6 +32,10 @@ CHAT_SNI_SERVICE = "org.krema.e2e.ChatSni"
 CHAT_SNI_PATH = "/StatusNotifierItem"
 CHAT_SNI_CONTROL_INTERFACE = "org.krema.e2e.ChatSni"
 NOTIFICATION_CONTROL_INTERFACE = "org.krema.e2e.NotificationControl"
+FERDIUM_SERVICE = "org.ferdium.Ferdium"
+FERDIUM_PATH = "/org/ferdium"
+FERDIUM_INTERFACE = "org.ferdium.Ferdium"
+FERDIUM_CONTROL_INTERFACE = "org.krema.e2e.Ferdium"
 
 def notification_interface():
     bus = dbus.SessionBus()
@@ -323,6 +327,46 @@ class ChatSniServer(dbus.service.Object):
         return dbus.Dictionary(self._props, signature="sv")
 
 
+def ferdium(args: argparse.Namespace) -> None:
+    bus = dbus.SessionBus()
+    proxy = bus.get_object(FERDIUM_SERVICE, FERDIUM_PATH)
+    dbus.Interface(proxy, FERDIUM_CONTROL_INTERFACE).SetCounts(dbus.UInt32(args.direct), dbus.UInt32(args.indirect))
+
+
+class FerdiumServer(dbus.service.Object):
+    """Ferdium's own D-Bus unread counters (src/lib/dbus/Ferdium.ts)."""
+
+    def __init__(self, bus: dbus.Bus) -> None:
+        self._bus_name = dbus.service.BusName(FERDIUM_SERVICE, bus=bus, do_not_queue=True)
+        super().__init__(self._bus_name, FERDIUM_PATH)
+        self._props = {
+            "UnreadDirectMessageCount": dbus.UInt32(0),
+            "UnreadIndirectMessageCount": dbus.UInt32(0),
+        }
+
+    @dbus.service.method(FERDIUM_CONTROL_INTERFACE, in_signature="uu")
+    def SetCounts(self, direct, indirect) -> None:
+        self._props["UnreadDirectMessageCount"] = dbus.UInt32(direct)
+        self._props["UnreadIndirectMessageCount"] = dbus.UInt32(indirect)
+        self.PropertiesChanged(
+            dbus.String(FERDIUM_INTERFACE),
+            dbus.Dictionary(self._props, signature="sv"),
+            dbus.Array([], signature="s"),
+        )
+
+    @dbus.service.signal(DBUS_PROPERTIES_INTERFACE, signature="sa{sv}as")
+    def PropertiesChanged(self, interface_name, changed_properties, invalidated_properties) -> None:
+        pass
+
+    @dbus.service.method(DBUS_PROPERTIES_INTERFACE, in_signature="ss", out_signature="v")
+    def Get(self, _interface_name: str, property_name: str):
+        return self._props[str(property_name)]
+
+    @dbus.service.method(DBUS_PROPERTIES_INTERFACE, in_signature="s", out_signature="a{sv}")
+    def GetAll(self, _interface_name: str):
+        return dbus.Dictionary(self._props, signature="sv")
+
+
 class NotificationServer(dbus.service.Object):
     """Minimal fd.o server plus KDE watcher registration for a private session."""
 
@@ -469,6 +513,7 @@ def serve(args: argparse.Namespace) -> None:
     elif args.chat_sni_id:
         sni_item = ChatSniServer(bus, args.chat_sni_id, args.chat_sni_title)
         sni_watcher = _register_sni(bus, CHAT_SNI_SERVICE, CHAT_SNI_PATH)
+    ferdium_server = FerdiumServer(bus) if args.with_ferdium else None
     server = NotificationServer(
         bus,
         Path(args.ready_file),
@@ -482,6 +527,7 @@ def serve(args: argparse.Namespace) -> None:
         server.stop()
         del sni_watcher
         del sni_item
+        del ferdium_server
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
@@ -518,6 +564,11 @@ def parser() -> argparse.ArgumentParser:
     chat.add_argument("--tooltip-body", default="")
     chat.set_defaults(handler=chat_sni)
 
+    counters = commands.add_parser("ferdium", help="update the test-owned Ferdium unread counters")
+    counters.add_argument("--direct", type=int, required=True)
+    counters.add_argument("--indirect", type=int, required=True)
+    counters.set_defaults(handler=ferdium)
+
     server = commands.add_parser("serve", help="own fd.o notifications for a private E2E session")
     server.add_argument("--ready-file", required=True)
     server.add_argument("--watcher-ready-file", required=True)
@@ -526,6 +577,7 @@ def parser() -> argparse.ArgumentParser:
     server.add_argument("--with-slack-sni", action="store_true")
     server.add_argument("--chat-sni-id", default="", help="host a chat-app StatusNotifierItem with this Id")
     server.add_argument("--chat-sni-title", default="")
+    server.add_argument("--with-ferdium", action="store_true", help="own org.ferdium.Ferdium with scriptable counters")
     server.set_defaults(handler=serve)
     return root
 

@@ -13,6 +13,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QLoggingCategory>
+#include <QRegularExpression>
 
 #include <algorithm>
 #include <cmath>
@@ -31,7 +32,11 @@ static QString stripDesktopSuffix(const QString &id)
 
 static QStringList fallbackDesktopIds(const QString &desktopFile)
 {
-    const QString stem = stripDesktopSuffix(desktopFile.trimmed().toLower());
+    QString stem = stripDesktopSuffix(desktopFile.trimmed().toLower());
+    static const QRegularExpression telegramInstanceSuffix(QStringLiteral("^(org\\.telegram\\.desktop)\\._[0-9a-f]{32}$"));
+    if (const auto match = telegramInstanceSuffix.match(stem); match.hasMatch()) {
+        stem = match.captured(1);
+    }
     QStringList candidates;
     if (stem == QLatin1String("discord") || stem == QLatin1String("com.discordapp.discord") || stem == QLatin1String("com.discord.app")) {
         candidates = {QStringLiteral("discord.desktop"), QStringLiteral("com.discordapp.Discord.desktop"), QStringLiteral("com.discordapp.discord.desktop")};
@@ -43,6 +48,11 @@ static QStringList fallbackDesktopIds(const QString &desktopFile)
                || stem == QLatin1String("com.mattermost.desktop") || stem == QLatin1String("com.mattermost")) {
         candidates = {QStringLiteral("mattermost.desktop"), QStringLiteral("mattermost-desktop.desktop"),
                       QStringLiteral("com.mattermost.Desktop.desktop"), QStringLiteral("com.mattermost.desktop.desktop")};
+    } else if (stem == QLatin1String("org.telegram") || stem == QLatin1String("org.telegram.desktop")
+               || stem == QLatin1String("telegram") || stem == QLatin1String("telegram-desktop")
+               || stem == QLatin1String("telegramdesktop")) {
+        candidates = {QStringLiteral("org.telegram.desktop.desktop"), QStringLiteral("telegram.desktop"),
+                      QStringLiteral("telegram-desktop.desktop"), QStringLiteral("telegramdesktop.desktop")};
     } else {
         return {};
     }

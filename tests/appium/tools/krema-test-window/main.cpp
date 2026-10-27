@@ -154,6 +154,14 @@ protected:
         record(QJsonObject{{QStringLiteral("event"), QStringLiteral("drag-start")},
                            {QStringLiteral("formats"), formats},
                            {QStringLiteral("urls"), urls}});
+        // Also expose the URI list as text/plain: on distro Qt stacks, Qt Quick
+        // DropEvent.text is the only accessor that surfaces this payload.
+        QStringList uriLines;
+        uriLines.reserve(localUrls.size());
+        for (const QUrl &url : localUrls) {
+            uriLines.append(url.toString());
+        }
+        mime->setText(uriLines.join(QLatin1Char('\n')));
 
         QDrag drag(this);
         drag.setMimeData(mime);

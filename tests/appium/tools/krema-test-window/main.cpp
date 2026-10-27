@@ -15,22 +15,33 @@
 // tell which window's live content a preview thumbnail shows.
 
 #include <QApplication>
-#include <QKeyEvent>
-#include <QColor>
 #include <QCommandLineParser>
+#include <QColor>
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QDrag>
+#include <QFile>
+#include <QFileInfo>
+#include <QGuiApplication>
 #include <QIcon>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QKeyEvent>
 #include <QLabel>
-#include <QPalette>
 #include <QMainWindow>
+#include <QMimeData>
+#include <QMouseEvent>
+#include <QPalette>
 #include <QPushButton>
 #include <QSocketNotifier>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <csignal>
 #include <cstdio>
+#include <optional>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -81,6 +92,90 @@ protected:
 private:
     QString m_title;
 };
+class DragSourceWindow : public QWidget
+{
+public:
+    DragSourceWindow(QStringList paths, QString eventsPath)
+        : m_paths(std::move(paths))
+        , m_eventsPath(std::move(eventsPath))
+    {
+        setWindowTitle(QStringLiteral("PR137 external MIME source"));
+        resize(240, 120);
+    }
+
+    void record(const QJsonObject &fields) const
+    {
+        QFile file(m_eventsPath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            return;
+        }
+        QJsonObject event(fields);
+        event.insert(QStringLiteral("pid"), QCoreApplication::applicationPid());
+        const QByteArray line = QJsonDocument(event).toJson(QJsonDocument::Compact) + '\n';
+        file.write(line);
+        file.flush();
+        if (file.handle() >= 0) {
+            ::fsync(file.handle());
+        }
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            m_pressPosition = event->position().toPoint();
+        }
+        QWidget::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (!event->buttons().testFlag(Qt::LeftButton) || !m_pressPosition.has_value()
+            || (event->position().toPoint() - *m_pressPosition).manhattanLength() < QApplication::startDragDistance()) {
+            QWidget::mouseMoveEvent(event);
+            return;
+        }
+        m_pressPosition.reset();
+
+        auto *mime = new QMimeData;
+        QJsonArray urls;
+        QList<QUrl> localUrls;
+        localUrls.reserve(m_paths.size());
+        for (const QString &path : m_paths) {
+            const QUrl url = QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath());
+            localUrls.append(url);
+            urls.append(url.toString());
+        }
+        mime->setUrls(localUrls);
+        QJsonArray formats;
+        for (const QString &format : mime->formats()) {
+            formats.append(format);
+        }
+        record(QJsonObject{{QStringLiteral("event"), QStringLiteral("drag-start")},
+                           {QStringLiteral("formats"), formats},
+                           {QStringLiteral("urls"), urls}});
+
+        QDrag drag(this);
+        drag.setMimeData(mime);
+        const Qt::DropAction action = drag.exec(Qt::CopyAction);
+        record(QJsonObject{{QStringLiteral("event"), QStringLiteral("drag-finished")},
+                           {QStringLiteral("action"), int(action)}});
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            m_pressPosition.reset();
+        }
+        QWidget::mouseReleaseEvent(event);
+    }
+
+private:
+    QStringList m_paths;
+    QString m_eventsPath;
+    std::optional<QPoint> m_pressPosition;
+};
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -108,6 +203,10 @@ int main(int argc, char **argv)
     parser.addOption({QStringLiteral("badge"), QStringLiteral("Unity LauncherEntry badge count"), QStringLiteral("n"), QStringLiteral("-1")});
     parser.addOption({QStringLiteral("color"), QStringLiteral("Solid background color of the window content (e.g. red, #00ff00)"), QStringLiteral("color")});
     parser.addOption({QStringLiteral("icon-path"), QStringLiteral("Explicit local test icon path"), QStringLiteral("path")});
+    parser.addOption({QStringLiteral("drag-source"), QStringLiteral("Run as an external MIME drag source")});
+    parser.addOption({QStringLiteral("events"), QStringLiteral("JSONL event log path"), QStringLiteral("path")});
+    parser.addPositionalArgument(QStringLiteral("paths"), QStringLiteral("Local files to include in the drag"));
+    parser.setOptionsAfterPositionalArgumentsMode(QCommandLineParser::ParseAsOptions);
     parser.process(app);
 
     ::socketpair(AF_UNIX, SOCK_STREAM, 0, s_sigFd);
@@ -119,6 +218,22 @@ int main(int argc, char **argv)
     sa.sa_flags = SA_RESTART;
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGINT, &sa, nullptr);
+
+    if (parser.isSet(QStringLiteral("drag-source"))) {
+        const QString eventsPath = parser.value(QStringLiteral("events"));
+        const QStringList paths = parser.positionalArguments();
+        if (eventsPath.isEmpty() || paths.isEmpty()) {
+            parser.error(QStringLiteral("--drag-source requires --events and at least one path"));
+        }
+        DragSourceWindow window(paths, eventsPath);
+        QObject::connect(&app, &QCoreApplication::aboutToQuit, &window, [&window] {
+            window.close();
+        });
+        window.show();
+        window.record(QJsonObject{{QStringLiteral("event"), QStringLiteral("source-started")}});
+        return app.exec();
+    }
+
 
     const QString title = parser.value(QStringLiteral("title"));
     KeyLogger keyLogger(title);

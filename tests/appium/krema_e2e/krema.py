@@ -521,6 +521,10 @@ class Krema:
             timeout=timeout,
             message="Settings window",
         )
+        # Post-restart Wayland activation can leave Settings mapped but inactive; use
+        # the existing KWin test setup to activate it before input.
+        if (active := kwin.active_window()) is None or active.internal_id != win.internal_id:
+            kwin.activate(win.internal_id)
         wait_until(
             lambda: (active := kwin.active_window()) is not None and active.internal_id == win.internal_id,
             timeout=timeout,

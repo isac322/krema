@@ -250,6 +250,7 @@ def open_page(krema: Krema, name: str) -> None:
         target = krema.screen_rect(item, "settings")
         if target.x >= W:
             item.click()
+            inp.key("Return")
         else:
             click_el(krema, item)
     wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")

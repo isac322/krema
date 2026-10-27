@@ -244,10 +244,17 @@ def scroll_into_view(krema: Krema, xpath: str):
 
 
 def open_page(krema: Krema, name: str) -> None:
-    """Show page ``name`` with a real click on its sidebar entry."""
+    """Show page ``name`` through its Settings sidebar entry."""
     item = krema.wait_for(f"{SIDEBAR}[@name='{name}']")
     if not has_state(item, "checked"):
-        click_el(krema, item)
+        target = krema.screen_rect(item, "settings")
+        if target.x >= W:
+            # Qt can drop a real pointer click while crossing to a freshly
+            # mapped secondary Settings window; invoke the sidebar action
+            # through its AT-SPI Press action in that case.
+            item.click()
+        else:
+            click_el(krema, item)
     wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")
 
 

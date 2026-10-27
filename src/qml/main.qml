@@ -1526,10 +1526,13 @@ Item {
                     return urls
                 }
 
-                if (typeof drop.getDataAsString !== "function") {
-                    return urls
+                let data = ""
+                if (typeof drop.getDataAsString === "function") {
+                    data = drop.getDataAsString("text/uri-list")
                 }
-                let data = drop.getDataAsString("text/uri-list")
+                if (!data && typeof drop.text === "string") {
+                    data = drop.text
+                }
                 if (!data) {
                     return urls
                 }

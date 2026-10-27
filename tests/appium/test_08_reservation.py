@@ -174,8 +174,17 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
     if edge != config.EDGE_BOTTOM:
         assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
     settings = krema.open_settings()
-    # Use the real pointer move to cancel keyboard/hover state and close any preview.
-    krema.move_away()
+    # Park the real pointer beyond the selected edge to cancel keyboard/hover
+    # state and close any preview without leaving it over the dock surface.
+    park = {
+        config.EDGE_TOP: (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT - 1),
+        config.EDGE_BOTTOM: (env.SCREEN_WIDTH // 2, 0),
+        config.EDGE_LEFT: (env.SCREEN_WIDTH - 1, env.SCREEN_HEIGHT // 2),
+        config.EDGE_RIGHT: (0, env.SCREEN_HEIGHT // 2),
+    }[edge]
+    inp.move(*park)
+    wait_until(lambda: kwin.cursor_pos() == park, message="pointer parked outside dock/preview")
+    wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed after moving away")
     if edge != config.EDGE_BOTTOM:
         _wait_shown_at_edge(krema, name)
         surface, rest = wait_stable(

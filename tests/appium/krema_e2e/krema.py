@@ -358,9 +358,18 @@ class Krema:
         return None
 
     def to_screen(self, rect: Rect, surface: str = "dock") -> Rect:
-        """Convert a surface-local AT-SPI rect (what ``element.rect`` returns
-        on Wayland) to global screen coordinates."""
+        """Convert a surface-local AT-SPI rect to global screen coordinates.
+
+        Secondary-output Settings children may already use global coordinates;
+        primary-output and dock/preview children remain surface-local.
+        """
         origin = wait_until(lambda: self.surface_rect(surface), timeout=5, message=f"{surface} surface geometry")
+        if (
+            origin.x > 0
+            and origin.contains(rect.x, rect.y)
+            and origin.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
+        ):
+            return rect
         return Rect(origin.x + rect.x, origin.y + rect.y, rect.width, rect.height)
 
     def screen_rect(self, element: WebElement, surface: str = "dock") -> Rect:

@@ -4,12 +4,13 @@
 ScreenShot2.
 
 KWin scripts cannot return values over D-Bus directly, so :func:`evaluate`
-exports a one-shot D-Bus object in this process and the script reports back
-with ``callDBus()``.
+queues a one-shot command in one persistent private KWin script. The script
+reports the command result back to this process with ``callDBus()``.
 """
 
 from __future__ import annotations
 
+import atexit
 import base64
 import io
 import itertools
@@ -17,10 +18,12 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from PIL import Image
 from gi.repository import Gio, GLib
@@ -30,45 +33,265 @@ from . import dbus, env
 _IFACE_XML = """
 <node>
   <interface name="org.kde.krema.e2e.Oracle">
+    <method name="ready"/>
     <method name="result">
       <arg type="s" name="token" direction="in"/>
       <arg type="s" name="json" direction="in"/>
+    </method>
+    <method name="take">
+      <arg type="s" name="token" direction="out"/>
+      <arg type="s" name="source" direction="out"/>
     </method>
   </interface>
 </node>
 """
 _ORACLE_PATH = "/Oracle"
 _ORACLE_IFACE = "org.kde.krema.e2e.Oracle"
+_KGLOBALACCEL_SERVICE = "org.kde.kglobalaccel"
+_KGLOBALACCEL_PATH = "/kglobalaccel"
+_KGLOBALACCEL_IFACE = "org.kde.KGlobalAccel"
+_KGLOBALACCEL_COMPONENT_IFACE = "org.kde.kglobalaccel.Component"
 _counter = itertools.count()
-_results: dict[str, str] = {}
-_registered = False
 
 
-def _ensure_oracle() -> str:
-    global _registered
-    bus = dbus.session_bus()
-    if not _registered:
+class _Oracle:
+    def __init__(self) -> None:
+        self.bus = dbus.session_bus()
+        self.registration_id = 0
+        self.plugin: str | None = None
+        self.script_path: str | None = None
+        self.component_path: str | None = None
+        self.action: str | None = None
+        self.pending: tuple[str, str] | None = None
+        self.current_token: str | None = None
+        self.results: dict[str, str] = {}
+        self.ready = False
+        self.startup: dict[str, Any] = {
+            "components": [], "matches": {}, "api_errors": {},
+        }
         info = Gio.DBusNodeInfo.new_for_xml(_IFACE_XML).interfaces[0]
 
         def on_call(_conn, _sender, _path, _iface, method, params, invocation):
-            token, payload = params.unpack()
-            _results[token] = payload
-            invocation.return_value(None)
+            if method == "ready":
+                self.ready = True
+                invocation.return_value(None)
+                return
+            if method == "result":
+                token, payload = params.unpack()
+                if token == self.current_token and token not in self.results:
+                    self.results[token] = payload
+                invocation.return_value(None)
+                return
+            if method == "take":
+                command = self.pending
+                self.pending = None
+                invocation.return_value(
+                    GLib.Variant("(ss)", command if command is not None else ("", ""))
+                )
+                return
+            invocation.return_dbus_error(
+                "org.kde.krema.e2e.Oracle.UnknownMethod",
+                f"unknown method {method}",
+            )
 
-        bus.register_object(_ORACLE_PATH, info, on_call, None, None)
-        _registered = True
-    return bus.get_unique_name()
+        self.registration_id = self.bus.register_object(
+            _ORACLE_PATH, info, on_call, None, None
+        )
+
+    def _component_for_action(self) -> str | None:
+        try:
+            components = dbus.call(
+                _KGLOBALACCEL_SERVICE,
+                _KGLOBALACCEL_PATH,
+                _KGLOBALACCEL_IFACE,
+                "allComponents",
+            )
+        except GLib.Error as error:
+            self.startup["api_errors"]["allComponents"] = str(error)
+            return None
+        self.startup["components"] = components
+        self.startup["matches"] = {}
+        for path in components:
+            method = "shortcutNames"
+            try:
+                names = dbus.call(
+                    _KGLOBALACCEL_SERVICE, path, _KGLOBALACCEL_COMPONENT_IFACE, method,
+                )
+                if self.action not in names:
+                    continue
+                self.startup["matches"][path] = None
+                method = "allShortcutInfos"
+                infos = dbus.call(
+                    _KGLOBALACCEL_SERVICE, path, _KGLOBALACCEL_COMPONENT_IFACE, method,
+                )
+            except GLib.Error as error:
+                self.startup["api_errors"][f"{path}/{method}"] = str(error)
+                continue
+            matching = [info for info in infos if info[0] == self.action]
+            self.startup["matches"][path] = matching
+            if any(not any(info[6]) for info in matching):
+                return path
+        return None
+
+    def _wait_until_ready(self) -> None:
+        ctx = GLib.MainContext.default()
+        deadline = time.monotonic() + 10.0
+        while True:
+            if self.ready:
+                component = self._component_for_action()
+                if component is not None:
+                    self.component_path = component
+                    return
+            if time.monotonic() > deadline:
+                if not self.ready:
+                    self._component_for_action()
+                raise TimeoutError(
+                    f"KGlobalAccel action {self.action} did not become ready within 10s; "
+                    f"ready={self.ready}; startup={json.dumps(self.startup)}"
+                )
+            if not ctx.iteration(False):
+                time.sleep(0.005)
+
+    def start(self) -> None:
+        token = uuid4().hex
+        plugin = f"krema_e2e_oracle_{token}"
+        self.action = f"krema_e2e_action_{token}"
+        script = (
+            "function dispatch() {\n"
+            f"  callDBus({json.dumps(self.bus.get_unique_name())}, "
+            f"{json.dumps(_ORACLE_PATH)}, {json.dumps(_ORACLE_IFACE)}, 'take', "
+            "function(token, source) {\n"
+            "    if (!token) return;\n"
+            "    const report = function(value) {\n"
+            f"      callDBus({json.dumps(self.bus.get_unique_name())}, "
+            f"{json.dumps(_ORACLE_PATH)}, {json.dumps(_ORACLE_IFACE)}, "
+            "'result', token, JSON.stringify(value === undefined ? null : value));\n"
+            "    };\n"
+            "    try { new Function('report', source)(report); }\n"
+            "    catch (e) { report({__error__: String(e)}); }\n"
+            "  });\n"
+            "}\n"
+            f"registerShortcut({json.dumps(self.action)}, {json.dumps(self.action)}, "
+            "'', function() { dispatch(); });\n"
+            f"callDBus({json.dumps(self.bus.get_unique_name())}, "
+            f"{json.dumps(_ORACLE_PATH)}, {json.dumps(_ORACLE_IFACE)}, 'ready');\n"
+        )
+        try:
+            file = tempfile.NamedTemporaryFile(
+                "w", suffix=".js", prefix="krema-e2e-oracle-", delete=False
+            )
+            self.script_path = file.name
+            with file:
+                file.write(script)
+            script_id = dbus.call(
+                "org.kde.KWin",
+                "/Scripting",
+                "org.kde.kwin.Scripting",
+                "loadScript",
+                "ss",
+                self.script_path,
+                plugin,
+            )
+            if script_id < 0:
+                raise RuntimeError(f"KWin did not load oracle script {plugin}")
+            self.plugin = plugin
+            dbus.call(
+                "org.kde.KWin",
+                f"/Scripting/Script{script_id}",
+                "org.kde.kwin.Script",
+                "run",
+            )
+            self._wait_until_ready()
+            os.unlink(self.script_path)
+            self.script_path = None
+        except BaseException:
+            self.close()
+            raise
+
+    def evaluate(self, js: str, timeout: float) -> Any:
+        token = f"t{os.getpid()}_{next(_counter)}"
+        self.current_token = token
+        self.pending = (token, js)
+        try:
+            dbus.call(
+                _KGLOBALACCEL_SERVICE,
+                self.component_path,
+                _KGLOBALACCEL_COMPONENT_IFACE,
+                "invokeShortcut",
+                "s",
+                self.action,
+            )
+            payload = self._pump_until(token, timeout)
+        finally:
+            self.pending = None
+            self.results.pop(token, None)
+            self.current_token = None
+        value = json.loads(payload)
+        if isinstance(value, dict) and "__error__" in value:
+            raise RuntimeError(f"KWin script error: {value['__error__']}")
+        return value
+
+    def _pump_until(self, token: str, timeout: float) -> str:
+        ctx = GLib.MainContext.default()
+        deadline = time.monotonic() + timeout
+        while token not in self.results:
+            if time.monotonic() > deadline:
+                raise TimeoutError(
+                    f"KWin script {token} did not report back within {timeout}s"
+                )
+            if not ctx.iteration(False):
+                time.sleep(0.005)
+        return self.results.pop(token)
+
+    def close(self) -> None:
+        if self.plugin is not None:
+            try:
+                dbus.call(
+                    "org.kde.KWin",
+                    "/Scripting",
+                    "org.kde.kwin.Scripting",
+                    "unloadScript",
+                    "s",
+                    self.plugin,
+                )
+            except GLib.Error:
+                pass
+            self.plugin = None
+        try:
+            if self.script_path is not None:
+                try:
+                    os.unlink(self.script_path)
+                except FileNotFoundError:
+                    pass
+                self.script_path = None
+        finally:
+            if self.registration_id:
+                self.bus.unregister_object(self.registration_id)
+                self.registration_id = 0
 
 
-def _pump_until(token: str, timeout: float) -> str:
-    ctx = GLib.MainContext.default()
-    deadline = time.monotonic() + timeout
-    while token not in _results:
-        if time.monotonic() > deadline:
-            raise TimeoutError(f"KWin script {token} did not report back within {timeout}s")
-        if not ctx.iteration(False):
-            time.sleep(0.005)
-    return _results.pop(token)
+_oracle: _Oracle | None = None
+# D-Bus callbacks never acquire this gate while evaluate pumps their context.
+_evaluation_lock = threading.Lock()
+
+
+def _ensure_oracle() -> _Oracle:
+    global _oracle
+    if _oracle is None:
+        oracle = _Oracle()
+        oracle.start()
+        _oracle = oracle
+    return _oracle
+
+
+def _close_oracle() -> None:
+    global _oracle
+    if _oracle is not None:
+        _oracle.close()
+        _oracle = None
+
+
+atexit.register(_close_oracle)
 
 
 def evaluate(js: str, timeout: float = 10.0) -> Any:
@@ -78,32 +301,12 @@ def evaluate(js: str, timeout: float = 10.0) -> Any:
     with any JSON-serializable value. KWin's JS API (``workspace``,
     ``workspace.windowList()``, ``workspace.activeWindow`` ...) is available.
     """
-    service = _ensure_oracle()
-    token = f"t{os.getpid()}_{next(_counter)}"
-    plugin = f"krema_e2e_{token}"
-    script = (
-        "function report(v) {"
-        f" callDBus({json.dumps(service)}, {json.dumps(_ORACLE_PATH)}, {json.dumps(_ORACLE_IFACE)},"
-        f" 'result', {json.dumps(token)}, JSON.stringify(v === undefined ? null : v)); }}\n"
-        "try {\n" + js + "\n} catch (e) { report({__error__: String(e)}); }\n"
-    )
-    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
-        f.write(script)
-        path = f.name
+    if not _evaluation_lock.acquire(blocking=False):
+        raise RuntimeError("KWin oracle does not support overlapping evaluate calls")
     try:
-        script_id = dbus.call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting", "loadScript", "ss", path, plugin)
-        dbus.call("org.kde.KWin", f"/Scripting/Script{script_id}", "org.kde.kwin.Script", "run")
-        payload = _pump_until(token, timeout)
+        return _ensure_oracle().evaluate(js, timeout)
     finally:
-        try:
-            dbus.call("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", plugin)
-        except GLib.Error:
-            pass
-        os.unlink(path)
-    value = json.loads(payload)
-    if isinstance(value, dict) and "__error__" in value:
-        raise RuntimeError(f"KWin script error: {value['__error__']}")
-    return value
+        _evaluation_lock.release()
 
 
 @dataclass(frozen=True)

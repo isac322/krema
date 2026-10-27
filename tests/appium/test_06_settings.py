@@ -373,15 +373,14 @@ def hover_ready(k: Krema, name: str = "Alpha") -> None:
     wait_until(lambda: zoomed_width(k, name, rest) > icon, timeout=5, message=f"dock item {name} hovered (zoomed)")
 
 
-def open_menu(k: Krema, name: str = "Alpha") -> kwin.Window:
-    hover_ready(k, name)
-    return k.open_dock_context_menu()
+def open_menu(k: Krema) -> kwin.Window:
+    return k.open_dock_context_menu_keyboard()
 
 
 def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
-    """Reveal via ``name``, open dock-only Settings, then head for the dialog."""
-    hover_ready(k, name)
-    win = k.open_settings(name, ENTRIES)
+    """Wait for fixture ``name``, then open Settings through the keyboard menu."""
+    k.wait_for_item(name)
+    win = k.open_settings()
     k.move_away()
     return win
 
@@ -915,7 +914,7 @@ def test_set008_follow_active_shortcuts_act_on_the_shown_dock(krema: Krema, apps
 
 # ------------------------------------------------------------------- SET-009
 def _quit_via_menu(k: Krema) -> int:
-    k.open_dock_context_menu()
+    k.open_dock_context_menu_keyboard()
     k.choose_context_menu_entry("Quit Krema", DOCK_CONTEXT_MENU_ENTRIES)
     assert k.process is not None
     return k.process.wait(20)

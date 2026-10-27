@@ -76,6 +76,14 @@ The existing context-menu Settings entry, keyboard paths, and multi-monitor
 lifecycle remain covered by their original cases. Click-policy, reservation,
 and task-section rows check their real controls and consumer effects.
 
+**Automation note:** General Settings and reservation tests invoke Focus Dock,
+wait for KWin compositor keyboard focus, press Shift+F10, and choose Settings.
+They retain their control, live-update, KConfig, KWin geometry, and persistence
+checks. Pointer movement ends dock keyboard navigation before hide/reveal checks.
+The manual scenarios below keep right-click entry to Settings. CTX-006/010/012
+and SET-008's second-output reopen continue to test pointer routing. Reruns of
+the migrated Settings and reservation entry paths are pending.
+
 
 ---
 
@@ -262,6 +270,10 @@ and task-section rows check their real controls and consumer effects.
 
 **Verification:** window list (window counts), screenshot (dialog + docks)
 **Automated (E2E, run with `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py`):** tests/appium/test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings, ::test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen, ::test_set008_follow_active_shortcuts_act_on_the_shown_dock (Toggle Dock and Focus Dock; the dock is moved with the Focus trigger), ::test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen (pointer at the second output's bottom edge). Meta+N is not checked end to end: activating entry N has no per-dock observable result and remains covered by the integration test.
+
+The second-output reopen uses a real padding right-click and requires the
+menu's x coordinate to be at least one output width (`x >= W`). SET-008's
+initial and post-close Settings opens use the keyboard path described above.
 
 ---
 

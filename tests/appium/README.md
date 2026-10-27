@@ -362,12 +362,19 @@ keyboard traversal, magnified hit targets, and grouped-preview retargeting.
 Each scenario's `**Automated:**` lines point back to the tests below. Rows with
 named automated nodes assert on the AT-SPI tree (states, names, geometry),
 the KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
-screenshots, or AT-SPI events. Existing pass statuses reflect the recorded
-suite results. Issue 54 rows remain `pending` until the parent completes Tier 2
-and packaged Tier 3 QA.
+screenshots, or AT-SPI events. Existing pass statuses reflect earlier recorded
+suite results. Reruns of the revised menu helpers and migrated Settings/reservation
+entry paths are pending. Issue 54 rows remain `pending` until the parent completes
+Tier 2 and packaged Tier 3 QA.
 The issue #55 regression `QA-PREV-01` has recorded pre-fix and fixed results:
 the pre-fix run failed after a 33 ms entry, while the fixed run passed three
 fresh opens in one run. The fast path is tested separately from pixel waits.
+
+General Settings and reservation tests open Settings through Focus Dock,
+wait for KWin compositor keyboard focus, press Shift+F10, and select Settings.
+CTX-006/010/012 and SET-008's second-output reopen keep real padding right-clicks;
+application-menu tests keep right-clicking their target items. The pointer helper
+requires its caller to keep the dock visible and has no keyboard fallback.
 
 `MOUSE-017` is a native KWin test, not an Appium fixture. Its test-only
 scripted effect reads `EffectWindow.iconGeometry` independently of
@@ -788,11 +795,13 @@ Input and UI flows:
 | `click_item(name, button="left")`, `scroll_item(name, dy=15)` | Real pointer click or wheel on an item. |
 | `move_away(close_preview=True)` | Glide the pointer to the top centre, then wait for the preview popup to be dismissed (the item stays zoomed while the preview is open). `close_preview=False` only moves the pointer. |
 | `open_context_menu(name) -> kwin.Window` | Right-click and wait for the QMenu popup; returns its KWin window (screen geometry). |
-| `open_dock_context_menu() -> kwin.Window` | Right-click visible dock padding, including an empty dock; returns its KWin popup. `DOCK_CONTEXT_MENU_ENTRIES` gives Settings..., About Krema, Quit Krema. |
+| `open_dock_context_menu() -> kwin.Window` | Right-click dock padding, including an empty dock; the caller must keep the dock visible. Returns its KWin popup. `DOCK_CONTEXT_MENU_ENTRIES` gives Settings..., About Krema, Quit Krema. |
+| `open_dock_context_menu_keyboard(timeout=5) -> kwin.Window` | Invoke Focus Dock, wait for KWin compositor keyboard focus, press Shift+F10, and wait for a new native popup. Returns its KWin window. |
 | `choose_context_menu_entry(label, entries)` | Keyboard selection (Down x position, Return) in the open menu. |
 | `context_menu_entries(pinned, is_window, has_notifications=False, desktop_actions=()) -> list[str]` (module function) | Enabled menu entries in order, mirroring `src/models/dockcontextmenu.cpp`; `desktop_actions` are the app's visible .desktop actions, listed first. |
-| `open_settings(via_item, entries=None) -> kwin.Window` | Reveal via an item, then open Settings through empty dock space; returns the "Settings" window. |
+| `open_settings(timeout=15) -> kwin.Window` | Open the keyboard dock menu, select Settings..., and wait for the real "Settings" window. Returns its KWin window. |
 | `screenshot(name, area=None) -> PIL.Image.Image` | RGB screen image, also saved to `artifacts/<name of krema>/<name>.png`. With `area` only that part is captured, the rest is black, and the PNG holds only the area (see "Screenshots and previews"). |
+
 
 ### `krema_e2e.windows` (fixture windows)
 

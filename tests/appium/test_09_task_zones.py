@@ -90,18 +90,10 @@ def _wait_no_separator(krema: Krema) -> None:
     wait_until(lambda: _separator(krema) is None, message="separator to be absent")
 
 
-def _open_behavior_switch(krema: Krema, *, pinned: bool = True):
-    # Use the real button currently exposed by the dock. Running fixture
-    # tasks are named by their window titles in the source-built QA image,
-    # while launcher-only items may use the desktop Name.
-    anchor = wait_until(
-        lambda: next((name for name in krema.item_names() if ("Pinned" in description(krema, name)) is pinned), None),
-        message="a real dock item matching the Settings context-menu membership",
-    )
-    krema.open_settings(anchor, entries=context_menu_entries(pinned=pinned, is_window=True))
-    # The keyboard-chosen entry leaves the pointer on the anchor, whose hover
-    # preview reopens after the menu closes; on a side dock it can cover the
-    # Settings sidebar. Leave the dock first, as test_06's open_settings does.
+def _open_behavior_switch(krema: Krema):
+    krema.open_settings()
+    # Move off the dock to end keyboard navigation and dismiss any hover
+    # preview before driving the Settings sidebar.
     krema.move_away()
     open_page(krema, "Behavior")
     return scroll_into_view(krema, SEPARATE_SWITCH)
@@ -468,7 +460,7 @@ def test_tzone007_fresh_default_separation_is_off(krema: Krema, apps: TestWindow
     """A fresh config keeps the new preference at its documented false default."""
     apps.open("Default", app_id=env.TEST_APP_ID)
     krema.wait_for_item("Default")
-    switch = _open_behavior_switch(krema, pinned=False)
+    switch = _open_behavior_switch(krema)
     assert not has_state(switch, "checked")
     assert not config.as_bool(krema.read_config().get("General", {}).get("SeparateLaunchers", "false"))
     close_settings(krema)

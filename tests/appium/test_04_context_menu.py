@@ -403,7 +403,9 @@ def test_ctx006_settings_entry_opens_the_settings_window(krema: Krema, apps: Tes
     before = [w for w in krema.windows() if w.normal_window and not w.skip_taskbar]
     assert before == []
 
-    win = krema.open_settings("Alpha", UNPINNED_WINDOW)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
+    win = wait_until(lambda: settings_window(krema), timeout=15, message="Settings from the pointer dock menu")
 
     after = [w for w in krema.windows() if w.normal_window and not w.skip_taskbar]
     assert [w.internal_id for w in after] == [win.internal_id]

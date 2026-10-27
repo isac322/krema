@@ -39,6 +39,12 @@
 right-click menu contents, entry ordering, Pin/Unpin, New Instance, Close,
 Settings, About, or Quit behavior.
 
+**Automation note:** General Settings and reservation tests use Focus Dock,
+wait for KWin compositor keyboard focus, then press Shift+F10. CTX-006/010/012
+and SET-008's second-output reopen retain real padding right-clicks, and
+application-menu tests retain item right-clicks. Reruns of the revised helpers
+and migrated Settings entry paths are pending.
+
 
 ---
 
@@ -117,7 +123,7 @@ entries with the keyboard (Down/Return) or by position on a screenshot.
 
 **Expected:** The dock menu opens and Settings appears; application pinning is unchanged. The click remains inside the panel but outside delegate hit spans, including the secondary span when wide spacing expands a primary hit slot. If clearing hover auto-hides the dock, restore visibility without keyboard-selecting an icon before approaching the padding.
 
-**Automated:** tests/appium/test_04_context_menu.py::test_ctx012_padding_after_zoom_opens_dock_settings (24 pointer-interaction cases); tests/appium/test_context_menu_geometry.py (inner padding and neutral-point constraints).
+**Automated:** tests/appium/test_04_context_menu.py::test_ctx012_padding_after_zoom_opens_dock_settings (24 pointer-interaction cases with an Always Visible fixture; Settings-window and saved-pin checks verify the routing effect); tests/appium/test_context_menu_geometry.py (inner padding and neutral-point constraints). The AutoHide visibility-restoration clause above remains manual. Rerunning the current helper is pending.
 
 ---
 

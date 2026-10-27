@@ -24,6 +24,7 @@ from selenium.common.exceptions import WebDriverException
 from . import config as kcfg
 from . import dbus, env, kwin
 from . import input as inp
+from .shortcuts import invoke_shortcut
 from .waits import wait_stable, wait_until
 
 #: XPath of the dock tool bar and its items (see tests/e2e/README.md).
@@ -422,11 +423,11 @@ class Krema:
         inp.key("Return")
 
     def open_dock_context_menu(self, timeout: float = 5.0, *, surface: Rect | None = None, items: Sequence[WebElement] | None = None) -> kwin.Window:
-        """Clear hover zoom, then approach the row's inner padding.
+        """Clear hover zoom, then approach the visible row's inner padding.
 
-        This works with an empty dock too. The helper reveals an auto-hidden
-        dock from its output edge before approaching the row's inner padding.
-        Pass the surface and its items when targeting another output.
+        The caller must keep the dock visible throughout this pointer route.
+        This works with an empty dock too. Pass the surface and its items when
+        targeting another output.
         """
         before = {w.internal_id for w in self.windows()}
         area = surface or wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
@@ -439,38 +440,24 @@ class Krema:
             env.SCREEN_WIDTH,
             env.SCREEN_HEIGHT,
         )
-        trigger = {
-            kcfg.EDGE_TOP: (output.x + 60, output.y),
-            kcfg.EDGE_BOTTOM: (output.x + 60, output.y + output.height - 1),
-            kcfg.EDGE_LEFT: (output.x, output.y + 60),
-            kcfg.EDGE_RIGHT: (output.x + output.width - 1, output.y + 60),
-        }[edge]
         first = None
         if dock_items:
             # Leave the whole surface, not just a resting icon slot: an
             # InPlace icon can cover the resting panel while magnified.
-            preview = self.surface_rect("preview")
-            if preview is None or not output.contains(*preview.center):
-                # ``surface_rect`` matches only dimensions and can therefore pick the first
-                # output. Fall back to the mapped, non-dock layer surface on this output;
-                # KWin's tiny input helpers are also special surfaces, so exclude dimensions
-                # no larger than a few pixels.
-                frame = self.find(self._frame_xpath("preview"))
-                frame_rect = Rect.of(frame) if frame is not None else None
-                preview = next(
-                    (
-                        Rect(w.client_x, w.client_y, w.client_width, w.client_height)
-                        for w in self.windows()
-                        if w.special_window
-                        and not w.dock
-                        and not w.desktops
-                        and w.client_width > 2
-                        and w.client_height > 2
-                        and (frame_rect is None or (w.client_width, w.client_height) == (frame_rect.width, frame_rect.height))
-                        and output.contains(w.client_x + w.client_width // 2, w.client_y + w.client_height // 2)
-                    ),
-                    None,
-                )
+            # Use mapped non-dock layer geometry on the target output, rather
+            # than matching AT-SPI frame dimensions across several outputs.
+            # KWin's 2px input helpers are special surfaces too.
+            previews = [
+                w.client_geometry
+                for w in self.windows()
+                if w.special_window
+                and not w.dock
+                and not w.desktops
+                and w.client_width > 2
+                and w.client_height > 2
+                and output.contains(w.client_x + w.client_width // 2, w.client_y + w.client_height // 2)
+            ]
+            preview = Rect(*kwin.bounds(*previews)) if previews else None
             neutral = dock_menu_neutral_point(area, edge, preview, output)
             inp.move_path(inp.line(kwin.cursor_pos(), neutral, 12), 15)
             wait_until(lambda: not self.preview_visible(), timeout=timeout, message="preview to close before dock menu")
@@ -482,13 +469,11 @@ class Krema:
                 return rect if extent == icon else None
 
             wait_until(unzoomed, timeout=timeout, message="dock zoom to retract")
-            edge_triggered = False
 
             def stable_visible_rest() -> Rect | None:
-                nonlocal edge_triggered
                 rect = self.screen_rect(dock_items[0])
                 extent = rect.width if edge <= kcfg.EDGE_BOTTOM else rect.height
-                contained = (
+                assert (
                     has_state(dock_items[0], "showing")
                     and rect.width > 0
                     and rect.height > 0
@@ -496,32 +481,14 @@ class Krema:
                     and area.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
                     and output.contains(rect.x, rect.y)
                     and output.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
-                )
-                if extent != icon or not contained:
-                    if not edge_triggered:
-                        inp.move(*trigger)
-                        edge_triggered = True
-                    return None
-                return rect
+                ), f"dock item {rect} is hidden or outside area/output; caller must keep the dock visible: area={area}, output={output}"
+                return rect if extent == icon else None
             first = wait_stable(stable_visible_rest, duration=0.15, timeout=timeout, accept=lambda rect: rect is not None)
-        # Match the established edge-dock hover route: enter at the edge, pass
-        # beside the first item, then leave its centre toward the padding.
-        if first is not None:
-            near = (
-                (first.center[0], trigger[1])
-                if edge <= kcfg.EDGE_BOTTOM
-                else (trigger[0], first.center[1])
-            )
-            inp.move_path([trigger, near, *inp.line(near, first.center, 5)], 15)
         target = dock_padding_target(area, settings, first)
         assert area.contains(*target) and output.contains(*target), (
             f"dock padding target {target} outside area/output: area={area}, output={output}, first={first}, edge={edge}"
         )
-        if first is not None:
-            inp.move_path(inp.line(first.center, target, 5), 15)
-        else:
-            inp.move(*trigger)
-            inp.move_path(inp.line(trigger, target, 12), 15)
+        inp.move_path(inp.line(kwin.cursor_pos(), target, 12), 15)
         inp.click(*target, button="right")
         return wait_until(
             lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar), None),
@@ -529,13 +496,25 @@ class Krema:
             message="dock context menu",
         )
 
-    def open_settings(self, via_item: str, entries: list[str] | None = None, timeout: float = 15.0) -> kwin.Window:
-        """Reveal the dock via ``via_item``, then open its dock-only Settings menu.
+    def open_dock_context_menu_keyboard(self, timeout: float = 5.0) -> kwin.Window:
+        """Focus the dock through KGlobalAccel and send Shift+F10.
 
-        ``entries`` is retained for callers that also use an app-menu oracle.
+        Wait for compositor keyboard focus before sending real key input, and
+        return the newly mapped native menu reported by KWin.
         """
-        self.hover_item(via_item)
-        self.open_dock_context_menu()
+        invoke_shortcut("focus-dock", timeout=timeout)
+        self.wait_keyboard_focus()
+        before = {w.internal_id for w in self.windows()}
+        inp.key("Shift", "F10")
+        return wait_until(
+            lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar), None),
+            timeout=timeout,
+            message="keyboard-opened dock context menu",
+        )
+
+    def open_settings(self, timeout: float = 15.0) -> kwin.Window:
+        """Open Settings through the keyboard dock menu and await its window."""
+        self.open_dock_context_menu_keyboard()
         self.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
         return wait_until(
             lambda: next((w for w in self.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),

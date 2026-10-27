@@ -150,7 +150,7 @@ int launcherRowForAppId(const QString &appId) {
   for (int row = 0; row < tasks->rowCount(); ++row) {
     const QModelIndex idx = tasks->index(row, 0);
     if (idx.data(AbstractTasksModel::IsLauncher).toBool() &&
-        idx.data(AbstractTasksModel::AppId).toString() == appId) {
+        idx.data(AbstractTasksModel::AppId).toString() == appId + QStringLiteral(".desktop")) {
       return row;
     }
   }
@@ -598,7 +598,7 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
                               .data(AbstractTasksModel::LauncherUrlWithoutIcon)
                               .toUrl();
     CHECK(tasks->index(row, 0).data(AbstractTasksModel::AppId).toString() ==
-          appId);
+          appId + QStringLiteral(".desktop"));
     CHECK(resolved == expectedUrl);
 
     removeLauncherForAppId(appId);

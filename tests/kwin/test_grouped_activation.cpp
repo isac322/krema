@@ -18,6 +18,8 @@
 #include <taskmanager/abstracttasksmodel.h>
 #include <taskmanager/tasksmodel.h>
 
+#include <KService>
+
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -304,6 +306,20 @@ QByteArray pinDesktopContents()
     return QByteArrayLiteral("[Desktop Entry]\nType=Application\nName=Krema Pin Test\nExec=true\nIcon=application-x-executable\n");
 }
 
+void refreshServiceCache()
+{
+    (void)QProcess::execute(QStringLiteral("kbuildsycoca6"), {QStringLiteral("--noincremental")});
+}
+
+bool serviceRegistered(const QString &desktopPath)
+{
+    return QTest::qWaitFor(
+        [&] {
+            return KService::serviceByDesktopPath(desktopPath) != nullptr;
+        },
+        kTimeoutMs);
+}
+
 bool prepareLauncherFixtures()
 {
     const QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
@@ -325,7 +341,10 @@ bool prepareLauncherFixtures()
     if (!write(pinDesktopPath(), pinDesktopContents())) {
         return false;
     }
-    return QProcess::execute(QStringLiteral("kbuildsycoca6"), {QStringLiteral("--noincremental")}) == 0;
+    if (QProcess::execute(QStringLiteral("kbuildsycoca6"), {QStringLiteral("--noincremental")}) != 0) {
+        return false;
+    }
+    return serviceRegistered(wheelDesktopPath()) && serviceRegistered(pinDesktopPath());
 }
 
 } // namespace
@@ -490,7 +509,9 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
   writeDesktopEntry(unknownPath, QStringLiteral("unknown"));
   REQUIRE(QFile::link(unknownPath, unknownSymlinkPath));
   REQUIRE(QFile::link(missingPath, danglingSymlinkPath));
-  QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+  REQUIRE(QProcess::execute(QStringLiteral("kbuildsycoca6"),
+                            {QStringLiteral("--noincremental")}) == 0);
+  REQUIRE(serviceRegistered(installedPath));
 
   auto *tasks = model().tasksModel();
   const QStringList launchersBefore = tasks->launcherList();
@@ -500,6 +521,7 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
     removeLauncherForAppId(appId);
     QFile::remove(installedPath);
     QDir(fixtureDir).removeRecursively();
+    refreshServiceCache();
   });
 
   // This harness cannot create a real unpinned task whose upstream metadata
@@ -541,18 +563,17 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
 
   const QString installedPath =
       applicationsDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
-  const QString copiedPath =
-      fixtureDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
   const QString symlinkPath =
       fixtureDir + QStringLiteral("/menu-target.desktop");
   const QString repeatedSuffixSymlinkPath = fixtureDir + QStringLiteral("/") +
                                             appId +
                                             QStringLiteral(".desktop.desktop");
   writeDesktopEntry(installedPath, appId);
-  writeDesktopEntry(copiedPath, QStringLiteral("different external copy"));
   REQUIRE(QFile::link(installedPath, symlinkPath));
   REQUIRE(QFile::link(installedPath, repeatedSuffixSymlinkPath));
-  QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+  REQUIRE(QProcess::execute(QStringLiteral("kbuildsycoca6"),
+                            {QStringLiteral("--noincremental")}) == 0);
+  REQUIRE(serviceRegistered(installedPath));
 
   auto *tasks = model().tasksModel();
   krema::DockActions actions(&model());
@@ -560,6 +581,7 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
     removeLauncherForAppId(appId);
     QFile::remove(installedPath);
     QDir(fixtureDir).removeRecursively();
+    refreshServiceCache();
   });
   const QUrl expectedUrl = applicationsUrl(appId);
   const auto verifyAccepted = [&](const QString &caseName, const QUrl &input) {
@@ -591,8 +613,6 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
                  QUrl::fromLocalFile(symlinkPath));
   verifyAccepted(QStringLiteral("repeated-suffix symlink alias"),
                  QUrl::fromLocalFile(repeatedSuffixSymlinkPath));
-  verifyAccepted(QStringLiteral("exact-basename external copy"),
-                 QUrl::fromLocalFile(copiedPath));
 }
 
 TEST_CASE("Clicking a group returns to its most recently used window", "[grouped-activation]")

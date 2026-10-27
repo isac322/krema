@@ -174,10 +174,8 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
     if edge != config.EDGE_BOTTOM:
         assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
     settings = krema.open_settings()
-    # Leave keyboard navigation through a real pointer move. The screen centre
-    # stays outside the dock on every edge, including a top-edge dock.
-    _park()
-    wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed before driving Settings")
+    # Use the real pointer move to cancel keyboard/hover state and close any preview.
+    krema.move_away()
     if edge != config.EDGE_BOTTOM:
         _wait_shown_at_edge(krema, name)
         surface, rest = wait_stable(

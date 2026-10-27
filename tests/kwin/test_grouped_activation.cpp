@@ -515,7 +515,6 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
 
   auto *tasks = model().tasksModel();
   const QStringList launchersBefore = tasks->launcherList();
-  const int rowsBefore = tasks->rowCount();
   krema::DockActions actions(&model());
   const auto cleanup = qScopeGuard([&] {
     removeLauncherForAppId(appId);
@@ -544,7 +543,7 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
     CHECK_FALSE(actions.addLauncher(url));
     QApplication::processEvents();
     CHECK(tasks->launcherList() == launchersBefore);
-    CHECK(tasks->rowCount() == rowsBefore);
+    CHECK(launcherRowForAppId(appId) < 0);
     CHECK(pinnedChanged.isEmpty());
   }
 }

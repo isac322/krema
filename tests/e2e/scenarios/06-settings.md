@@ -1025,7 +1025,10 @@ Old/new source-comparison probes remain throwaway merge-evidence artifacts.
 
 
 **Automated:** `tests/appium/test_12_notifications.py::test_not001_external_watcher_badge_close`
-uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`.
+uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`,
+and `tests/appium/test_12_notifications.py::test_not002_slack_sni_chat_badge_lifecycle`
+verifies Slack `StatusNotifierItem` (`IconPixmap` + `ToolTip`) rest/unread/highlight/read-clear
+badge synchronization and desktop toast `Notify` count suppression in a running KWin session.
 SNI, Unity, DND, portal, and Jobs protocol coverage remains in the wire-level
 notification catalog; no animation pixel assertion is required here.
 `tests/integration/test_notification_tracker.cpp` (`krema_notification_tracker_tests`)

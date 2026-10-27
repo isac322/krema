@@ -365,7 +365,8 @@ class Krema:
         """
         origin = wait_until(lambda: self.surface_rect(surface), timeout=5, message=f"{surface} surface geometry")
         if (
-            origin.x > 0
+            surface == "settings"
+            and origin.x >= env.SCREEN_WIDTH
             and origin.contains(rect.x, rect.y)
             and origin.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
         ):

@@ -436,6 +436,7 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | DND-003 | `test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator` | screenshot | pass |
 | ICON-009 | `test_05_drag.py::test_icon009_drag_ghost_uses_raw_client_artwork` | screenshot, KWin, TaskManager | pending; DRM capture required on current host |
 | DND-004 | `test_05_drag.py::test_dnd_004_drag_released_outside_dock_keeps_order`, `test_dnd_004_escape_cancels_drag` (both also: focus returns to the previously active window) | AT-SPI, kremarc, screenshot, KWin | pass |
+| DND-007 | `test_05_external_drop.py::test_dnd007_unknown_local_task_pin_is_rejected`, `test_05_external_drop.py::test_dnd007_external_launcher_and_document_drops` | Real Qt `QDrag`/`text/uri-list`, pointer and context-menu input, KWin identity, process liveness, AT-SPI pin state, exact `kremarc` URLs, installed `Exec` document receipt, restart | real KWin external-boundary path passed for #137/#155; original SIGSEGV and visual capture unverified |
 | SET-001 | `test_06_settings.py::test_set001_settings_opens_once_with_formcard_controls_and_keeps_dock_shown` | KWin, AT-SPI | pass |
 | SET-002 | `test_06_settings.py::test_set002_icon_size_spinbox_resizes_dock_live_and_keeps_zoom_proportion` | AT-SPI, kremarc | pass |
 | SET-003 | `test_06_settings.py::test_set003_auto_hide_applies_immediately_and_persists` | AT-SPI, kremarc | pass |
@@ -590,6 +591,24 @@ within-section ordering and clamps cross-section moves without auto-pinning;
 separation off restores free ordering. The assertions cover nearest-valid
 source-zone positions and membership; visual drop-indicator/drag ghost/paint
 remain unverified.
+
+`DND-007` launches the native C++ `krema-test-window --drag-source` fixture,
+which emits a real Qt `QDrag` with a `text/uri-list` payload from pointer
+input. The stdlib Python helper `tools/desktop_drop_source.py` is used only as
+the installed desktop entry's document receipt process. The test checks unknown
+local and repeated-suffix rejection, installed-entry and symlink acceptance,
+canonical launcher identities, duplicate suppression, regular-document
+delivery through the installed `Exec`, and restart persistence. Its companion
+test chooses **Pin to Dock** for a task whose app ID is an unknown local
+desktop path and checks that pin state stays unchanged. These tests exercise
+KWin's external MIME and context-menu paths without Qt Quick MIME synthesis.
+The source-built path passed for #137/#155; the original SIGSEGV was not
+reproduced. Paint, cursor appearance, screenshots, and video were not verified.
+`tests/kwin/test_grouped_activation.cpp` (`krema_grouped_activation_tests`)
+provides action-layer coverage only through
+`Rejecting unresolved desktop drops preserves launcher state` and
+`Accepted desktop drops resolve to the installed launcher`; the Appium
+functions supply the real MIME and context-menu flow.
 
 `KBD-010` covers launch/close and focus traversal on all four edges; F12 is a
 delivery probe, not launch proof. `PREV-010` keeps three-thumbnail horizontal

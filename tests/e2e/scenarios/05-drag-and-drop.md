@@ -22,8 +22,8 @@
 **Tier:** Tier 2 (Appium) for real drag input and KWin state. Tier 1 QML
 tests cover the shared `main.qml` drag and hit-testing seam. Tier 3 reuses
 the Appium cases against installed packages.
-Keyboard Escape cancellation, context-menu actions, and middle/right input
-remain unchanged; the added contract checks drag release state only.
+The internal-drag cases check drag release state; DND-007 also exercises
+external MIME delivery and the task context menu's pin action.
 
 
 ---
@@ -174,3 +174,67 @@ held-left/right release-order controls).
 
 **Verification:** AT-SPI item order and drag feedback, persisted pin membership, and the post-release task order for both option states.
 **Automated (native Tier 2 coverage):** `tests/appium/test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `tests/appium/test_09_task_zones.py::test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both pinned-to-running and running-to-pinned directions; exact nearest-valid source-zone positions and membership asserted; visual drop-indicator/drag ghost/paint remain unverified)
+
+---
+
+## TC DND-007: External launcher drops reject unknown files and preserve valid launchers
+
+**Preconditions:** Run source-built Krema in the Appium suite's real KWin
+Wayland session. Install two deterministic desktop entries in the private XDG
+applications directory and refresh KService before starting Krema. Prepare a
+symlink to one installed entry, a valid but unknown local `.desktop` file, a
+regular copy with a repeated `.desktop.desktop` suffix, and a regular document.
+The external drag source is `tests/appium/tools/krema-test-window --drag-source`.
+
+**Steps:**
+1. Record Krema's process state, ordered dock items, and persisted launcher URLs.
+2. Use real pointer press/hold/move/release input to start
+   `krema-test-window --drag-source`, which emits a real Qt `QDrag` with a
+   `text/uri-list` payload. Drop the unknown local file and repeated-suffix
+   copy onto the dock.
+3. Drop the installed entry and symlink onto the dock, then drop the installed
+   entry again to check duplicate suppression.
+4. Drop the regular document onto the accepted application's icon and inspect
+   the receipt from its installed `Exec` command.
+5. Open a fixture window with the unknown local `.desktop` path as its app ID.
+   Verify that KWin received that local identity, then choose **Pin to Dock**
+   through the real context menu.
+6. Compare process liveness, AT-SPI item names and pin descriptions, and
+   persisted launcher URLs after each operation.
+7. Close the unknown-local task and restart Krema. Verify that rejected pins
+   remain absent and accepted launcher identities and order persist.
+
+**Expected:**
+- Krema and the unknown-local fixture task remain alive through rejected pin attempts.
+- Unknown local files, including the repeated-suffix copy, are not pinned.
+- Installed entries and symlinks pin under their canonical installed
+  `applications:<menuId>` identities, with one dock item per application.
+- The installed target's `Exec` receives the document's exact path and content hash.
+- Rejected attempts leave persisted launcher state and AT-SPI pin state unchanged.
+- Repeated accepted drops add no duplicate launcher.
+- Accepted launcher identities and order survive restart; the rejected task
+  leaves no launcher after it closes or Krema restarts.
+
+**Verification:** Process liveness, real external `QDrag` start/finish and
+`text/uri-list` records, KWin fixture identity, AT-SPI item names and pin
+descriptions, exact persisted launcher URLs, installed `Exec` document receipt
+(path and SHA-256), and restart state.
+
+**Automated (Tier 2):**
+- `tests/appium/test_05_external_drop.py::test_dnd007_unknown_local_task_pin_is_rejected`
+- `tests/appium/test_05_external_drop.py::test_dnd007_external_launcher_and_document_drops`
+
+**Native action-layer coverage:** `tests/kwin/test_grouped_activation.cpp`
+(`krema_grouped_activation_tests`), cases
+`Rejecting unresolved desktop drops preserves launcher state` and
+`Accepted desktop drops resolve to the installed launcher`.
+These native cases cover validation and launcher state; the Appium functions
+above cover real MIME delivery and context-menu input.
+
+The native C++ `krema-test-window --drag-source` fixture creates the external
+Qt `QDrag` from real pointer input; the tests do not synthesize MIME events in
+Qt Quick. The stdlib Python helper `tests/appium/tools/desktop_drop_source.py`
+is used only as the installed desktop entry's document receipt process.
+The real KWin external-boundary path was exercised for PRs #137/#155. The
+original SIGSEGV was not reproduced, and paint, cursor appearance, screenshot,
+and video capture were not verified.

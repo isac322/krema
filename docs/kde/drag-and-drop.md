@@ -168,17 +168,22 @@ bool hasLauncher = index.data(TaskManager::AbstractTasksModel::HasLauncher).toBo
 
 ## AppData for External Drops
 
-When receiving external URL drops:
+`appDataFromUrl()` derives an id from a dropped `.desktop` path, but a nonempty
+`appData.id` alone does not prove that the URL names a registered application.
+Before calling `requestAddLauncher()`:
+
+- A local file URL must canonical-match a registered `KService::entryPath()`.
+  Convert the match to `applications:<menuId>` using the service's nonempty
+  `menuId()`; reject the URL when no match exists.
+- An `applications:` URL must resolve through `KService::serviceByMenuId()`
+  and its path must exactly equal the service's nonempty `menuId()`.
+- Reject unsupported URL schemes and never pass an unvalidated local URL to
+  `requestAddLauncher()`.
 
 ```cpp
-#include <taskmanager/tasktools.h>
-
 TaskManager::AppData appData = TaskManager::appDataFromUrl(droppedUrl);
-
-if (!appData.id.isEmpty()) {
-    // Valid app found — use appData.url for requestAddLauncher
-    model->requestAddLauncher(appData.url);
-}
+// A nonempty appData.id is only an initial candidate check. Resolve and
+// validate the final applications:<menuId> URL as described above.
 ```
 
 ---

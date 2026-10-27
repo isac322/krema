@@ -9,7 +9,11 @@
 #include <taskmanager/tasksmodel.h>
 #include <taskmanager/tasktools.h>
 
+#include <KApplicationTrader>
+#include <KService>
+
 #include <QDateTime>
+#include <QFileInfo>
 #include <QLoggingCategory>
 
 Q_DECLARE_LOGGING_CATEGORY(lcModel)
@@ -84,10 +88,10 @@ void DockActions::togglePinned(int index)
     if (launcherUrl.isValid()) {
         if (tasksModel->launcherPosition(launcherUrl) != -1) {
             tasksModel->requestRemoveLauncher(launcherUrl);
+            Q_EMIT pinnedLaunchersChanged();
         } else {
-            tasksModel->requestAddLauncher(launcherUrl);
+            addLauncher(launcherUrl);
         }
-        Q_EMIT pinnedLaunchersChanged();
     }
 }
 
@@ -276,20 +280,75 @@ bool DockActions::moveTask(int fromIndex, int toIndex)
     return ok;
 }
 
+namespace
+{
+
+// Menu id of the installed application behind a local .desktop file, or an
+// empty string when none matches. Menus hand out the symlink target (e.g.
+// /usr/lib/libreoffice/share/xdg/writer.desktop) instead of the entry in the
+// application directories (libreoffice-writer.desktop), so compare resolved paths.
+QString menuIdForDesktopFile(const QUrl &url)
+{
+    if (!url.isLocalFile()) {
+        return {};
+    }
+    const QString target = QFileInfo(url.toLocalFile()).canonicalFilePath();
+    if (target.isEmpty()) {
+        return {};
+    }
+    const auto services = KApplicationTrader::query([&target](const KService::Ptr &service) {
+        return QFileInfo(service->entryPath()).canonicalFilePath() == target;
+    });
+    for (const KService::Ptr &service : services) {
+        const QString menuId = service->menuId();
+        if (!menuId.isEmpty()) {
+            return menuId;
+        }
+    }
+    return {};
+}
+
+}
+
 bool DockActions::addLauncher(const QUrl &url)
 {
     if (!url.isValid()) {
         return false;
     }
 
-    // Validate that the URL resolves to a real application
+    // Validate that the URL resolves to a real application.
     const auto appData = TaskManager::appDataFromUrl(url);
-    if (appData.id.isEmpty()) {
+    QUrl resolvedUrl;
+    if (url.isLocalFile()) {
+        // appDataFromUrl() can derive an id from any .desktop path, including
+        // one outside the application directories. Validate local paths
+        // against the canonical service entry instead.
+        const QString menuId = menuIdForDesktopFile(url);
+        if (menuId.isEmpty()) {
+            qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
+            return false;
+        }
+        resolvedUrl = QUrl(QStringLiteral("applications:") + menuId);
+    } else {
+        if (appData.id.isEmpty()) {
+            return false;
+        }
+        resolvedUrl = appData.url.isValid() ? appData.url : url;
+    }
+
+    // Unknown local entries are rejected above because libtaskmanager
+    // dereferences the null service in requestAddLauncher().
+
+    if (resolvedUrl.scheme() != QLatin1String("applications")) {
+        return false;
+    }
+    const QString menuId = resolvedUrl.path();
+    const KService::Ptr service = KService::serviceByMenuId(menuId);
+    if (!service || menuId.isEmpty() || service->menuId().isEmpty() || service->menuId() != menuId) {
+        qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
         return false;
     }
 
-    // Use the resolved URL (handles preferred:// and other special schemes)
-    const QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
     const bool ok = m_model->tasksModel()->requestAddLauncher(resolvedUrl);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();

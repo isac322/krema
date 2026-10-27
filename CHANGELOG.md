@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Floating gaps used the effective per-screen Floating state and configured global margin. Shadows no longer shifted the requested gap, screen reservation, or preview position; same-edge panel behavior remained unchanged.
 - With "Measure gap from: Panels", Floating off now follows the visible same-edge panel surface, hidden dodge and auto-hide frames are ignored, and panel-depth updates animate without leaving the dock or its previews at a stale depth.
 - Dock shadows no longer clipped at low light heights by their containing surfaces; when the requested gap is smaller than the outward shadow, pixels may still clip at the layer-surface/output boundary. Screen reservation and window preview placement keep the requested gap, and previews stay interactive after native surface resizes (#118)
+- Fixed a crash when dragging an uninstalled .desktop file onto the dock. Krema now ignores unknown files while still pinning application-menu launchers that point to symlinked files correctly.
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)

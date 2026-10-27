@@ -570,3 +570,31 @@ handover, and false-to-false cannot prove that owner loss cleared state.
 **Root cause:** Qt documents that `stopped` and `finished` are emitted for standalone animations, not animations used inside a `Behavior` or `Transition`. A reservation release wired to a `Behavior` animation handler therefore never runs.
 
 **Key lesson:** Settle lifecycle state when the displayed property commits its current target in C++, rather than inferring completion from a QML animation callback. See [Qt Quick Animation::stopped](https://doc.qt.io/qt-6/qml-qtquick-animation.html#stopped-signal).
+
+## 27. Validate the final launcher URL before every pin addition (2026-10, PRs #137/#155)
+
+**Cause:** An ID derived from `TaskManager::appDataFromUrl()` does not prove
+that the final local URL resolves to an installed service. A plausible
+`.desktop` name, including a repeated suffix, can still identify an unknown
+local file.
+
+**Fix:** Resolve local entries through their canonical installed desktop file,
+require a nonempty `menuId`, and validate the exact resulting
+`applications:<menuId>` service. Route every pin-add caller through the same
+validator so external drops and task context-menu pinning share the rule.
+
+**Regression lesson:** Assert the task's exact `LauncherUrlWithoutIcon`;
+the `AppId` suffix varies across Qt/KDE versions. The two DND-007 Appium
+functions in `tests/appium/test_05_external_drop.py`
+(`test_dnd007_unknown_local_task_pin_is_rejected` and
+`test_dnd007_external_launcher_and_document_drops`) exercise a real KWin
+Wayland context menu and an external Qt `QDrag` with real pointer input and
+`text/uri-list`. This path passed for #137/#155, including installed/symlink
+acceptance, unknown/repeated-suffix rejection, document receipt through the
+installed `Exec`, duplicate suppression, and restart persistence. The original
+reported SIGSEGV was not reproduced; paint, cursor appearance, screenshots,
+and video were not verified.
+The native cases `Rejecting unresolved desktop drops preserves launcher state`
+and `Accepted desktop drops resolve to the installed launcher` in
+`tests/kwin/test_grouped_activation.cpp` (`krema_grouped_activation_tests`)
+cover the action layer only; DND-007 supplies the real MIME and menu flow.

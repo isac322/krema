@@ -1513,7 +1513,36 @@ Item {
         DropArea {
             id: externalDropArea
             anchors.fill: parent
+            keys: ["text/uri-list"]
             property int dropTargetIndex: -1
+
+            function normalizedUrls(drop) {
+                let urls = []
+                if (drop.hasUrls && drop.urls && drop.urls.length > 0) {
+                    for (let i = 0; i < drop.urls.length; i++) {
+                        urls.push(drop.urls[i])
+                    }
+                    return urls
+                }
+
+                if (typeof drop.getDataAsString !== "function") {
+                    return urls
+                }
+                let data = drop.getDataAsString("text/uri-list")
+                if (!data) {
+                    return urls
+                }
+                let lines = data.split(/\r\n|\n|\r/)
+                for (let i = 0; i < lines.length; i++) {
+                    let uri = lines[i].trim()
+                    if (!uri || uri[0] === "#"
+                            || !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(uri)) {
+                        continue
+                    }
+                    urls.push(Qt.resolvedUrl(uri))
+                }
+                return urls
+            }
 
             onEntered: function(drag) {
                 drag.accepted = true
@@ -1524,12 +1553,7 @@ Item {
             }
 
             onDropped: function(drop) {
-                let urls = []
-                if (drop.hasUrls) {
-                    for (let i = 0; i < drop.urls.length; i++) {
-                        urls.push(drop.urls[i])
-                    }
-                }
+                let urls = normalizedUrls(drop)
 
                 if (urls.length === 0) {
                     drop.accepted = false

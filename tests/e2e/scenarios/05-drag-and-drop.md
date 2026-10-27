@@ -230,8 +230,10 @@ descriptions, exact persisted launcher URLs, installed `Exec` document receipt
 These native cases cover validation and launcher state; the Appium functions
 above cover real MIME delivery and context-menu input.
 
-`tests/appium/tools/desktop_drop_source.py` creates the external Qt `QDrag`
-from real pointer input; the tests do not synthesize MIME events in Qt Quick.
+The native C++ `krema-test-window --drag-source` fixture creates the external
+Qt `QDrag` from real pointer input; the tests do not synthesize MIME events in
+Qt Quick. The stdlib Python helper `tests/appium/tools/desktop_drop_source.py`
+is used only as the installed desktop entry's document receipt process.
 The real KWin external-boundary path was exercised for PRs #137/#155. The
 original SIGSEGV was not reproduced, and paint, cursor appearance, screenshot,
 and video capture were not verified.

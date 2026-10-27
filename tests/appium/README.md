@@ -592,8 +592,10 @@ separation off restores free ordering. The assertions cover nearest-valid
 source-zone positions and membership; visual drop-indicator/drag ghost/paint
 remain unverified.
 
-`DND-007` uses `tools/desktop_drop_source.py`, a separate Qt client whose
-real pointer gesture starts `QDrag` with `text/uri-list`. It checks unknown
+`DND-007` launches the native C++ `krema-test-window --drag-source` fixture,
+which emits a real Qt `QDrag` with a `text/uri-list` payload from pointer
+input. The stdlib Python helper `tools/desktop_drop_source.py` is used only as
+the installed desktop entry's document receipt process. The test checks unknown
 local and repeated-suffix rejection, installed-entry and symlink acceptance,
 canonical launcher identities, duplicate suppression, regular-document
 delivery through the installed `Exec`, and restart persistence. Its companion

@@ -32,10 +32,73 @@ def test_target_is_inside_panel_but_outside_unzoomed_hit_span(edge, spacing):
         assert target[0] < first.x or target[0] >= first.x + first.width
 
 
-@pytest.mark.parametrize("edge", [config.EDGE_TOP, config.EDGE_BOTTOM, config.EDGE_LEFT, config.EDGE_RIGHT])
-def test_neutral_point_is_outside_entire_surface(edge):
-    area = Rect(0, 0, 1024, 768)
-    assert not area.contains(*dock_menu_neutral_point(area, edge))
+@pytest.mark.parametrize(
+    "edge, area, preview",
+    [
+        (config.EDGE_TOP, Rect(0, 0, 1024, 120), None),
+        (config.EDGE_TOP, Rect(0, 0, 1024, 120), Rect(0, 120, 1024, 400)),
+        (config.EDGE_BOTTOM, Rect(0, 648, 1024, 120), None),
+        (config.EDGE_BOTTOM, Rect(0, 648, 1024, 120), Rect(0, 248, 1024, 400)),
+        (config.EDGE_LEFT, Rect(0, 0, 120, 768), None),
+        (config.EDGE_LEFT, Rect(0, 0, 120, 768), Rect(120, 0, 400, 768)),
+        (config.EDGE_RIGHT, Rect(904, 0, 120, 768), None),
+        (config.EDGE_RIGHT, Rect(904, 0, 120, 768), Rect(504, 0, 400, 768)),
+    ],
+)
+def test_neutral_point_stays_inside_output_and_avoids_surfaces(edge, area, preview):
+    output = Rect(0, 0, 1024, 768)
+    target = dock_menu_neutral_point(area, edge, preview, output)
+
+    assert output.contains(*target)
+    assert not area.contains(*target)
+    if preview is not None:
+        assert not preview.contains(*target)
+
+
+def test_set023_bottom_preview_neutral_point():
+    area = Rect(0, 648, 1024, 120)
+    preview = Rect(0, 248, 1024, 400)
+    output = Rect(0, 0, 1024, 768)
+
+    assert dock_menu_neutral_point(area, config.EDGE_BOTTOM, preview, output) == (512, 216)
+
+
+@pytest.mark.parametrize(
+    "first_preview, second_preview",
+    [(None, None), (Rect(0, 248, 1024, 400), Rect(1024, 248, 1024, 400))],
+)
+def test_neutral_point_translates_with_second_output(first_preview, second_preview):
+    first_area = Rect(0, 648, 1024, 120)
+    first_output = Rect(0, 0, 1024, 768)
+    second_area = Rect(1024, 648, 1024, 120)
+    second_output = Rect(1024, 0, 1024, 768)
+
+    first_target = dock_menu_neutral_point(first_area, config.EDGE_BOTTOM, first_preview, first_output)
+    second_target = dock_menu_neutral_point(second_area, config.EDGE_BOTTOM, second_preview, second_output)
+
+    assert second_output.contains(*second_target)
+    assert not first_area.contains(*first_target)
+    assert not second_area.contains(*second_target)
+    if first_preview is not None:
+        assert not first_preview.contains(*first_target)
+    if second_preview is not None:
+        assert not second_preview.contains(*second_target)
+
+
+@pytest.mark.parametrize(
+    "edge, area, preview",
+    [
+        (config.EDGE_TOP, Rect(0, 0, 1024, 120), Rect(0, 120, 1024, 616)),
+        (config.EDGE_BOTTOM, Rect(0, 648, 1024, 120), Rect(0, 31, 1024, 617)),
+        (config.EDGE_LEFT, Rect(0, 0, 120, 768), Rect(120, 0, 872, 768)),
+        (config.EDGE_RIGHT, Rect(904, 0, 120, 768), Rect(31, 0, 873, 768)),
+    ],
+)
+def test_neutral_point_rejects_when_no_on_screen_escape_exists(edge, area, preview):
+    output = Rect(0, 0, 1024, 768)
+
+    with pytest.raises(AssertionError, match="output="):
+        dock_menu_neutral_point(area, edge, preview, output)
 
 
 def test_empty_dock_and_default_edge():
@@ -44,3 +107,31 @@ def test_empty_dock_and_default_edge():
 
 def test_second_output_uses_observed_rest_geometry():
     assert dock_padding_target(Rect(1024, 668, 1024, 100), {}, Rect(1486, 704, 48, 56)) == (1482, 700)
+
+
+@pytest.mark.parametrize(
+    "area, edge, hidden_first, visible_first",
+    [
+        (
+            Rect(0, 648, 1024, 120),
+            config.EDGE_BOTTOM,
+            Rect(488, 784, 48, 56),
+            Rect(488, 704, 48, 56),
+        ),
+        (
+            Rect(0, 0, 350, 768),
+            config.EDGE_LEFT,
+            Rect(-72, 360, 56, 48),
+            Rect(8, 360, 56, 48),
+        ),
+    ],
+)
+def test_padding_target_rejects_hidden_first_but_accepts_visible_control(
+    area, edge, hidden_first, visible_first
+):
+    with pytest.raises(AssertionError, match="dock item|dock surface"):
+        dock_padding_target(area, {"Edge": edge}, hidden_first)
+
+    target = dock_padding_target(area, {"Edge": edge}, visible_first)
+    assert area.contains(*target)
+    assert not visible_first.contains(*target)

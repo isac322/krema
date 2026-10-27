@@ -16,6 +16,7 @@
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
+#include "shell/previewcontroller.h"
 #include "shell/edgetrigger.h"
 #include "shell/multidockmanager.h"
 #include "shell/outputordermonitor.h"
@@ -776,8 +777,27 @@ TEST_CASE("Rebuilding docks releases every dock surface", "[settings][teardown]"
     QCoreApplication::processEvents();
     const auto baseline = QGuiApplication::topLevelWindows().size();
 
-    // QA-07: shells torn down by mode changes leave no surfaces behind and
-    // raise no QML errors while being destroyed.
+    auto *oldShell = app().manager->primaryShell();
+    REQUIRE(oldShell);
+    QPointer<QObject> dockRoot = oldShell->view()->rootObject();
+    QPointer<krema::PreviewController> previewController = oldShell->previewController();
+    REQUIRE(dockRoot);
+    REQUIRE(previewController);
+    bool previewDestroyedAfterRoot = false;
+    QObject::connect(previewController, &QObject::destroyed, oldShell->view(), [&] {
+        previewDestroyedAfterRoot = dockRoot.isNull();
+    }, Qt::DirectConnection);
+    // QA-07: synchronously rebuilding the manager destroys the dock root before
+    // its PreviewController and leaves no QML errors behind.
+    app().manager.reset();
+    startDocks();
+    CHECK(previewDestroyedAfterRoot);
+    CHECK(dockRoot.isNull());
+    CHECK(previewController.isNull());
+    CHECK(QGuiApplication::topLevelWindows().size() == baseline);
+    CHECK(g_qmlErrors.isEmpty());
+
+    // The remaining mode round trip keeps the existing surface-leak coverage.
     app().settings->setMonitorMode(MultiDockManager::AllScreens);
     app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
     app().settings->setMonitorMode(MultiDockManager::FollowActive);

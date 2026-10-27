@@ -39,7 +39,12 @@ DockShell::DockShell(KremaSettings *globalSettings,
 {
 }
 
-DockShell::~DockShell() = default;
+DockShell::~DockShell()
+{
+    // Shell-owned context properties must outlive the QML root; PreviewController
+    // remains before DockView in destruction order because its preview shares the engine.
+    m_view->setSource(QUrl{});
+}
 
 void DockShell::initialize(DockPlatform::Edge edge, DockPlatform::VisibilityMode visibilityMode)
 {

@@ -24,7 +24,6 @@ from selenium.common.exceptions import WebDriverException
 from . import config as kcfg
 from . import dbus, env, kwin
 from . import input as inp
-from .shortcuts import invoke_shortcut
 from .waits import wait_stable, wait_until
 
 #: XPath of the dock tool bar and its items (see tests/e2e/README.md).
@@ -425,8 +424,8 @@ class Krema:
     def open_dock_context_menu(self, timeout: float = 5.0, *, surface: Rect | None = None, items: Sequence[WebElement] | None = None) -> kwin.Window:
         """Clear hover zoom, then approach the row's inner padding.
 
-        This works with an empty dock too. The fixture must show the dock
-        before calling this helper (AlwaysVisible or a reveal shortcut).
+        This works with an empty dock too. The helper reveals an auto-hidden
+        dock from its output edge before approaching the row's inner padding.
         Pass the surface and its items when targeting another output.
         """
         before = {w.internal_id for w in self.windows()}
@@ -434,11 +433,45 @@ class Krema:
         settings = self.read_config().get("General", {})
         edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
         dock_items = self.items() if items is None else items
+        output = Rect(
+            (area.center[0] // env.SCREEN_WIDTH) * env.SCREEN_WIDTH,
+            0,
+            env.SCREEN_WIDTH,
+            env.SCREEN_HEIGHT,
+        )
+        trigger = {
+            kcfg.EDGE_TOP: (output.x + 60, output.y),
+            kcfg.EDGE_BOTTOM: (output.x + 60, output.y + output.height - 1),
+            kcfg.EDGE_LEFT: (output.x, output.y + 60),
+            kcfg.EDGE_RIGHT: (output.x + output.width - 1, output.y + 60),
+        }[edge]
         first = None
         if dock_items:
             # Leave the whole surface, not just a resting icon slot: an
             # InPlace icon can cover the resting panel while magnified.
-            neutral = dock_menu_neutral_point(area, edge)
+            preview = self.surface_rect("preview")
+            if preview is None or not output.contains(*preview.center):
+                # ``surface_rect`` matches only dimensions and can therefore pick the first
+                # output. Fall back to the mapped, non-dock layer surface on this output;
+                # KWin's tiny input helpers are also special surfaces, so exclude dimensions
+                # no larger than a few pixels.
+                frame = self.find(self._frame_xpath("preview"))
+                frame_rect = Rect.of(frame) if frame is not None else None
+                preview = next(
+                    (
+                        Rect(w.client_x, w.client_y, w.client_width, w.client_height)
+                        for w in self.windows()
+                        if w.special_window
+                        and not w.dock
+                        and not w.desktops
+                        and w.client_width > 2
+                        and w.client_height > 2
+                        and (frame_rect is None or (w.client_width, w.client_height) == (frame_rect.width, frame_rect.height))
+                        and output.contains(w.client_x + w.client_width // 2, w.client_y + w.client_height // 2)
+                    ),
+                    None,
+                )
+            neutral = dock_menu_neutral_point(area, edge, preview, output)
             inp.move_path(inp.line(kwin.cursor_pos(), neutral, 12), 15)
             wait_until(lambda: not self.preview_visible(), timeout=timeout, message="preview to close before dock menu")
             icon = int(settings.get("IconSize", 48))
@@ -449,18 +482,46 @@ class Krema:
                 return rect if extent == icon else None
 
             wait_until(unzoomed, timeout=timeout, message="dock zoom to retract")
-            # On Qt < 6.9 extents ignore Scale, but the transformed origin
-            # still moves. Wait for it too before using the rest geometry.
-            first = wait_stable(lambda: self.screen_rect(dock_items[0]), duration=0.15, timeout=timeout)
-            if not area.contains(*first.center):
-                # Auto-hide may finish while zoom retracts. Toggle restores
-                # visibility without selecting/zooming an icon as Focus Dock
-                # would. Existing multi-output callers hold Settings open.
-                invoke_shortcut("toggle-dock")
-                wait_until(lambda: area.contains(*self.screen_rect(dock_items[0]).center), timeout=timeout, message="dock to reappear")
-                first = wait_stable(lambda: self.screen_rect(dock_items[0]), duration=0.15, timeout=timeout)
+            edge_triggered = False
+
+            def stable_visible_rest() -> Rect | None:
+                nonlocal edge_triggered
+                rect = self.screen_rect(dock_items[0])
+                extent = rect.width if edge <= kcfg.EDGE_BOTTOM else rect.height
+                contained = (
+                    has_state(dock_items[0], "showing")
+                    and rect.width > 0
+                    and rect.height > 0
+                    and area.contains(rect.x, rect.y)
+                    and area.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
+                    and output.contains(rect.x, rect.y)
+                    and output.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
+                )
+                if extent != icon or not contained:
+                    if not edge_triggered:
+                        inp.move(*trigger)
+                        edge_triggered = True
+                    return None
+                return rect
+            first = wait_stable(stable_visible_rest, duration=0.15, timeout=timeout, accept=lambda rect: rect is not None)
+        # Match the established edge-dock hover route: enter at the edge, pass
+        # beside the first item, then leave its centre toward the padding.
+        if first is not None:
+            near = (
+                (first.center[0], trigger[1])
+                if edge <= kcfg.EDGE_BOTTOM
+                else (trigger[0], first.center[1])
+            )
+            inp.move_path([trigger, near, *inp.line(near, first.center, 5)], 15)
         target = dock_padding_target(area, settings, first)
-        inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
+        assert area.contains(*target) and output.contains(*target), (
+            f"dock padding target {target} outside area/output: area={area}, output={output}, first={first}, edge={edge}"
+        )
+        if first is not None:
+            inp.move_path(inp.line(first.center, target, 5), 15)
+        else:
+            inp.move(*trigger)
+            inp.move_path(inp.line(trigger, target, 12), 15)
         inp.click(*target, button="right")
         return wait_until(
             lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar), None),
@@ -545,15 +606,26 @@ def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool 
 DOCK_CONTEXT_MENU_ENTRIES = ["Settings...", "About Krema", "Quit Krema"]
 
 
-def dock_menu_neutral_point(area: Rect, edge: int) -> tuple[int, int]:
-    """Desktop-side point outside the entire dock/zoom surface."""
+def dock_menu_neutral_point(area: Rect, edge: int, preview: Rect | None, output: Rect) -> tuple[int, int]:
+    """Return a 32 px desktop-side point outside the dock and mapped preview."""
     if edge == kcfg.EDGE_TOP:
-        return area.center[0], area.y + area.height + 32
-    if edge == kcfg.EDGE_BOTTOM:
-        return area.center[0], area.y - 32
-    if edge == kcfg.EDGE_LEFT:
-        return area.x + area.width + 32, area.center[1]
-    return area.x - 32, area.center[1]
+        depth = max(area.y + area.height, preview.y + preview.height if preview is not None else area.y + area.height)
+        point = (area.center[0], depth + 32)
+    elif edge == kcfg.EDGE_BOTTOM:
+        depth = min(area.y, preview.y if preview is not None else area.y)
+        point = (area.center[0], depth - 32)
+    elif edge == kcfg.EDGE_LEFT:
+        depth = max(area.x + area.width, preview.x + preview.width if preview is not None else area.x + area.width)
+        point = (depth + 32, area.center[1])
+    elif edge == kcfg.EDGE_RIGHT:
+        depth = min(area.x, preview.x if preview is not None else area.x)
+        point = (depth - 32, area.center[1])
+    else:
+        raise ValueError(f"unknown dock edge {edge}")
+    assert output.contains(*point) and not area.contains(*point) and (preview is None or not preview.contains(*point)), (
+        f"dock menu neutral point {point} escapes geometry: area={area}, preview={preview}, output={output}, edge={edge}"
+    )
+    return point
 
 
 def dock_padding_target(area: Rect, settings: Mapping[str, Any], first: Rect | None = None) -> tuple[int, int]:
@@ -565,6 +637,12 @@ def dock_padding_target(area: Rect, settings: Mapping[str, Any], first: Rect | N
     """
     edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
     if first is not None:
+        assert (
+            first.width > 0
+            and first.height > 0
+            and area.contains(first.x, first.y)
+            and area.contains(first.x + first.width - 1, first.y + first.height - 1)
+        ), f"dock item {first} is outside dock surface {area}"
         if edge == kcfg.EDGE_TOP:
             return first.x - 4, first.y + first.height + 4
         if edge == kcfg.EDGE_LEFT:

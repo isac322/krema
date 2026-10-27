@@ -22,8 +22,8 @@
 **Tier:** Tier 2 (Appium) for real drag input and KWin state. Tier 1 QML
 tests cover the shared `main.qml` drag and hit-testing seam. Tier 3 reuses
 the Appium cases against installed packages.
-Keyboard Escape cancellation, context-menu actions, and middle/right input
-remain unchanged; the added contract checks drag release state only.
+The internal-drag cases check drag release state; DND-007 also exercises
+external MIME delivery and the task context menu's pin action.
 
 
 ---
@@ -179,26 +179,59 @@ held-left/right release-order controls).
 
 ## TC DND-007: External launcher drops reject unknown files and preserve valid launchers
 
-**Preconditions:** Run Krema in a real Plasma Wayland session with a file manager and application menu available. Prepare one valid installed launcher, one launcher reached through a symlink target, one valid but unknown `.desktop` file, one regular copy with a repeated suffix, and one regular document.
+**Preconditions:** Run source-built Krema in the Appium suite's real KWin
+Wayland session. Install two deterministic desktop entries in the private XDG
+applications directory and refresh KService before starting Krema. Prepare a
+symlink to one installed entry, a valid but unknown local `.desktop` file, a
+regular copy with a repeated `.desktop.desktop` suffix, and a regular document.
+Use a separate Qt client as the external drag source.
 
 **Steps:**
-1. Record the dock's pinned state and launcher identities.
-2. Drag the unknown `.desktop` file and the repeated-suffix copy onto the dock.
-3. Drag the installed launcher and the symlink-target launcher onto the dock.
-4. Drop the regular document onto an app icon that opens it.
-5. Where applicable, use the task context menu's **Pin to Dock** action for an unpinned task.
-6. Inspect the dock, application identity, and pin state after each operation.
-7. Restart Krema and inspect the persisted accepted launcher.
+1. Record Krema's process state, ordered dock items, and persisted launcher URLs.
+2. Use real pointer press/hold/move/release input to start the external Qt
+   client's `QDrag` with a `text/uri-list` payload. Drop the unknown local file
+   and repeated-suffix copy onto the dock.
+3. Drop the installed entry and symlink onto the dock, then drop the installed
+   entry again to check duplicate suppression.
+4. Drop the regular document onto the accepted application's icon and inspect
+   the receipt from its installed `Exec` command.
+5. Open a fixture window with the unknown local `.desktop` path as its app ID.
+   Verify that KWin received that local identity, then choose **Pin to Dock**
+   through the real context menu.
+6. Compare process liveness, AT-SPI item names and pin descriptions, and
+   persisted launcher URLs after each operation.
+7. Close the unknown-local task and restart Krema. Verify that rejected pins
+   remain absent and accepted launcher identities and order persist.
 
 **Expected:**
-- The dock remains alive throughout the drops.
+- Krema and the unknown-local fixture task remain alive through rejected pin attempts.
 - Unknown local files, including the repeated-suffix copy, are not pinned.
-- Valid launchers pin as the installed application.
-- The regular document still opens with the target application.
-- Failed pin attempts do not change launcher state or emit a pin change.
-- No duplicate launcher appears.
-- The accepted launcher remains pinned after restart.
+- Installed entries and symlinks pin under their canonical installed
+  `applications:<menuId>` identities, with one dock item per application.
+- The installed target's `Exec` receives the document's exact path and content hash.
+- Rejected attempts leave persisted launcher state and AT-SPI pin state unchanged.
+- Repeated accepted drops add no duplicate launcher.
+- Accepted launcher identities and order survive restart; the rejected task
+  leaves no launcher after it closes or Krema restarts.
 
-**Verification:** Process liveness, AT-SPI and persisted pinned state, installed application identity, receipt of the regular document by the target application, and the accepted launcher after restart.
+**Verification:** Process liveness, real external `QDrag` start/finish and
+`text/uri-list` records, KWin fixture identity, AT-SPI item names and pin
+descriptions, exact persisted launcher URLs, installed `Exec` document receipt
+(path and SHA-256), and restart state.
 
-**Automated:** **BLOCKED** — current Qt Quick tests cannot synthesize MIME-bearing external drags, and the Appium suite covers internal drags only. Manual QA in a real Plasma Wayland session is required. Screenshots or video are not required for this non-visual behavior unless the project review process asks for them.
+**Automated (Tier 2):**
+- `tests/appium/test_05_external_drop.py::test_dnd007_unknown_local_task_pin_is_rejected`
+- `tests/appium/test_05_external_drop.py::test_dnd007_external_launcher_and_document_drops`
+
+**Native action-layer coverage:** `tests/kwin/test_grouped_activation.cpp`
+(`krema_grouped_activation_tests`), cases
+`Rejecting unresolved desktop drops preserves launcher state` and
+`Accepted desktop drops resolve to the installed launcher`.
+These native cases cover validation and launcher state; the Appium functions
+above cover real MIME delivery and context-menu input.
+
+`tests/appium/tools/desktop_drop_source.py` creates the external Qt `QDrag`
+from real pointer input; the tests do not synthesize MIME events in Qt Quick.
+The real KWin external-boundary path was exercised for PRs #137/#155. The
+original SIGSEGV was not reproduced, and paint, cursor appearance, screenshot,
+and video capture were not verified.

@@ -174,3 +174,31 @@ held-left/right release-order controls).
 
 **Verification:** AT-SPI item order and drag feedback, persisted pin membership, and the post-release task order for both option states.
 **Automated (native Tier 2 coverage):** `tests/appium/test_09_task_zones.py::test_tzone005_on_reorders_inside_both_zones_and_clamps_cross_boundary`, `tests/appium/test_09_task_zones.py::test_tzone006_off_allows_real_cross_zone_reorder_without_auto_pin` (both pinned-to-running and running-to-pinned directions; exact nearest-valid source-zone positions and membership asserted; visual drop-indicator/drag ghost/paint remain unverified)
+
+---
+
+## TC DND-007: External launcher drops reject unknown files and preserve valid launchers
+
+**Preconditions:** Run Krema in a real Plasma Wayland session with a file manager and application menu available. Prepare one valid installed launcher, one launcher reached through a symlink target, one valid but unknown `.desktop` file, one regular copy with a repeated suffix, and one regular document.
+
+**Steps:**
+1. Record the dock's pinned state and launcher identities.
+2. Drag the unknown `.desktop` file and the repeated-suffix copy onto the dock.
+3. Drag the installed launcher and the symlink-target launcher onto the dock.
+4. Drop the regular document onto an app icon that opens it.
+5. Where applicable, use the task context menu's **Pin to Dock** action for an unpinned task.
+6. Inspect the dock, application identity, and pin state after each operation.
+7. Restart Krema and inspect the persisted accepted launcher.
+
+**Expected:**
+- The dock remains alive throughout the drops.
+- Unknown local files, including the repeated-suffix copy, are not pinned.
+- Valid launchers pin as the installed application.
+- The regular document still opens with the target application.
+- Failed pin attempts do not change launcher state or emit a pin change.
+- No duplicate launcher appears.
+- The accepted launcher remains pinned after restart.
+
+**Verification:** Process liveness, AT-SPI and persisted pinned state, installed application identity, receipt of the regular document by the target application, and the accepted launcher after restart.
+
+**Automated:** **BLOCKED** — current Qt Quick tests cannot synthesize MIME-bearing external drags, and the Appium suite covers internal drags only. Manual QA in a real Plasma Wayland session is required. Screenshots or video are not required for this non-visual behavior unless the project review process asks for them.

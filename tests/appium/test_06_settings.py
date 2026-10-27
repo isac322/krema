@@ -247,7 +247,11 @@ def open_page(krema: Krema, name: str) -> None:
     """Show page ``name`` through its Settings sidebar entry."""
     item = krema.wait_for(f"{SIDEBAR}[@name='{name}']")
     if not has_state(item, "checked"):
-        click_el(krema, item)
+        target = krema.screen_rect(item, "settings")
+        if target.x >= W:
+            item.click()
+        else:
+            click_el(krema, item)
     wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")
 
 

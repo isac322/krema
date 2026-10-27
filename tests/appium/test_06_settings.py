@@ -380,9 +380,6 @@ def open_menu(k: Krema) -> kwin.Window:
 def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
     """Wait for fixture ``name``, then open Settings through the keyboard menu."""
     k.wait_for_item(name)
-    point = k.item_center(name)
-    inp.move(*point)
-    wait_until(lambda: kwin.cursor_pos() == point, message=f"pointer to reach {point}")
     win = k.open_settings()
     k.move_away()
     return win
@@ -728,7 +725,8 @@ def test_set007_custom_tint_color_is_applied_and_saved(krema: Krema, apps: TestW
     dialog_click(hex_field)
     inp.key("ctrl", "a")
     inp.type_text("#c81e1e")
-    inp.key("tab")
+    inp.key("Return")
+    wait_until(lambda: hex_field.get_attribute("name") == "#c81e1e", message="Hex field to commit tint colour")
     dialog_click(krema.wait_for(f"{COLOR_DIALOG}//button[@name='OK']"))
     wait_until(lambda: not [w for w in krema.windows() if w.title.startswith("Choose tint color")], message="colour dialog closed")
 

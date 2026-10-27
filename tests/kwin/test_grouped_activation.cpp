@@ -497,6 +497,8 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
 
   const QString installedPath =
       applicationsDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
+  const QString sameBasenameCopyPath =
+      fixtureDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
   const QString repeatedSuffixPath = fixtureDir + QLatin1Char('/') + appId +
                                      QStringLiteral(".desktop.desktop");
   const QString unknownPath = fixtureDir + QStringLiteral("/unknown.desktop");
@@ -506,6 +508,7 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
       fixtureDir + QStringLiteral("/dangling.desktop");
   const QString missingPath = fixtureDir + QStringLiteral("/missing.desktop");
   writeDesktopEntry(installedPath, appId);
+  REQUIRE(QFile::copy(installedPath, sameBasenameCopyPath));
   REQUIRE(QFile::copy(installedPath, repeatedSuffixPath));
   writeDesktopEntry(unknownPath, QStringLiteral("unknown"));
   REQUIRE(QFile::link(unknownPath, unknownSymlinkPath));
@@ -528,6 +531,7 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
   // exposes an unknown local .desktop URL. Manual QA must cover togglePinned()
   // for that path; this test covers the shared addLauncher() validator.
   const QList<QUrl> rejectedUrls{
+      QUrl::fromLocalFile(sameBasenameCopyPath),
       QUrl::fromLocalFile(repeatedSuffixPath),
       QUrl::fromLocalFile(unknownPath),
       QUrl::fromLocalFile(unknownSymlinkPath),
@@ -565,11 +569,14 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
       applicationsDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
   const QString symlinkPath =
       fixtureDir + QStringLiteral("/menu-target.desktop");
+  const QString sameBasenameSymlinkPath =
+      fixtureDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
   const QString repeatedSuffixSymlinkPath = fixtureDir + QStringLiteral("/") +
                                             appId +
                                             QStringLiteral(".desktop.desktop");
   writeDesktopEntry(installedPath, appId);
   REQUIRE(QFile::link(installedPath, symlinkPath));
+  REQUIRE(QFile::link(installedPath, sameBasenameSymlinkPath));
   REQUIRE(QFile::link(installedPath, repeatedSuffixSymlinkPath));
   REQUIRE(QProcess::execute(QStringLiteral("kbuildsycoca6"),
                             {QStringLiteral("--noincremental")}) == 0);
@@ -609,6 +616,8 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
   verifyAccepted(QStringLiteral("known applications URL"), expectedUrl);
   verifyAccepted(QStringLiteral("symlink to installed desktop file"),
                  QUrl::fromLocalFile(symlinkPath));
+  verifyAccepted(QStringLiteral("same-basename symlink alias"),
+                 QUrl::fromLocalFile(sameBasenameSymlinkPath));
   verifyAccepted(QStringLiteral("repeated-suffix symlink alias"),
                  QUrl::fromLocalFile(repeatedSuffixSymlinkPath));
 }

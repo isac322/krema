@@ -326,14 +326,16 @@ bool DockActions::addLauncher(const QUrl &url)
     // the application directories (e.g. a file dragged from ~/Desktop). Such
     // entries are unknown to KSycoca, and libtaskmanager dereferences the null
     // service in requestAddLauncher() and crashes the dock.
-    QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
-    if (resolvedUrl.isLocalFile()) {
-        const QString menuId = menuIdForDesktopFile(resolvedUrl);
+    QUrl resolvedUrl;
+    if (url.isLocalFile()) {
+        const QString menuId = menuIdForDesktopFile(url);
         if (menuId.isEmpty()) {
             qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
             return false;
         }
         resolvedUrl = QUrl(QStringLiteral("applications:") + menuId);
+    } else {
+        resolvedUrl = appData.url.isValid() ? appData.url : url;
     }
 
     if (resolvedUrl.scheme() != QLatin1String("applications")) {

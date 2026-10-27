@@ -374,12 +374,15 @@ def hover_ready(k: Krema, name: str = "Alpha") -> None:
 
 
 def open_menu(k: Krema) -> kwin.Window:
-    return k.open_dock_context_menu_keyboard()
+    return k.open_dock_context_menu()
 
 
 def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
     """Wait for fixture ``name``, then open Settings through the keyboard menu."""
     k.wait_for_item(name)
+    point = k.item_center(name)
+    inp.move(*point)
+    wait_until(lambda: kwin.cursor_pos() == point, message=f"pointer to reach {point}")
     win = k.open_settings()
     k.move_away()
     return win
@@ -914,7 +917,7 @@ def test_set008_follow_active_shortcuts_act_on_the_shown_dock(krema: Krema, apps
 
 # ------------------------------------------------------------------- SET-009
 def _quit_via_menu(k: Krema) -> int:
-    k.open_dock_context_menu_keyboard()
+    k.open_dock_context_menu()
     k.choose_context_menu_entry("Quit Krema", DOCK_CONTEXT_MENU_ENTRIES)
     assert k.process is not None
     return k.process.wait(20)

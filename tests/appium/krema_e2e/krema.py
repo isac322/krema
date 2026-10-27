@@ -300,8 +300,14 @@ class Krema:
         active window, so wait for this before the first key."""
 
         def has_focus() -> bool:
-            w, r = kwin.active_window(), self.surface_rect(surface)
-            return w is not None and r is not None and w.pid == self.pid and Rect(w.client_x, w.client_y, w.client_width, w.client_height) == r
+            frame = self.find(self._frame_xpath(surface))
+            w = kwin.active_window()
+            return (
+                frame is not None
+                and w is not None
+                and w.pid == self.pid
+                and (w.client_width, w.client_height) == (Rect.of(frame).width, Rect.of(frame).height)
+            )
 
         wait_until(has_focus, timeout=5, message=f"KWin keyboard focus on krema's {surface} surface")
 

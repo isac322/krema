@@ -316,18 +316,13 @@ bool DockActions::addLauncher(const QUrl &url)
         return false;
     }
 
-    // Validate that the URL resolves to a real application
+    // Validate that the URL resolves to a real application.
     const auto appData = TaskManager::appDataFromUrl(url);
-    if (appData.id.isEmpty()) {
-        return false;
-    }
-
-    // appDataFromUrl() derives an id from any .desktop path, even one outside
-    // the application directories (e.g. a file dragged from ~/Desktop). Such
-    // entries are unknown to KSycoca, and libtaskmanager dereferences the null
-    // service in requestAddLauncher() and crashes the dock.
     QUrl resolvedUrl;
     if (url.isLocalFile()) {
+        // appDataFromUrl() can derive an id from any .desktop path, including
+        // one outside the application directories. Validate local paths
+        // against the canonical service entry instead.
         const QString menuId = menuIdForDesktopFile(url);
         if (menuId.isEmpty()) {
             qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
@@ -335,8 +330,14 @@ bool DockActions::addLauncher(const QUrl &url)
         }
         resolvedUrl = QUrl(QStringLiteral("applications:") + menuId);
     } else {
+        if (appData.id.isEmpty()) {
+            return false;
+        }
         resolvedUrl = appData.url.isValid() ? appData.url : url;
     }
+
+    // Unknown local entries are rejected above because libtaskmanager
+    // dereferences the null service in requestAddLauncher().
 
     if (resolvedUrl.scheme() != QLatin1String("applications")) {
         return false;

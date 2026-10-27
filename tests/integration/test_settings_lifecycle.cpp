@@ -719,6 +719,12 @@ TEST_CASE("Settings reopen cleanly after being closed", "[settings][reopen-after
 
     // QA-06: Escape closes the dialog, releases the lock and destroys the
     // window instead of leaving a hidden one behind
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            auto *dialog = settingsWindow();
+            return dialog && dialog->isActive();
+        },
+        kTimeoutMs));
     QTest::keyClick(settingsWindow(), Qt::Key_Escape);
     CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
     CHECK(QTest::qWaitFor(

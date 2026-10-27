@@ -513,14 +513,20 @@ class Krema:
         )
 
     def open_settings(self, timeout: float = 15.0) -> kwin.Window:
-        """Open Settings through the keyboard dock menu and await its window."""
+        """Open Settings through the keyboard dock menu and await activation."""
         self.open_dock_context_menu_keyboard()
         self.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
-        return wait_until(
+        win = wait_until(
             lambda: next((w for w in self.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
             timeout=timeout,
             message="Settings window",
         )
+        wait_until(
+            lambda: (active := kwin.active_window()) is not None and active.internal_id == win.internal_id,
+            timeout=timeout,
+            message="Settings window to become active",
+        )
+        return win
 
     def screenshot(self, name: str, area: tuple[int, int, int, int] | None = None) -> Image.Image:
         """Screen image (RGB, screen coordinates), also saved as PNG to

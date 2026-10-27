@@ -76,10 +76,13 @@ The existing context-menu Settings entry, keyboard paths, and multi-monitor
 lifecycle remain covered by their original cases. Click-policy, reservation,
 and task-section rows check their real controls and consumer effects.
 
-**Automation note:** General Settings and reservation tests invoke Focus Dock,
-wait for KWin compositor keyboard focus, press Shift+F10, and choose Settings.
-They retain their control, live-update, KConfig, KWin geometry, and persistence
-checks. Pointer movement ends dock keyboard navigation before hide/reveal checks.
+**Automation note:** General Settings and reservation tests use the keyboard
+frontdoor: invoke Focus Dock, wait for KWin compositor keyboard focus, press
+Shift+F10, and choose Settings. They retain their control, live-update, KConfig,
+KWin geometry, and persistence checks. Pointer movement ends dock keyboard
+navigation before hide/reveal checks. SET-009 explicitly retains pointer
+right-click for both the Settings and Quit menu steps because keyboard reopening
+while Settings is active is not portable. CTX-011 covers keyboard dock menus.
 The manual scenarios below keep right-click entry to Settings. CTX-006/010/012
 and SET-008's second-output reopen continue to test pointer routing. Reruns of
 the migrated Settings and reservation entry paths are pending.
@@ -289,7 +292,7 @@ initial and post-close Settings opens use the keyboard path described above.
 - No Settings window remains after exit
 
 **Verification:** process exit status, window list
-**Automated:** tests/appium/test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly (Fedora 43 image only; the Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
+**Automated:** tests/appium/test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly (retains the pointer menu for both the Settings and Quit steps; CTX-011 covers keyboard dock menus; Fedora 43 image only; the Debian 13 / Ubuntu 25.04 run is out of this harness's scope; reruns remain pending)
 
 ---
 

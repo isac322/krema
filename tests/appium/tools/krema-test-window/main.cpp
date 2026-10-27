@@ -223,7 +223,8 @@ int main(int argc, char **argv)
         const QString eventsPath = parser.value(QStringLiteral("events"));
         const QStringList paths = parser.positionalArguments();
         if (eventsPath.isEmpty() || paths.isEmpty()) {
-            parser.error(QStringLiteral("--drag-source requires --events and at least one path"));
+            fprintf(stderr, "--drag-source requires --events and at least one path\n");
+            return 2;
         }
         DragSourceWindow window(paths, eventsPath);
         QObject::connect(&app, &QCoreApplication::aboutToQuit, &window, [&window] {

@@ -87,8 +87,15 @@ def external_drop(krema, path, target, label):
     output = env.artifact_path(f"pr137/{label}-source.log")
     child_env = krema.environment()
     with output.open("wb") as stream:
-        process = subprocess.Popen([env.TEST_WINDOW_BINARY, "--drag-source", "--events", str(events), str(path)],
-                                   env=child_env, stdout=stream, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(
+            [
+                env.TEST_WINDOW_BINARY,
+                "--drag-source",
+                "--events", str(events),
+                "--app-id", "org.krema.pr137.source",
+                str(path),
+            ],
+            env=child_env, stdout=stream, stderr=subprocess.STDOUT)
     try:
         window = wait_until(lambda: next((w for w in kwin.app_windows() if w.pid == process.pid), None),
                             message=f"external source {label} mapped")

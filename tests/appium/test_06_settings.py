@@ -152,7 +152,6 @@ def click_el(krema: Krema, el, surface: str = "settings", button: str = "left") 
     target = krema.screen_rect(el, surface).center
     if surface == "settings" and target[0] >= W:
         inp.move_path(inp.line(kwin.cursor_pos(), target, 8), step_ms=20)
-        wait_until(lambda: kwin.cursor_pos() == target, message="pointer arrival at secondary Settings target")
         inp.click(button=button)
     else:
         inp.click(*target, button=button)

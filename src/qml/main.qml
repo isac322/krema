@@ -1513,7 +1513,8 @@ Item {
         DropArea {
             id: externalDropArea
             anchors.fill: parent
-            keys: ["text/uri-list"]
+            // DropArea `keys` match Drag.keys of the source, not MIME formats,
+            // so no filter is set here; MIME URI lists are handled in normalizedUrls().
             property int dropTargetIndex: -1
 
             function normalizedUrls(drop) {

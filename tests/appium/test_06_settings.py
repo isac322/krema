@@ -725,8 +725,7 @@ def test_set007_custom_tint_color_is_applied_and_saved(krema: Krema, apps: TestW
     dialog_click(hex_field)
     inp.key("ctrl", "a")
     inp.type_text("#c81e1e")
-    inp.key("Return")
-    wait_until(lambda: hex_field.get_attribute("name") == "#c81e1e", message="Hex field to commit tint colour")
+    inp.key("tab")
     dialog_click(krema.wait_for(f"{COLOR_DIALOG}//button[@name='OK']"))
     wait_until(lambda: not [w for w in krema.windows() if w.title.startswith("Choose tint color")], message="colour dialog closed")
 

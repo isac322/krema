@@ -184,13 +184,14 @@ Wayland session. Install two deterministic desktop entries in the private XDG
 applications directory and refresh KService before starting Krema. Prepare a
 symlink to one installed entry, a valid but unknown local `.desktop` file, a
 regular copy with a repeated `.desktop.desktop` suffix, and a regular document.
-Use a separate Qt client as the external drag source.
+The external drag source is `tests/appium/tools/krema-test-window --drag-source`.
 
 **Steps:**
 1. Record Krema's process state, ordered dock items, and persisted launcher URLs.
-2. Use real pointer press/hold/move/release input to start the external Qt
-   client's `QDrag` with a `text/uri-list` payload. Drop the unknown local file
-   and repeated-suffix copy onto the dock.
+2. Use real pointer press/hold/move/release input to start
+   `krema-test-window --drag-source`, which emits a real Qt `QDrag` with a
+   `text/uri-list` payload. Drop the unknown local file and repeated-suffix
+   copy onto the dock.
 3. Drop the installed entry and symlink onto the dock, then drop the installed
    entry again to check duplicate suppression.
 4. Drop the regular document onto the accepted application's icon and inspect

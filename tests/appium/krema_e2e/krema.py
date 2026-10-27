@@ -360,12 +360,12 @@ class Krema:
     def to_screen(self, rect: Rect, surface: str = "dock") -> Rect:
         """Convert a surface-local AT-SPI rect to global screen coordinates.
 
-        Secondary-output Settings children include the horizontal output offset
-        but keep the client-local vertical coordinate.
+        Secondary-output Settings children already include their global x
+        coordinate; primary-output and dock/preview children remain local.
         """
         origin = wait_until(lambda: self.surface_rect(surface), timeout=5, message=f"{surface} surface geometry")
         if surface == "settings" and origin.x >= env.SCREEN_WIDTH and rect.x >= origin.x:
-            return Rect(rect.x, origin.y + rect.y, rect.width, rect.height)
+            return rect
         return Rect(origin.x + rect.x, origin.y + rect.y, rect.width, rect.height)
 
     def screen_rect(self, element: WebElement, surface: str = "dock") -> Rect:

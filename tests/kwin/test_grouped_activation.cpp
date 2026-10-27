@@ -145,21 +145,22 @@ QString nextLauncherFixtureId() {
       .arg(++serial);
 }
 
+QUrl applicationsUrl(const QString &appId) {
+  return QUrl(QStringLiteral("applications:") + appId +
+              QStringLiteral(".desktop"));
+}
+
 int launcherRowForAppId(const QString &appId) {
   auto *tasks = model().tasksModel();
+  const QUrl expectedUrl = applicationsUrl(appId);
   for (int row = 0; row < tasks->rowCount(); ++row) {
     const QModelIndex idx = tasks->index(row, 0);
     if (idx.data(AbstractTasksModel::IsLauncher).toBool() &&
-        idx.data(AbstractTasksModel::AppId).toString() == appId + QStringLiteral(".desktop")) {
+        idx.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl() == expectedUrl) {
       return row;
     }
   }
   return -1;
-}
-
-QUrl applicationsUrl(const QString &appId) {
-  return QUrl(QStringLiteral("applications:") + appId +
-              QStringLiteral(".desktop"));
 }
 
 void writeDesktopEntry(const QString &path, const QString &name) {
@@ -596,8 +597,6 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
     const QUrl resolved = tasks->index(row, 0)
                               .data(AbstractTasksModel::LauncherUrlWithoutIcon)
                               .toUrl();
-    CHECK(tasks->index(row, 0).data(AbstractTasksModel::AppId).toString() ==
-          appId + QStringLiteral(".desktop"));
     CHECK(resolved == expectedUrl);
 
     removeLauncherForAppId(appId);

@@ -249,8 +249,13 @@ def open_page(krema: Krema, name: str) -> None:
     if not has_state(item, "checked"):
         target = krema.screen_rect(item, "settings")
         if target.x >= W:
-            item.click()
-            inp.key("Return")
+            desktop = pyatspi.Registry.getDesktop(0)
+            app = next(a for a in desktop if a is not None and a.get_process_id() == krema.pid)
+            node = pyatspi.findDescendant(app, lambda n: n.getRoleName() == "list item" and n.name == name)
+            assert node is not None, f"Settings page {name!r} not in krema's AT-SPI tree"
+            action = node.queryAction()
+            assert action.nActions, f"Settings page {name!r} has no accessible action"
+            assert action.doAction(0), f"could not activate Settings page {name!r}"
         else:
             click_el(krema, item)
     wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")

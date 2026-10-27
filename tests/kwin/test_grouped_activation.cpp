@@ -136,6 +136,51 @@ int launcherRow(const QUrl &url)
     }
     return -1;
 }
+QString nextLauncherFixtureId() {
+  static int serial = 0;
+  return QStringLiteral("krema-drop-test-%1-%2")
+      .arg(QCoreApplication::applicationPid())
+      .arg(++serial);
+}
+
+int launcherRowForAppId(const QString &appId) {
+  auto *tasks = model().tasksModel();
+  for (int row = 0; row < tasks->rowCount(); ++row) {
+    const QModelIndex idx = tasks->index(row, 0);
+    if (idx.data(AbstractTasksModel::IsLauncher).toBool() &&
+        idx.data(AbstractTasksModel::AppId).toString() == appId) {
+      return row;
+    }
+  }
+  return -1;
+}
+
+QUrl applicationsUrl(const QString &appId) {
+  return QUrl(QStringLiteral("applications:") + appId +
+              QStringLiteral(".desktop"));
+}
+
+void writeDesktopEntry(const QString &path, const QString &name) {
+  QFile desktop(path);
+  REQUIRE(desktop.open(QIODevice::WriteOnly));
+  desktop.write(QStringLiteral("[Desktop "
+                               "Entry]\nType=Application\nName=%1\nExec="
+                               "true\nIcon=application-x-executable\n")
+                    .arg(name)
+                    .toUtf8());
+  desktop.close();
+}
+
+void removeLauncherForAppId(const QString &appId) {
+  auto *tasks = model().tasksModel();
+  const int row = launcherRowForAppId(appId);
+  if (row >= 0) {
+    tasks->requestRemoveLauncher(
+        tasks->index(row, 0)
+            .data(AbstractTasksModel::LauncherUrlWithoutIcon)
+            .toUrl());
+  }
+}
 
 // Resolve fresh indices after focus, minimization, or grouping changes.
 QModelIndex windowIndex(const QString &title)
@@ -416,6 +461,138 @@ TEST_CASE("A launcher pinned by file URL counts as pinned and toggles off", "[gr
             return launcherRow(url) < 0;
         },
         kTimeoutMs));
+}
+
+TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
+          "[grouped-activation][launcher-drop]") {
+  const QString dataHome =
+      QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+  const QString runtimeHome =
+      QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+  const QString appId = nextLauncherFixtureId();
+  const QString applicationsDir = dataHome + QStringLiteral("/applications");
+  const QString fixtureDir = runtimeHome + QLatin1Char('/') + appId;
+  REQUIRE(QDir().mkpath(applicationsDir));
+  REQUIRE(QDir().mkpath(fixtureDir));
+
+  const QString installedPath =
+      applicationsDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
+  const QString repeatedSuffixPath = fixtureDir + QLatin1Char('/') + appId +
+                                     QStringLiteral(".desktop.desktop");
+  const QString unknownPath = fixtureDir + QStringLiteral("/unknown.desktop");
+  const QString unknownSymlinkPath =
+      fixtureDir + QStringLiteral("/unknown-target.desktop");
+  const QString danglingSymlinkPath =
+      fixtureDir + QStringLiteral("/dangling.desktop");
+  const QString missingPath = fixtureDir + QStringLiteral("/missing.desktop");
+  writeDesktopEntry(installedPath, appId);
+  REQUIRE(QFile::copy(installedPath, repeatedSuffixPath));
+  writeDesktopEntry(unknownPath, QStringLiteral("unknown"));
+  REQUIRE(QFile::link(unknownPath, unknownSymlinkPath));
+  REQUIRE(QFile::link(missingPath, danglingSymlinkPath));
+  QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+
+  auto *tasks = model().tasksModel();
+  const QStringList launchersBefore = tasks->launcherList();
+  const int rowsBefore = tasks->rowCount();
+  krema::DockActions actions(&model());
+  const auto cleanup = qScopeGuard([&] {
+    removeLauncherForAppId(appId);
+    QFile::remove(installedPath);
+    QDir(fixtureDir).removeRecursively();
+  });
+
+  // This harness cannot create a real unpinned task whose upstream metadata
+  // exposes an unknown local .desktop URL. Manual QA must cover togglePinned()
+  // for that path; this test covers the shared addLauncher() validator.
+  const QList<QUrl> rejectedUrls{
+      QUrl::fromLocalFile(repeatedSuffixPath),
+      QUrl::fromLocalFile(unknownPath),
+      QUrl::fromLocalFile(unknownSymlinkPath),
+      QUrl::fromLocalFile(missingPath),
+      QUrl::fromLocalFile(danglingSymlinkPath),
+      QUrl(QStringLiteral("https://example.com/unknown.desktop")),
+      applicationsUrl(appId + QStringLiteral("-unknown")),
+      QUrl(),
+  };
+  for (const QUrl &url : rejectedUrls) {
+    CAPTURE(url);
+    QSignalSpy pinnedChanged(&actions,
+                             &krema::DockActions::pinnedLaunchersChanged);
+    CHECK_FALSE(actions.addLauncher(url));
+    QApplication::processEvents();
+    CHECK(tasks->launcherList() == launchersBefore);
+    CHECK(tasks->rowCount() == rowsBefore);
+    CHECK(pinnedChanged.isEmpty());
+  }
+}
+
+TEST_CASE("Accepted desktop drops resolve to the installed launcher",
+          "[grouped-activation][launcher-drop]") {
+  const QString dataHome =
+      QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+  const QString runtimeHome =
+      QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+  const QString appId = nextLauncherFixtureId();
+  const QString applicationsDir = dataHome + QStringLiteral("/applications");
+  const QString fixtureDir = runtimeHome + QLatin1Char('/') + appId;
+  REQUIRE(QDir().mkpath(applicationsDir));
+  REQUIRE(QDir().mkpath(fixtureDir));
+
+  const QString installedPath =
+      applicationsDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
+  const QString copiedPath =
+      fixtureDir + QLatin1Char('/') + appId + QStringLiteral(".desktop");
+  const QString symlinkPath =
+      fixtureDir + QStringLiteral("/menu-target.desktop");
+  const QString repeatedSuffixSymlinkPath = fixtureDir + QStringLiteral("/") +
+                                            appId +
+                                            QStringLiteral(".desktop.desktop");
+  writeDesktopEntry(installedPath, appId);
+  writeDesktopEntry(copiedPath, QStringLiteral("different external copy"));
+  REQUIRE(QFile::link(installedPath, symlinkPath));
+  REQUIRE(QFile::link(installedPath, repeatedSuffixSymlinkPath));
+  QProcess::execute(QStringLiteral("kbuildsycoca6"), {});
+
+  auto *tasks = model().tasksModel();
+  krema::DockActions actions(&model());
+  const auto cleanup = qScopeGuard([&] {
+    removeLauncherForAppId(appId);
+    QFile::remove(installedPath);
+    QDir(fixtureDir).removeRecursively();
+  });
+  const QUrl expectedUrl = applicationsUrl(appId);
+  const auto verifyAccepted = [&](const QString &caseName, const QUrl &input) {
+    INFO(caseName.toStdString());
+    QSignalSpy pinnedChanged(&actions,
+                             &krema::DockActions::pinnedLaunchersChanged);
+    REQUIRE(actions.addLauncher(input));
+    REQUIRE(QTest::qWaitFor([&] { return launcherRowForAppId(appId) >= 0; },
+                            kTimeoutMs));
+    REQUIRE(pinnedChanged.count() == 1);
+
+    const int row = launcherRowForAppId(appId);
+    const QUrl resolved = tasks->index(row, 0)
+                              .data(AbstractTasksModel::LauncherUrlWithoutIcon)
+                              .toUrl();
+    CHECK(tasks->index(row, 0).data(AbstractTasksModel::AppId).toString() ==
+          appId);
+    CHECK(resolved == expectedUrl);
+
+    removeLauncherForAppId(appId);
+    REQUIRE(QTest::qWaitFor([&] { return launcherRowForAppId(appId) < 0; },
+                            kTimeoutMs));
+  };
+
+  verifyAccepted(QStringLiteral("installed local desktop file"),
+                 QUrl::fromLocalFile(installedPath));
+  verifyAccepted(QStringLiteral("known applications URL"), expectedUrl);
+  verifyAccepted(QStringLiteral("symlink to installed desktop file"),
+                 QUrl::fromLocalFile(symlinkPath));
+  verifyAccepted(QStringLiteral("repeated-suffix symlink alias"),
+                 QUrl::fromLocalFile(repeatedSuffixSymlinkPath));
+  verifyAccepted(QStringLiteral("exact-basename external copy"),
+                 QUrl::fromLocalFile(copiedPath));
 }
 
 TEST_CASE("Clicking a group returns to its most recently used window", "[grouped-activation]")

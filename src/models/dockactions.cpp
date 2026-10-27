@@ -88,10 +88,10 @@ void DockActions::togglePinned(int index)
     if (launcherUrl.isValid()) {
         if (tasksModel->launcherPosition(launcherUrl) != -1) {
             tasksModel->requestRemoveLauncher(launcherUrl);
+            Q_EMIT pinnedLaunchersChanged();
         } else {
-            tasksModel->requestAddLauncher(launcherUrl);
+            addLauncher(launcherUrl);
         }
-        Q_EMIT pinnedLaunchersChanged();
     }
 }
 
@@ -283,11 +283,11 @@ bool DockActions::moveTask(int fromIndex, int toIndex)
 namespace
 {
 
-// Storage id of the installed application behind a local .desktop file, or an
+// Menu id of the installed application behind a local .desktop file, or an
 // empty string when none matches. Menus hand out the symlink target (e.g.
 // /usr/lib/libreoffice/share/xdg/writer.desktop) instead of the entry in the
 // application directories (libreoffice-writer.desktop), so compare resolved paths.
-QString storageIdForDesktopFile(const QUrl &url)
+QString menuIdForDesktopFile(const QUrl &url)
 {
     if (!url.isLocalFile()) {
         return {};
@@ -299,7 +299,13 @@ QString storageIdForDesktopFile(const QUrl &url)
     const auto services = KApplicationTrader::query([&target](const KService::Ptr &service) {
         return QFileInfo(service->entryPath()).canonicalFilePath() == target;
     });
-    return services.isEmpty() ? QString() : services.constFirst()->storageId();
+    for (const KService::Ptr &service : services) {
+        const QString menuId = service->menuId();
+        if (!menuId.isEmpty()) {
+            return menuId;
+        }
+    }
+    return {};
 }
 
 }
@@ -321,13 +327,23 @@ bool DockActions::addLauncher(const QUrl &url)
     // entries are unknown to KSycoca, and libtaskmanager dereferences the null
     // service in requestAddLauncher() and crashes the dock.
     QUrl resolvedUrl = appData.url.isValid() ? appData.url : url;
-    if (!KService::serviceByStorageId(appData.id)) {
-        const QString storageId = storageIdForDesktopFile(url);
-        if (storageId.isEmpty()) {
+    if (resolvedUrl.isLocalFile()) {
+        const QString menuId = menuIdForDesktopFile(resolvedUrl);
+        if (menuId.isEmpty()) {
             qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
             return false;
         }
-        resolvedUrl = QUrl(QStringLiteral("applications:") + storageId);
+        resolvedUrl = QUrl(QStringLiteral("applications:") + menuId);
+    }
+
+    if (resolvedUrl.scheme() != QLatin1String("applications")) {
+        return false;
+    }
+    const QString menuId = resolvedUrl.path();
+    const KService::Ptr service = KService::serviceByMenuId(menuId);
+    if (!service || menuId.isEmpty() || service->menuId().isEmpty() || service->menuId() != menuId) {
+        qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
+        return false;
     }
 
     const bool ok = m_model->tasksModel()->requestAddLauncher(resolvedUrl);

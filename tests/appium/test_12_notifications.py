@@ -25,6 +25,7 @@ def _start_server(
     *,
     with_slack_sni: bool = False,
     chat_sni: tuple[str, str] | None = None,
+    with_ferdium: bool = False,
 ) -> subprocess.Popen[str]:
     ready_file = tmp_path / "notification-server.ready"
     watcher_ready_file = tmp_path / "notification-watcher.ready"
@@ -41,6 +42,8 @@ def _start_server(
         command.append("--with-slack-sni")
     if chat_sni is not None:
         command += ["--chat-sni-id", chat_sni[0], "--chat-sni-title", chat_sni[1]]
+    if with_ferdium:
+        command.append("--with-ferdium")
     server = subprocess.Popen(
         command,
         stdout=subprocess.DEVNULL,
@@ -521,3 +524,73 @@ def test_not006_telegram_tray_states_and_title_count(
         )
     finally:
         _finish([], server)
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher("io.element.Element.desktop")]})
+def test_not007_element_tray_tooltip_states_without_window(
+    krema: Krema, apps: TestWindows, tmp_path: Path
+) -> None:
+    """Element closed to the tray: its tooltip carries highlight and unread state; icon pixels do not."""
+    _install_app(krema, "io.element.Element.desktop", "Element", "io.element.Element")
+    krema.start()
+    krema.wait_for_item("Element")
+    description = _dock_description(krema, "Element")
+    server: subprocess.Popen[str] | None = None
+    try:
+        server = _start_server(tmp_path, chat_sni=("element-desktop", "Element"))
+        _chat_sni("Element [offline] [5] | #matrix:matrix.org")
+        wait_until(
+            lambda: "5 notifications" in description(),
+            message=lambda: f"Element tooltip highlight count to reach the launcher (got {description()!r})",
+        )
+        _chat_sni("Element * | #matrix:matrix.org")
+        wait_until(
+            lambda: "Unread messages" in description() and "notifications" not in description(),
+            message=lambda: f"Element tooltip activity dot to show unread (got {description()!r})",
+        )
+        _chat_sni("Element | #matrix:matrix.org", badge="235,55,55@top-right")
+        wait_until(
+            lambda: "Unread messages" not in description()
+            and "Mention notification" not in description()
+            and "notifications" not in description(),
+            message=lambda: f"Element badge to clear with a resting tooltip despite red icon art (got {description()!r})",
+        )
+    finally:
+        _finish([], server)
+
+
+@pytest.mark.no_krema_autostart
+@pytest.mark.kremarc({"PinnedLaunchers": [config.launcher("org.ferdium.Ferdium.desktop")]})
+def test_not008_ferdium_dbus_counters_drive_badge_and_clear_popups(
+    krema: Krema, apps: TestWindows, tmp_path: Path
+) -> None:
+    """Ferdium: its D-Bus direct/indirect counters drive the badge; reading direct messages clears popups."""
+    _install_app(krema, "org.ferdium.Ferdium.desktop", "Ferdium", "org.ferdium.Ferdium")
+    krema.start()
+    krema.wait_for_item("Ferdium")
+    description = _dock_description(krema, "Ferdium")
+    token = uuid.uuid4().hex[:10]
+    tracked_ids: list[int] = []
+    server: subprocess.Popen[str] | None = None
+    try:
+        server = _start_server(tmp_path, with_ferdium=True)
+        _stimulate("ferdium", "--direct", "0", "--indirect", "2")
+        wait_until(
+            lambda: "Unread messages" in description(),
+            message=lambda: f"Ferdium indirect counter to show unread (got {description()!r})",
+        )
+        _stimulate("ferdium", "--direct", "3", "--indirect", "2")
+        wait_until(
+            lambda: "3 notifications" in description(),
+            message=lambda: f"Ferdium direct counter to show its count (got {description()!r})",
+        )
+        toast_id = _notify(token, "ferdium-dm", desktop_entry="org.ferdium.ferdium")
+        tracked_ids.append(toast_id)
+        _stimulate("ferdium", "--direct", "0", "--indirect", "0")
+        wait_until(
+            lambda: "notifications" not in description() and "Unread messages" not in description(),
+            message=lambda: f"Ferdium badge and popup count to clear once read (got {description()!r})",
+        )
+    finally:
+        _finish(tracked_ids, server)

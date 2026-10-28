@@ -999,6 +999,12 @@ test-owned `tests/notification/notify.py serve` process, which owns
    with Id `WebCord_status_icon_1` and set its tooltip to
    `WebCord - 4 mentions`; verify `4 notifications`. Set the tooltip back to
    `WebCord` and verify the badge clears.
+10. Pin a `mattermost.desktop` launcher and open a `mattermost` window. Host a
+    StatusNotifierItem with Id `mattermost`. Set a red lower-right tray badge and
+    verify `Mention notification`; send a `mattermost` notification and verify
+    `1 notifications`; time the popup out and verify the count stays. Switch the
+    tray badge to blue (unread only) and verify the count clears while
+    `Unread messages` remains; return the tray icon to rest and verify both clear.
 
 **Expected Result:**
 - A real external `Notify` reaches the running Krema watcher and increments
@@ -1008,6 +1014,8 @@ test-owned `tests/notification/notify.py serve` process, which owns
   unread, and the count clears as soon as the tray icon returns to rest.
 - A WebCord tray tooltip mention count drives the pinned launcher's badge
   without any window, and clears with the tooltip.
+- Mattermost keeps a timed-out mention popup counted while its tray shows a
+  mention, and drops the count once only unread channels remain.
 - The owner handover has one non-empty old owner and one non-empty new owner;
   the replacement server re-registers once, and its notification is visible.
 - A 30-day DND deadline is accepted and safely armed by the Qt integration
@@ -1044,8 +1052,10 @@ uses `tests/notification/notify.py` for external `Notify`/`CloseNotification`,
 and `tests/appium/test_12_notifications.py::test_not002_slack_sni_chat_badge_lifecycle`
 verifies Slack `StatusNotifierItem` (`IconPixmap` + `ToolTip`) rest/unread/highlight/read-clear
 badge synchronization and desktop toast `Notify` count suppression in a running KWin session.
-`test_not003_discord_keeps_expired_popup_count_until_read` and
-`test_not004_webcord_tray_tooltip_mentions_without_window` cover steps 8 and 9.
+`test_not003_discord_keeps_expired_popup_count_until_read`,
+`test_not004_webcord_tray_tooltip_mentions_without_window`, and
+`test_not005_mattermost_mention_count_clears_when_mentions_are_read` cover
+steps 8 to 10.
 SNI, Unity, DND, portal, and Jobs protocol coverage remains in the wire-level
 notification catalog; no animation pixel assertion is required here.
 `tests/integration/test_notification_tracker.cpp` (`krema_notification_tracker_tests`)

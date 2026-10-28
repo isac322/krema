@@ -250,6 +250,7 @@ enum class SniChatClient : quint8 {
     Vesktop,
     WebCord,
     Mattermost,
+    Telegram,
 };
 
 static QString normalizedSniId(const QString &rawId)
@@ -257,7 +258,10 @@ static QString normalizedSniId(const QString &rawId)
     QString id = stripDesktopSuffix(rawId.trimmed().toLower());
     static const QRegularExpression statusIconSuffix(QStringLiteral("_[sS]tatus_[iI]con_[0-9]+$"));
     id.remove(statusIconSuffix);
-    return stripDesktopSuffix(id);
+    id = stripDesktopSuffix(id);
+    static const QRegularExpression telegramInstanceSuffix(QStringLiteral("^(org\\.telegram\\.desktop)\\._[0-9a-f]{32}$"));
+    const auto match = telegramInstanceSuffix.match(id);
+    return match.hasMatch() ? match.captured(1) : id;
 }
 
 static SniChatClient sniChatClientForId(const QString &rawId)
@@ -279,6 +283,11 @@ static SniChatClient sniChatClientForId(const QString &rawId)
     }
     if (id == QLatin1String("mattermost") || id == QLatin1String("mattermost-desktop") || id == QLatin1String("com.mattermost") || id == QLatin1String("com.mattermost.desktop")) {
         return SniChatClient::Mattermost;
+    }
+    if (id == QLatin1String("org.telegram") || id == QLatin1String("org.telegram.desktop")
+        || id == QLatin1String("telegram") || id == QLatin1String("telegram-desktop")
+        || id == QLatin1String("telegramdesktop")) {
+        return SniChatClient::Telegram;
     }
     return SniChatClient::None;
 }
@@ -302,6 +311,8 @@ static QString canonicalNotificationKey(const QString &rawId)
         return QStringLiteral("webcord");
     case SniChatClient::Mattermost:
         return QStringLiteral("mattermost");
+    case SniChatClient::Telegram:
+        return QStringLiteral("org.telegram.desktop");
     case SniChatClient::None:
         break;
     }
@@ -449,6 +460,66 @@ static int mattermostPixelState(const QImage &image, const QString &toolTipTitle
         return 2;
     }
     return unreadPixels >= 10 || toolTipTitle.contains(QStringLiteral("unread channel"), Qt::CaseInsensitive) ? 1 : 0;
+}
+static int telegramPixelState(const QImage &image, const QString &iconName)
+{
+    if (iconName.contains(QStringLiteral("attention"), Qt::CaseInsensitive)) {
+        return 2;
+    }
+    if (iconName.contains(QStringLiteral("mute"), Qt::CaseInsensitive)) {
+        return 1;
+    }
+    if (image.isNull() || image.width() <= 0 || image.height() <= 0) {
+        return 0;
+    }
+
+    int activePixels = 0;
+    int grayPixels = 0;
+    for (int y = 0; y < image.height(); ++y) {
+        if (y * 10 < image.height() * 5) {
+            continue;
+        }
+        for (int x = 0; x < image.width(); ++x) {
+            if (x * 10 < image.width() * 5) {
+                continue;
+            }
+            const QColor pixel = image.pixelColor(x, y);
+            if (pixel.alpha() < 200) {
+                continue;
+            }
+
+            const bool red = pixel.red() >= 200 && pixel.green() <= 110 && pixel.blue() <= 120;
+            if (red) {
+                ++activePixels;
+            } else if (std::abs(pixel.red() - pixel.green()) <= 10
+                       && std::abs(pixel.green() - pixel.blue()) <= 10
+                       && pixel.red() >= 70 && pixel.red() <= 190) {
+                ++grayPixels;
+            }
+        }
+    }
+
+    if (activePixels >= 12 && activePixels > grayPixels) {
+        return 2;
+    }
+    return grayPixels >= 12 ? 1 : 0;
+}
+
+static int telegramToolTipCount(const QString &title, const QString &subTitle)
+{
+    static const QRegularExpression pattern(QStringLiteral("^\\s*Telegram\\s*\\(([1-9][0-9]*)\\)\\s*$"),
+                                            QRegularExpression::CaseInsensitiveOption);
+    for (const QString &candidate : {title, subTitle}) {
+        const auto match = pattern.match(candidate);
+        if (match.hasMatch()) {
+            bool ok = false;
+            const int count = match.captured(1).toInt(&ok);
+            if (ok && count > 0) {
+                return count;
+            }
+        }
+    }
+    return 0;
 }
 } // namespace
 
@@ -1186,7 +1257,11 @@ void NotificationTracker::updateSniChatState(SniEntry &entry)
         return;
     }
     entry.chatMentionCount = 0;
-    if (chatClient == SniChatClient::Mattermost) {
+    if (chatClient == SniChatClient::Telegram) {
+        const int pixelState = telegramPixelState(entry.iconImage, entry.iconName);
+        entry.chatMentionCount = telegramToolTipCount(entry.toolTipTitle, entry.toolTipSubTitle);
+        entry.chatUnreadState = (pixelState == 0 && entry.chatMentionCount > 0) ? 1 : pixelState;
+    } else if (chatClient == SniChatClient::Mattermost) {
         entry.chatUnreadState = mattermostPixelState(entry.iconImage, entry.toolTipTitle);
     } else if (chatClient == SniChatClient::WebCord) {
         entry.chatMentionCount = webCordMentionCount(entry.toolTipTitle, entry.toolTipSubTitle);

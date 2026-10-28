@@ -89,6 +89,7 @@ enum class ChatTitleAdapter {
     None,
     Discord,
     WebCord,
+    Telegram,
 };
 
 ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
@@ -96,6 +97,10 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
     QString appId = rawAppId.trimmed().toLower();
     if (appId.endsWith(QLatin1String(".desktop"))) {
         appId.chop(8);
+    }
+    static const QRegularExpression telegramInstanceSuffix(QStringLiteral("^(org\\.telegram\\.desktop)\\._[0-9a-f]{32}$"));
+    if (const auto match = telegramInstanceSuffix.match(appId); match.hasMatch()) {
+        appId = match.captured(1);
     }
     if (appId == QLatin1String("discord") || appId == QLatin1String("com.discordapp.discord")
         || appId == QLatin1String("com.discord.app") || appId == QLatin1String("vesktop")
@@ -105,12 +110,40 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
     if (appId == QLatin1String("webcord") || appId == QLatin1String("io.github.spacingbat3.webcord")) {
         return ChatTitleAdapter::WebCord;
     }
+    if (appId == QLatin1String("org.telegram") || appId == QLatin1String("org.telegram.desktop") || appId == QLatin1String("telegram")
+        || appId == QLatin1String("telegram-desktop") || appId == QLatin1String("telegramdesktop")) {
+        return ChatTitleAdapter::Telegram;
+    }
     return ChatTitleAdapter::None;
+}
+
+int telegramTitleCount(const QStringList &titles)
+{
+    static const QRegularExpression telegramPrefix(
+        QStringLiteral("^Telegram\\s*\\(([1-9][0-9]*)\\)\\s*$"));
+    static const QRegularExpression telegramSuffix(
+        QStringLiteral("[–-]\\s*\\(([1-9][0-9]*)\\)\\s*$"));
+
+    int count = 0;
+    for (const QString &title : titles) {
+        const QRegularExpressionMatch prefixMatch = telegramPrefix.match(title);
+        const QRegularExpressionMatch suffixMatch = telegramSuffix.match(title);
+        const QRegularExpressionMatch match = prefixMatch.hasMatch() ? prefixMatch : suffixMatch;
+        if (!match.hasMatch()) {
+            continue;
+        }
+        bool ok = false;
+        const int candidate = match.captured(1).toInt(&ok);
+        if (ok) {
+            count = std::max(count, candidate);
+        }
+    }
+    return count;
 }
 
 ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapter)
 {
-    if (adapter == ChatTitleAdapter::None) {
+    if (adapter == ChatTitleAdapter::None || adapter == ChatTitleAdapter::Telegram) {
         return {};
     }
 
@@ -655,7 +688,11 @@ int DockModel::chatUnreadStateForTitles(const QString &appId, const QStringList 
     if (adapter == ChatTitleAdapter::None) {
         return 0;
     }
-    return chatTitleState(titles, adapter).unreadState;
+    const ChatTitleState state = chatTitleState(titles, adapter);
+    if (adapter == ChatTitleAdapter::Telegram && state.unreadState == 0 && telegramTitleCount(titles) > 0) {
+        return 1;
+    }
+    return state.unreadState;
 }
 
 int DockModel::chatMentionCountForTitles(const QString &appId, const QStringList &titles)
@@ -664,7 +701,11 @@ int DockModel::chatMentionCountForTitles(const QString &appId, const QStringList
     if (adapter == ChatTitleAdapter::None) {
         return 0;
     }
-    return chatTitleState(titles, adapter).mentionCount;
+    const ChatTitleState state = chatTitleState(titles, adapter);
+    if (adapter == ChatTitleAdapter::Telegram) {
+        return std::max(state.mentionCount, telegramTitleCount(titles));
+    }
+    return state.mentionCount;
 }
 
 int DockModel::taskChatUnreadState(int row) const

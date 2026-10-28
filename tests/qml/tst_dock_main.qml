@@ -1065,6 +1065,45 @@ Item {
 
         // --- Context menu hover hold ---
 
+        function test_rightClickRoutesToTaskOrDock_data() {
+            return dockEdges()
+        }
+
+        function test_rightClickRoutesToTaskOrDock(data) {
+            DockView.edge = data.edge
+            DockSettings.maxZoomFactor = 1
+            addTasks(["A"])
+            let dock = makeDock(1)
+            let c = centerOf(items(dock)[0])
+            mouseClick(stage, c.x, c.y, Qt.RightButton)
+            compare(DockContextMenu.callsTo("showForTask").length, 1)
+            compare(DockContextMenu.callsTo("showForTask")[0].args[0], 0)
+
+            // Padding inside the actual panel, outside every icon slot.
+            let panel = items(dock)[0].parent.parent
+            verify(panel)
+            let p = panel.mapToItem(stage, 1, 1)
+            mouseClick(stage, p.x, p.y, Qt.RightButton)
+            compare(DockContextMenu.callsTo("showForDock").length, 1)
+            compare(DockContextMenu.callsTo("showForTask").length, 1)
+
+            // A keyboard-selected task must not steal a background click.
+            dock.keyboardNavigating = true
+            dock.hoveredIndex = 0
+            mouseClick(stage, p.x, p.y, Qt.RightButton)
+            compare(DockContextMenu.callsTo("showForDock").length, 2)
+        }
+
+        function test_emptyDockRightClick() {
+            let dock = makeDock(0)
+            let panel = T.findFirst(dock, o => o.hasOwnProperty("restEdgePos"))
+            verify(panel)
+            let p = panel.mapToItem(stage, panel.width / 2, panel.height / 2)
+            mouseClick(stage, p.x, p.y, Qt.RightButton)
+            compare(DockContextMenu.callsTo("showForDock").length, 1)
+            compare(DockContextMenu.callsTo("showForTask").length, 0)
+        }
+
         // Opens the mock menu the way production does: DockShell holds the
         // preview hidden (PreviewController::setHeld) while it is open.
         function openContextMenu() {
@@ -1772,6 +1811,32 @@ Item {
         }
 
         // --- Keyboard navigation ---
+
+        function test_keyboardMenus_data() {
+            return [
+                { tag: "populated", count: 2 },
+                { tag: "empty", count: 0 },
+            ]
+        }
+
+        function test_keyboardMenus(data) {
+            if (data.count) addTasks(["A", "B"])
+            let dock = makeDock(data.count)
+            dock.startKeyboardNavigation()
+            keyClick(Qt.Key_F10, Qt.ShiftModifier)
+            compare(DockContextMenu.callsTo("showForDock").length, 1)
+            compare(DockContextMenu.callsTo("showForTask").length, 0)
+            keyClick(Qt.Key_Menu, Qt.ShiftModifier)
+            compare(DockContextMenu.callsTo("showForDock").length, 2)
+            keyClick(Qt.Key_Menu)
+            if (data.count) {
+                compare(DockContextMenu.callsTo("showForTask").length, 1)
+                compare(DockContextMenu.callsTo("showForTask")[0].args[0], 0)
+                compare(DockContextMenu.callsTo("showForDock").length, 2)
+            } else {
+                compare(DockContextMenu.callsTo("showForDock").length, 3)
+            }
+        }
 
         function test_keyboardNavigationMovesFocusAndReturnEndsNavigation() {
             addTasks(["A", "B", "C"])

@@ -16,6 +16,7 @@
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
 #include "shell/dockvisibilitycontroller.h"
+#include "shell/previewcontroller.h"
 #include "shell/edgetrigger.h"
 #include "shell/multidockmanager.h"
 #include "shell/outputordermonitor.h"
@@ -27,12 +28,16 @@
 #include <KAboutData>
 
 #include <QApplication>
+#include <QFile>
+#include <QMenu>
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScopeGuard>
 #include <QScreen>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QtQml>
 
@@ -714,6 +719,12 @@ TEST_CASE("Settings reopen cleanly after being closed", "[settings][reopen-after
 
     // QA-06: Escape closes the dialog, releases the lock and destroys the
     // window instead of leaving a hidden one behind
+    REQUIRE(QTest::qWaitFor(
+        [] {
+            auto *dialog = settingsWindow();
+            return dialog && dialog->isActive();
+        },
+        kTimeoutMs));
     QTest::keyClick(settingsWindow(), Qt::Key_Escape);
     CHECK(QTest::qWaitFor(allDocksHidden, kTimeoutMs));
     CHECK(QTest::qWaitFor(
@@ -772,8 +783,27 @@ TEST_CASE("Rebuilding docks releases every dock surface", "[settings][teardown]"
     QCoreApplication::processEvents();
     const auto baseline = QGuiApplication::topLevelWindows().size();
 
-    // QA-07: shells torn down by mode changes leave no surfaces behind and
-    // raise no QML errors while being destroyed.
+    auto *oldShell = app().manager->primaryShell();
+    REQUIRE(oldShell);
+    QPointer<QObject> dockRoot = oldShell->view()->rootObject();
+    QPointer<krema::PreviewController> previewController = oldShell->previewController();
+    REQUIRE(dockRoot);
+    REQUIRE(previewController);
+    bool previewDestroyedAfterRoot = false;
+    QObject::connect(previewController, &QObject::destroyed, oldShell->view(), [&] {
+        previewDestroyedAfterRoot = dockRoot.isNull();
+    }, Qt::DirectConnection);
+    // QA-07: synchronously rebuilding the manager destroys the dock root before
+    // its PreviewController and leaves no QML errors behind.
+    app().manager.reset();
+    startDocks();
+    CHECK(previewDestroyedAfterRoot);
+    CHECK(dockRoot.isNull());
+    CHECK(previewController.isNull());
+    CHECK(QGuiApplication::topLevelWindows().size() == baseline);
+    CHECK(g_qmlErrors.isEmpty());
+
+    // The remaining mode round trip keeps the existing surface-leak coverage.
     app().settings->setMonitorMode(MultiDockManager::AllScreens);
     app().settings->setMonitorMode(MultiDockManager::PrimaryOnly);
     app().settings->setMonitorMode(MultiDockManager::FollowActive);
@@ -1044,6 +1074,108 @@ TEST_CASE("Shutting down right after reopening settings", "[settings][shutdown-a
     app().manager.reset();
     CHECK_FALSE(closed);
     checkSettingsTornDown(reopened);
+}
+
+TEST_CASE("Dock-wide actions are only available from empty dock space", "[context-menu]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    QFile desktop(directory.filePath(QStringLiteral("krema-context-test.desktop")));
+    REQUIRE(desktop.open(QIODevice::WriteOnly));
+    REQUIRE(desktop.write("[Desktop Entry]\nType=Application\nName=Context Menu Test\nExec=true\nIcon=application-x-executable\n") > 0);
+    desktop.close();
+    const auto oldLaunchers = app().model->pinnedLaunchers();
+    const auto oldVisibility = app().settings->visibilityMode();
+    const auto oldZoom = app().settings->maxZoomFactor();
+    const auto restore = qScopeGuard([&] {
+        app().model->setPinnedLaunchers(oldLaunchers);
+        app().settings->setVisibilityMode(oldVisibility);
+        app().settings->setMaxZoomFactor(oldZoom);
+    });
+    app().settings->setVisibilityMode(0);
+    app().settings->setMaxZoomFactor(1.0);
+    app().model->setPinnedLaunchers({QUrl::fromLocalFile(desktop.fileName()).toString()});
+    restartDocks();
+    auto *shell = app().manager->primaryShell();
+    auto *view = shell->view();
+    REQUIRE(QTest::qWaitForWindowExposed(view));
+    auto *item = findItem(view->contentItem(), [](QQuickItem *candidate) {
+        return candidate->property("displayName").isValid() && candidate->property("index").toInt() == 0;
+    });
+    REQUIRE(item);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return item->width() > 0 && item->height() > 0;
+        },
+        kTimeoutMs));
+
+    // QtTest exercises QML routing but supplies no compositor input serial
+    // for a Wayland popup grab. Inspect native labels before popup() instead.
+    QStringList labels;
+    bool interactionHeld = false;
+    const auto connection = QObject::connect(shell->contextMenu(), &krema::DockContextMenu::openChanged, view, [&] {
+        if (!shell->contextMenu()->isOpen()) {
+            return;
+        }
+        interactionHeld = view->visibilityController()->isInteracting();
+        labels.clear();
+        for (auto *widget : QApplication::topLevelWidgets()) {
+            if (auto *menu = qobject_cast<QMenu *>(widget); menu && !menu->isVisible()) {
+                for (auto *action : menu->actions()) {
+                    if (!action->isSeparator()) {
+                        labels.append(action->text());
+                    }
+                }
+            }
+        }
+    });
+    const auto disconnect = qScopeGuard([&] {
+        QObject::disconnect(connection);
+    });
+    QTest::mouseClick(view, Qt::RightButton, Qt::NoModifier, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+    CHECK(labels.contains(QStringLiteral("Unpin from Dock")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Quit")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Quit Krema")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Settings...")));
+    CHECK_FALSE(labels.contains(QStringLiteral("About Krema")));
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+
+    auto *panel = findItem(view->contentItem(), [](QQuickItem *candidate) {
+        return candidate->property("restEdgePos").isValid();
+    });
+    REQUIRE(panel);
+    QTest::mouseClick(view, Qt::RightButton, Qt::NoModifier, panel->mapToScene(QPointF(2, 2)).toPoint());
+    CHECK(labels == QStringList{QStringLiteral("Settings..."), QStringLiteral("About Krema"), QStringLiteral("Quit Krema")});
+    CHECK(interactionHeld);
+}
+
+TEST_CASE("An idle empty dock receives compositor keyboard focus", "[context-menu][keyboard]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    const auto oldLaunchers = app().model->pinnedLaunchers();
+    const auto oldVisibility = app().settings->visibilityMode();
+    const auto restore = qScopeGuard([&] {
+        app().model->setPinnedLaunchers(oldLaunchers);
+        app().settings->setVisibilityMode(oldVisibility);
+    });
+    app().model->setPinnedLaunchers({});
+    app().settings->setVisibilityMode(0);
+    restartDocks();
+    auto *shell = app().manager->primaryShell();
+    auto *view = shell->view();
+    REQUIRE(QTest::qWaitForWindowExposed(view));
+    // Let startup rendering settle: no icon animation may commit focus for us.
+    QTest::qWait(200);
+    shell->focusDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return view->isActive();
+        },
+        kTimeoutMs));
+    REQUIRE(view->rootObject()->property("keyboardNavigating").toBool());
+    REQUIRE(view->rootObject()->hasActiveFocus());
+    QTest::keyClick(view, Qt::Key_Escape);
 }
 
 int main(int argc, char *argv[])

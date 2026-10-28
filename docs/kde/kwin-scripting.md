@@ -39,11 +39,52 @@ use the dock surface's screen-edge strip.
 
 Caveat: the id is `scripts.size()` at load time, so after an unload a new
 script can get the id (and object path) of a script that is still loaded;
-`registerObject` then fails for the new one. Harmless when scripts are loaded
-and unloaded one at a time.
+`registerObject` then fails for the new one. Waiting for the lower script's
+deferred deletion does not prevent a collision with the surviving higher id.
 
 The file is read by KWin's process with `QFile`: it must be a real file
 (no `qrc:`), readable by the session user.
+
+## Private E2E oracle lifetime
+
+The E2E window queries load one private KWin script before Krema starts and
+keep it for the whole test session. The session-scoped pointer fixture's first
+`cursor_pos()` query initializes it before any test starts Krema or its panel
+watcher. Python queues a query and invokes the script's unique keyless action
+on the discovered KGlobalAccel component. The callback retrieves the token
+and JavaScript through asynchronous `callDBus` and executes
+`new Function("report", source)`, giving each query its own declarations and
+local `report` closure.
+
+Startup waits for the script's `ready` callback and for its action to appear
+in KGlobalAccel with no active keys: `allShortcutInfos()` may represent this
+as `[]` or as zero combined key codes (`[0]` on the tested stack); any nonzero
+key is rejected. It discovers the component path through `/kglobalaccel`'s
+`org.kde.KGlobalAccel.allComponents()` and each component's
+`org.kde.kglobalaccel.Component.shortcutNames()`; it does not assume the
+component is named `kwin` or `kwin_wayland`. Dispatch uses that component's
+`invokeShortcut(actionName)`. The initial file is kept through readiness,
+then removed. Shutdown unloads only the oracle plugin and unregisters the
+Python object by its Gio registration id.
+
+Loading and unloading a script for every query is unsafe. KWin assigns a new
+script id from `scripts.size()`, so an unloaded lower id can be reused while a
+higher script is still alive; the new script then has an object path already
+owned by the higher script and its callback can never run. The persistent
+oracle avoids that allocator collision. A timed-out query clears both its
+queued command and current token, and later reports with that token are
+ignored, so a missing report does not satisfy a subsequent query. Overlapping
+queries are rejected.
+
+API sources:
+[KWin scripting.cpp](https://raw.githubusercontent.com/KDE/kwin/master/src/scripting/scripting.cpp)
+(`registerShortcut`, `callDBus`, script ids),
+[KGlobalAccel root XML](https://raw.githubusercontent.com/KDE/kglobalaccel/master/src/org.kde.KGlobalAccel.xml)
+(`allComponents`),
+[component XML](https://raw.githubusercontent.com/KDE/kglobalaccel/master/src/org.kde.kglobalaccel.Component.xml)
+(`shortcutNames`, `allShortcutInfos`, `invokeShortcut`), and
+[kglobalacceld component.cpp](https://raw.githubusercontent.com/KDE/kglobalacceld/master/src/component.cpp)
+(`invokeShortcut` emits the action even without a key binding).
 
 ## JavaScript API used
 

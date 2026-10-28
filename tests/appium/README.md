@@ -362,12 +362,19 @@ keyboard traversal, magnified hit targets, and grouped-preview retargeting.
 Each scenario's `**Automated:**` lines point back to the tests below. Rows with
 named automated nodes assert on the AT-SPI tree (states, names, geometry),
 the KWin window list, the `kremarc` file, pixel analysis of ScreenShot2
-screenshots, or AT-SPI events. Existing pass statuses reflect the recorded
-suite results. Issue 54 rows remain `pending` until the parent completes Tier 2
-and packaged Tier 3 QA.
+screenshots, or AT-SPI events. Existing pass statuses reflect earlier recorded
+suite results. Reruns of the revised menu helpers and migrated Settings/reservation
+entry paths are pending. Issue 54 rows remain `pending` until the parent completes
+Tier 2 and packaged Tier 3 QA.
 The issue #55 regression `QA-PREV-01` has recorded pre-fix and fixed results:
 the pre-fix run failed after a 33 ms entry, while the fixed run passed three
 fresh opens in one run. The fast path is tested separately from pixel waits.
+
+General Settings and reservation tests open Settings through Focus Dock,
+wait for KWin compositor keyboard focus, press Shift+F10, and select Settings.
+CTX-006/010/012 and SET-008's second-output reopen keep real padding right-clicks;
+application-menu tests keep right-clicking their target items. The pointer helper
+requires its caller to keep the dock visible and has no keyboard fallback.
 
 `MOUSE-017` is a native KWin test, not an Appium fixture. Its test-only
 scripted effect reads `EffectWindow.iconGeometry` independently of
@@ -423,14 +430,17 @@ Tier 3 runs the Tier 2 Appium scenarios against installed distro packages.
 | PREV-007 | `test_03_preview.py::test_prev007_opening_preview_announces_window_count` | AT-SPI event | pass |
 | QA-PREV-01 | `test_03_preview.py::test_qa_prev01_atspi_visible_popup_accepts_fast_pointer_entry` | AT-SPI, KWin, real input | pass (pre-fix failed at 33 ms; fixed 1/1) |
 | QA-PREV-02 | `test_03_preview.py::test_qa_prev02_popup_geometry_after_a_hidden_first_read` (parameters `rect`, `element-origin`) | AT-SPI, KWin geometry/cursor, W3C element origin | pass on arm64 Fedora 44 and Leap 16.0: both new cases failed before the webdriver patch and passed after; PREV-003/005 stayed passing |
-| CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`, `test_ctx001_about_krema_is_the_fifth_entry`, `test_ctx001_quit_is_the_last_entry` | KWin | pass |
+| CTX-001 | `test_04_context_menu.py::test_ctx001_right_click_opens_native_menu_at_the_item`; native `[context-menu]` integration test checks no dock-wide actions | KWin, native QMenu | pending after #130 |
+| CTX-010 | `test_04_context_menu.py::test_ctx010_quit_krema_is_in_the_dock_menu` (empty/running-app variants), `test_ctx010_about_krema_is_the_second_dock_entry`; native `[context-menu]` test; QML routing tests at all four edges | KWin, native QMenu, QML input | pending after #130 |
+| CTX-011 | `test_04_context_menu.py::test_ctx011_keyboard_opens_dock_settings`; QML `test_keyboardMenus` | Real keyboard input, KWin, QML | Docker E2E pending |
+| CTX-012 | `test_04_context_menu.py::test_ctx012_padding_after_zoom_opens_dock_settings` (all edges, both zoom styles, spacing 0/4/64); `test_context_menu_geometry.py` | Real pointer input, KWin Settings window, unchanged saved pins | Docker E2E pending |
 | CTX-002 | `test_04_context_menu.py::test_ctx002_pin_keeps_the_app_in_the_dock_after_it_closes` | AT-SPI, kremarc | pass |
 | CTX-003 | `test_04_context_menu.py::test_ctx003_unpin_removes_a_closed_app`, `test_ctx003_unpinned_running_app_stays_until_it_closes` | AT-SPI, kremarc | pass |
 | CTX-004 | `test_04_context_menu.py::test_ctx004_new_instance_launches_another_window` | KWin | pass |
 | CTX-005 | `test_04_context_menu.py::test_ctx005_close_closes_every_window_of_an_unpinned_app`, `test_ctx005_close_keeps_a_pinned_app_without_indicator` | KWin, AT-SPI | pass |
 | CTX-006 | `test_04_context_menu.py::test_ctx006_settings_entry_opens_the_settings_window` | KWin, AT-SPI | pass |
 | CTX-008 | `test_04_context_menu.py::test_ctx008_pinned_launcher_launches_the_chosen_desktop_action`, `test_ctx008_grouped_windows_launch_the_chosen_desktop_action` | KWin (launched window title), kremarc | pending: not yet run |
-| CTX-009 | `test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open`, `test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock` (skip without ScreenShot2 capture), `test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse` (Krema started without pointer capability: `input.drop_pointer_capability()`) | KWin, AT-SPI, screenshot, real input | pass |
+| CTX-009 | `test_04_context_menu.py::test_ctx009_zoom_and_hover_hold_while_menu_is_open`, `test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock` (skip without ScreenShot2 capture), `test_ctx009_zoom_holds_on_the_first_menu_after_starting_without_a_mouse` (Krema started without pointer capability: `input.drop_pointer_capability()`) | KWin, AT-SPI, screenshot, real input | New Instance/group-name oracle updated; isolated oracle checks passed (`test_context_menu_oracles.py`); live Docker rerun pending (Docker unavailable locally) |
 | DND-001 | `test_05_drag.py::test_dnd_001_drag_reorders_dock_items` (also: focus returns to the previously active window) | AT-SPI, screenshot, KWin | pass |
 | DND-002 | `test_05_drag.py::test_dnd_002_reorder_persists_after_restart` | AT-SPI, kremarc | pass |
 | DND-003 | `test_05_drag.py::test_dnd_003_drag_shows_ghost_dimmed_source_and_drop_indicator` | screenshot | pass |
@@ -804,10 +814,13 @@ Input and UI flows:
 | `click_item(name, button="left")`, `scroll_item(name, dy=15)` | Real pointer click or wheel on an item. |
 | `move_away(close_preview=True)` | Glide the pointer to the top centre, then wait for the preview popup to be dismissed (the item stays zoomed while the preview is open). `close_preview=False` only moves the pointer. |
 | `open_context_menu(name) -> kwin.Window` | Right-click and wait for the QMenu popup; returns its KWin window (screen geometry). |
+| `open_dock_context_menu() -> kwin.Window` | Right-click dock padding, including an empty dock; the caller must keep the dock visible. Returns its KWin popup. `DOCK_CONTEXT_MENU_ENTRIES` gives Settings..., About Krema, Quit Krema. |
+| `open_dock_context_menu_keyboard(timeout=5) -> kwin.Window` | Invoke Focus Dock, wait for KWin compositor keyboard focus, press Shift+F10, and wait for a new native popup. Returns its KWin window. |
 | `choose_context_menu_entry(label, entries)` | Keyboard selection (Down x position, Return) in the open menu. |
 | `context_menu_entries(pinned, is_window, has_notifications=False, desktop_actions=()) -> list[str]` (module function) | Enabled menu entries in order, mirroring `src/models/dockcontextmenu.cpp`; `desktop_actions` are the app's visible .desktop actions, listed first. |
-| `open_settings(via_item, entries=None) -> kwin.Window` | Open Settings through an item's context menu; returns the "Settings" window. |
+| `open_settings(timeout=15) -> kwin.Window` | Open the keyboard dock menu, select Settings..., and wait for the real "Settings" window. Returns its KWin window. |
 | `screenshot(name, area=None) -> PIL.Image.Image` | RGB screen image, also saved to `artifacts/<name of krema>/<name>.png`. With `area` only that part is captured, the rest is black, and the PNG holds only the area (see "Screenshots and previews"). |
+
 
 ### `krema_e2e.windows` (fixture windows)
 

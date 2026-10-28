@@ -24,6 +24,7 @@ from selenium.common.exceptions import WebDriverException
 from . import config as kcfg
 from . import dbus, env, kwin
 from . import input as inp
+from .shortcuts import invoke_shortcut
 from .waits import wait_stable, wait_until
 
 #: XPath of the dock tool bar and its items (see tests/e2e/README.md).
@@ -299,8 +300,14 @@ class Krema:
         active window, so wait for this before the first key."""
 
         def has_focus() -> bool:
-            w, r = kwin.active_window(), self.surface_rect(surface)
-            return w is not None and r is not None and w.pid == self.pid and Rect(w.client_x, w.client_y, w.client_width, w.client_height) == r
+            frame = self.find(self._frame_xpath(surface))
+            w = kwin.active_window()
+            return (
+                frame is not None
+                and w is not None
+                and w.pid == self.pid
+                and (w.client_width, w.client_height) == (Rect.of(frame).width, Rect.of(frame).height)
+            )
 
         wait_until(has_focus, timeout=5, message=f"KWin keyboard focus on krema's {surface} surface")
 
@@ -351,9 +358,14 @@ class Krema:
         return None
 
     def to_screen(self, rect: Rect, surface: str = "dock") -> Rect:
-        """Convert a surface-local AT-SPI rect (what ``element.rect`` returns
-        on Wayland) to global screen coordinates."""
+        """Convert a surface-local AT-SPI rect to global screen coordinates.
+
+        Secondary-output Settings children already include their global x
+        coordinate; primary-output and dock/preview children remain local.
+        """
         origin = wait_until(lambda: self.surface_rect(surface), timeout=5, message=f"{surface} surface geometry")
+        if surface == "settings" and origin.x >= env.SCREEN_WIDTH and rect.x >= origin.x:
+            return rect
         return Rect(origin.x + rect.x, origin.y + rect.y, rect.width, rect.height)
 
     def screen_rect(self, element: WebElement, surface: str = "dock") -> Rect:
@@ -421,17 +433,115 @@ class Krema:
             inp.key("Down")
         inp.key("Return")
 
-    def open_settings(self, via_item: str, entries: list[str] | None = None, timeout: float = 15.0) -> kwin.Window:
-        """Open Settings through item ``via_item``'s context menu and wait for
-        the "Settings — Krema" window. Pass ``entries`` when the item is not
-        an unpinned single window without notifications."""
-        self.open_context_menu(via_item)
-        self.choose_context_menu_entry("Settings...", entries or context_menu_entries(pinned=False, is_window=True))
+    def open_dock_context_menu(self, timeout: float = 5.0, *, surface: Rect | None = None, items: Sequence[WebElement] | None = None) -> kwin.Window:
+        """Clear hover zoom, then approach the visible row's inner padding.
+
+        The caller must keep the dock visible throughout this pointer route.
+        This works with an empty dock too. Pass the surface and its items when
+        targeting another output.
+        """
+        before = {w.internal_id for w in self.windows()}
+        area = surface or wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
+        settings = self.read_config().get("General", {})
+        edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
+        dock_items = self.items() if items is None else items
+        output = Rect(
+            (area.center[0] // env.SCREEN_WIDTH) * env.SCREEN_WIDTH,
+            0,
+            env.SCREEN_WIDTH,
+            env.SCREEN_HEIGHT,
+        )
+        first = None
+        if dock_items:
+            # Leave the whole surface, not just a resting icon slot: an
+            # InPlace icon can cover the resting panel while magnified.
+            # Use mapped non-dock layer geometry on the target output, rather
+            # than matching AT-SPI frame dimensions across several outputs.
+            # KWin's 2px input helpers are special surfaces too.
+            previews = [
+                w.client_geometry
+                for w in self.windows()
+                if w.special_window
+                and not w.dock
+                and not w.desktops
+                and w.client_width > 2
+                and w.client_height > 2
+                and output.contains(w.client_x + w.client_width // 2, w.client_y + w.client_height // 2)
+            ]
+            preview = Rect(*kwin.bounds(*previews)) if previews else None
+            neutral = dock_menu_neutral_point(area, edge, preview, output)
+            inp.move_path(inp.line(kwin.cursor_pos(), neutral, 12), 15)
+            wait_until(lambda: not self.preview_visible(), timeout=timeout, message="preview to close before dock menu")
+            icon = int(settings.get("IconSize", 48))
+
+            def unzoomed() -> Rect | None:
+                rect = self.screen_rect(dock_items[0])
+                extent = rect.width if edge <= kcfg.EDGE_BOTTOM else rect.height
+                return rect if extent == icon else None
+
+            wait_until(unzoomed, timeout=timeout, message="dock zoom to retract")
+
+            def stable_visible_rest() -> Rect | None:
+                rect = self.screen_rect(dock_items[0])
+                extent = rect.width if edge <= kcfg.EDGE_BOTTOM else rect.height
+                assert (
+                    has_state(dock_items[0], "showing")
+                    and rect.width > 0
+                    and rect.height > 0
+                    and area.contains(rect.x, rect.y)
+                    and area.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
+                    and output.contains(rect.x, rect.y)
+                    and output.contains(rect.x + rect.width - 1, rect.y + rect.height - 1)
+                ), f"dock item {rect} is hidden or outside area/output; caller must keep the dock visible: area={area}, output={output}"
+                return rect if extent == icon else None
+            first = wait_stable(stable_visible_rest, duration=0.15, timeout=timeout, accept=lambda rect: rect is not None)
+        target = dock_padding_target(area, settings, first)
+        assert area.contains(*target) and output.contains(*target), (
+            f"dock padding target {target} outside area/output: area={area}, output={output}, first={first}, edge={edge}"
+        )
+        inp.move_path(inp.line(kwin.cursor_pos(), target, 12), 15)
+        inp.click(*target, button="right")
         return wait_until(
+            lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar), None),
+            timeout=timeout,
+            message="dock context menu",
+        )
+
+    def open_dock_context_menu_keyboard(self, timeout: float = 5.0) -> kwin.Window:
+        """Focus the dock through KGlobalAccel and send Shift+F10.
+
+        Wait for compositor keyboard focus before sending real key input, and
+        return the newly mapped native menu reported by KWin.
+        """
+        invoke_shortcut("focus-dock", timeout=timeout)
+        self.wait_keyboard_focus()
+        before = {w.internal_id for w in self.windows()}
+        inp.key("Shift", "F10")
+        return wait_until(
+            lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar), None),
+            timeout=timeout,
+            message="keyboard-opened dock context menu",
+        )
+
+    def open_settings(self, timeout: float = 15.0) -> kwin.Window:
+        """Open Settings through the keyboard dock menu and await activation."""
+        self.open_dock_context_menu_keyboard()
+        self.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
+        win = wait_until(
             lambda: next((w for w in self.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
             timeout=timeout,
             message="Settings window",
         )
+        # Post-restart Wayland activation can leave Settings mapped but inactive; use
+        # the existing KWin test setup to activate it before input.
+        if (active := kwin.active_window()) is None or active.internal_id != win.internal_id:
+            kwin.activate(win.internal_id)
+        wait_until(
+            lambda: (active := kwin.active_window()) is not None and active.internal_id == win.internal_id,
+            timeout=timeout,
+            message="Settings window to become active",
+        )
+        return win
 
     def screenshot(self, name: str, area: tuple[int, int, int, int] | None = None) -> Image.Image:
         """Screen image (RGB, screen coordinates), also saved as PNG to
@@ -490,7 +600,65 @@ def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool 
         entries.append("Clear Notifications")
     if is_window:
         entries.append("Close")
-    return entries + ["Settings...", "About Krema", "Quit"]
+    return entries
+
+
+DOCK_CONTEXT_MENU_ENTRIES = ["Settings...", "About Krema", "Quit Krema"]
+
+
+def dock_menu_neutral_point(area: Rect, edge: int, preview: Rect | None, output: Rect) -> tuple[int, int]:
+    """Return a 32 px desktop-side point outside the dock and mapped preview."""
+    if edge == kcfg.EDGE_TOP:
+        depth = max(area.y + area.height, preview.y + preview.height if preview is not None else area.y + area.height)
+        point = (area.center[0], depth + 32)
+    elif edge == kcfg.EDGE_BOTTOM:
+        depth = min(area.y, preview.y if preview is not None else area.y)
+        point = (area.center[0], depth - 32)
+    elif edge == kcfg.EDGE_LEFT:
+        depth = max(area.x + area.width, preview.x + preview.width if preview is not None else area.x + area.width)
+        point = (depth + 32, area.center[1])
+    elif edge == kcfg.EDGE_RIGHT:
+        depth = min(area.x, preview.x if preview is not None else area.x)
+        point = (depth - 32, area.center[1])
+    else:
+        raise ValueError(f"unknown dock edge {edge}")
+    assert output.contains(*point) and not area.contains(*point) and (preview is None or not preview.contains(*point)), (
+        f"dock menu neutral point {point} escapes geometry: area={area}, preview={preview}, output={output}, edge={edge}"
+    )
+    return point
+
+
+def dock_padding_target(area: Rect, settings: Mapping[str, Any], first: Rect | None = None) -> tuple[int, int]:
+    """Inner leading corner beside an observed, fully unzoomed delegate.
+
+    Approach from the desktop side so the pointer never crosses an icon.
+    The secondary coordinate is outside the delegate's hit span, even when
+    large spacing extends the primary hit slot across the panel's padding.
+    """
+    edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
+    if first is not None:
+        assert (
+            first.width > 0
+            and first.height > 0
+            and area.contains(first.x, first.y)
+            and area.contains(first.x + first.width - 1, first.y + first.height - 1)
+        ), f"dock item {first} is outside dock surface {area}"
+        if edge == kcfg.EDGE_TOP:
+            return first.x - 4, first.y + first.height + 4
+        if edge == kcfg.EDGE_LEFT:
+            return first.x + first.width + 4, first.y - 4
+        return first.x - 4, first.y - 4
+    icon = int(settings.get("IconSize", 48))
+    floating = str(settings.get("Floating", "true")).lower() == "true"
+    margin = int(settings.get("FloatingMargin", 8)) if floating else 0
+    depth = margin + icon / 2
+    if edge == kcfg.EDGE_TOP:
+        return area.center[0], round(area.y + depth)
+    if edge == kcfg.EDGE_BOTTOM:
+        return area.center[0], round(area.y + area.height - depth)
+    if edge == kcfg.EDGE_LEFT:
+        return round(area.x + depth), area.center[1]
+    return round(area.x + area.width - depth), area.center[1]
 
 
 def _xpath_str(s: str) -> str:

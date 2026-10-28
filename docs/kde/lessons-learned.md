@@ -1,5 +1,36 @@
 # 교훈 (Lessons Learned)
 
+## Context menu scope and test geometry (2026-10-20)
+
+Moving global actions out of task menus must preserve a separate keyboard
+route on populated docks. Test both scopes, with and without tasks, rather
+than checking only the pointer path. For pointer QA, clear hover outside the
+whole dock surface and observe settled delegate geometry before approaching
+inner padding from the desktop side. Resting primary-axis padding alone is
+not safe: InPlace zoom can cover it, while wide icon spacing extends the
+primary hit slot beyond the panel. Check the secondary hit span too.
+Compile-only Python checks do not catch undefined names: execute default
+configuration paths and run an undefined-name check as well.
+
+## DockShell teardown ordering (2026-10-27)
+
+`DockShell` owns the dock QML root and a `PreviewController` that uses the
+same QML engine. During a manager rebuild, the root must be destroyed before
+the controller so teardown callbacks cannot evaluate QML after its context
+property has been cleared.
+
+**해결책:**
+- Clear the dock view's QML source in `DockShell::~DockShell()` before member
+  teardown.
+- Keep a real KWin fixture regression assertion for root-before-controller
+  destruction, no QML errors, and no leaked top-level surfaces.
+
+**핵심 교훈:**
+- Destroy the QML root before controllers that can still invoke callbacks
+  through its engine; establish the lifetime order explicitly.
+- A direct `destroyed` ordering check catches lifetime regressions that an
+  error-count check alone can miss.
+
 ## 1. QML 애니메이션 좌표가 C++ 로직에 영향을 주는 문제 (2026-02)
 
 **증상:** 데스크탑 전환 시 독이 번갈아가며 보이고 숨겨짐 (D1: 숨김 → D2: 보임 → D3: 숨김 → ...)

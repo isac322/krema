@@ -76,6 +76,17 @@ The existing context-menu Settings entry, keyboard paths, and multi-monitor
 lifecycle remain covered by their original cases. Click-policy, reservation,
 and task-section rows check their real controls and consumer effects.
 
+**Automation note:** General Settings and reservation tests use the keyboard
+frontdoor: invoke Focus Dock, wait for KWin compositor keyboard focus, press
+Shift+F10, and choose Settings. They retain their control, live-update, KConfig,
+KWin geometry, and persistence checks. Pointer movement ends dock keyboard
+navigation before hide/reveal checks. SET-009 explicitly retains pointer
+right-click for both the Settings and Quit menu steps because keyboard reopening
+while Settings is active is not portable. CTX-011 covers keyboard dock menus.
+The manual scenarios below keep right-click entry to Settings. CTX-006/010/012
+and SET-008's second-output reopen continue to test pointer routing. Reruns of
+the migrated Settings and reservation entry paths are pending.
+
 
 ---
 
@@ -83,7 +94,7 @@ and task-section rows check their real controls and consumer effects.
 
 **Precondition:** Dock visible.
 **Steps:**
-1. Right-click a dock item → context menu appears
+1. Right-click empty dock space → dock context menu appears
 2. Choose "Settings..."
 3. Wait 1500ms (settings window creation)
 4. Check the window list — krema window count increased
@@ -263,21 +274,25 @@ and task-section rows check their real controls and consumer effects.
 **Verification:** window list (window counts), screenshot (dialog + docks)
 **Automated (E2E, run with `KREMA_E2E_OUTPUT_COUNT=2 tests/appium/run-e2e.sh test_06_settings.py`):** tests/appium/test_06_settings.py::test_set008_monitor_mode_all_monitors_from_open_settings, ::test_set008_follow_active_mouse_opening_settings_keeps_dock_on_its_screen, ::test_set008_follow_active_shortcuts_act_on_the_shown_dock (Toggle Dock and Focus Dock; the dock is moved with the Focus trigger), ::test_set008_follow_active_mouse_trigger_moves_dock_to_the_pointer_screen (pointer at the second output's bottom edge). Meta+N is not checked end to end: activating entry N has no per-dock observable result and remains covered by the integration test.
 
+The second-output reopen uses a real padding right-click and requires the
+menu's x coordinate to be at least one output width (`x >= W`). SET-008's
+initial and post-close Settings opens use the keyboard path described above.
+
 ---
 
 ## TC SET-009: Quit While Settings Is Open
 
 **Precondition:** Dock visible. Run on Debian 13 or Ubuntu 25.04 as well (Qt 6.8, KF 6.13).
 **Steps:**
-1. Right-click the dock → "Settings...", then immediately right-click the dock → "Quit"
-2. Start Krema again, open "Settings...", wait until the window is drawn, then right-click the dock → "Quit"
+1. Right-click empty dock space → "Settings...", then immediately right-click empty dock space → "Quit Krema"
+2. Start Krema again, open "Settings...", wait until the window is drawn, then right-click empty dock space → "Quit Krema"
 
 **Expected:**
 - Krema exits normally both times (exit status 0, no crash report)
 - No Settings window remains after exit
 
 **Verification:** process exit status, window list
-**Automated:** tests/appium/test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly (Fedora 43 image only; the Debian 13 / Ubuntu 25.04 run is out of this harness's scope)
+**Automated:** tests/appium/test_06_settings.py::test_set009_quit_while_settings_is_open_exits_cleanly (retains the pointer menu for both the Settings and Quit steps; CTX-011 covers keyboard dock menus; Fedora 43 image only; the Debian 13 / Ubuntu 25.04 run is out of this harness's scope; reruns remain pending)
 
 ---
 

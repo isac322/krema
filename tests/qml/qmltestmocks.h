@@ -44,6 +44,8 @@ public:
         LauncherUrlWithoutIcon,
         IconName,
         IsOnCurrentDesktop,
+        ChatUnreadState,
+        ChatMentionCount,
     };
     Q_ENUM(AdditionalRoles)
 };
@@ -78,7 +80,7 @@ public:
     Q_INVOKABLE void removeTask(int row);
     Q_INVOKABLE void reset();
     // Role lookup by name, used by the QML DockModel mock.
-    Q_INVOKABLE QVariant get(int row, const QString &roleName) const;
+    Q_INVOKABLE QVariant get(int row, const QString &roleName, int childRow = -1) const;
 
     // TaskManager::TasksModel API used by Krema's QML.
     Q_INVOKABLE QModelIndex makeModelIndex(int row, int childRow = -1) const;

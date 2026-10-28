@@ -247,19 +247,7 @@ def open_page(krema: Krema, name: str) -> None:
     """Show page ``name`` through its Settings sidebar entry."""
     item = krema.wait_for(f"{SIDEBAR}[@name='{name}']")
     if not has_state(item, "checked"):
-        target = krema.screen_rect(item, "settings")
-        if target.x >= W:
-            desktop = pyatspi.Registry.getDesktop(0)
-            app = next(a for a in desktop if a is not None and a.get_process_id() == krema.pid)
-            pages = pyatspi.findDescendant(app, lambda n: n.getRoleName() == "list" and n.name == "Settings pages")
-            assert pages is not None, "Settings pages list not in krema's AT-SPI tree"
-            index = next(
-                i for i in range(pages.childCount)
-                if (child := pages.getChildAtIndex(i)) is not None and child.name == name
-            )
-            assert pages.querySelection().selectChild(index), f"could not select Settings page {name!r}"
-        else:
-            click_el(krema, item)
+        click_el(krema, item)
     wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")
 
 

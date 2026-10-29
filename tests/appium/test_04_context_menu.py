@@ -18,9 +18,9 @@ asserted outcome::
     0  Pin to Dock / Unpin from Dock   CTX-002 / CTX-003 (kremarc PinnedLaunchers)
     1  New Instance                    CTX-004 (KWin window count +1)
     2  Close                           CTX-005 (KWin windows of the app gone)
-    3  Settings...                     CTX-006 (Settings window, Icons page)
-    4  About Krema                     CTX-001 (Settings window, About Krema page)
-    5  Quit                            CTX-001 (krema exits with status 0)
+
+The empty-area dock menu has Settings..., About Krema, and Quit Krema.
+Only its final entry exits the dock (CTX-010).
 
 An app whose .desktop file declares actions lists them first, in Actions=
 order, so every position above moves down by their count (CTX-008: the
@@ -43,11 +43,11 @@ from PIL import Image, ImageChops
 
 from krema_e2e import config, dbus, env, kwin
 from krema_e2e import input as inp
-from krema_e2e.krema import PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state, painted_rect
+from krema_e2e.krema import DOCK_CONTEXT_MENU_ENTRIES, PAGE_ROLE, SETTINGS_PAGES_XPATH, SETTINGS_XPATH, DescriptionChanges, Krema, Rect, context_menu_entries, has_state, painted_rect
 from krema_e2e.waits import KWIN_POLL_INTERVAL, wait_stable, wait_until
+from krema_e2e.shortcuts import invoke_shortcut
 from krema_e2e.windows import TestWindows
 from test_02_mouse import ZOOM_KREMARC, _require_capture
-from test_06_settings import close_settings
 
 import pytest
 
@@ -59,6 +59,54 @@ LAUNCHER = config.launcher(APP)
 UNPINNED_WINDOW = context_menu_entries(pinned=False, is_window=True)
 PINNED_WINDOW = context_menu_entries(pinned=True, is_window=True)
 PINNED_LAUNCHER = context_menu_entries(pinned=True, is_window=False)
+
+
+def _padding_cases():
+    for edge in (config.EDGE_TOP, config.EDGE_BOTTOM, config.EDGE_LEFT, config.EDGE_RIGHT):
+        for style in (0, 1):
+            for spacing in (0, 4, 64):
+                yield pytest.param(edge, style, spacing, marks=pytest.mark.kremarc({
+                    "PinnedLaunchers": [config.launcher(APP), config.launcher(env.TEST_APP2_ID)],
+                    "VisibilityMode": config.ALWAYS_VISIBLE, "Edge": edge,
+                    "ZoomStyle": style, "IconSpacing": spacing, "MaxZoomFactor": 1.6,
+                    "PreviewEnabled": False,
+                }), id=f"edge-{edge}-zoom-{style}-spacing-{spacing}")
+
+
+@pytest.mark.parametrize("edge,style,spacing", list(_padding_cases()))
+def test_ctx012_padding_after_zoom_opens_dock_settings(krema: Krema, edge: int, style: int, spacing: int) -> None:
+    def two_items():
+        items = krema.items()
+        return items if len(items) == 2 else None
+
+    items = wait_until(two_items, message="two pinned launchers")
+    rest = wait_stable(lambda: krema.screen_rect(items[0]), duration=0.2)
+    inp.move_path(inp.line(kwin.cursor_pos(), rest.center, 12), 20)
+    wait_until(lambda: krema.screen_rect(items[0]) != rest, message="first launcher to magnify")
+    zoomed = wait_stable(lambda: krema.screen_rect(items[0]), duration=0.2)
+    assert zoomed != rest, "hover must be fully established before testing the padding route"
+    before = pinned_launchers(krema)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
+    wait_until(lambda: settings_window(krema), timeout=15, message="Settings from padding after zoom")
+    assert pinned_launchers(krema) == before, "padding opened the app menu and changed pinning"
+
+
+@pytest.mark.parametrize("with_app", [False, True], ids=["empty", "populated"])
+def test_ctx011_keyboard_opens_dock_settings(krema: Krema, apps: TestWindows, with_app: bool) -> None:
+    if with_app:
+        apps.open("Alpha")
+        krema.wait_for_item("Alpha")
+    invoke_shortcut("focus-dock")
+    krema.wait_keyboard_focus()
+    before = {w.internal_id for w in krema.windows()}
+    inp.key("Shift", "F10")
+    wait_until(
+        lambda: any(w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar for w in krema.windows()),
+        message="keyboard-opened dock menu",
+    )
+    krema.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
+    wait_until(lambda: settings_window(krema), timeout=15, message="Settings from keyboard dock menu")
 
 
 # ------------------------------------------------------------------- oracles
@@ -174,7 +222,7 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     )
     top, bottom = changed[1], changed[3]
     assert top >= area.height * 0.08, f"highlight {changed} is on the header row (menu {area})"
-    assert bottom <= area.height * 0.34, f"highlight {changed} is not the first entry row (menu {area})"
+    assert bottom <= area.height * 0.60, f"highlight {changed} is not the first entry row (menu {area})"
 
     # Escape dismisses it.
     inp.key("Escape")
@@ -182,10 +230,10 @@ def test_ctx001_right_click_opens_native_menu_at_the_item(krema: Krema, apps: Te
     assert krema.item("Alpha") is not None
 
 
-def test_ctx001_about_krema_is_the_fifth_entry(krema: Krema, apps: TestWindows) -> None:
+def test_ctx010_about_krema_is_the_second_dock_entry(krema: Krema, apps: TestWindows) -> None:
     apps.open("Alpha")
-    krema.open_context_menu("Alpha")
-    krema.choose_context_menu_entry("About Krema", UNPINNED_WINDOW)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("About Krema", DOCK_CONTEXT_MENU_ENTRIES)
 
     win = wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from About Krema")
     assert win.pid == krema.pid
@@ -196,19 +244,21 @@ def test_ctx001_about_krema_is_the_fifth_entry(krema: Krema, apps: TestWindows) 
     assert checked == ["About Krema"], f"sidebar selection {checked}"
 
 
-def test_ctx001_quit_is_the_last_entry(krema: Krema, apps: TestWindows) -> None:
-    apps.open("Alpha")
+@pytest.mark.parametrize("with_app", [False, True], ids=["empty-dock", "running-app"])
+def test_ctx010_quit_krema_is_in_the_dock_menu(krema: Krema, apps: TestWindows, with_app: bool) -> None:
+    if with_app:
+        apps.open("Alpha")
     process = krema.process
     assert process is not None
-    krema.open_context_menu("Alpha")
-    krema.choose_context_menu_entry("Quit", UNPINNED_WINDOW)
+    krema.open_dock_context_menu()
+    krema.choose_context_menu_entry("Quit Krema", DOCK_CONTEXT_MENU_ENTRIES)
 
     wait_until(lambda: process.poll() is not None, timeout=15, message="krema to quit")
     assert process.returncode == 0, f"krema exited with {process.returncode}; see {krema.log_path}"
     wait_until(lambda: not dbus.has_name("org.kde.krema"), timeout=10, message="org.kde.krema to be released")
     wait_until(lambda: not any(w.pid == process.pid for w in kwin.windows()), timeout=10, message="krema surfaces to go")
     # The fixture window is untouched.
-    assert [w.title for w in app_windows()] == ["Alpha"]
+    assert [w.title for w in app_windows()] == (["Alpha"] if with_app else [])
     krema.stop()  # expected exit: detach the fixture from the finished process
 
 
@@ -497,9 +547,11 @@ def hold_painted(krema: Krema, rest: dict[str, Rect], name: str = HOLD_TARGET) -
 
 
 def hold_painted_sizes(krema: Krema, rest: dict[str, Rect]) -> dict[str, tuple[int, int]]:
-    """Painted (width, height) of the items in ``rest``, by name. Items added
-    later (the Settings window's task) are ignored; sizes rather than rects
-    are compared because such an item re-centres the row horizontally."""
+    """Painted sizes by current item name; ``rest`` must follow group renames.
+
+    Sizes rather than rects are compared because task changes can re-centre
+    the row horizontally. A missing expected item still fails the comparison.
+    """
     sizes = {}
     for e in krema.items():
         name = e.get_attribute("name")
@@ -604,36 +656,44 @@ def test_ctx009_zoom_and_hover_hold_while_menu_is_open(krema: Krema, apps: TestW
 
 @pytest.mark.kremarc(HOLD_KREMARC)
 def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, apps: TestWindows) -> None:
+    known = {w.pid for w in app_windows(HOLD_TARGET_APP)}
     try:
         rest, base, zoomed, dock = hover_zoomed_with_preview(krema, apps)
+        before = app_windows(HOLD_TARGET_APP)
+        assert len(before) == 1, f"expected one target window before New Instance: {before}"
+        known.update(w.pid for w in before)
 
         menu = right_click_in_place(krema)
         wait_until(lambda: not krema.preview_visible(), timeout=1.0, message="preview to close when the context menu opens")
 
-        # Locate the "Settings..." row: highlight it with the keyboard and diff
+        # Locate the "New Instance" row: highlight it with the keyboard and diff
         # the menu against its unhighlighted frame (QMenu is not in AT-SPI).
         area = Rect(*menu.client_geometry)
         shot = crop(settled_capture(krema, "hold-menu-open", area), area)
-        for _ in range(PINNED_WINDOW.index("Settings...") + 1):
+        for _ in range(PINNED_WINDOW.index("New Instance") + 1):
             inp.key("Down")
         row = wait_stable(
-            lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-settings", area), area)).getbbox(),
+            lambda: ImageChops.difference(shot, crop(capture(krema, "hold-menu-new-instance", area), area)).getbbox(),
             duration=0.5,
         )
-        assert row is not None, "keyboard highlight of 'Settings...' not visible in the menu"
+        assert row is not None, "keyboard highlight of 'New Instance' not visible in the menu"
         target = (area.x + (row[0] + row[2]) // 2, area.y + (row[1] + row[3]) // 2)
         zoomed_top = dock.y + zoomed.y
-        assert target[1] < zoomed_top, f"'Settings...' row at {target} is not above the magnified icon (top {zoomed_top})"
+        assert target[1] < zoomed_top, f"'New Instance' row at {target} is not above the magnified icon (top {zoomed_top})"
 
         # Click the entry with the pointer: the menu closes with the pointer on
         # the menu's former place, off the dock.
-        inp.move(*target)
+        inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
         inp.click()
         wait_menu_closed(menu)
-        wait_until(lambda: settings_window(krema), timeout=15, message="Settings window from the 'Settings...' entry")
+        wait_until(lambda: len(app_windows(HOLD_TARGET_APP)) == 2, timeout=15, message="New Instance launched a second target-app window")
+        krema.wait_for_item(HOLD_TARGET_LAUNCHER)
+        wait_until(lambda: "2 windows" in description(krema, HOLD_TARGET_LAUNCHER), message="new instance joined the target group")
+        wait_until(lambda: "Starting" not in description(krema, HOLD_TARGET_LAUNCHER), timeout=10, message="new-instance launch feedback to end")
 
-        # The Settings window adds its own task item; only the items present
-        # before the menu opened are checked.
+        # A single window is named by its title, but two windows group under
+        # the desktop launcher name. Keep the same slot's resting geometry.
+        rest = {HOLD_TARGET_LAUNCHER if name == HOLD_TARGET else name: r for name, r in rest.items()}
         rest_sizes = {name: (r.width, r.height) for name, r in rest.items()}
         wait_until(
             lambda: hold_painted_sizes(krema, rest) == rest_sizes,
@@ -641,10 +701,12 @@ def test_ctx009_zoom_releases_when_menu_closes_away_from_the_dock(krema: Krema, 
             message=lambda: f"icons to return to rest size (base {base}px, now {hold_painted_sizes(krema, rest)})",
         )
         assert not krema.preview_visible(), "preview reopened although the pointer left the dock"
-        close_settings(krema)
     finally:
         # Never leave the pointer resting on the dock, even after a failure.
         krema.move_away(close_preview=False)
+        # New Instance is launched by Krema, not tracked by the apps fixture.
+        for pid in {w.pid for w in app_windows(HOLD_TARGET_APP)} - known:
+            kill_pid(pid)
 
 
 @pytest.mark.no_krema_autostart

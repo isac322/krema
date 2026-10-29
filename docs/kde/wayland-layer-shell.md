@@ -4,6 +4,14 @@
 
 ## Overview
 
+When enabling keyboard interactivity on an already mapped, empty dock,
+schedule a frame with `QQuickWindow::update()` after focusing the QML root.
+Otherwise no icon focus/zoom changes dirty the scene and the new layer-shell
+state may wait indefinitely for a surface commit. This was reproduced in
+private KWin: the empty dock failed to become active until a frame was
+requested. `void update()` was verified in
+`/usr/include/qt6/QtQuick/qquickwindow.h`.
+
 LayerShellQt is a Qt interface library for the `wlr-layer-shell` Wayland protocol. It allows Qt applications to create windows on specific "layers" in a Wayland compositor (docks, panels, overlays, etc.).
 
 **Headers:**

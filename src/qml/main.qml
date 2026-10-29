@@ -21,6 +21,7 @@ Item {
 
     Accessible.role: Accessible.ToolBar
     Accessible.name: i18n("Krema Dock")
+    Accessible.description: i18n("Press Menu for application actions or Shift+F10 for dock settings and actions.")
 
     // C++ singletons: DockView, DockModel, DockActions, DockContextMenu, DockVisibility, DockSettings, PreviewController
 
@@ -371,10 +372,18 @@ Item {
             event.accepted = true
             break
         case Qt.Key_Menu:
-            if (hoveredIndex >= 0) {
+            if (hoveredIndex >= 0 && !(event.modifiers & Qt.ShiftModifier)) {
                 DockContextMenu.showForTask(hoveredIndex)
+            } else {
+                DockContextMenu.showForDock()
             }
             event.accepted = true
+            break
+        case Qt.Key_F10:
+            if (event.modifiers & Qt.ShiftModifier) {
+                DockContextMenu.showForDock()
+                event.accepted = true
+            }
             break
         }
     }
@@ -890,7 +899,7 @@ Item {
             }
             if (root._hoverReconciling && !root._menuHeld)
                 root._reconcileAt(mouse.x, mouse.y)
-            else if (!root.keyboardNavigating)
+            else if (!root.keyboardNavigating || mouse.button === Qt.RightButton)
                 root.trackPointer(mouse.x, mouse.y)
             if (mouse.button === Qt.LeftButton && root.hoveredIndex >= 0) {
                 root._dragStartX = mouse.x
@@ -929,6 +938,13 @@ Item {
         onClicked: function(mouse) {
             // Suppress clicks for the entire held-button cycle after a drag.
             if (root._dragWasActive) return
+            if (mouse.button === Qt.RightButton) {
+                if (root.hoveredIndex >= 0)
+                    DockContextMenu.showForTask(root.hoveredIndex)
+                else
+                    DockContextMenu.showForDock()
+                return
+            }
             if (root.hoveredIndex < 0) return
             if (mouse.button === Qt.LeftButton) {
                 let idx = DockModel.tasksModel.index(root.hoveredIndex, 0)
@@ -950,8 +966,6 @@ Item {
                 }
             } else if (mouse.button === Qt.MiddleButton) {
                 DockActions.newInstance(root.hoveredIndex)
-            } else if (mouse.button === Qt.RightButton) {
-                DockContextMenu.showForTask(root.hoveredIndex)
             }
         }
 

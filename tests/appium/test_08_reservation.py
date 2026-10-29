@@ -173,7 +173,7 @@ def _geometry(krema: Krema, win: TestWindow, edge: int, reserved: bool, stage: s
 
 def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM) -> None:
     if edge != config.EDGE_BOTTOM:
-        from krema_e2e.krema import context_menu_entries
+        from krema_e2e.krema import DOCK_CONTEXT_MENU_ENTRIES
 
         # Leave any existing preview before revealing off-centre. The shared
         # settings helper's bottom-specific park lies inside a top dock.
@@ -202,19 +202,13 @@ def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM)
             message=f"{name!r} showing before the native context menu",
         )
         assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
-        before = {w.internal_id for w in krema.windows()}
+        menu = krema.open_dock_context_menu()
         pointer = kwin.cursor_pos()
-        inp.click(*pointer, button="right")
-        menu = wait_until(
-            lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
-            timeout=5,
-            message=f"real context menu of {name!r} on selected edge",
-        )
         _record(krema, "edge-settings-frontdoor", {
             "edge": edge, "surface": list(surface), "rest_icon": list(rest),
             "pointer": list(pointer), "menu": list(menu.client_geometry),
         })
-        krema.choose_context_menu_entry("Settings...", context_menu_entries(pinned=False, is_window=True))
+        krema.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
         wait_until(
             lambda: next((w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
             timeout=15,

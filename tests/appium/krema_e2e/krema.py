@@ -24,6 +24,7 @@ from selenium.common.exceptions import WebDriverException
 from . import config as kcfg
 from . import dbus, env, kwin
 from . import input as inp
+from .shortcuts import invoke_shortcut
 from .waits import wait_stable, wait_until
 
 #: XPath of the dock tool bar and its items (see tests/e2e/README.md).
@@ -421,12 +422,60 @@ class Krema:
             inp.key("Down")
         inp.key("Return")
 
+    def open_dock_context_menu(self, timeout: float = 5.0, *, surface: Rect | None = None, items: Sequence[WebElement] | None = None) -> kwin.Window:
+        """Clear hover zoom, then approach the row's inner padding.
+
+        This works with an empty dock too. The fixture must show the dock
+        before calling this helper (AlwaysVisible or a reveal shortcut).
+        Pass the surface and its items when targeting another output.
+        """
+        before = {w.internal_id for w in self.windows()}
+        area = surface or wait_until(lambda: self.surface_rect(), timeout=timeout, message="dock geometry")
+        settings = self.read_config().get("General", {})
+        edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
+        dock_items = self.items() if items is None else items
+        first = None
+        if dock_items:
+            # Leave the whole surface, not just a resting icon slot: an
+            # InPlace icon can cover the resting panel while magnified.
+            neutral = dock_menu_neutral_point(area, edge)
+            inp.move_path(inp.line(kwin.cursor_pos(), neutral, 12), 15)
+            wait_until(lambda: not self.preview_visible(), timeout=timeout, message="preview to close before dock menu")
+            icon = int(settings.get("IconSize", 48))
+
+            def unzoomed() -> Rect | None:
+                rect = self.screen_rect(dock_items[0])
+                extent = rect.width if edge <= kcfg.EDGE_BOTTOM else rect.height
+                return rect if extent == icon else None
+
+            wait_until(unzoomed, timeout=timeout, message="dock zoom to retract")
+            # On Qt < 6.9 extents ignore Scale, but the transformed origin
+            # still moves. Wait for it too before using the rest geometry.
+            first = wait_stable(lambda: self.screen_rect(dock_items[0]), duration=0.15, timeout=timeout)
+            if not area.contains(*first.center):
+                # Auto-hide may finish while zoom retracts. Toggle restores
+                # visibility without selecting/zooming an icon as Focus Dock
+                # would. Existing multi-output callers hold Settings open.
+                invoke_shortcut("toggle-dock")
+                wait_until(lambda: area.contains(*self.screen_rect(dock_items[0]).center), timeout=timeout, message="dock to reappear")
+                first = wait_stable(lambda: self.screen_rect(dock_items[0]), duration=0.15, timeout=timeout)
+        target = dock_padding_target(area, settings, first)
+        inp.move_path(inp.line(kwin.cursor_pos(), target, 20), 15)
+        inp.click(*target, button="right")
+        return wait_until(
+            lambda: next((w for w in self.windows() if w.internal_id not in before and not w.normal_window and not w.special_window and not w.skip_taskbar), None),
+            timeout=timeout,
+            message="dock context menu",
+        )
+
     def open_settings(self, via_item: str, entries: list[str] | None = None, timeout: float = 15.0) -> kwin.Window:
-        """Open Settings through item ``via_item``'s context menu and wait for
-        the "Settings — Krema" window. Pass ``entries`` when the item is not
-        an unpinned single window without notifications."""
-        self.open_context_menu(via_item)
-        self.choose_context_menu_entry("Settings...", entries or context_menu_entries(pinned=False, is_window=True))
+        """Reveal the dock via ``via_item``, then open its dock-only Settings menu.
+
+        ``entries`` is retained for callers that also use an app-menu oracle.
+        """
+        self.hover_item(via_item)
+        self.open_dock_context_menu()
+        self.choose_context_menu_entry("Settings...", DOCK_CONTEXT_MENU_ENTRIES)
         return wait_until(
             lambda: next((w for w in self.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
             timeout=timeout,
@@ -490,7 +539,48 @@ def context_menu_entries(pinned: bool, is_window: bool, has_notifications: bool 
         entries.append("Clear Notifications")
     if is_window:
         entries.append("Close")
-    return entries + ["Settings...", "About Krema", "Quit"]
+    return entries
+
+
+DOCK_CONTEXT_MENU_ENTRIES = ["Settings...", "About Krema", "Quit Krema"]
+
+
+def dock_menu_neutral_point(area: Rect, edge: int) -> tuple[int, int]:
+    """Desktop-side point outside the entire dock/zoom surface."""
+    if edge == kcfg.EDGE_TOP:
+        return area.center[0], area.y + area.height + 32
+    if edge == kcfg.EDGE_BOTTOM:
+        return area.center[0], area.y - 32
+    if edge == kcfg.EDGE_LEFT:
+        return area.x + area.width + 32, area.center[1]
+    return area.x - 32, area.center[1]
+
+
+def dock_padding_target(area: Rect, settings: Mapping[str, Any], first: Rect | None = None) -> tuple[int, int]:
+    """Inner leading corner beside an observed, fully unzoomed delegate.
+
+    Approach from the desktop side so the pointer never crosses an icon.
+    The secondary coordinate is outside the delegate's hit span, even when
+    large spacing extends the primary hit slot across the panel's padding.
+    """
+    edge = int(settings.get("Edge", kcfg.EDGE_BOTTOM))
+    if first is not None:
+        if edge == kcfg.EDGE_TOP:
+            return first.x - 4, first.y + first.height + 4
+        if edge == kcfg.EDGE_LEFT:
+            return first.x + first.width + 4, first.y - 4
+        return first.x - 4, first.y - 4
+    icon = int(settings.get("IconSize", 48))
+    floating = str(settings.get("Floating", "true")).lower() == "true"
+    margin = int(settings.get("FloatingMargin", 8)) if floating else 0
+    depth = margin + icon / 2
+    if edge == kcfg.EDGE_TOP:
+        return area.center[0], round(area.y + depth)
+    if edge == kcfg.EDGE_BOTTOM:
+        return area.center[0], round(area.y + area.height - depth)
+    if edge == kcfg.EDGE_LEFT:
+        return round(area.x + depth), area.center[1]
+    return round(area.x + area.width - depth), area.center[1]
 
 
 def _xpath_str(s: str) -> str:

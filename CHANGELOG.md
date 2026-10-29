@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Moved Settings and About Krema into the dock-only context menu, keeping application menus focused on the clicked app (#130)
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
 
 ### Fixed
@@ -34,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Fixed a crash when dragging an uninstalled .desktop file onto the dock. Krema now ignores unknown files while still pinning application-menu launchers that point to symlinked files correctly.
 - Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
 - Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
+- Kept dock settings and actions accessible from keyboard navigation with Shift+F10 or Shift+Menu, including on populated docks (#130)
+- Moved the dock's quit action out of application context menus into an empty-area dock menu and renamed it "Quit Krema", preventing it from being mistaken for closing the clicked app (#130)
 - Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
 - Notification tracking reconnected after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.
 - Long Do Not Disturb periods kept a valid expiry timer on older Qt versions and ended only when their configured deadline passed.

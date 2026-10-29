@@ -27,12 +27,16 @@
 #include <KAboutData>
 
 #include <QApplication>
+#include <QFile>
+#include <QMenu>
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScopeGuard>
 #include <QScreen>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QtQml>
 
@@ -1044,6 +1048,108 @@ TEST_CASE("Shutting down right after reopening settings", "[settings][shutdown-a
     app().manager.reset();
     CHECK_FALSE(closed);
     checkSettingsTornDown(reopened);
+}
+
+TEST_CASE("Dock-wide actions are only available from empty dock space", "[context-menu]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    QFile desktop(directory.filePath(QStringLiteral("krema-context-test.desktop")));
+    REQUIRE(desktop.open(QIODevice::WriteOnly));
+    REQUIRE(desktop.write("[Desktop Entry]\nType=Application\nName=Context Menu Test\nExec=true\nIcon=application-x-executable\n") > 0);
+    desktop.close();
+    const auto oldLaunchers = app().model->pinnedLaunchers();
+    const auto oldVisibility = app().settings->visibilityMode();
+    const auto oldZoom = app().settings->maxZoomFactor();
+    const auto restore = qScopeGuard([&] {
+        app().model->setPinnedLaunchers(oldLaunchers);
+        app().settings->setVisibilityMode(oldVisibility);
+        app().settings->setMaxZoomFactor(oldZoom);
+    });
+    app().settings->setVisibilityMode(0);
+    app().settings->setMaxZoomFactor(1.0);
+    app().model->setPinnedLaunchers({QUrl::fromLocalFile(desktop.fileName()).toString()});
+    restartDocks();
+    auto *shell = app().manager->primaryShell();
+    auto *view = shell->view();
+    REQUIRE(QTest::qWaitForWindowExposed(view));
+    auto *item = findItem(view->contentItem(), [](QQuickItem *candidate) {
+        return candidate->property("displayName").isValid() && candidate->property("index").toInt() == 0;
+    });
+    REQUIRE(item);
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return item->width() > 0 && item->height() > 0;
+        },
+        kTimeoutMs));
+
+    // QtTest exercises QML routing but supplies no compositor input serial
+    // for a Wayland popup grab. Inspect native labels before popup() instead.
+    QStringList labels;
+    bool interactionHeld = false;
+    const auto connection = QObject::connect(shell->contextMenu(), &krema::DockContextMenu::openChanged, view, [&] {
+        if (!shell->contextMenu()->isOpen()) {
+            return;
+        }
+        interactionHeld = view->visibilityController()->isInteracting();
+        labels.clear();
+        for (auto *widget : QApplication::topLevelWidgets()) {
+            if (auto *menu = qobject_cast<QMenu *>(widget); menu && !menu->isVisible()) {
+                for (auto *action : menu->actions()) {
+                    if (!action->isSeparator()) {
+                        labels.append(action->text());
+                    }
+                }
+            }
+        }
+    });
+    const auto disconnect = qScopeGuard([&] {
+        QObject::disconnect(connection);
+    });
+    QTest::mouseClick(view, Qt::RightButton, Qt::NoModifier, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+    CHECK(labels.contains(QStringLiteral("Unpin from Dock")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Quit")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Quit Krema")));
+    CHECK_FALSE(labels.contains(QStringLiteral("Settings...")));
+    CHECK_FALSE(labels.contains(QStringLiteral("About Krema")));
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+
+    auto *panel = findItem(view->contentItem(), [](QQuickItem *candidate) {
+        return candidate->property("restEdgePos").isValid();
+    });
+    REQUIRE(panel);
+    QTest::mouseClick(view, Qt::RightButton, Qt::NoModifier, panel->mapToScene(QPointF(2, 2)).toPoint());
+    CHECK(labels == QStringList{QStringLiteral("Settings..."), QStringLiteral("About Krema"), QStringLiteral("Quit Krema")});
+    CHECK(interactionHeld);
+}
+
+TEST_CASE("An idle empty dock receives compositor keyboard focus", "[context-menu][keyboard]")
+{
+    resetTo(MultiDockManager::PrimaryOnly);
+    const auto oldLaunchers = app().model->pinnedLaunchers();
+    const auto oldVisibility = app().settings->visibilityMode();
+    const auto restore = qScopeGuard([&] {
+        app().model->setPinnedLaunchers(oldLaunchers);
+        app().settings->setVisibilityMode(oldVisibility);
+    });
+    app().model->setPinnedLaunchers({});
+    app().settings->setVisibilityMode(0);
+    restartDocks();
+    auto *shell = app().manager->primaryShell();
+    auto *view = shell->view();
+    REQUIRE(QTest::qWaitForWindowExposed(view));
+    // Let startup rendering settle: no icon animation may commit focus for us.
+    QTest::qWait(200);
+    shell->focusDock();
+    REQUIRE(QTest::qWaitFor(
+        [&] {
+            return view->isActive();
+        },
+        kTimeoutMs));
+    REQUIRE(view->rootObject()->property("keyboardNavigating").toBool());
+    REQUIRE(view->rootObject()->hasActiveFocus());
+    QTest::keyClick(view, Qt::Key_Escape);
 }
 
 int main(int argc, char *argv[])

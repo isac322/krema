@@ -110,8 +110,13 @@ void DockContextMenu::showForTask(int index)
         });
     }
 
-    // Settings
-    menu->addSeparator();
+    popup(menu);
+}
+
+void DockContextMenu::showForDock()
+{
+    auto *menu = new QMenu();
+    menu->setAttribute(Qt::WA_DeleteOnClose);
     menu->addAction(QIcon::fromTheme(QStringLiteral("configure")), i18nc("@action:inmenu", "Settings..."), this, [this]() {
         Q_EMIT settingsRequested();
     });
@@ -121,8 +126,13 @@ void DockContextMenu::showForTask(int index)
     menu->addAction(QIcon::fromTheme(QStringLiteral("help-about")), i18nc("@action:inmenu", "About Krema"), this, [this]() {
         Q_EMIT aboutRequested();
     });
-    menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18nc("@action:inmenu", "Quit"), qApp, &QApplication::quit);
+    menu->addSeparator();
+    menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18nc("@action:inmenu", "Quit Krema"), qApp, &QApplication::quit);
+    popup(menu);
+}
 
+void DockContextMenu::popup(QMenu *menu)
+{
     // Open before popup(): the popup grab makes QtWayland send the dock a
     // synthetic leave, which QML must already see as part of the menu hold.
     // Also drives the interaction lock (dock stays visible while menu is open).

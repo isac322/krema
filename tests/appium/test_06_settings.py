@@ -56,9 +56,9 @@ from krema_e2e.krema import (
     SETTINGS_PAGES_XPATH,
     SETTINGS_SIDEBAR_XPATH,
     TOOLBAR_XPATH,
+    DOCK_CONTEXT_MENU_ENTRIES,
     Krema,
     Rect,
-    context_menu_entries,
     has_state,
     painted_rect,
 )
@@ -84,8 +84,8 @@ PAGES = [
 ]
 ICON_SIZE_SLIDER = f"{SETTINGS}//slider[@name='Icon size']"
 W, H = env.SCREEN_WIDTH, env.SCREEN_HEIGHT
-#: Dock item context menu of an unpinned single-window task.
-ENTRIES = context_menu_entries(pinned=False, is_window=True)
+#: Dock-only context menu, shared by all settings entry points.
+ENTRIES = DOCK_CONTEXT_MENU_ENTRIES
 
 
 # --------------------------------------------------------------------- helpers
@@ -375,16 +375,11 @@ def hover_ready(k: Krema, name: str = "Alpha") -> None:
 
 def open_menu(k: Krema, name: str = "Alpha") -> kwin.Window:
     hover_ready(k, name)
-    return k.open_context_menu(name)
+    return k.open_dock_context_menu()
 
 
 def open_settings(k: Krema, name: str = "Alpha") -> kwin.Window:
-    """Open Settings from ``name``'s context menu, then leave the dock like a
-    user heading for the dialog.
-
-    After the keyboard-chosen menu entry the pointer still rests on ``name``,
-    whose hover preview then opens (window item); it must be gone before the
-    dialog is used, or it takes the wheel and clicks aimed at the dialog."""
+    """Reveal via ``name``, open dock-only Settings, then head for the dialog."""
     hover_ready(k, name)
     win = k.open_settings(name, ENTRIES)
     k.move_away()
@@ -805,12 +800,9 @@ def test_set008_monitor_mode_all_monitors_from_open_settings(krema: Krema, apps:
     # dock reports the hover (its item zooms) before right-clicking.
     inp.move_path(inp.line((x, docks[1].client_y - 40), (x, y), 5), step_ms=40)
     wait_until(lambda: painted_rect(second_alpha(), second).width > second.width, timeout=5, message="second dock item hovered")
-    r = wait_stable(second_alpha, duration=0.3)
-    before = {w.internal_id for w in krema.windows()}
-    inp.click(r.center[0], docks[1].client_y + r.center[1], button="right")
-    menu = wait_until(
-        lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
-        message="context menu on the second output",
+    menu = krema.open_dock_context_menu(
+        surface=Rect(*docks[1].client_geometry),
+        items=[item for item in krema.items() if Rect.of(item).x >= W],
     )
     assert menu.client_x >= W, f"menu opened on the wrong output: {menu}"
     krema.choose_context_menu_entry("Settings...", ENTRIES)
@@ -923,8 +915,8 @@ def test_set008_follow_active_shortcuts_act_on_the_shown_dock(krema: Krema, apps
 
 # ------------------------------------------------------------------- SET-009
 def _quit_via_menu(k: Krema) -> int:
-    open_menu(k)
-    k.choose_context_menu_entry("Quit", ENTRIES)
+    k.open_dock_context_menu()
+    k.choose_context_menu_entry("Quit Krema", DOCK_CONTEXT_MENU_ENTRIES)
     assert k.process is not None
     return k.process.wait(20)
 

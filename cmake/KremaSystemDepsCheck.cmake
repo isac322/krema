@@ -11,6 +11,7 @@ endif()
 set(_stamp_content "/* Krema system dependency rebuild trigger. */\n")
 set(_files)
 set(_missing_lines)
+set(_directory_inputs)
 
 if(EXISTS "${INPUTS}")
     file(STRINGS "${INPUTS}" _input_paths)
@@ -20,6 +21,7 @@ endif()
 
 foreach(_input IN LISTS _input_paths)
     if(IS_DIRECTORY "${_input}")
+        list(APPEND _directory_inputs "${_input}")
         file(GLOB _directory_files LIST_DIRECTORIES false
             "${_input}/*"
             "${_input}/.*"
@@ -38,6 +40,20 @@ endforeach()
 
 list(REMOVE_DUPLICATES _files)
 list(SORT _files)
+list(REMOVE_DUPLICATES _directory_inputs)
+if(_directory_inputs)
+    execute_process(
+        COMMAND find -H ${_directory_inputs}
+            -mindepth 1
+            -type d
+            -printf "%p|%i|%C@\\n"
+        RESULT_VARIABLE _find_result
+        OUTPUT_VARIABLE _find_output
+        ERROR_VARIABLE _find_error
+    )
+else()
+    set(_find_output "")
+endif()
 
 if(_files)
     execute_process(
@@ -58,6 +74,12 @@ if(_stat_output STREQUAL "")
     set(_fingerprint_lines)
 else()
     string(REPLACE "\n" ";" _fingerprint_lines "${_stat_output}")
+endif()
+string(REPLACE "\r\n" "\n" _find_output "${_find_output}")
+string(REGEX REPLACE "\n+$" "" _find_output "${_find_output}")
+if(NOT _find_output STREQUAL "")
+    string(REPLACE "\n" ";" _find_lines "${_find_output}")
+    list(APPEND _fingerprint_lines ${_find_lines})
 endif()
 list(APPEND _fingerprint_lines ${_missing_lines})
 list(REMOVE_DUPLICATES _fingerprint_lines)

@@ -4,9 +4,10 @@
 # Package managers install files with their build-time mtimes, so after a
 # system upgrade the new headers look older than existing object files and
 # mtime-based incremental builds keep objects compiled against the old
-# headers. A ctime/inode fingerprint of the found dependencies touches a
-# forced-include header when they change, recompiling every object once;
-# the header's content never changes, so ccache keeps that rebuild cheap.
+# headers. A ctime/inode fingerprint of the found files, plus directory ctimes
+# covering nested dependencies, touches a forced-include header when they change,
+# recompiling every object once; the header's content never changes, so ccache
+# keeps that rebuild cheap.
 set(_KREMA_SYSTEM_DEPS_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 function(krema_system_deps_begin)

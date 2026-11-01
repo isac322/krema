@@ -126,8 +126,13 @@ family_krema() {
     if [ "$TARGET_ID" = opensuse-slowroll ]; then
         # The package may satisfy KPipeWireRecord's codec soname through the
         # intentionally non-installable mini FFmpeg flavor. Lock that flavor
-        # out so zypper keeps the coherent full FFmpeg set from the upgrade.
+        # out and keep the complete oss FFmpeg 8.1.2 set, which matches the
+        # Plasma KPipeWireRecord ABI currently published by slowroll-oss.
         zypper --non-interactive addlock ffmpeg-8-mini-libs || true
+        suse_install --oldpackage \
+            libavcodec62=8.1.2-5.2 libavfilter11=8.1.2-5.2 \
+            libavformat62=8.1.2-5.2 libavutil60=8.1.2-5.2 \
+            libswresample6=8.1.2-5.2 libswscale9=8.1.2-5.2
     fi
     suse_install --allow-unsigned-rpm /pkgs/*.rpm
     # Shrink the committed diff: no cached packages or metadata.

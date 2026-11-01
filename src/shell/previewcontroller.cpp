@@ -7,13 +7,10 @@
 #include "dockvisibilitycontroller.h"
 #include "krema.h"
 #include "models/dockmodel.h"
+#include "models/taskbackend.h"
 #include "utils/inputregion.h"
 
 #include <LayerShellQt/Window>
-
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
-
 #include <wayland-client.h>
 
 #include <cmath>
@@ -50,10 +47,10 @@ PreviewController::~PreviewController() = default;
 
 void PreviewController::initialize()
 {
-    // Share the dock's QQmlEngine so QML types (Kirigami, TaskManager, etc.)
-    // are available. m_previewView is a std::unique_ptr so the preview
-    // surface is destroyed with this controller (DockShell owns it) instead
-    // of leaking on the old output across a topology change.
+    // Share the dock's QQmlEngine so QML types are available.
+    // m_previewView is a std::unique_ptr so the preview surface is destroyed
+    // with this controller (DockShell owns it) instead of leaking on the old
+    // output across a topology change.
     m_previewView = std::make_unique<QQuickView>(m_dockView->engine(), nullptr);
     m_previewView->setColor(Qt::transparent);
     m_previewView->setResizeMode(QQuickView::SizeRootObjectToView);
@@ -171,7 +168,7 @@ QString PreviewController::appName() const
         return {};
     }
     const QModelIndex idx = m_model->tasksModel()->index(m_parentIndex, 0);
-    return idx.data(TaskManager::AbstractTasksModel::AppName).toString();
+    return idx.data(tasks::roles().AppName).toString();
 }
 
 qreal PreviewController::contentX() const
@@ -224,7 +221,6 @@ void PreviewController::showPreview(int index, qreal itemGlobalPos, qreal itemEx
 
     doShow();
 }
-
 
 void PreviewController::hidePreview()
 {
@@ -413,7 +409,7 @@ void PreviewController::activatePreviewThumbnail()
     if (!idx.isValid()) {
         return;
     }
-    m_model->tasksModel()->requestActivate(idx);
+    m_model->tasks().requestActivate(idx);
     hidePreview();
 }
 
@@ -423,7 +419,7 @@ void PreviewController::closePreviewThumbnail()
     if (!idx.isValid()) {
         return;
     }
-    m_model->tasksModel()->requestClose(idx);
+    m_model->tasks().requestClose(idx);
 
     // Adjust focus index if needed
     const int count = previewThumbnailCount();
@@ -443,7 +439,7 @@ int PreviewController::previewThumbnailCount() const
     if (childCount == 0) {
         // Check if it's a window (not just a launcher)
         const QModelIndex parentIdx = m_model->tasksModel()->index(m_parentIndex, 0);
-        bool isWindow = parentIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+        bool isWindow = parentIdx.data(tasks::roles().IsWindow).toBool();
         return isWindow ? 1 : 0;
     }
     return childCount;
@@ -464,7 +460,7 @@ bool PreviewController::focusedThumbnailIsActive() const
     if (!idx.isValid()) {
         return false;
     }
-    return idx.data(TaskManager::AbstractTasksModel::IsActive).toBool();
+    return idx.data(tasks::roles().IsActive).toBool();
 }
 
 bool PreviewController::focusedThumbnailIsMinimized() const
@@ -473,7 +469,7 @@ bool PreviewController::focusedThumbnailIsMinimized() const
     if (!idx.isValid()) {
         return false;
     }
-    return idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
+    return idx.data(tasks::roles().IsMinimized).toBool();
 }
 
 QModelIndex PreviewController::focusedThumbnailModelIndex() const
@@ -489,7 +485,7 @@ QModelIndex PreviewController::focusedThumbnailModelIndex() const
     if (m_focusedThumbnailIndex >= childCount) {
         return {};
     }
-    return m_model->tasksModel()->makeModelIndex(m_parentIndex, m_focusedThumbnailIndex);
+    return m_model->tasks().makeModelIndex(m_parentIndex, m_focusedThumbnailIndex);
 }
 
 void PreviewController::setHideDelay(int ms)

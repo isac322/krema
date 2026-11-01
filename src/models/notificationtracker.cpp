@@ -3,7 +3,7 @@
 
 #include "notificationtracker.h"
 
-#include <settings.h>
+#include "taskbackend.h"
 
 #include <KService>
 #include <algorithm>
@@ -12,9 +12,10 @@
 #include <limits>
 #include <utility>
 
+#include <QColor>
+#include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
-#include <QDBusArgument>
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
@@ -23,8 +24,8 @@
 #include <QDir>
 #include <QFile>
 #include <QImage>
-#include <QColor>
 #include <QLoggingCategory>
+#include <QMetaObject>
 #include <QRegularExpression>
 #include <QTimer>
 
@@ -201,9 +202,8 @@ static QList<SniPixmap> parseSniPixmaps(const QVariant &value)
     for (const QVariant &item : list) {
         const QVariantMap map = item.toMap();
         if (!map.isEmpty()) {
-            result.append({map.value(QStringLiteral("width")).toInt(),
-                           map.value(QStringLiteral("height")).toInt(),
-                           map.value(QStringLiteral("data")).toByteArray()});
+            result.append(
+                {map.value(QStringLiteral("width")).toInt(), map.value(QStringLiteral("height")).toInt(), map.value(QStringLiteral("data")).toByteArray()});
         }
     }
     return result;
@@ -235,10 +235,10 @@ static QImage decodeSniPixmap(const QVariant &value)
     for (int y = 0; y < best->height; ++y) {
         for (int x = 0; x < best->width; ++x) {
             const int offset = (y * best->width + x) * 4;
-            image.setPixelColor(x, y, QColor(uchar(best->data.at(offset + 1)),
-                                             uchar(best->data.at(offset + 2)),
-                                             uchar(best->data.at(offset + 3)),
-                                             uchar(best->data.at(offset))));
+            image.setPixelColor(
+                x,
+                y,
+                QColor(uchar(best->data.at(offset + 1)), uchar(best->data.at(offset + 2)), uchar(best->data.at(offset + 3)), uchar(best->data.at(offset))));
         }
     }
     return image;
@@ -290,30 +290,28 @@ static SniChatClient sniChatClientForId(const QString &rawId)
     if (id == QLatin1String("slack") || id == QLatin1String("com.slack.slack") || id == QLatin1String("com.slack")) {
         return SniChatClient::Slack;
     }
-    if (id == QLatin1String("discord") || id == QLatin1String("com.discordapp.discord")
-        || id == QLatin1String("com.discord.app")) {
+    if (id == QLatin1String("discord") || id == QLatin1String("com.discordapp.discord") || id == QLatin1String("com.discord.app")) {
         return SniChatClient::Discord;
     }
-    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop")
-        || id == QLatin1String("dev.vencord")) {
+    if (id == QLatin1String("vesktop") || id == QLatin1String("dev.vencord.vesktop") || id == QLatin1String("dev.vencord")) {
         return SniChatClient::Vesktop;
     }
     if (id == QLatin1String("webcord") || id == QLatin1String("io.github.spacingbat3.webcord")) {
         return SniChatClient::WebCord;
     }
-    if (id == QLatin1String("mattermost") || id == QLatin1String("mattermost-desktop") || id == QLatin1String("com.mattermost") || id == QLatin1String("com.mattermost.desktop")) {
+    if (id == QLatin1String("mattermost") || id == QLatin1String("mattermost-desktop") || id == QLatin1String("com.mattermost")
+        || id == QLatin1String("com.mattermost.desktop")) {
         return SniChatClient::Mattermost;
     }
     if (id == QLatin1String(kFerdiumAppId) || id == QLatin1String(kFerdiumAlias)) {
         return SniChatClient::Ferdium;
     }
-    if (id == QLatin1String("io.element.element") || id == QLatin1String("im.riot.riot")
-        || id == QLatin1String("element") || id == QLatin1String("element-desktop")) {
+    if (id == QLatin1String("io.element.element") || id == QLatin1String("im.riot.riot") || id == QLatin1String("element")
+        || id == QLatin1String("element-desktop")) {
         return SniChatClient::Element;
     }
-    if (id == QLatin1String("org.telegram") || id == QLatin1String("org.telegram.desktop")
-        || id == QLatin1String("telegram") || id == QLatin1String("telegram-desktop")
-        || id == QLatin1String("telegramdesktop")) {
+    if (id == QLatin1String("org.telegram") || id == QLatin1String("org.telegram.desktop") || id == QLatin1String("telegram")
+        || id == QLatin1String("telegram-desktop") || id == QLatin1String("telegramdesktop")) {
         return SniChatClient::Telegram;
     }
     return SniChatClient::None;
@@ -403,14 +401,10 @@ static int countSniPixels(const QImage &image, bool topRight, SniPixelColor colo
     for (int y = yStart; y < yEnd; ++y) {
         for (int x = xStart; x < image.width(); ++x) {
             const QColor pixel = image.pixelColor(x, y);
-            const bool red = pixel.alpha() >= 180 && pixel.red() >= 200
-                && pixel.green() <= (color == SniPixelColor::WebCordRed ? 90 : 100)
+            const bool red = pixel.alpha() >= 180 && pixel.red() >= 200 && pixel.green() <= (color == SniPixelColor::WebCordRed ? 90 : 100)
                 && pixel.blue() <= (color == SniPixelColor::WebCordRed ? 90 : 100);
-            const bool blue = pixel.alpha() >= 180 && pixel.red() <= 170
-                && pixel.green() >= 150 && pixel.blue() >= 210
-                && pixel.blue() - pixel.red() >= 50;
-            if ((color == SniPixelColor::WebCordBlue && blue)
-                || (color != SniPixelColor::WebCordBlue && red)) {
+            const bool blue = pixel.alpha() >= 180 && pixel.red() <= 170 && pixel.green() >= 150 && pixel.blue() >= 210 && pixel.blue() - pixel.red() >= 50;
+            if ((color == SniPixelColor::WebCordBlue && blue) || (color != SniPixelColor::WebCordBlue && red)) {
                 ++count;
             }
         }
@@ -428,9 +422,8 @@ static int webCordPixelState(const QImage &image)
 
 static int webCordMentionCount(const QString &title, const QString &subTitle)
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("^\\s*WebCord\\s+-\\s+([1-9][0-9]*)\\s+[^#0-9\\s]"),
-        QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+    static const QRegularExpression pattern(QStringLiteral("^\\s*WebCord\\s+-\\s+([1-9][0-9]*)\\s+[^#0-9\\s]"),
+                                            QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
     const QString combined = QString(title + QLatin1Char(' ') + subTitle).trimmed();
     for (const QString &candidate : {title, subTitle, combined}) {
         const auto match = pattern.match(candidate);
@@ -476,9 +469,10 @@ static int slackPixelState(const QImage &image)
 
 static int slackMentionCount(const QString &title, const QString &subTitle)
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("([1-9][0-9]*(?:[.,\\x{00A0}\\x{202F}' ][0-9]{3})*)\\s*(?:notifications?\\b|개의\\s*알림|件の通知|Benachrichtigung(?:en)?\\b|notificaci(?:ón|ones)\\b|notific(?:a|he)\\b|notificaç(?:ão|ões)\\b|(?:条(?:[1-9][0-9]*)?|則)?\\s*通知)"),
-        QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+    static const QRegularExpression pattern(QStringLiteral("([1-9][0-9]*(?:[.,\\x{00A0}\\x{202F}' "
+                                                           "][0-9]{3})*)\\s*(?:notifications?\\b|개의\\s*알림|件の通知|Benachrichtigung(?:en)?\\b|notificaci(?:"
+                                                           "ón|ones)\\b|notific(?:a|he)\\b|notificaç(?:ão|ões)\\b|(?:条(?:[1-9][0-9]*)?|則)?\\s*通知)"),
+                                            QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
     const auto match = pattern.match(title + QLatin1Char(' ') + subTitle);
     if (!match.hasMatch()) {
         return 0;
@@ -504,8 +498,7 @@ static int mattermostPixelState(const QImage &image, const QString &toolTipTitle
                 const QColor pixel = image.pixelColor(x, y);
                 if (pixel.alpha() >= 180 && pixel.red() >= 210 && pixel.green() <= 90 && pixel.blue() <= 80) {
                     ++mentionPixels;
-                } else if (pixel.alpha() >= 180 && pixel.red() <= 120 && pixel.green() >= 130 && pixel.blue() >= 220
-                           && pixel.blue() - pixel.red() >= 90) {
+                } else if (pixel.alpha() >= 180 && pixel.red() <= 120 && pixel.green() >= 130 && pixel.blue() >= 220 && pixel.blue() - pixel.red() >= 90) {
                     ++unreadPixels;
                 }
             }
@@ -546,9 +539,7 @@ static int telegramPixelState(const QImage &image, const QString &iconName)
             const bool red = pixel.red() >= 200 && pixel.green() <= 110 && pixel.blue() <= 120;
             if (red) {
                 ++activePixels;
-            } else if (std::abs(pixel.red() - pixel.green()) <= 10
-                       && std::abs(pixel.green() - pixel.blue()) <= 10
-                       && pixel.red() >= 70 && pixel.red() <= 190) {
+            } else if (std::abs(pixel.red() - pixel.green()) <= 10 && std::abs(pixel.green() - pixel.blue()) <= 10 && pixel.red() >= 70 && pixel.red() <= 190) {
                 ++grayPixels;
             }
         }
@@ -562,8 +553,7 @@ static int telegramPixelState(const QImage &image, const QString &iconName)
 
 static int telegramToolTipCount(const QString &title, const QString &subTitle)
 {
-    static const QRegularExpression pattern(QStringLiteral("^\\s*Telegram\\s*\\(([1-9][0-9]*)\\)\\s*$"),
-                                            QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression pattern(QStringLiteral("^\\s*Telegram\\s*\\(([1-9][0-9]*)\\)\\s*$"), QRegularExpression::CaseInsensitiveOption);
     for (const QString &candidate : {title, subTitle}) {
         const auto match = pattern.match(candidate);
         if (match.hasMatch()) {
@@ -610,19 +600,27 @@ NotificationTracker::NotificationTracker(QObject *parent)
     , m_ferdiumServiceWatcher(QString::fromLatin1(kFerdiumService), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange)
     , m_dndExpiryTimer(this)
 {
-    // Settings — must load() explicitly (constructor doesn't auto-load)
-    m_notifSettings = std::make_unique<NotificationManager::Settings>(this);
-    m_notifSettings->load();
+    if (!tasks::Backend::instance().ensureLoaded()) {
+        qCWarning(lcNotif) << "Notification settings unavailable:" << tasks::Backend::instance().errorString();
+    }
+    m_notifSettings = tasks::Backend::instance().createNotificationSettings(this);
+    if (m_notifSettings) {
+        QMetaObject::invokeMethod(m_notifSettings, "load");
+    }
 
-    qCInfo(lcNotif) << "NotificationTracker init: badgesInTaskManager=" << (m_notifSettings ? m_notifSettings->badgesInTaskManager() : true)
-                    << "blacklist=" << (m_notifSettings ? m_notifSettings->badgeBlacklistedApplications() : QStringList());
+    qCInfo(lcNotif) << "NotificationTracker init: badgesInTaskManager=" << (m_notifSettings ? m_notifSettings->property("badgesInTaskManager").toBool() : true)
+                    << "blacklist=" << (m_notifSettings ? m_notifSettings->property("badgeBlacklistedApplications").toStringList() : QStringList());
 
     // DND and badge settings tracking
-    connect(m_notifSettings.get(), &NotificationManager::Settings::settingsChanged, this, [this] {
-        updateDndState();
-        bumpRevision();
-    });
-    connect(m_notifSettings.get(), &NotificationManager::Settings::notificationsInhibitedByApplicationChanged, this, &NotificationTracker::updateDndState);
+    if (m_notifSettings) {
+        tasks::connectSignal(m_notifSettings, "settingsChanged", this, [this] {
+            updateDndState();
+            bumpRevision();
+        });
+        tasks::connectSignal(m_notifSettings, "notificationsInhibitedByApplicationChanged", this, [this] {
+            updateDndState();
+        });
+    }
     m_dndExpiryTimer.setSingleShot(true);
     connect(&m_dndExpiryTimer, &QTimer::timeout, this, &NotificationTracker::updateDndState);
     setupNotificationWatcher();
@@ -656,14 +654,14 @@ bool NotificationTracker::dndActive() const
 
 bool NotificationTracker::badgesEnabled(const QString &appId) const
 {
-    if (appId.isEmpty() || (m_notifSettings && !m_notifSettings->badgesInTaskManager())) {
+    if (appId.isEmpty() || (m_notifSettings && !m_notifSettings->property("badgesInTaskManager").toBool())) {
         return false;
     }
     const QString normalized = canonicalDesktopId(appId);
-    if (normalized.isEmpty() || !m_notifSettings) {
-        return !normalized.isEmpty();
+    if (normalized.isEmpty()) {
+        return false;
     }
-    const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
+    const auto blacklist = m_notifSettings ? m_notifSettings->property("badgeBlacklistedApplications").toStringList() : QStringList();
     return !std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &appId](const QString &entry) {
         return canonicalDesktopId(entry) == normalized || sniIdsMatch(entry, appId);
     });
@@ -698,15 +696,14 @@ int NotificationTracker::sniChatMentionCount(const QString &appId) const
     return entry ? entry->chatMentionCount : 0;
 }
 
-
 void NotificationTracker::updateDndState()
 {
     m_dndExpiryTimer.stop();
     bool active = false;
     if (m_notifSettings) {
-        active = m_notifSettings->notificationsInhibitedByApplication();
+        active = m_notifSettings->property("notificationsInhibitedByApplication").toBool();
         if (!active) {
-            const auto until = m_notifSettings->notificationsInhibitedUntil();
+            const auto until = m_notifSettings->property("notificationsInhibitedUntil").toDateTime();
             const auto now = QDateTime::currentDateTime();
             if (until.isValid() && until > now) {
                 active = true;
@@ -732,7 +729,7 @@ int NotificationTracker::unreadCount(const QString &desktopEntry) const
         return 0;
     }
 
-    if (m_notifSettings && !m_notifSettings->badgesInTaskManager()) {
+    if (m_notifSettings && !m_notifSettings->property("badgesInTaskManager").toBool()) {
         return 0;
     }
 
@@ -741,15 +738,13 @@ int NotificationTracker::unreadCount(const QString &desktopEntry) const
         return 0;
     }
 
-    if (m_notifSettings) {
-        const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
-        const bool blacklisted = std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &desktopEntry](const QString &entry) {
-            return canonicalNotificationKey(entry) == normalized || sniIdsMatch(entry, desktopEntry);
-        });
-        if (blacklisted) {
-            qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0 (blacklisted)";
-            return 0;
-        }
+    const auto blacklist = m_notifSettings ? m_notifSettings->property("badgeBlacklistedApplications").toStringList() : QStringList();
+    const bool blacklisted = std::any_of(blacklist.cbegin(), blacklist.cend(), [&normalized, &desktopEntry](const QString &entry) {
+        return canonicalNotificationKey(entry) == normalized || sniIdsMatch(entry, desktopEntry);
+    });
+    if (blacklisted) {
+        qCInfo(lcNotif) << "  unreadCount(" << desktopEntry << ") = 0 (blacklisted)";
+        return 0;
     }
 
     const auto it = m_unreadNotifs.constFind(normalized);
@@ -865,7 +860,7 @@ void NotificationTracker::dumpState() const
     qCInfo(lcNotif) << "=== Krema Notification State ===";
 
     // Notification watcher data
-    const bool badgesEnabled = m_notifSettings ? m_notifSettings->badgesInTaskManager() : true;
+    const bool badgesEnabled = !m_notifSettings || m_notifSettings->property("badgesInTaskManager").toBool();
     qCInfo(lcNotif).noquote() << QStringLiteral("[Notification Watcher] (tracked IDs: %1, badgesEnabled: %2)")
                                      .arg(m_notifIdToEntry.size())
                                      .arg(badgesEnabled ? QStringLiteral("true") : QStringLiteral("false"));
@@ -895,7 +890,7 @@ void NotificationTracker::dumpState() const
 
     // Blacklisted apps
     if (m_notifSettings) {
-        const auto blacklist = m_notifSettings->badgeBlacklistedApplications();
+        const auto blacklist = m_notifSettings->property("badgeBlacklistedApplications").toStringList();
         if (!blacklist.isEmpty()) {
             qCInfo(lcNotif).noquote() << QStringLiteral("[Blacklisted] %1").arg(blacklist.join(QStringLiteral(", ")));
         }
@@ -1164,19 +1159,15 @@ void NotificationTracker::replayDeferredChatClears(const QString &itemId)
 void NotificationTracker::setupFerdiumWatcher()
 {
     auto bus = QDBusConnection::sessionBus();
-    connect(&m_ferdiumServiceWatcher,
-            &QDBusServiceWatcher::serviceOwnerChanged,
-            this,
-            &NotificationTracker::onFerdiumServiceOwnerChanged);
+    connect(&m_ferdiumServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onFerdiumServiceOwnerChanged);
 
     if (!m_ferdiumPropertiesMatchConnected) {
-        m_ferdiumPropertiesMatchConnected =
-            bus.connect(QString::fromLatin1(kFerdiumService),
-                       QString::fromLatin1(kFerdiumPath),
-                       QString::fromLatin1(kPropertiesInterface),
-                       QString::fromLatin1(kPropertiesChangedSignal),
-                       this,
-                       SLOT(onFerdiumPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
+        m_ferdiumPropertiesMatchConnected = bus.connect(QString::fromLatin1(kFerdiumService),
+                                                        QString::fromLatin1(kFerdiumPath),
+                                                        QString::fromLatin1(kPropertiesInterface),
+                                                        QString::fromLatin1(kPropertiesChangedSignal),
+                                                        this,
+                                                        SLOT(onFerdiumPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
         if (!m_ferdiumPropertiesMatchConnected) {
             qCWarning(lcNotif) << "Failed to subscribe to Ferdium PropertiesChanged:" << bus.lastError().message();
         }
@@ -1313,9 +1304,9 @@ void NotificationTracker::onFerdiumServiceOwnerChanged(const QString &service, c
 }
 
 void NotificationTracker::onFerdiumPropertiesChanged(const QString &interfaceName,
-                                                      const QVariantMap &changedProperties,
-                                                      const QStringList &invalidatedProperties,
-                                                      const QDBusMessage &message)
+                                                     const QVariantMap &changedProperties,
+                                                     const QStringList &invalidatedProperties,
+                                                     const QDBusMessage &message)
 {
     if (interfaceName != QString::fromLatin1(kFerdiumInterface) || message.path() != QString::fromLatin1(kFerdiumPath)) {
         return;
@@ -1335,8 +1326,7 @@ void NotificationTracker::onFerdiumPropertiesChanged(const QString &interfaceNam
         indirectCount = unwrapDbusVariant(changedProperties.value(indirectProperty)).toUInt();
         changed = true;
     }
-    const bool invalidated = invalidatedProperties.contains(directProperty)
-        || invalidatedProperties.contains(indirectProperty);
+    const bool invalidated = invalidatedProperties.contains(directProperty) || invalidatedProperties.contains(indirectProperty);
     if (!changed && !invalidated) {
         return;
     }
@@ -1359,37 +1349,34 @@ void NotificationTracker::setupSniWatcher()
     auto bus = QDBusConnection::sessionBus();
 
     if (!m_sniWatcherRegisteredMatchConnected) {
-        m_sniWatcherRegisteredMatchConnected =
-            bus.connect(QString::fromLatin1(kSniWatcherService),
-                        QStringLiteral("/StatusNotifierWatcher"),
-                        QStringLiteral("org.kde.StatusNotifierWatcher"),
-                        QStringLiteral("StatusNotifierItemRegistered"),
-                        this,
-                        SLOT(onSniRegistered(QString)));
+        m_sniWatcherRegisteredMatchConnected = bus.connect(QString::fromLatin1(kSniWatcherService),
+                                                           QStringLiteral("/StatusNotifierWatcher"),
+                                                           QStringLiteral("org.kde.StatusNotifierWatcher"),
+                                                           QStringLiteral("StatusNotifierItemRegistered"),
+                                                           this,
+                                                           SLOT(onSniRegistered(QString)));
         if (!m_sniWatcherRegisteredMatchConnected) {
             qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItemRegistered:" << bus.lastError().message();
         }
     }
     if (!m_sniWatcherUnregisteredMatchConnected) {
-        m_sniWatcherUnregisteredMatchConnected =
-            bus.connect(QString::fromLatin1(kSniWatcherService),
-                        QStringLiteral("/StatusNotifierWatcher"),
-                        QStringLiteral("org.kde.StatusNotifierWatcher"),
-                        QStringLiteral("StatusNotifierItemUnregistered"),
-                        this,
-                        SLOT(onSniUnregistered(QString)));
+        m_sniWatcherUnregisteredMatchConnected = bus.connect(QString::fromLatin1(kSniWatcherService),
+                                                             QStringLiteral("/StatusNotifierWatcher"),
+                                                             QStringLiteral("org.kde.StatusNotifierWatcher"),
+                                                             QStringLiteral("StatusNotifierItemUnregistered"),
+                                                             this,
+                                                             SLOT(onSniUnregistered(QString)));
         if (!m_sniWatcherUnregisteredMatchConnected) {
             qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItemUnregistered:" << bus.lastError().message();
         }
     }
     if (!m_sniStatusMatchConnected) {
-        m_sniStatusMatchConnected =
-            bus.connect(QString(),
-                        QString(),
-                        QStringLiteral("org.kde.StatusNotifierItem"),
-                        QStringLiteral("NewStatus"),
-                        this,
-                        SLOT(onSniNewStatus(QString, QDBusMessage)));
+        m_sniStatusMatchConnected = bus.connect(QString(),
+                                                QString(),
+                                                QStringLiteral("org.kde.StatusNotifierItem"),
+                                                QStringLiteral("NewStatus"),
+                                                this,
+                                                SLOT(onSniNewStatus(QString, QDBusMessage)));
         if (!m_sniStatusMatchConnected) {
             qCWarning(lcNotif) << "Failed to subscribe to StatusNotifierItem.NewStatus:" << bus.lastError().message();
         }
@@ -1404,21 +1391,38 @@ void NotificationTracker::setupSniWatcher()
         }
     };
     connectSniSignal(m_sniTitleMatchConnected, QStringLiteral("org.kde.StatusNotifierItem"), QStringLiteral("NewTitle"), SLOT(onSniNewTitle(QDBusMessage)));
-    connectSniSignal(m_sniAttentionIconMatchConnected, QStringLiteral("org.kde.StatusNotifierItem"), QStringLiteral("NewAttentionIcon"), SLOT(onSniNewAttentionIcon(QDBusMessage)));
-    connectSniSignal(m_sniOverlayIconMatchConnected, QStringLiteral("org.kde.StatusNotifierItem"), QStringLiteral("NewOverlayIcon"), SLOT(onSniNewOverlayIcon(QDBusMessage)));
-    connectSniSignal(m_sniToolTipMatchConnected, QStringLiteral("org.kde.StatusNotifierItem"), QStringLiteral("NewToolTip"), SLOT(onSniNewToolTip(QDBusMessage)));
+    connectSniSignal(m_sniAttentionIconMatchConnected,
+                     QStringLiteral("org.kde.StatusNotifierItem"),
+                     QStringLiteral("NewAttentionIcon"),
+                     SLOT(onSniNewAttentionIcon(QDBusMessage)));
+    connectSniSignal(m_sniOverlayIconMatchConnected,
+                     QStringLiteral("org.kde.StatusNotifierItem"),
+                     QStringLiteral("NewOverlayIcon"),
+                     SLOT(onSniNewOverlayIcon(QDBusMessage)));
+    connectSniSignal(m_sniToolTipMatchConnected,
+                     QStringLiteral("org.kde.StatusNotifierItem"),
+                     QStringLiteral("NewToolTip"),
+                     SLOT(onSniNewToolTip(QDBusMessage)));
     connectSniSignal(m_sniIconMatchConnected, QStringLiteral("org.kde.StatusNotifierItem"), QStringLiteral("NewIcon"), SLOT(onSniNewIcon(QDBusMessage)));
-    connectSniSignal(m_sniIconThemePathMatchConnected, QStringLiteral("org.kde.StatusNotifierItem"), QStringLiteral("NewIconThemePath"), SLOT(onSniNewIconThemePath(QDBusMessage)));
-    connectSniSignal(m_sniFreedesktopIconMatchConnected, QStringLiteral("org.freedesktop.StatusNotifierItem"), QStringLiteral("NewIcon"), SLOT(onSniNewIcon(QDBusMessage)));
-    connectSniSignal(m_sniFreedesktopIconThemePathMatchConnected, QStringLiteral("org.freedesktop.StatusNotifierItem"), QStringLiteral("NewIconThemePath"), SLOT(onSniNewIconThemePath(QDBusMessage)));
+    connectSniSignal(m_sniIconThemePathMatchConnected,
+                     QStringLiteral("org.kde.StatusNotifierItem"),
+                     QStringLiteral("NewIconThemePath"),
+                     SLOT(onSniNewIconThemePath(QDBusMessage)));
+    connectSniSignal(m_sniFreedesktopIconMatchConnected,
+                     QStringLiteral("org.freedesktop.StatusNotifierItem"),
+                     QStringLiteral("NewIcon"),
+                     SLOT(onSniNewIcon(QDBusMessage)));
+    connectSniSignal(m_sniFreedesktopIconThemePathMatchConnected,
+                     QStringLiteral("org.freedesktop.StatusNotifierItem"),
+                     QStringLiteral("NewIconThemePath"),
+                     SLOT(onSniNewIconThemePath(QDBusMessage)));
     if (!m_sniPropertiesChangedMatchConnected) {
-        m_sniPropertiesChangedMatchConnected =
-            bus.connect(QString(),
-                        QString(),
-                        QStringLiteral("org.freedesktop.DBus.Properties"),
-                        QStringLiteral("PropertiesChanged"),
-                        this,
-                        SLOT(onSniPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
+        m_sniPropertiesChangedMatchConnected = bus.connect(QString(),
+                                                           QString(),
+                                                           QStringLiteral("org.freedesktop.DBus.Properties"),
+                                                           QStringLiteral("PropertiesChanged"),
+                                                           this,
+                                                           SLOT(onSniPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
     }
     connect(&m_sniServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onSniServiceOwnerChanged);
     connect(&m_sniWatcherServiceWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this, &NotificationTracker::onSniWatcherServiceOwnerChanged);
@@ -1443,7 +1447,7 @@ void NotificationTracker::bumpRevision()
         if (sni.status == QLatin1String("NeedsAttention"))
             ++sniAttentionCount;
     }
-    const bool badgesEnabled = m_notifSettings ? m_notifSettings->badgesInTaskManager() : true;
+    const bool badgesEnabled = !m_notifSettings || m_notifSettings->property("badgesInTaskManager").toBool();
     qCInfo(lcNotif) << "bumpRevision:" << m_revision << "| unread:" << (summary.isEmpty() ? QStringLiteral("(none)") : summary.join(QStringLiteral(", ")))
                     << "| sniAttention:" << sniAttentionCount << "| badgesEnabled:" << badgesEnabled;
 
@@ -1508,10 +1512,7 @@ void NotificationTracker::trackSniItem(const QString &service, const QString &ob
     m_sniItems.insert(key, entry);
     queryAllSniProperties(key, generation, service, objectPath);
 }
-void NotificationTracker::queryAllSniProperties(const QString &key,
-                                                 quint64 generation,
-                                                 const QString &service,
-                                                 const QString &objectPath)
+void NotificationTracker::queryAllSniProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath)
 {
     querySniProperty(key, generation, service, objectPath, QStringLiteral("Id"));
     querySniProperty(key, generation, service, objectPath, QStringLiteral("Status"));
@@ -1520,7 +1521,6 @@ void NotificationTracker::queryAllSniProperties(const QString &key,
     querySniProperty(key, generation, service, objectPath, QStringLiteral("OverlayIconName"));
     querySniProperty(key, generation, service, objectPath, QStringLiteral("ToolTip"));
     querySniIconProperties(key, generation, service, objectPath, QStringLiteral("org.kde.StatusNotifierItem"));
-
 }
 void NotificationTracker::updateSniIconImage(SniEntry &entry)
 {
@@ -1577,12 +1577,12 @@ void NotificationTracker::updateSniChatState(SniEntry &entry)
 }
 
 void NotificationTracker::querySniProperty(const QString &key,
-                                            quint64 generation,
-                                            const QString &service,
-                                            const QString &objectPath,
-                                            const QString &property,
-                                            const QString &interfaceName,
-                                            bool iconQuery)
+                                           quint64 generation,
+                                           const QString &service,
+                                           const QString &objectPath,
+                                           const QString &property,
+                                           const QString &interfaceName,
+                                           bool iconQuery)
 {
     const QString interface = interfaceName.isEmpty() ? QStringLiteral("org.kde.StatusNotifierItem") : interfaceName;
     QDBusMessage msg = QDBusMessage::createMethodCall(service, objectPath, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
@@ -1605,8 +1605,7 @@ void NotificationTracker::querySniProperty(const QString &key,
                 updateSniIconImage(*current);
                 updateSniChatState(*current);
                 const int previousChatState = current->iconQueryPreviousChatState;
-                const bool changed = current->iconImage != current->iconQueryPreviousImage
-                    || current->chatUnreadState != previousChatState
+                const bool changed = current->iconImage != current->iconQueryPreviousImage || current->chatUnreadState != previousChatState
                     || current->chatMentionCount != current->iconQueryPreviousMentionCount;
                 current->iconQueryInFlight = false;
                 const bool pending = current->iconQueryPending;
@@ -1621,8 +1620,7 @@ void NotificationTracker::querySniProperty(const QString &key,
                         scheduleSniIconRefresh(key, pendingInterface);
                     }
                 }
-                if (!currentId.isEmpty()
-                    && shouldClearChatNotificationsOnTransition(sniChatClientForId(currentId), previousChatState, committedChatState)) {
+                if (!currentId.isEmpty() && shouldClearChatNotificationsOnTransition(sniChatClientForId(currentId), previousChatState, committedChatState)) {
                     clearChatNotificationsUnlessRetained(currentId);
                 }
                 replayDeferredChatClears(currentId);
@@ -1661,15 +1659,13 @@ void NotificationTracker::querySniProperty(const QString &key,
                 if (!iconQuery) {
                     updateSniChatState(*it);
                     if (!it->iconQueryInFlight && !it->iconQueryPending) {
-                        if (!it->id.isEmpty()
-                            && shouldClearChatNotificationsOnTransition(sniChatClientForId(it->id), oldState, it->chatUnreadState)) {
+                        if (!it->id.isEmpty() && shouldClearChatNotificationsOnTransition(sniChatClientForId(it->id), oldState, it->chatUnreadState)) {
                             clearChatNotificationsUnlessRetained(it->id);
                         }
                         replayDeferredChatClears(it->id);
                     }
-                    if (it->chatUnreadState != oldState || it->chatMentionCount != oldCount
-                        || it->title != oldTitle || it->attentionIconName != oldAttentionIcon
-                        || it->overlayIconName != oldOverlayIcon || it->toolTipTitle != oldToolTipTitle
+                    if (it->chatUnreadState != oldState || it->chatMentionCount != oldCount || it->title != oldTitle
+                        || it->attentionIconName != oldAttentionIcon || it->overlayIconName != oldOverlayIcon || it->toolTipTitle != oldToolTipTitle
                         || it->toolTipSubTitle != oldToolTipSubTitle) {
                         bumpRevision();
                     }
@@ -1712,8 +1708,7 @@ void NotificationTracker::querySniProperty(const QString &key,
             if (storedValue) {
                 *storedValue = value.toString();
             }
-            if (property == QLatin1String("Id") && sniChatClientForId(it->id) == SniChatClient::Ferdium
-                && ferdiumGeneration != m_ferdiumOwnerGeneration) {
+            if (property == QLatin1String("Id") && sniChatClientForId(it->id) == SniChatClient::Ferdium && ferdiumGeneration != m_ferdiumOwnerGeneration) {
                 it->ferdiumOwnerGeneration = m_ferdiumOwnerGeneration;
                 it->iconPixmapImage = {};
                 it->iconImage = {};
@@ -1727,8 +1722,7 @@ void NotificationTracker::querySniProperty(const QString &key,
         } else {
             updateSniChatState(*it);
             if (!it->iconQueryInFlight && !it->iconQueryPending) {
-                if (!it->id.isEmpty()
-                    && shouldClearChatNotificationsOnTransition(sniChatClientForId(it->id), oldState, it->chatUnreadState)) {
+                if (!it->id.isEmpty() && shouldClearChatNotificationsOnTransition(sniChatClientForId(it->id), oldState, it->chatUnreadState)) {
                     clearChatNotificationsUnlessRetained(it->id);
                 }
                 replayDeferredChatClears(it->id);
@@ -1739,10 +1733,10 @@ void NotificationTracker::querySniProperty(const QString &key,
 }
 
 void NotificationTracker::querySniIconProperties(const QString &key,
-                                                  quint64 generation,
-                                                  const QString &service,
-                                                  const QString &objectPath,
-                                                  const QString &interfaceName)
+                                                 quint64 generation,
+                                                 const QString &service,
+                                                 const QString &objectPath,
+                                                 const QString &interfaceName)
 {
     auto it = m_sniItems.find(key);
     if (it == m_sniItems.end() || it->generation != generation) {
@@ -1791,11 +1785,7 @@ void NotificationTracker::processSniIconRefreshes()
             continue;
         }
         it->iconQueryPending = false;
-        querySniIconProperties(key,
-                               it->generation,
-                               key.left(separator),
-                               key.mid(separator + 1),
-                               it->iconQueryInterface);
+        querySniIconProperties(key, it->generation, key.left(separator), key.mid(separator + 1), it->iconQueryInterface);
     }
 }
 void NotificationTracker::ensureSniMetadataQueried(const QString &key, SniEntry &entry)
@@ -1808,10 +1798,7 @@ void NotificationTracker::ensureSniMetadataQueried(const QString &key, SniEntry 
         return;
     }
     entry.initialQueryFailed = false;
-    queryAllSniProperties(key,
-                          entry.generation,
-                          key.left(separator),
-                          key.mid(separator + 1));
+    queryAllSniProperties(key, entry.generation, key.left(separator), key.mid(separator + 1));
 }
 void NotificationTracker::clearSniItems()
 {
@@ -1839,7 +1826,6 @@ void NotificationTracker::clearSniItems()
     }
     bumpRevision();
 }
-
 
 // --- SNI D-Bus slot handlers ---
 
@@ -1905,8 +1891,7 @@ QString NotificationTracker::sniKeyForMessage(const QDBusMessage &message) const
         }
 
         const QString registeredService = it.key().left(separator);
-        if (registeredService == message.service()
-            || (dbusInterface && dbusInterface->serviceOwner(registeredService) == message.service())) {
+        if (registeredService == message.service() || (dbusInterface && dbusInterface->serviceOwner(registeredService) == message.service())) {
             return it.key();
         }
     }
@@ -1995,14 +1980,12 @@ void NotificationTracker::onSniNewIconThemePath(const QDBusMessage &message)
     }
 }
 
-
 void NotificationTracker::onSniPropertiesChanged(const QString &interfaceName,
-                                                  const QVariantMap &changedProperties,
-                                                  const QStringList &invalidatedProperties,
-                                                  const QDBusMessage &message)
+                                                 const QVariantMap &changedProperties,
+                                                 const QStringList &invalidatedProperties,
+                                                 const QDBusMessage &message)
 {
-    if (interfaceName != QLatin1String("org.kde.StatusNotifierItem")
-        && interfaceName != QLatin1String("org.freedesktop.StatusNotifierItem")) {
+    if (interfaceName != QLatin1String("org.kde.StatusNotifierItem") && interfaceName != QLatin1String("org.freedesktop.StatusNotifierItem")) {
         return;
     }
     const QString key = sniKeyForMessage(message);
@@ -2023,8 +2006,7 @@ void NotificationTracker::onSniPropertiesChanged(const QString &interfaceName,
         if (iconProperties.contains(property)) {
             iconRefresh = true;
         } else if (property == QLatin1String("Id") || property == QLatin1String("Status") || property == QLatin1String("Title")
-                   || property == QLatin1String("AttentionIconName") || property == QLatin1String("OverlayIconName")
-                   || property == QLatin1String("ToolTip")) {
+                   || property == QLatin1String("AttentionIconName") || property == QLatin1String("OverlayIconName") || property == QLatin1String("ToolTip")) {
             querySniProperty(key, it->generation, message.service(), message.path(), property, interfaceName);
         }
     }

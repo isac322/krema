@@ -14,7 +14,6 @@
 #include "shell/dockvisibilitycontroller.h"
 #include "shell/multidockmanager.h"
 #include "shell/outputordermonitor.h"
-#include <taskmanager/abstracttasksmodel.h>
 
 #include <KAboutData>
 #include <catch2/catch_session.hpp>
@@ -49,7 +48,6 @@ static void initResources()
 namespace
 {
 
-using TaskManager::AbstractTasksModel;
 constexpr int kTimeoutMs = 15000;
 constexpr auto kWindowArg = "--geometry-window";
 const QString kWindowA = QStringLiteral("krema-geometry-A");
@@ -209,7 +207,7 @@ int taskRow(const QSet<QString> &titles)
     auto *tasks = app().model->tasksModel();
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const auto index = tasks->index(row, 0);
-        if (!index.data(TaskManager::AbstractTasksModel::IsWindow).toBool() && !index.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+        if (!index.data(krema::tasks::roles().IsWindow).toBool() && !index.data(krema::tasks::roles().IsGroupParent).toBool()) {
             continue;
         }
         QSet<QString> found;
@@ -460,7 +458,7 @@ TEST_CASE("KWin uses dock delegate geometry for managed windows", "[delegate-geo
     CHECK(revealed == hidden);
     const int group = taskRow({kWindowA, kWindowB});
     REQUIRE(group >= 0);
-    CHECK(app().model->tasksModel()->index(group, 0).data(TaskManager::AbstractTasksModel::IsGroupParent).toBool());
+    CHECK(app().model->tasksModel()->index(group, 0).data(krema::tasks::roles().IsGroupParent).toBool());
     auto *groupView = manager->primaryShell()->view();
     auto *groupDelegate = groupView && groupView->rootObject() ? findDelegate(groupView->rootObject(), group) : nullptr;
     QPointer<QQuickItem> groupProxy;

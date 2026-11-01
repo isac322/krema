@@ -15,8 +15,6 @@
 #include "models/dockactions.h"
 #include "models/dockmodel.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
 
 #include <KService>
 
@@ -40,7 +38,6 @@
 namespace
 {
 
-using TaskManager::AbstractTasksModel;
 
 constexpr int kTimeoutMs = 15000;
 const QString kWindowA = QStringLiteral("krema-group-A");
@@ -84,10 +81,10 @@ std::string describeTasks()
         const QModelIndex idx = tasks->index(row, 0);
         out += QStringLiteral("row %1 '%2' appId=%3 children=%4 active=%5 minimized=%6\n")
                    .arg(row)
-                   .arg(idx.data(Qt::DisplayRole).toString(), idx.data(AbstractTasksModel::AppId).toString())
+                   .arg(idx.data(Qt::DisplayRole).toString(), idx.data(krema::tasks::roles().AppId).toString())
                    .arg(tasks->rowCount(idx))
-                   .arg(idx.data(AbstractTasksModel::IsActive).toBool())
-                   .arg(idx.data(AbstractTasksModel::IsMinimized).toBool());
+                   .arg(idx.data(krema::tasks::roles().IsActive).toBool())
+                   .arg(idx.data(krema::tasks::roles().IsMinimized).toBool());
         for (int i = 0; i < tasks->rowCount(idx); ++i) {
             const QModelIndex child = tasks->index(i, 0, idx);
             out += QStringLiteral(
@@ -95,10 +92,10 @@ std::string describeTasks()
                        "lastActivated=%5 stacking=%6\n")
                        .arg(i)
                        .arg(childTitle(idx, i))
-                       .arg(child.data(AbstractTasksModel::IsActive).toBool())
-                       .arg(child.data(AbstractTasksModel::IsMinimized).toBool())
-                       .arg(child.data(AbstractTasksModel::LastActivated).toDateTime().toString(Qt::ISODateWithMs))
-                       .arg(child.data(AbstractTasksModel::StackingOrder).toInt());
+                       .arg(child.data(krema::tasks::roles().IsActive).toBool())
+                       .arg(child.data(krema::tasks::roles().IsMinimized).toBool())
+                       .arg(child.data(krema::tasks::roles().LastActivated).toDateTime().toString(Qt::ISODateWithMs))
+                       .arg(child.data(krema::tasks::roles().StackingOrder).toInt());
         }
     }
     return out.toStdString();
@@ -115,7 +112,7 @@ QString activeGroupWindow()
     const QModelIndex idx = tasks->index(row, 0);
     for (int i = 0; i < tasks->rowCount(idx); ++i) {
         const QModelIndex child = tasks->index(i, 0, idx);
-        if (child.data(AbstractTasksModel::IsActive).toBool()) {
+        if (child.data(krema::tasks::roles().IsActive).toBool()) {
             return child.data(Qt::DisplayRole).toString();
         }
     }
@@ -131,8 +128,8 @@ int launcherRow(const QUrl &url)
     auto *tasks = model().tasksModel();
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const QModelIndex idx = tasks->index(row, 0);
-        const QUrl rowUrl = idx.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
-        if (rowUrl == url || rowUrl.fileName() == fileName || rowUrl.path() == fileName || idx.data(AbstractTasksModel::AppId).toString() == appId) {
+        const QUrl rowUrl = idx.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl();
+        if (rowUrl == url || rowUrl.fileName() == fileName || rowUrl.path() == fileName || idx.data(krema::tasks::roles().AppId).toString() == appId) {
             return row;
         }
     }
@@ -155,9 +152,8 @@ int launcherRowForAppId(const QString &appId) {
   const QUrl expectedUrl = applicationsUrl(appId);
   for (int row = 0; row < tasks->rowCount(); ++row) {
     const QModelIndex idx = tasks->index(row, 0);
-    if (idx.data(AbstractTasksModel::IsLauncher).toBool() &&
-        idx.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl() == expectedUrl) {
-      return row;
+    if (idx.data(krema::tasks::roles().IsLauncher).toBool() && idx.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl() == expectedUrl) {
+        return row;
     }
   }
   return -1;
@@ -178,10 +174,7 @@ void removeLauncherForAppId(const QString &appId) {
   auto *tasks = model().tasksModel();
   const int row = launcherRowForAppId(appId);
   if (row >= 0) {
-    tasks->requestRemoveLauncher(
-        tasks->index(row, 0)
-            .data(AbstractTasksModel::LauncherUrlWithoutIcon)
-            .toUrl());
+      model().tasks().requestRemoveLauncher(tasks->index(row, 0).data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl());
   }
 }
 
@@ -195,7 +188,7 @@ QModelIndex windowIndex(const QString &title)
             return parent;
         }
         for (int child = 0; child < tasks->rowCount(parent); ++child) {
-            const QModelIndex index = tasks->makeModelIndex(row, child);
+            const QModelIndex index = model().tasks().makeModelIndex(row, child);
             if (index.data(Qt::DisplayRole).toString() == title) {
                 return index;
             }
@@ -407,11 +400,11 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
 
     const QUrl url = QUrl::fromLocalFile(wheelDesktopPath());
     auto *tasks = model().tasksModel();
-    tasks->requestAddLauncher(url);
+    model().tasks().requestAddLauncher(url);
     const auto unpin = qScopeGuard([&] {
         const int row = launcherRow(url);
         if (row >= 0) {
-            tasks->requestRemoveLauncher(tasks->index(row, 0).data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl());
+            model().tasks().requestRemoveLauncher(tasks->index(row, 0).data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl());
         }
     });
     const bool pinned = QTest::qWaitFor(
@@ -422,14 +415,14 @@ TEST_CASE("Wheel over a non-running pinned launcher does not launch it", "[group
     if (!pinned) {
         for (int row = 0; row < tasks->rowCount(); ++row) {
             const QModelIndex idx = tasks->index(row, 0);
-            WARN("row " << row << " appId=" << idx.data(AbstractTasksModel::AppId).toString().toStdString()
-                        << " url=" << idx.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl().toString().toStdString());
+            WARN("row " << row << " appId=" << idx.data(krema::tasks::roles().AppId).toString().toStdString()
+                        << " url=" << idx.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl().toString().toStdString());
         }
     }
     REQUIRE(pinned);
     const QModelIndex idx = tasks->index(launcherRow(url), 0);
-    REQUIRE(idx.data(AbstractTasksModel::IsLauncher).toBool());
-    REQUIRE_FALSE(idx.data(AbstractTasksModel::IsWindow).toBool());
+    REQUIRE(idx.data(krema::tasks::roles().IsLauncher).toBool());
+    REQUIRE_FALSE(idx.data(krema::tasks::roles().IsWindow).toBool());
 
     krema::DockActions actions(&model());
     for (int tick = 0; tick < 3; ++tick) {
@@ -464,18 +457,18 @@ TEST_CASE("A launcher pinned by file URL counts as pinned and toggles off", "[gr
     const auto restore = qScopeGuard([&] {
         model().setPinnedLaunchers(saved);
     });
-    INFO("launchers " << tasks->launcherList().join(u'|').toStdString());
+    INFO("launchers " << model().tasks().launcherList().join(u'|').toStdString());
     REQUIRE(QTest::qWaitFor(
         [&] {
             return launcherRow(url) >= 0;
         },
         kTimeoutMs));
-    INFO("row url " << tasks->index(launcherRow(url), 0).data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl().toString().toStdString());
+    INFO("row url " << tasks->index(launcherRow(url), 0).data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl().toString().toStdString());
     CHECK(model().isPinned(launcherRow(url)));
 
     krema::DockActions actions(&model());
     actions.togglePinned(launcherRow(url));
-    CHECK(tasks->launcherPosition(url) == -1);
+    CHECK(model().tasks().launcherPosition(url) == -1);
     CHECK(QTest::qWaitFor(
         [&] {
             return launcherRow(url) < 0;
@@ -517,8 +510,7 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
                             {QStringLiteral("--noincremental")}) == 0);
   REQUIRE(serviceRegistered(installedPath));
 
-  auto *tasks = model().tasksModel();
-  const QStringList launchersBefore = tasks->launcherList();
+  const QStringList launchersBefore = model().tasks().launcherList();
   krema::DockActions actions(&model());
   const auto cleanup = qScopeGuard([&] {
     removeLauncherForAppId(appId);
@@ -547,7 +539,7 @@ TEST_CASE("Rejecting unresolved desktop drops preserves launcher state",
                              &krema::DockActions::pinnedLaunchersChanged);
     CHECK_FALSE(actions.addLauncher(url));
     QApplication::processEvents();
-    CHECK(tasks->launcherList() == launchersBefore);
+    CHECK(model().tasks().launcherList() == launchersBefore);
     CHECK(launcherRowForAppId(appId) < 0);
     CHECK(pinnedChanged.isEmpty());
   }
@@ -601,9 +593,7 @@ TEST_CASE("Accepted desktop drops resolve to the installed launcher",
     REQUIRE(pinnedChanged.count() == 1);
 
     const int row = launcherRowForAppId(appId);
-    const QUrl resolved = tasks->index(row, 0)
-                              .data(AbstractTasksModel::LauncherUrlWithoutIcon)
-                              .toUrl();
+    const QUrl resolved = tasks->index(row, 0).data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl();
     CHECK(resolved == expectedUrl);
 
     removeLauncherForAppId(appId);
@@ -657,7 +647,7 @@ TEST_CASE("Clicking a group returns to its most recently used window", "[grouped
     // millisecond timestamp, which would leave LastActivated tied.
     for (int child : {0, 1}) {
         const QString title = childTitle(tasks->index(groupRow(), 0), child);
-        tasks->requestActivate(tasks->makeModelIndex(groupRow(), child));
+        model().tasks().requestActivate(model().tasks().makeModelIndex(groupRow(), child));
         REQUIRE(QTest::qWaitFor(
             [&] {
                 return activeGroupWindow() == title;
@@ -672,7 +662,7 @@ TEST_CASE("Clicking a group returns to its most recently used window", "[grouped
     REQUIRE(other.waitForStarted(kTimeoutMs));
     const bool left = QTest::qWaitFor(
         [] {
-            return activeGroupWindow().isEmpty() && otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+            return activeGroupWindow().isEmpty() && otherWindowIndex().data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs);
     INFO("after opening the other app:\n" << describeTasks());
@@ -719,48 +709,47 @@ TEST_CASE("Single-window minimize clicks honor actual focus and minimized state"
     REQUIRE(other.waitForStarted(kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool();
+            return otherWindowIndex().data(krema::tasks::roles().IsActive).toBool() && !otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
-    REQUIRE(otherWindowIndex().data(AbstractTasksModel::IsWindow).toBool());
-    REQUIRE(otherWindowIndex().data(AbstractTasksModel::IsMinimizable).toBool());
-    REQUIRE_FALSE(otherWindowIndex().data(AbstractTasksModel::IsGroupParent).toBool());
+    REQUIRE(otherWindowIndex().data(krema::tasks::roles().IsWindow).toBool());
+    REQUIRE(otherWindowIndex().data(krema::tasks::roles().IsMinimizable).toBool());
+    REQUIRE_FALSE(otherWindowIndex().data(krema::tasks::roles().IsGroupParent).toBool());
 
-    auto *tasks = model().tasksModel();
     krema::DockActions actions(&model());
     SECTION("active single minimizes")
     {
         actions.activateOrMinimize(otherWindowIndex().row());
         REQUIRE(QTest::qWaitFor(
             [] {
-                return otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+                return otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool() && !otherWindowIndex().data(krema::tasks::roles().IsActive).toBool();
             },
             kTimeoutMs));
     }
     SECTION("background single activates without minimizing")
     {
-        tasks->requestActivate(windowIndex(kWindowA));
+        model().tasks().requestActivate(windowIndex(kWindowA));
         REQUIRE(QTest::qWaitFor(
             [] {
-                return activeGroupWindow() == kWindowA && !otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+                return activeGroupWindow() == kWindowA && !otherWindowIndex().data(krema::tasks::roles().IsActive).toBool();
             },
             kTimeoutMs));
         actions.activateOrMinimize(otherWindowIndex().row());
         REQUIRE(QTest::qWaitFor(
             [] {
-                return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool();
+                return otherWindowIndex().data(krema::tasks::roles().IsActive).toBool() && !otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool();
             },
             kTimeoutMs));
     }
     SECTION("minimized single restores and takes focus")
     {
-        tasks->requestToggleMinimized(otherWindowIndex());
+        model().tasks().requestToggleMinimized(otherWindowIndex());
         REQUIRE(QTest::qWaitFor(
             [] {
-                return otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+                return otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool() && !otherWindowIndex().data(krema::tasks::roles().IsActive).toBool();
             },
             kTimeoutMs));
-        tasks->requestActivate(windowIndex(kWindowA));
+        model().tasks().requestActivate(windowIndex(kWindowA));
         REQUIRE(QTest::qWaitFor(
             [] {
                 return activeGroupWindow() == kWindowA;
@@ -769,7 +758,7 @@ TEST_CASE("Single-window minimize clicks honor actual focus and minimized state"
         actions.activateOrMinimize(otherWindowIndex().row());
         REQUIRE(QTest::qWaitFor(
             [] {
-                return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool();
+                return otherWindowIndex().data(krema::tasks::roles().IsActive).toBool() && !otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool();
             },
             kTimeoutMs));
     }
@@ -777,8 +766,8 @@ TEST_CASE("Single-window minimize clicks honor actual focus and minimized state"
     INFO("after the single-window click:\n" << describeTasks());
     REQUIRE(windowIndex(kWindowA).isValid());
     REQUIRE(windowIndex(kWindowB).isValid());
-    CHECK_FALSE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool());
-    CHECK_FALSE(windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK_FALSE(windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool());
+    CHECK_FALSE(windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool());
 }
 
 TEST_CASE("Default activation keeps an active single window focused and unminimized", "[grouped-activation][click-minimize]")
@@ -798,7 +787,7 @@ TEST_CASE("Default activation keeps an active single window focused and unminimi
     REQUIRE(other.waitForStarted(kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool() && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool();
+            return otherWindowIndex().data(krema::tasks::roles().IsActive).toBool() && !otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
 
@@ -806,18 +795,18 @@ TEST_CASE("Default activation keeps an active single window focused and unminimi
     actions.activate(otherWindowIndex().row());
     // Observe a subsequent compositor state change instead of checking before
     // an erroneous asynchronous minimize request could have reached KWin.
-    model().tasksModel()->requestToggleMinimized(windowIndex(kWindowA));
+    model().tasks().requestToggleMinimized(windowIndex(kWindowA));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
 
     INFO("after default activation:\n" << describeTasks());
-    CHECK(otherWindowIndex().data(AbstractTasksModel::IsActive).toBool());
-    CHECK_FALSE(otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK(otherWindowIndex().data(krema::tasks::roles().IsActive).toBool());
+    CHECK_FALSE(otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool());
     REQUIRE(windowIndex(kWindowB).isValid());
-    CHECK_FALSE(windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK_FALSE(windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool());
 }
 
 TEST_CASE("Active grouped-window clicks minimize only the current child", "[grouped-activation][click-minimize]")
@@ -833,42 +822,43 @@ TEST_CASE("Active grouped-window clicks minimize only the current child", "[grou
         kTimeoutMs));
 
     auto *tasks = model().tasksModel();
-    REQUIRE(tasks->index(groupRow(), 0).data(AbstractTasksModel::IsGroupParent).toBool());
+    REQUIRE(tasks->index(groupRow(), 0).data(krema::tasks::roles().IsGroupParent).toBool());
     bool otherMinimized = false;
     SECTION("another unminimized child stays unminimized")
     {
-        REQUIRE_FALSE(windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool());
+        REQUIRE_FALSE(windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool());
     }
     SECTION("another already minimized child stays minimized")
     {
-        tasks->requestToggleMinimized(windowIndex(kWindowB));
+        model().tasks().requestToggleMinimized(windowIndex(kWindowB));
         REQUIRE(QTest::qWaitFor(
             [] {
-                return windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool();
+                return windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool();
             },
             kTimeoutMs));
         otherMinimized = true;
     }
-    tasks->requestActivate(windowIndex(kWindowA));
+    model().tasks().requestActivate(windowIndex(kWindowA));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return activeGroupWindow() == kWindowA && !windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
+            return activeGroupWindow() == kWindowA && !windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
-    REQUIRE(windowIndex(kWindowA).data(AbstractTasksModel::IsWindow).toBool());
-    REQUIRE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimizable).toBool());
+    REQUIRE(windowIndex(kWindowA).data(krema::tasks::roles().IsWindow).toBool());
+    REQUIRE(windowIndex(kWindowA).data(krema::tasks::roles().IsMinimizable).toBool());
 
     krema::DockActions actions(&model());
     actions.activateOrMinimize(groupRow());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool()
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
 
     INFO("after minimizing the active child:\n" << describeTasks());
     REQUIRE(windowIndex(kWindowB).isValid());
-    CHECK(windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool() == otherMinimized);
+    CHECK(windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool() == otherMinimized);
 }
 
 TEST_CASE(
@@ -889,23 +879,23 @@ TEST_CASE(
     auto *tasks = model().tasksModel();
     const QString firstUsed = childTitle(tasks->index(groupRow(), 0), 0);
     const QString lastUsed = childTitle(tasks->index(groupRow(), 0), 1);
-    tasks->requestActivate(windowIndex(firstUsed));
+    model().tasks().requestActivate(windowIndex(firstUsed));
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return activeGroupWindow() == firstUsed && windowIndex(firstUsed).data(AbstractTasksModel::LastActivated).toDateTime().isValid();
+            return activeGroupWindow() == firstUsed && windowIndex(firstUsed).data(krema::tasks::roles().LastActivated).toDateTime().isValid();
         },
         kTimeoutMs));
-    const QDateTime firstActivation = windowIndex(firstUsed).data(AbstractTasksModel::LastActivated).toDateTime();
+    const QDateTime firstActivation = windowIndex(firstUsed).data(krema::tasks::roles().LastActivated).toDateTime();
     // Establish distinct MRU timestamps without a fixed sleep.
     REQUIRE(QTest::qWaitFor(
         [&] {
             return QDateTime::currentDateTime() > firstActivation;
         },
         kTimeoutMs));
-    tasks->requestActivate(windowIndex(lastUsed));
+    model().tasks().requestActivate(windowIndex(lastUsed));
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return activeGroupWindow() == lastUsed && windowIndex(lastUsed).data(AbstractTasksModel::LastActivated).toDateTime() > firstActivation;
+            return activeGroupWindow() == lastUsed && windowIndex(lastUsed).data(krema::tasks::roles().LastActivated).toDateTime() > firstActivation;
         },
         kTimeoutMs));
 
@@ -914,22 +904,22 @@ TEST_CASE(
     REQUIRE(other.waitForStarted(kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return activeGroupWindow().isEmpty() && otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+            return activeGroupWindow().isEmpty() && otherWindowIndex().data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
 
     bool firstMinimized = false;
     SECTION("no children are minimized")
     {
-        REQUIRE_FALSE(windowIndex(firstUsed).data(AbstractTasksModel::IsMinimized).toBool());
-        REQUIRE_FALSE(windowIndex(lastUsed).data(AbstractTasksModel::IsMinimized).toBool());
+        REQUIRE_FALSE(windowIndex(firstUsed).data(krema::tasks::roles().IsMinimized).toBool());
+        REQUIRE_FALSE(windowIndex(lastUsed).data(krema::tasks::roles().IsMinimized).toBool());
     }
     SECTION("the non-MRU child is already minimized")
     {
-        tasks->requestToggleMinimized(windowIndex(firstUsed));
+        model().tasks().requestToggleMinimized(windowIndex(firstUsed));
         REQUIRE(QTest::qWaitFor(
             [&] {
-                return windowIndex(firstUsed).data(AbstractTasksModel::IsMinimized).toBool();
+                return windowIndex(firstUsed).data(krema::tasks::roles().IsMinimized).toBool();
             },
             kTimeoutMs));
         firstMinimized = true;
@@ -937,31 +927,31 @@ TEST_CASE(
     SECTION("all children are minimized")
     {
         for (const QString &title : {firstUsed, lastUsed}) {
-            tasks->requestToggleMinimized(windowIndex(title));
+            model().tasks().requestToggleMinimized(windowIndex(title));
             REQUIRE(QTest::qWaitFor(
                 [&] {
-                    return windowIndex(title).data(AbstractTasksModel::IsMinimized).toBool();
+                    return windowIndex(title).data(krema::tasks::roles().IsMinimized).toBool();
                 },
                 kTimeoutMs));
         }
         firstMinimized = true;
     }
     REQUIRE(activeGroupWindow().isEmpty());
-    REQUIRE(otherWindowIndex().data(AbstractTasksModel::IsActive).toBool());
+    REQUIRE(otherWindowIndex().data(krema::tasks::roles().IsActive).toBool());
 
     krema::DockActions actions(&model());
     actions.activateOrMinimize(groupRow());
     REQUIRE(QTest::qWaitFor(
         [&] {
-            return activeGroupWindow() == lastUsed && !windowIndex(lastUsed).data(AbstractTasksModel::IsMinimized).toBool();
+            return activeGroupWindow() == lastUsed && !windowIndex(lastUsed).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
 
     INFO("after entering the background group:\n" << describeTasks());
     REQUIRE(windowIndex(firstUsed).isValid());
-    CHECK(windowIndex(firstUsed).data(AbstractTasksModel::IsMinimized).toBool() == firstMinimized);
-    CHECK_FALSE(otherWindowIndex().data(AbstractTasksModel::IsActive).toBool());
-    CHECK_FALSE(otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK(windowIndex(firstUsed).data(krema::tasks::roles().IsMinimized).toBool() == firstMinimized);
+    CHECK_FALSE(otherWindowIndex().data(krema::tasks::roles().IsActive).toBool());
+    CHECK_FALSE(otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool());
 }
 
 TEST_CASE(
@@ -979,8 +969,7 @@ TEST_CASE(
         },
         kTimeoutMs));
 
-    auto *tasks = model().tasksModel();
-    tasks->requestActivate(windowIndex(kWindowA));
+    model().tasks().requestActivate(windowIndex(kWindowA));
     REQUIRE(QTest::qWaitFor(
         [] {
             return activeGroupWindow() == kWindowA;
@@ -990,28 +979,30 @@ TEST_CASE(
     actions.activateOrMinimize(groupRow());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool()
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
 
     // Explicitly observe B becoming active; never assume KWin's focus fallback.
-    tasks->requestActivate(windowIndex(kWindowB));
+    model().tasks().requestActivate(windowIndex(kWindowB));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return activeGroupWindow() == kWindowB && !windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool();
+            return activeGroupWindow() == kWindowB && !windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
-    REQUIRE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool());
+    REQUIRE(windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool());
     actions.activateOrMinimize(groupRow());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowB).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool()
+                && !windowIndex(kWindowB).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
 
     INFO("after clicking the newly focused child:\n" << describeTasks());
     REQUIRE(windowIndex(kWindowA).isValid());
-    CHECK(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK(windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool());
     CHECK(activeGroupWindow().isEmpty());
 }
 
@@ -1034,18 +1025,18 @@ TEST_CASE(
     REQUIRE(other.waitForStarted(kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return otherWindowIndex().data(AbstractTasksModel::IsActive).toBool();
+            return otherWindowIndex().data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
     auto *tasks = model().tasksModel();
-    tasks->requestToggleMinimized(windowIndex(kWindowB));
+    model().tasks().requestToggleMinimized(windowIndex(kWindowB));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool();
+            return windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
-    REQUIRE_FALSE(otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool());
-    REQUIRE_FALSE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool());
+    REQUIRE_FALSE(otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool());
+    REQUIRE_FALSE(windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool());
 
     int invalidIndex = -1;
     SECTION("negative index")
@@ -1061,9 +1052,9 @@ TEST_CASE(
     // focus change cannot be hidden by KWin's later focus fallback.
     bool protectedStatePreserved = true;
     const auto observed = QObject::connect(tasks, &QAbstractItemModel::dataChanged, tasks, [&] {
-        protectedStatePreserved = protectedStatePreserved && otherWindowIndex().data(AbstractTasksModel::IsActive).toBool()
-            && !otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool() && windowIndex(kWindowB).isValid()
-            && windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool();
+        protectedStatePreserved = protectedStatePreserved && otherWindowIndex().data(krema::tasks::roles().IsActive).toBool()
+            && !otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool() && windowIndex(kWindowB).isValid()
+            && windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool();
     });
     const auto disconnect = qScopeGuard([&] {
         QObject::disconnect(observed);
@@ -1073,18 +1064,18 @@ TEST_CASE(
     actions.activateOrMinimize(invalidIndex);
     // A subsequent valid request gives the compositor a positive observed
     // boundary; the two protected windows must remain unchanged throughout.
-    tasks->requestToggleMinimized(windowIndex(kWindowA));
+    model().tasks().requestToggleMinimized(windowIndex(kWindowA));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
 
     INFO("after the invalid click:\n" << describeTasks());
     CHECK(protectedStatePreserved);
-    CHECK(otherWindowIndex().data(AbstractTasksModel::IsActive).toBool());
-    CHECK_FALSE(otherWindowIndex().data(AbstractTasksModel::IsMinimized).toBool());
-    CHECK(windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK(otherWindowIndex().data(krema::tasks::roles().IsActive).toBool());
+    CHECK_FALSE(otherWindowIndex().data(krema::tasks::roles().IsMinimized).toBool());
+    CHECK(windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool());
 }
 
 TEST_CASE("Minimize-click targeting tracks single-group-single window membership", "[grouped-activation][click-minimize]")
@@ -1095,22 +1086,24 @@ TEST_CASE("Minimize-click targeting tracks single-group-single window membership
     REQUIRE(first.waitForStarted(kTimeoutMs));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
-    REQUIRE_FALSE(windowIndex(kWindowA).data(AbstractTasksModel::IsGroupParent).toBool());
+    REQUIRE_FALSE(windowIndex(kWindowA).data(krema::tasks::roles().IsGroupParent).toBool());
 
     krema::DockActions actions(&model());
     actions.activateOrMinimize(windowIndex(kWindowA).row());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool()
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
     actions.activateOrMinimize(windowIndex(kWindowA).row());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool()
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
 
@@ -1123,36 +1116,39 @@ TEST_CASE("Minimize-click targeting tracks single-group-single window membership
         },
         kTimeoutMs));
     auto *tasks = model().tasksModel();
-    REQUIRE(tasks->index(groupRow(), 0).data(AbstractTasksModel::IsGroupParent).toBool());
+    REQUIRE(tasks->index(groupRow(), 0).data(krema::tasks::roles().IsGroupParent).toBool());
     actions.activateOrMinimize(groupRow());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowB).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowB).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowB).data(krema::tasks::roles().IsMinimized).toBool()
+                && !windowIndex(kWindowB).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
-    CHECK_FALSE(windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool());
+    CHECK_FALSE(windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool());
 
-    tasks->requestClose(windowIndex(kWindowB));
+    model().tasks().requestClose(windowIndex(kWindowB));
     REQUIRE(QTest::qWaitFor(
         [] {
             return !windowIndex(kWindowB).isValid() && windowIndex(kWindowA).isValid()
-                && !windowIndex(kWindowA).data(AbstractTasksModel::IsGroupParent).toBool() && groupRow() < 0;
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsGroupParent).toBool() && groupRow() < 0;
         },
         kTimeoutMs));
-    tasks->requestActivate(windowIndex(kWindowA));
+    model().tasks().requestActivate(windowIndex(kWindowA));
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool()
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool();
         },
         kTimeoutMs));
     actions.activateOrMinimize(windowIndex(kWindowA).row());
     REQUIRE(QTest::qWaitFor(
         [] {
-            return windowIndex(kWindowA).data(AbstractTasksModel::IsMinimized).toBool() && !windowIndex(kWindowA).data(AbstractTasksModel::IsActive).toBool();
+            return windowIndex(kWindowA).data(krema::tasks::roles().IsMinimized).toBool()
+                && !windowIndex(kWindowA).data(krema::tasks::roles().IsActive).toBool();
         },
         kTimeoutMs));
     INFO("after returning to a single window:\n" << describeTasks());
-    CHECK_FALSE(windowIndex(kWindowA).data(AbstractTasksModel::IsGroupParent).toBool());
+    CHECK_FALSE(windowIndex(kWindowA).data(krema::tasks::roles().IsGroupParent).toBool());
     CHECK_FALSE(windowIndex(kWindowB).isValid());
 }
 

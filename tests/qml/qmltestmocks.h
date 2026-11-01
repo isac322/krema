@@ -22,9 +22,9 @@
 namespace KremaQmlTest
 {
 
-// Mirrors the role names of TaskManager::AbstractTasksModel that Krema's QML
-// reads, plus a few mock-only roles (IconName, IsOnCurrentDesktop) that back
-// the per-index DockModel lookups. Values are internal to the test double.
+// Mirrors the role names of the Plasma task model that Krema's QML reads,
+// plus a few mock-only roles (IconName, IsOnCurrentDesktop) that back the
+// per-index DockModel lookups. Values are internal to the test double.
 class MockAbstractTasksModel : public QObject
 {
     Q_OBJECT
@@ -50,7 +50,7 @@ public:
     Q_ENUM(AdditionalRoles)
 };
 
-// Stand-in for TaskManager::TasksModel as exposed via DockModel.tasksModel.
+// Stand-in for the runtime TasksModel as exposed via DockModel.tasksModel.
 // Rows are populated from QML with role-name keyed maps, e.g.
 //   tasksModel.addTask({ display: "Dolphin", IsWindow: true, ChildCount: 2 })
 class MockTasksModel : public QStandardItemModel
@@ -82,7 +82,7 @@ public:
     // Role lookup by name, used by the QML DockModel mock.
     Q_INVOKABLE QVariant get(int row, const QString &roleName, int childRow = -1) const;
 
-    // TaskManager::TasksModel API used by Krema's QML.
+    // TasksModel API used by Krema's QML.
     Q_INVOKABLE QModelIndex makeModelIndex(int row, int childRow = -1) const;
     Q_INVOKABLE void requestActivate(const QModelIndex &index);
     Q_INVOKABLE void requestClose(const QModelIndex &index);

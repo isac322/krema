@@ -25,11 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The Floating margin setting went up to 128 px instead of 32 px (#90)
-- Krema packages (Arch, Fedora, openSUSE, Debian, Ubuntu) now require the Plasma and Qt minor release they were built against. A Plasma or Qt upgrade asks for a Krema rebuild instead of leaving a dock that crashes on startup.
+- Krema packages (Arch, Fedora, openSUSE, Debian, Ubuntu) now require only the Qt minor release they were built against. Plasma upgrades no longer require rebuilding Krema because it loads Plasma's task manager and notification settings through their QML modules.
 
 ### Fixed
 
 - Builds from source no longer fail to link (for example `undefined reference to vtable for Catch::ITransientExpression`) or produce crashing binaries after a system upgrade of Qt, Plasma, Catch2, or the compiler; the next build recompiles everything against the new libraries.
+- Krema no longer crashed on startup after a Plasma upgrade because it no longer links Plasma's task manager and notification manager C++ libraries.
 - Floating gaps used the effective per-screen Floating state and configured global margin. Shadows no longer shifted the requested gap, screen reservation, or preview position; same-edge panel behavior remained unchanged.
 - With "Measure gap from: Panels", Floating off now follows the visible same-edge panel surface, hidden dodge and auto-hide frames are ignored, and panel-depth updates animate without leaving the dock or its previews at a stale depth.
 - Dock shadows no longer clipped at low light heights by their containing surfaces; when the requested gap is smaller than the outward shadow, pixels may still clip at the layer-surface/output boundary. Screen reservation and window preview placement keep the requested gap, and previews stay interactive after native surface resizes (#118)

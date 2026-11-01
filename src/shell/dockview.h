@@ -12,18 +12,12 @@
 
 #include <memory>
 
-namespace TaskManager
-{
-class ActivityInfo;
-class TasksModel;
-class VirtualDesktopInfo;
-}
+class QAbstractItemModel;
 
 class KremaSettings;
 
 namespace krema
 {
-
 class DockVisibilityController;
 class KWinPanelWatcher;
 class PointerFocusTracker;
@@ -60,9 +54,9 @@ public:
     ~DockView() override;
 
     /// Initialize the dock view. @p tasksModel is used for visibility control.
-    void initialize(TaskManager::TasksModel *tasksModel,
-                    TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
-                    TaskManager::ActivityInfo *activityInfo,
+    void initialize(QAbstractItemModel *tasksModel,
+                    QObject *virtualDesktopInfo,
+                    QObject *activityInfo,
                     DockPlatform::Edge edge,
                     DockPlatform::VisibilityMode visibilityMode);
 

@@ -3,9 +3,9 @@
 Reference for Krema's notification badges: showing badges/counts on dock icons, including apps
 that do NOT support the Unity Launcher API.
 
-**Headers**: `/usr/include/notificationmanager/`
-**Package**: `plasma-workspace` (`PW::LibNotificationManager`)
-**QML Module**: `org.kde.notificationmanager`
+**Production integration:** Krema loads `org.kde.notificationmanager` through QML and
+does not link Plasma's ABI-unstable `libnotificationmanager` C++ library.
+The C++ API described below remains relevant to the notification integration tests.
 
 ---
 
@@ -609,32 +609,17 @@ never reports a synthetic `1 notification` or a zero-count label.
 
 ## CMake Integration
 
+Krema's production target does not call `find_package(LibNotificationManager)` or
+link `PW::LibNotificationManager`. It creates the notification settings object
+from the `org.kde.notificationmanager` QML module and accesses it through Qt's
+public `QObject` and meta-object interfaces.
+
+The notification integration tests may use the C++ API directly:
+
 ```cmake
-# Find LibNotificationManager (from plasma-workspace)
 find_package(LibNotificationManager REQUIRED)
-
-# Link target
-target_link_libraries(krema_lib PRIVATE PW::LibNotificationManager)
-
-# Headers are at: /usr/include/notificationmanager/
+target_link_libraries(notification_tests PRIVATE PW::LibNotificationManager)
 ```
-
-**CMake target**: `PW::LibNotificationManager`
-**CMake find_package name**: `LibNotificationManager`
-**Config file**: `/usr/lib/cmake/LibNotificationManager/LibNotificationManagerConfig.cmake`
-**Shared library**: `libnotificationmanager.so` (soname: `libnotificationmanager.so.1`)
-**Qt minimum version required by config**: `Qt6 6.9.0`
-
-**INTERFACE_LINK_LIBRARIES** (pulled in transitively via `find_dependency`):
-`Qt6::Core`, `Qt6::Gui`, `Qt6::Quick`, `KF6::ItemModels`
-
-**IMPORTED_LINK_DEPENDENT_LIBRARIES** (runtime deps, not transitive for consumers):
-`Qt6::DBus`, `KF6::ConfigGui`, `KF6::I18n`, `KF6::WindowSystem`, `KF6::ItemModels`,
-`KF6::Notifications`, `KF6::KIOFileWidgets`, `Plasma::Plasma`, `PW::LibTaskManager`,
-`KF6::Screen`, `KF6::Service`, `Qt6::Qml`
-
-> Note: The IMPORTED_LINK_DEPENDENT list (runtime deps) is NOT transitively propagated.
-> If Krema code directly uses Qt6::DBus etc., link them explicitly.
 
 ---
 

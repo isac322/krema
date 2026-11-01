@@ -3,6 +3,7 @@
 
 find_package(Catch2 3 REQUIRED)
 include(Catch)
+find_package(LibNotificationManager REQUIRED)
 
 add_test(NAME krema_desktop_entries
     COMMAND ${CMAKE_COMMAND}

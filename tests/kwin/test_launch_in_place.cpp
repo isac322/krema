@@ -12,8 +12,6 @@
 #include "fakepointer.h"
 #include "models/dockmodel.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
 
 #include <LayerShellQt/Window>
 
@@ -58,7 +56,6 @@
 namespace
 {
 
-using TaskManager::AbstractTasksModel;
 
 constexpr int kTimeoutMs = 15000;
 // WaylandStartupTasksModel's unchanged default startup-feedback lifetime.
@@ -100,8 +97,8 @@ QStringList layout()
     QStringList rows;
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const QModelIndex index = tasks->index(row, 0);
-        const int position = tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl());
-        const bool isLauncher = index.data(AbstractTasksModel::IsLauncher).toBool();
+        const int position = model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl());
+        const bool isLauncher = index.data(krema::tasks::roles().IsLauncher).toBool();
         rows.append((isLauncher ? QStringLiteral("L") : QStringLiteral("W")) + QString::number(position));
     }
     return rows;
@@ -528,10 +525,10 @@ protected:
             auto *tasks = model().tasksModel();
             for (int row = 0; row < tasks->rowCount(); ++row) {
                 const QModelIndex index = tasks->index(row, 0);
-                if (tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) == position) {
+                if (model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl()) == position) {
                     m_requestIssued = true;
                     m_launchTime.start();
-                    tasks->requestNewInstance(index);
+                    model().tasks().requestNewInstance(index);
                     return true;
                 }
             }
@@ -658,7 +655,7 @@ int windowRows()
     auto *tasks = model().tasksModel();
     int count = 0;
     for (int row = 0; row < tasks->rowCount(); ++row) {
-        count += tasks->index(row, 0).data(AbstractTasksModel::IsWindow).toBool();
+        count += tasks->index(row, 0).data(krema::tasks::roles().IsWindow).toBool();
     }
     return count;
 }
@@ -670,9 +667,9 @@ bool startupAtFirstSlot()
         return false;
     }
     const QModelIndex index = tasks->index(0, 0);
-    return tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) == 0 && index.data(AbstractTasksModel::IsStartup).toBool()
-        && !index.data(AbstractTasksModel::IsLauncher).toBool() && !index.data(AbstractTasksModel::IsWindow).toBool()
-        && index.data(AbstractTasksModel::WinIdList).toList().isEmpty();
+    return model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl()) == 0
+        && index.data(krema::tasks::roles().IsStartup).toBool() && !index.data(krema::tasks::roles().IsLauncher).toBool()
+        && !index.data(krema::tasks::roles().IsWindow).toBool() && index.data(krema::tasks::roles().WinIdList).toList().isEmpty();
 }
 
 int groupedWindows(int launcherPosition)
@@ -680,9 +677,9 @@ int groupedWindows(int launcherPosition)
     auto *tasks = model().tasksModel();
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const QModelIndex index = tasks->index(row, 0);
-        if (tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) == launcherPosition
-            && index.data(AbstractTasksModel::IsWindow).toBool()) {
-            return index.data(AbstractTasksModel::IsGroupParent).toBool() ? tasks->rowCount(index) : 1;
+        if (model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl()) == launcherPosition
+            && index.data(krema::tasks::roles().IsWindow).toBool()) {
+            return index.data(krema::tasks::roles().IsGroupParent).toBool() ? tasks->rowCount(index) : 1;
         }
     }
     return 0;
@@ -744,19 +741,19 @@ private:
         QStringList rows;
         for (int row = 0; row < tasks->rowCount(); ++row) {
             const QModelIndex index = tasks->index(row, 0);
-            const int position = tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl());
-            const bool startup = index.data(AbstractTasksModel::IsStartup).toBool();
+            const int position = model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl());
+            const bool startup = index.data(krema::tasks::roles().IsStartup).toBool();
             if (startup && !m_startupLaunchers.contains(position)) {
                 m_startupLaunchers.append(position);
             }
             rows.append(QStringLiteral("%1:p%2/L%3/S%4/W%5/ids%6/app=%7")
                             .arg(row)
                             .arg(position)
-                            .arg(index.data(AbstractTasksModel::IsLauncher).toBool())
+                            .arg(index.data(krema::tasks::roles().IsLauncher).toBool())
                             .arg(startup)
-                            .arg(index.data(AbstractTasksModel::IsWindow).toBool())
-                            .arg(index.data(AbstractTasksModel::WinIdList).toList().size())
-                            .arg(index.data(AbstractTasksModel::AppId).toString()));
+                            .arg(index.data(krema::tasks::roles().IsWindow).toBool())
+                            .arg(index.data(krema::tasks::roles().WinIdList).toList().size())
+                            .arg(index.data(krema::tasks::roles().AppId).toString()));
         }
         m_rows.append(QStringLiteral("rows: ") + rows.join(QLatin1Char(' ')));
     }
@@ -830,8 +827,8 @@ TEST_CASE("Grouped tasks preserve pinned launcher slots", "[launch-in-place]")
         auto *tasks = model().tasksModel();
         for (int row = 0; row < tasks->rowCount(); ++row) {
             const QModelIndex index = tasks->index(row, 0);
-            const QString appId = index.data(AbstractTasksModel::AppId).toString();
-            if ((appId != kAppIds[0] && appId != desktopAppId) || index.data(AbstractTasksModel::IsLauncher).toBool()) {
+            const QString appId = index.data(krema::tasks::roles().AppId).toString();
+            if ((appId != kAppIds[0] && appId != desktopAppId) || index.data(krema::tasks::roles().IsLauncher).toBool()) {
                 continue;
             }
             return tasks->rowCount(index);
@@ -882,13 +879,13 @@ TEST_CASE("An explicit reorder wins over a pending launcher-slot repair", "[laun
         int taskRow = -1;
         for (int row = 0; row < tasks->rowCount(); ++row) {
             const QModelIndex index = tasks->index(row, 0);
-            if (tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) != 1) {
+            if (model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl()) != 1) {
                 continue;
             }
-            if (index.data(AbstractTasksModel::IsLauncher).toBool()) {
+            if (index.data(krema::tasks::roles().IsLauncher).toBool()) {
                 return -1;
             }
-            if (index.data(AbstractTasksModel::IsWindow).toBool()) {
+            if (index.data(krema::tasks::roles().IsWindow).toBool()) {
                 taskRow = row;
             }
         }
@@ -966,9 +963,9 @@ TEST_CASE("A real startup notification retains its pinned slot when its window a
             INFO("real startup -> window trace:\n" << trace.describe().toStdString());
             CHECK(firstInPlace);
             const QModelIndex first = model().tasksModel()->index(0, 0);
-            CHECK(first.data(AbstractTasksModel::IsWindow).toBool());
-            CHECK_FALSE(first.data(AbstractTasksModel::IsStartup).toBool());
-            CHECK_FALSE(first.data(AbstractTasksModel::WinIdList).toList().isEmpty());
+            CHECK(first.data(krema::tasks::roles().IsWindow).toBool());
+            CHECK_FALSE(first.data(krema::tasks::roles().IsStartup).toBool());
+            CHECK_FALSE(first.data(krema::tasks::roles().WinIdList).toList().isEmpty());
             CHECK(model().pinnedLaunchers() == launchers);
 
             // Real KDE new-instance launches from an already running task
@@ -1094,11 +1091,12 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
             auto *tasks = model().tasksModel();
             for (int row = 0; row < tasks->rowCount(); ++row) {
                 const QModelIndex index = tasks->index(row, 0);
-                QString appId = index.data(AbstractTasksModel::AppId).toString();
+                QString appId = index.data(krema::tasks::roles().AppId).toString();
                 appId.remove(QStringLiteral(".desktop"));
-                if (index.data(AbstractTasksModel::IsWindow).toBool() && !index.data(AbstractTasksModel::WinIdList).toList().isEmpty() && appId == unpinnedU) {
+                if (index.data(krema::tasks::roles().IsWindow).toBool() && !index.data(krema::tasks::roles().WinIdList).toList().isEmpty()
+                    && appId == unpinnedU) {
                     rows[row] = QStringLiteral("U");
-                } else if (index.data(AbstractTasksModel::IsWindow).toBool() && !index.data(AbstractTasksModel::WinIdList).toList().isEmpty()
+                } else if (index.data(krema::tasks::roles().IsWindow).toBool() && !index.data(krema::tasks::roles().WinIdList).toList().isEmpty()
                            && appId == unpinnedV) {
                     rows[row] = QStringLiteral("V");
                 }
@@ -1136,7 +1134,7 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         // Prepare V's acknowledged activation before clicking the dock-like
         // layer, whose KeyboardInteractivityNone does not request focus.
         auto *tasks = model().tasksModel();
-        tasks->requestActivate(tasks->index(3, 0));
+        model().tasks().requestActivate(tasks->index(3, 0));
         auto *waylandApp = qGuiApp ? qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>() : nullptr;
         REQUIRE(waylandApp);
         wl_display *display = waylandApp->display();
@@ -1168,12 +1166,12 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         REQUIRE(wl_callback_add_listener(activationSync.callback, &activationSyncListener, &activationSync) == 0);
         const bool foreignFocusReady = QTest::qWaitFor(
             [&] {
-                return activationSync.done && mixedLayout() == before && tasks->index(3, 0).data(AbstractTasksModel::IsActive).toBool()
+                return activationSync.done && mixedLayout() == before && tasks->index(3, 0).data(krema::tasks::roles().IsActive).toBool()
                     && !g_launcherSurface->windowHandle()->isActive();
             },
             kTimeoutMs);
         INFO("foreign-focus prerequisite: activation acknowledged=" << activationSync.done
-                                                                    << ", V active=" << tasks->index(3, 0).data(AbstractTasksModel::IsActive).toBool()
+                                                                    << ", V active=" << tasks->index(3, 0).data(krema::tasks::roles().IsActive).toBool()
                                                                     << ", launcher active=" << g_launcherSurface->windowHandle()->isActive());
         REQUIRE(foreignFocusReady);
         requireStartupChild(started, 1, trace);
@@ -1183,9 +1181,9 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
                 return false;
             }
             const QModelIndex index = tasks->index(2, 0);
-            return tasks->launcherPosition(index.data(AbstractTasksModel::LauncherUrlWithoutIcon).toUrl()) == 1
-                && index.data(AbstractTasksModel::IsStartup).toBool() && !index.data(AbstractTasksModel::IsWindow).toBool()
-                && !index.data(AbstractTasksModel::IsLauncher).toBool() && index.data(AbstractTasksModel::WinIdList).toList().isEmpty();
+            return model().tasks().launcherPosition(index.data(krema::tasks::roles().LauncherUrlWithoutIcon).toUrl()) == 1
+                && index.data(krema::tasks::roles().IsStartup).toBool() && !index.data(krema::tasks::roles().IsWindow).toBool()
+                && !index.data(krema::tasks::roles().IsLauncher).toBool() && index.data(krema::tasks::roles().WinIdList).toList().isEmpty();
         };
         const bool startupReached = QTest::qWaitFor(startupInPlace, kTimeoutMs);
         const QString startupRows = trace.currentRows();
@@ -1198,7 +1196,7 @@ TEST_CASE("Real startup replacement preserves mixed-mode unpinned anchors", "[la
         REQUIRE(startupInPlace());
         // IsActive is the TaskManager snapshot before RELEASE, not a claim
         // that V keeps seat focus after the new child maps.
-        CHECK(tasks->index(3, 0).data(AbstractTasksModel::IsActive).toBool());
+        CHECK(tasks->index(3, 0).data(krema::tasks::roles().IsActive).toBool());
         CHECK_FALSE(g_launcherSurface->windowHandle()->isActive());
         REQUIRE(started.release(true));
         const QStringList after{QStringLiteral("L0"), QStringLiteral("U"), QStringLiteral("W1"), QStringLiteral("V")};

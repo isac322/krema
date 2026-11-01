@@ -1,6 +1,7 @@
 # KDE TaskManager Models
 
-> Source: `/usr/include/taskmanager/` headers (plasma-workspace 6)
+> Krema instantiates the task manager through Plasma's `org.kde.taskmanager`
+> QML module instead of linking Plasma's ABI-unstable `libtaskmanager`.
 
 ## Model Hierarchy
 
@@ -65,11 +66,14 @@ Source model switches dynamically in `updateGroupInline()`:
 - Pure window list only (no launchers/startup)
 - No grouping/filtering — all individual windows 1:1
 - Suitable for geometry-based visibility checks
-- Krema creates separate instance: `new TaskManager::WindowTasksModel(this)`
+- The upstream implementation exposes this as a separate model type; Krema's
+  production code communicates with its runtime-created models through Qt's
+  public model and meta-object interfaces.
 
 ### Krema Task-Zone Policy
 
-Krema keeps one `TaskManager::TasksModel` for the dock task list. Its existing configuration remains application grouping, manual sorting, `hideActivatedLaunchers=true`, `launchInPlace=true`, and the native `separateLaunchers=false` setting. The native option separates launcher-model entries; it does not define Krema's pinned-membership boundary.
+Krema keeps one runtime `TasksModel` for the dock task list. Its existing
+configuration remains application grouping, manual sorting, `hideActivatedLaunchers=true`, `launchInPlace=true`, and the native `separateLaunchers=false` setting. The `DockModel` accesses that object through the `krema::tasks::TasksModel` facade; it does not link `libtaskmanager`.
 
 Krema's `DockModel` adds the dock-specific policy:
 

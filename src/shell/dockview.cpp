@@ -18,7 +18,6 @@
 
 #include <KIconLoader>
 #include <KLocalizedQmlContext>
-#include <taskmanager/tasksmodel.h>
 
 #include <QQmlEngine>
 #include <QScreen>
@@ -47,9 +46,9 @@ DockView::~DockView()
     hide();
 }
 
-void DockView::initialize(TaskManager::TasksModel *tasksModel,
-                          TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
-                          TaskManager::ActivityInfo *activityInfo,
+void DockView::initialize(QAbstractItemModel *tasksModel,
+                          QObject *virtualDesktopInfo,
+                          QObject *activityInfo,
                           DockPlatform::Edge edge,
                           DockPlatform::VisibilityMode visibilityMode)
 {

@@ -9,17 +9,14 @@ override_dh_auto_configure:
 override_dh_auto_build:
 	dh_auto_build
 
-# libtaskmanager/libnotificationmanager and Qt private/QPA ABIs are pinned to
-# the build-time minor release because they are not stable across minor upgrades.
+# Qt private/QPA ABI is pinned to the build-time minor release because it is
+# not stable across minor upgrades.
 override_dh_gencontrol:
-	@plasma_version=$$(dpkg-query -W -f='$${Version}' plasma-workspace-dev); \
-	qt_version=$$(dpkg-query -W -f='$${Version}' qt6-base-dev); \
-	plasma_epoch=; \
-	case "$$plasma_version" in *:*) plasma_epoch=$${plasma_version%%:*}:; plasma_version=$${plasma_version#*:};; esac; \
+	@qt_version=$$(dpkg-query -W -f='$${Version}' qt6-base-dev); \
+	qt_epoch=; \
 	case "$$qt_version" in *:*) qt_epoch=$${qt_version%%:*}:; qt_version=$${qt_version#*:};; *) qt_epoch=;; esac; \
-	plasma_version=$${plasma_version%%[-+~]*}; qt_version=$${qt_version%%[-+~]*}; \
-	plasma_major=$${plasma_version%%.*}; plasma_minor=$${plasma_version#*.}; plasma_minor=$${plasma_minor%%.*}; \
+	qt_version=$${qt_version%%[-+~]*}; \
 	qt_major=$${qt_version%%.*}; qt_minor=$${qt_version#*.}; qt_minor=$${qt_minor%%.*}; \
-	dh_gencontrol -- "-Vkrema:AbiDepends=plasma-workspace (>= $${plasma_epoch}$${plasma_major}.$${plasma_minor}~), plasma-workspace (<< $${plasma_epoch}$${plasma_major}.$$(($${plasma_minor} + 1))~), libqt6gui6 (>= $${qt_epoch}$${qt_major}.$${qt_minor}~), libqt6gui6 (<< $${qt_epoch}$${qt_major}.$$(($${qt_minor} + 1))~)"
+	dh_gencontrol -- "-Vkrema:AbiDepends=libqt6gui6 (>= $${qt_epoch}$${qt_major}.$${qt_minor}~), libqt6gui6 (<< $${qt_epoch}$${qt_major}.$$(($${qt_minor} + 1))~)"
 
 override_dh_auto_test:

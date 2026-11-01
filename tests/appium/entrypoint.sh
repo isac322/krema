@@ -31,11 +31,10 @@ if [ "${1:-}" = "--inner" ]; then
     # Like Plasma, which starts kactivitymanagerd as a session service
     # (plasma-kactivitymanagerd.service, with the session's environment), run
     # it inside the kwin session when it is installed (Tier 3: krema's
-    # plasma-workspace dependency pulls it in). Otherwise krema's
-    # TaskManager::ActivityInfo D-Bus-activates it on every start from the
-    # bus's environment, which has no WAYLAND_DISPLAY: it tries xcb and
-    # aborts (SIGABRT), once per krema start, each crash handed to the host's
-    # core handler (apport on the CI runners).
+    # plasma-workspace dependency pulls it in). Otherwise the activity service
+    # is D-Bus activated on every start from the bus environment, which has no
+    # WAYLAND_DISPLAY: it tries xcb and aborts (SIGABRT), once per krema start,
+    # each crash handed to the host's core handler (apport on the CI runners).
     for d in $(echo "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' ' '); do
         f="$d/dbus-1/services/org.kde.ActivityManager.service"
         [ -f "$f" ] || continue

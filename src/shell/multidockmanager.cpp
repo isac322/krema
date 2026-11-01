@@ -17,8 +17,7 @@
 #include "platform/dockplatformfactory.h"
 #include "settingswindow.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
+#include "models/taskbackend.h"
 
 #include <QCursor>
 #include <QGuiApplication>
@@ -340,7 +339,7 @@ void MultiDockManager::setupFollowActive()
                 &QAbstractItemModel::dataChanged,
                 this,
                 [this](const QModelIndex &topLeft, const QModelIndex &, const QList<int> &roles) {
-                    if (roles.contains(TaskManager::AbstractTasksModel::IsActive) && topLeft.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+                    if (roles.contains(tasks::roles().IsActive) && topLeft.data(tasks::roles().IsActive).toBool()) {
                         onActiveWindowChanged();
                     }
                 });
@@ -446,16 +445,16 @@ void MultiDockManager::onActiveWindowChanged()
     auto *tasksModel = m_model->tasksModel();
     for (int i = 0; i < tasksModel->rowCount(); ++i) {
         auto idx = tasksModel->index(i, 0);
-        if (!idx.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+        if (!idx.data(tasks::roles().IsActive).toBool()) {
             continue;
         }
 
         // Skip KDE internal surfaces (task switcher, etc.)
-        if (idx.data(TaskManager::AbstractTasksModel::SkipTaskbar).toBool()) {
+        if (idx.data(tasks::roles().SkipTaskbar).toBool()) {
             continue;
         }
 
-        QRect screenGeo = idx.data(TaskManager::AbstractTasksModel::ScreenGeometry).toRect();
+        QRect screenGeo = idx.data(tasks::roles().ScreenGeometry).toRect();
         if (screenGeo.isEmpty()) {
             continue;
         }

@@ -3,13 +3,8 @@
 
 #include "dockvisibilitycontroller.h"
 
+#include "models/taskbackend.h"
 #include "utils/inputregion.h"
-
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/activityinfo.h>
-#include <taskmanager/regionfiltermode.h>
-#include <taskmanager/tasksmodel.h>
-#include <taskmanager/virtualdesktopinfo.h>
 
 #include <QLoggingCategory>
 #include <QScreen>
@@ -23,9 +18,9 @@ namespace krema
 {
 
 DockVisibilityController::DockVisibilityController(DockPlatform *platform,
-                                                   TaskManager::TasksModel *tasksModel,
-                                                   TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
-                                                   TaskManager::ActivityInfo *activityInfo,
+                                                   QAbstractItemModel *tasksModel,
+                                                   QObject *virtualDesktopInfo,
+                                                   QObject *activityInfo,
                                                    QWindow *dockWindow,
                                                    QObject *parent)
     : QObject(parent)
@@ -36,22 +31,23 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
     , m_dockWindow(dockWindow)
 {
     // Region-filtered model: only windows overlapping the dock geometry pass through.
-    // Uses KDE's built-in filterByRegion(Intersect) — same approach as Plasma panels.
-    m_overlapModel = new TaskManager::TasksModel(this);
-    m_overlapModel->classBegin();
-    m_overlapModel->setGroupMode(TaskManager::TasksModel::GroupDisabled);
-    m_overlapModel->setFilterByRegion(RegionFilterMode::Intersect);
-    m_overlapModel->setFilterMinimized(true);
-    m_overlapModel->setFilterHidden(true);
-    m_overlapModel->setFilterByVirtualDesktop(true);
-    m_overlapModel->setFilterByActivity(true);
+    // Static enum configuration is resolved by the running Plasma QML module.
+    QVariantMap initialProperties{
+        {QStringLiteral("filterMinimized"), true},
+        {QStringLiteral("filterHidden"), true},
+        {QStringLiteral("filterByVirtualDesktop"), true},
+        {QStringLiteral("filterByActivity"), true},
+    };
     if (m_virtualDesktopInfo) {
-        m_overlapModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
+        initialProperties.insert(QStringLiteral("virtualDesktop"), m_virtualDesktopInfo->property("currentDesktop"));
     }
     if (m_activityInfo) {
-        m_overlapModel->setActivity(m_activityInfo->currentActivity());
+        initialProperties.insert(QStringLiteral("activity"), m_activityInfo->property("currentActivity"));
     }
-    m_overlapModel->componentComplete();
+    m_overlapModel =
+        tasks::TasksModel(tasks::Backend::instance().createTasksModel("groupMode: TasksModel.GroupDisabled\nfilterByRegion: RegionFilterMode.Intersect",
+                                                                      initialProperties,
+                                                                      this));
 
     // Show timer: fires when mouse has dwelled in trigger area long enough
     m_showTimer.setSingleShot(true);
@@ -75,16 +71,16 @@ DockVisibilityController::DockVisibilityController(DockPlatform *platform,
     m_evaluateTimer.setInterval(300);
     connect(&m_evaluateTimer, &QTimer::timeout, this, &DockVisibilityController::evaluateVisibility);
 
-    // Re-evaluate when virtual desktop or activity changes
+    // Re-evaluate when virtual desktop or activity changes.
     if (m_virtualDesktopInfo) {
-        connect(m_virtualDesktopInfo, &TaskManager::VirtualDesktopInfo::currentDesktopChanged, this, [this]() {
-            m_overlapModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
+        tasks::connectNotify(m_virtualDesktopInfo, "currentDesktop", this, [this]() {
+            m_overlapModel.setProperty("virtualDesktop", m_virtualDesktopInfo->property("currentDesktop"));
             m_evaluateTimer.start();
         });
     }
     if (m_activityInfo) {
-        connect(m_activityInfo, &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
-            m_overlapModel->setActivity(m_activityInfo->currentActivity());
+        tasks::connectNotify(m_activityInfo, "currentActivity", this, [this]() {
+            m_overlapModel.setProperty("activity", m_activityInfo->property("currentActivity"));
             m_evaluateTimer.start();
         });
     }
@@ -479,21 +475,21 @@ void DockVisibilityController::restoreReturnTask()
     // layer surface when it gains focus and never hands focus back. The dock
     // would stay the active window, keeping keys away from the user's window
     // and hiding the active window from DodgeActiveOnly (SmartHide).
-    if (!m_tasksModel || m_returnWindowIds.isEmpty()) {
+    if (!m_tasksModel.isValid() || m_returnWindowIds.isEmpty()) {
         return;
     }
     // The user moved focus to another window meanwhile: leave it there.
-    const QModelIndex current = m_tasksModel->activeTask();
-    if (current.isValid() && current.data(TaskManager::AbstractTasksModel::WinIdList).toList() != m_returnWindowIds) {
+    const QModelIndex current = m_tasksModel.activeTask();
+    if (current.isValid() && current.data(tasks::roles().WinIdList).toList() != m_returnWindowIds) {
         return;
     }
     const QModelIndex task = findTask(m_returnWindowIds);
     // Closed meanwhile, or minimized while the dock held focus: don't undo that.
-    if (!task.isValid() || task.data(TaskManager::AbstractTasksModel::IsMinimized).toBool()) {
+    if (!task.isValid() || task.data(tasks::roles().IsMinimized).toBool()) {
         return;
     }
     qCDebug(lcVisibility) << "Returning focus to" << task.data(Qt::DisplayRole).toString();
-    m_tasksModel->requestActivate(task);
+    m_tasksModel.requestActivate(task);
 }
 
 QModelIndex DockVisibilityController::findTask(const QVariantList &windowIds) const
@@ -502,15 +498,15 @@ QModelIndex DockVisibilityController::findTask(const QVariantList &windowIds) co
     // the dock grabbed focus does not survive a reorder (TasksModel::move() +
     // syncLaunchers() reset the launcher rows the window task is merged into).
     const auto matches = [&windowIds](const QModelIndex &index) {
-        return index.data(TaskManager::AbstractTasksModel::WinIdList).toList() == windowIds;
+        return index.data(tasks::roles().WinIdList).toList() == windowIds;
     };
-    for (int row = 0; row < m_tasksModel->rowCount(); ++row) {
-        const QModelIndex task = m_tasksModel->index(row, 0);
+    for (int row = 0; row < m_tasksModel.rowCount(); ++row) {
+        const QModelIndex task = m_tasksModel.index(row, 0);
         if (matches(task)) {
             return task;
         }
-        for (int child = 0; child < m_tasksModel->rowCount(task); ++child) {
-            const QModelIndex window = m_tasksModel->index(child, 0, task);
+        for (int child = 0; child < m_tasksModel.rowCount(task); ++child) {
+            const QModelIndex window = m_tasksModel.index(child, 0, task);
             if (matches(window)) {
                 return window;
             }
@@ -543,8 +539,8 @@ void DockVisibilityController::applyKeyboardInteractivity()
         // Remember the active window before the dock takes keyboard focus:
         // KWin activates the dock surface once it becomes keyboard-interactive
         // (keyboard navigation or a drag) and never hands focus back.
-        if (m_tasksModel) {
-            m_returnWindowIds = m_tasksModel->activeTask().data(TaskManager::AbstractTasksModel::WinIdList).toList();
+        if (m_tasksModel.isValid()) {
+            m_returnWindowIds = m_tasksModel.activeTask().data(tasks::roles().WinIdList).toList();
         }
     }
     m_interactivityActive = interactive;
@@ -653,9 +649,9 @@ QRect DockVisibilityController::dockScreenRect() const
 
 bool DockVisibilityController::hasOverlappingWindow(bool activeOnly) const
 {
-    const int count = m_overlapModel->rowCount();
+    const int count = m_overlapModel.rowCount();
     qCDebug(lcVisibility) << "hasOverlappingWindow: overlapModel rows=" << count << "activeOnly=" << activeOnly
-                          << "regionGeometry=" << m_overlapModel->regionGeometry();
+                          << "regionGeometry=" << m_overlapModel.property("regionGeometry").toRect();
 
     if (!activeOnly) {
         return count > 0;
@@ -663,8 +659,8 @@ bool DockVisibilityController::hasOverlappingWindow(bool activeOnly) const
 
     // DodgeWindows: only hide when an *active* window overlaps
     for (int i = 0; i < count; ++i) {
-        const QModelIndex idx = m_overlapModel->index(i, 0);
-        if (idx.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+        const QModelIndex idx = m_overlapModel.index(i, 0);
+        if (idx.data(tasks::roles().IsActive).toBool()) {
             return true;
         }
     }
@@ -673,10 +669,10 @@ bool DockVisibilityController::hasOverlappingWindow(bool activeOnly) const
 
 bool DockVisibilityController::hasMaximizedOrFullscreenWindow() const
 {
-    const int count = m_overlapModel->rowCount();
+    const int count = m_overlapModel.rowCount();
     for (int i = 0; i < count; ++i) {
-        const QModelIndex idx = m_overlapModel->index(i, 0);
-        if (idx.data(TaskManager::AbstractTasksModel::IsMaximized).toBool() || idx.data(TaskManager::AbstractTasksModel::IsFullScreen).toBool()) {
+        const QModelIndex idx = m_overlapModel.index(i, 0);
+        if (idx.data(tasks::roles().IsMaximized).toBool() || idx.data(tasks::roles().IsFullScreen).toBool()) {
             return true;
         }
     }
@@ -687,22 +683,26 @@ void DockVisibilityController::connectModelSignals()
 {
     // The overlap model already filters by region, virtual desktop, activity,
     // minimized, and hidden windows. Row changes mean the overlap set changed.
-    connect(m_overlapModel, &QAbstractItemModel::rowsInserted, this, [this]() {
+    auto *overlapModel = m_overlapModel.model();
+    if (!overlapModel) {
+        return;
+    }
+    connect(overlapModel, &QAbstractItemModel::rowsInserted, this, [this]() {
         m_evaluateTimer.start();
     });
-    connect(m_overlapModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
+    connect(overlapModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
         m_evaluateTimer.start();
     });
-    connect(m_overlapModel, &QAbstractItemModel::modelReset, this, [this]() {
+    connect(overlapModel, &QAbstractItemModel::modelReset, this, [this]() {
         m_evaluateTimer.start();
     });
 
     // IsActive changes don't add/remove rows — needed for DodgeWindows mode
-    connect(m_overlapModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+    connect(overlapModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
         static const QList<int> relevantRoles = {
-            TaskManager::AbstractTasksModel::IsActive,
-            TaskManager::AbstractTasksModel::IsMaximized,
-            TaskManager::AbstractTasksModel::IsFullScreen,
+            tasks::roles().IsActive,
+            tasks::roles().IsMaximized,
+            tasks::roles().IsFullScreen,
         };
 
         if (roles.isEmpty()) {
@@ -722,11 +722,11 @@ void DockVisibilityController::connectModelSignals()
 void DockVisibilityController::updateRegionGeometry()
 {
     const QRect rect = dockScreenRect();
-    if (rect == m_overlapModel->regionGeometry()) {
+    if (rect == m_overlapModel.property("regionGeometry").toRect()) {
         return;
     }
     qCDebug(lcVisibility) << "updateRegionGeometry:" << rect;
-    m_overlapModel->setRegionGeometry(rect);
+    m_overlapModel.setProperty("regionGeometry", rect);
 }
 
 } // namespace krema

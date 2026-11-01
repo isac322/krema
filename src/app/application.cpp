@@ -8,6 +8,7 @@
 #include "models/dockmodel.h"
 #include "models/launcherentrytracker.h"
 #include "models/notificationtracker.h"
+#include "models/taskbackend.h"
 #include "models/taskiconprovider.h"
 #include "shell/dockshell.h"
 #include "shell/dockview.h"
@@ -192,6 +193,11 @@ int Application::run(const KAboutData &aboutData)
     migrateLegacySettings(m_settings.get());
 
     // Create data model
+    if (!tasks::Backend::instance().ensureLoaded()) {
+        qCCritical(lcApp).noquote() << "Krema cannot start:" << tasks::Backend::instance().errorString()
+                                    << ". plasma-workspace's org.kde.taskmanager and org.kde.notificationmanager QML modules are required.";
+        return 1;
+    }
     m_dockModel = std::make_unique<DockModel>();
     m_dockModel->setPinnedLaunchers(m_settings->pinnedLaunchers());
     m_dockModel->setSeparateLaunchers(m_settings->separateLaunchers());

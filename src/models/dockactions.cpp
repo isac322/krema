@@ -5,10 +5,6 @@
 
 #include "dockmodel.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
-#include <taskmanager/tasktools.h>
-
 #include <KApplicationTrader>
 #include <KService>
 
@@ -29,8 +25,8 @@ DockActions::DockActions(DockModel *model, QObject *parent)
 
 void DockActions::activate(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid()) {
         return;
     }
@@ -41,53 +37,53 @@ void DockActions::activate(int index)
     // grouped tasks"): while a window of the group is active, each click
     // activates the next one in model order, wrapping around. When none is
     // active, the most recently used window of the group is activated.
-    if (idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+    if (idx.data(tasks::roles().IsGroupParent).toBool()) {
         cycleWindows(index, true);
         return;
     }
 
-    const bool isLauncher = idx.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const bool isLauncher = idx.data(tasks::roles().IsLauncher).toBool();
+    const bool isWindow = idx.data(tasks::roles().IsWindow).toBool();
 
     if (isWindow) {
-        tasksModel->requestActivate(idx);
+        tasksModel.requestActivate(idx);
     } else if (isLauncher) {
-        tasksModel->requestNewInstance(idx);
+        tasksModel.requestNewInstance(idx);
         Q_EMIT taskLaunching(index);
     }
 }
 
 void DockActions::newInstance(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (idx.isValid()) {
-        tasksModel->requestNewInstance(idx);
+        tasksModel.requestNewInstance(idx);
         Q_EMIT taskLaunching(index);
     }
 }
 
 void DockActions::closeTask(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (idx.isValid()) {
-        tasksModel->requestClose(idx);
+        tasksModel.requestClose(idx);
     }
 }
 
 void DockActions::togglePinned(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid()) {
         return;
     }
 
-    const QUrl launcherUrl = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    const QUrl launcherUrl = idx.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
     if (launcherUrl.isValid()) {
-        if (tasksModel->launcherPosition(launcherUrl) != -1) {
-            tasksModel->requestRemoveLauncher(launcherUrl);
+        if (tasksModel.launcherPosition(launcherUrl) != -1) {
+            tasksModel.requestRemoveLauncher(launcherUrl);
             Q_EMIT pinnedLaunchersChanged();
         } else {
             addLauncher(launcherUrl);
@@ -99,15 +95,14 @@ namespace
 {
 
 // Child of the group at @p index to enter when none of its windows is active,
-// following Plasma's task manager (TaskTools.js groupTopTask): the most
-// recently activated window, else the topmost in the stacking order, else the
-// first child.
-int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
+// following Plasma's task manager group-top behavior: the most recently
+// activated window, else the topmost in the stacking order, else the first child.
+int entryChild(const tasks::TasksModel &tasksModel, int index, int childCount)
 {
     int best = -1;
     QDateTime bestActivated;
     for (int i = 0; i < childCount; ++i) {
-        const QDateTime activated = tasksModel->makeModelIndex(index, i).data(TaskManager::AbstractTasksModel::LastActivated).toDateTime();
+        const QDateTime activated = tasksModel.makeModelIndex(index, i).data(tasks::roles().LastActivated).toDateTime();
         if (activated.isValid() && (!bestActivated.isValid() || activated > bestActivated)) {
             bestActivated = activated;
             best = i;
@@ -120,7 +115,7 @@ int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
     int bestStacking = -1;
     for (int i = 0; i < childCount; ++i) {
         bool ok = false;
-        const int stacking = tasksModel->makeModelIndex(index, i).data(TaskManager::AbstractTasksModel::StackingOrder).toInt(&ok);
+        const int stacking = tasksModel.makeModelIndex(index, i).data(tasks::roles().StackingOrder).toInt(&ok);
         if (ok && stacking > bestStacking) {
             bestStacking = stacking;
             best = i;
@@ -133,40 +128,40 @@ int entryChild(TaskManager::TasksModel *tasksModel, int index, int childCount)
 
 void DockActions::activateOrMinimize(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid()) {
         return;
     }
 
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const bool isWindow = idx.data(tasks::roles().IsWindow).toBool();
     if (!isWindow) {
         activate(index);
         return;
     }
 
-    if (!idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
-        const bool isActive = idx.data(TaskManager::AbstractTasksModel::IsActive).toBool();
-        const bool isMinimized = idx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
-        const bool isMinimizable = idx.data(TaskManager::AbstractTasksModel::IsMinimizable).toBool();
+    if (!idx.data(tasks::roles().IsGroupParent).toBool()) {
+        const bool isActive = idx.data(tasks::roles().IsActive).toBool();
+        const bool isMinimized = idx.data(tasks::roles().IsMinimized).toBool();
+        const bool isMinimizable = idx.data(tasks::roles().IsMinimizable).toBool();
         if (isActive && !isMinimized && isMinimizable) {
-            tasksModel->requestToggleMinimized(idx);
+            tasksModel.requestToggleMinimized(idx);
         } else {
             activate(index);
         }
         return;
     }
 
-    const int childCount = tasksModel->rowCount(idx);
+    const int childCount = tasksModel.rowCount(idx);
     if (childCount <= 0) {
         return;
     }
 
     int activeChild = -1;
     for (int i = 0; i < childCount; ++i) {
-        const QModelIndex child = tasksModel->makeModelIndex(index, i);
-        if (child.isValid() && child.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
-            && !child.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool() && child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+        const QModelIndex child = tasksModel.makeModelIndex(index, i);
+        if (child.isValid() && child.data(tasks::roles().IsWindow).toBool() && !child.data(tasks::roles().IsGroupParent).toBool()
+            && child.data(tasks::roles().IsActive).toBool()) {
             activeChild = i;
             break;
         }
@@ -177,54 +172,52 @@ void DockActions::activateOrMinimize(int index)
         if (target < 0 || target >= childCount) {
             return;
         }
-        const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
-        if (targetIdx.isValid() && targetIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
-            && !targetIdx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
-            tasksModel->requestActivate(targetIdx);
+        const QModelIndex targetIdx = tasksModel.makeModelIndex(index, target);
+        if (targetIdx.isValid() && targetIdx.data(tasks::roles().IsWindow).toBool() && !targetIdx.data(tasks::roles().IsGroupParent).toBool()) {
+            tasksModel.requestActivate(targetIdx);
         }
         return;
     }
 
-    const QModelIndex activeIdx = tasksModel->makeModelIndex(index, activeChild);
-    if (!activeIdx.isValid() || !activeIdx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
-        || activeIdx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool()) {
+    const QModelIndex activeIdx = tasksModel.makeModelIndex(index, activeChild);
+    if (!activeIdx.isValid() || !activeIdx.data(tasks::roles().IsWindow).toBool() || activeIdx.data(tasks::roles().IsGroupParent).toBool()) {
         return;
     }
 
-    const bool isMinimized = activeIdx.data(TaskManager::AbstractTasksModel::IsMinimized).toBool();
-    const bool isMinimizable = activeIdx.data(TaskManager::AbstractTasksModel::IsMinimizable).toBool();
+    const bool isMinimized = activeIdx.data(tasks::roles().IsMinimized).toBool();
+    const bool isMinimizable = activeIdx.data(tasks::roles().IsMinimizable).toBool();
     if (!isMinimized && isMinimizable) {
-        tasksModel->requestToggleMinimized(activeIdx);
+        tasksModel.requestToggleMinimized(activeIdx);
     } else {
-        tasksModel->requestActivate(activeIdx);
+        tasksModel.requestActivate(activeIdx);
     }
 }
 
 void DockActions::cycleWindows(int index, bool forward)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid()) {
         return;
     }
 
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const bool isWindow = idx.data(tasks::roles().IsWindow).toBool();
     if (!isWindow) {
         return;
     }
 
-    const int childCount = tasksModel->rowCount(idx);
+    const int childCount = tasksModel.rowCount(idx);
     if (childCount <= 1) {
         // Single window or non-grouped: just activate/focus it
-        tasksModel->requestActivate(idx);
+        tasksModel.requestActivate(idx);
         return;
     }
 
     // Find the currently active child window
     int activeChild = -1;
     for (int i = 0; i < childCount; ++i) {
-        const QModelIndex child = tasksModel->makeModelIndex(index, i);
-        if (child.data(TaskManager::AbstractTasksModel::IsActive).toBool()) {
+        const QModelIndex child = tasksModel.makeModelIndex(index, i);
+        if (child.data(tasks::roles().IsActive).toBool()) {
             activeChild = i;
             break;
         }
@@ -240,22 +233,22 @@ void DockActions::cycleWindows(int index, bool forward)
         target = forward ? (activeChild + 1) % childCount : (activeChild - 1 + childCount) % childCount;
     }
 
-    const QModelIndex targetIdx = tasksModel->makeModelIndex(index, target);
+    const QModelIndex targetIdx = tasksModel.makeModelIndex(index, target);
     if (targetIdx.isValid()) {
-        tasksModel->requestActivate(targetIdx);
+        tasksModel.requestActivate(targetIdx);
     }
 }
 
 bool DockActions::moveTask(int fromIndex, int toIndex)
 {
-    auto *tasksModel = m_model->tasksModel();
+    const auto tasksModel = m_model->tasks();
     if (fromIndex == toIndex) {
         return false;
     }
-    if (fromIndex < 0 || fromIndex >= tasksModel->rowCount()) {
+    if (fromIndex < 0 || fromIndex >= tasksModel.rowCount()) {
         return false;
     }
-    if (toIndex < 0 || toIndex >= tasksModel->rowCount()) {
+    if (toIndex < 0 || toIndex >= tasksModel.rowCount()) {
         return false;
     }
 
@@ -316,40 +309,34 @@ bool DockActions::addLauncher(const QUrl &url)
         return false;
     }
 
-    // Validate that the URL resolves to a real application.
-    const auto appData = TaskManager::appDataFromUrl(url);
-    QUrl resolvedUrl;
+    // Resolve the URL to a canonical applications: menu ID. Local .desktop
+    // files are accepted only when they are an installed service entry, so a
+    // copy outside the application directories (or a menu symlink such as
+    // LibreOffice's writer.desktop) maps to its real menu ID.
+    QString menuId;
     if (url.isLocalFile()) {
-        // appDataFromUrl() can derive an id from any .desktop path, including
-        // one outside the application directories. Validate local paths
-        // against the canonical service entry instead.
-        const QString menuId = menuIdForDesktopFile(url);
-        if (menuId.isEmpty()) {
-            qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
-            return false;
+        menuId = menuIdForDesktopFile(url);
+    } else if (url.scheme() == QLatin1String("applications")) {
+        const QString id = url.path();
+        KService::Ptr service = KService::serviceByStorageId(id);
+        if (!service) {
+            service = KService::serviceByDesktopName(id);
         }
-        resolvedUrl = QUrl(QStringLiteral("applications:") + menuId);
-    } else {
-        if (appData.id.isEmpty()) {
-            return false;
+        if (service) {
+            menuId = service->menuId();
         }
-        resolvedUrl = appData.url.isValid() ? appData.url : url;
     }
 
-    // Unknown local entries are rejected above because libtaskmanager
-    // dereferences the null service in requestAddLauncher().
-
-    if (resolvedUrl.scheme() != QLatin1String("applications")) {
-        return false;
-    }
-    const QString menuId = resolvedUrl.path();
-    const KService::Ptr service = KService::serviceByMenuId(menuId);
-    if (!service || menuId.isEmpty() || service->menuId().isEmpty() || service->menuId() != menuId) {
+    // requestAddLauncher() dereferences the service without a null check, so
+    // only pass menu IDs the service database resolves to themselves.
+    const KService::Ptr service = menuId.isEmpty() ? KService::Ptr() : KService::serviceByMenuId(menuId);
+    if (!service || service->menuId() != menuId) {
         qCWarning(lcModel) << "Refusing to pin launcher unknown to the service database:" << url;
         return false;
     }
+    const QUrl resolvedUrl = QUrl(QStringLiteral("applications:") + menuId);
 
-    const bool ok = m_model->tasksModel()->requestAddLauncher(resolvedUrl);
+    const bool ok = m_model->tasks().requestAddLauncher(resolvedUrl);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();
     }
@@ -358,18 +345,18 @@ bool DockActions::addLauncher(const QUrl &url)
 
 bool DockActions::removeLauncher(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid()) {
         return false;
     }
 
-    const QUrl url = idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    const QUrl url = idx.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
     if (!url.isValid()) {
         return false;
     }
 
-    const bool ok = tasksModel->requestRemoveLauncher(url);
+    const bool ok = tasksModel.requestRemoveLauncher(url);
     if (ok) {
         Q_EMIT pinnedLaunchersChanged();
     }
@@ -378,12 +365,12 @@ bool DockActions::removeLauncher(int index)
 
 void DockActions::openUrlsWithTask(int index, const QList<QUrl> &urls)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid() || urls.isEmpty()) {
         return;
     }
-    tasksModel->requestOpenUrls(idx, urls);
+    tasksModel.requestOpenUrls(idx, urls);
 }
 
 } // namespace krema

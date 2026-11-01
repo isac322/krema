@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "models/taskbackend.h"
 #include "platform/dockplatform.h"
 #include "platform/kwinpanelwatcher.h"
 #include "platform/kwinpointermotionwatcher.h"
@@ -13,13 +14,6 @@
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
-
-namespace TaskManager
-{
-class ActivityInfo;
-class TasksModel;
-class VirtualDesktopInfo;
-}
 
 class QWindow;
 
@@ -46,9 +40,9 @@ class DockVisibilityController : public QObject
     Q_PROPERTY(int mode READ mode WRITE setMode NOTIFY modeChanged)
 public:
     explicit DockVisibilityController(DockPlatform *platform,
-                                      TaskManager::TasksModel *tasksModel,
-                                      TaskManager::VirtualDesktopInfo *virtualDesktopInfo,
-                                      TaskManager::ActivityInfo *activityInfo,
+                                      QAbstractItemModel *tasksModel,
+                                      QObject *virtualDesktopInfo,
+                                      QObject *activityInfo,
                                       QWindow *dockWindow,
                                       QObject *parent = nullptr);
     ~DockVisibilityController() override;
@@ -157,10 +151,10 @@ private:
     void applyKeyboardInteractivity();
 
     DockPlatform *m_platform;
-    TaskManager::TasksModel *m_tasksModel;
-    TaskManager::TasksModel *m_overlapModel = nullptr;
-    TaskManager::VirtualDesktopInfo *m_virtualDesktopInfo = nullptr;
-    TaskManager::ActivityInfo *m_activityInfo = nullptr;
+    tasks::TasksModel m_tasksModel;
+    tasks::TasksModel m_overlapModel;
+    QObject *m_virtualDesktopInfo = nullptr;
+    QObject *m_activityInfo = nullptr;
     QWindow *m_dockWindow;
 
     /// Combine surface and screen-edge hover into m_hovered and drive the

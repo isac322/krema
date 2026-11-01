@@ -11,13 +11,6 @@
 #include <QUrl>
 #include <QVariantMap>
 
-#include <memory>
-
-namespace NotificationManager
-{
-class Settings;
-}
-
 namespace krema
 {
 
@@ -78,7 +71,7 @@ private:
     [[nodiscard]] QString storageIdFor(const QUrl &launcherUrl) const;
     [[nodiscard]] bool countAllowed(const QString &storageId) const;
 
-    std::unique_ptr<NotificationManager::Settings> m_settings;
+    QObject *m_settings = nullptr;
     QStringList m_badgeBlacklist; // desktop entries without ".desktop"
 
     QDBusServiceWatcher m_serviceWatcher;

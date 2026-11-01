@@ -3,14 +3,11 @@
 
 #pragma once
 
+#include <QAbstractItemModel>
 #include <QObject>
 #include <QUrl>
 
-#include <taskmanager/activityinfo.h>
-#include <taskmanager/tasksmodel.h>
-#include <taskmanager/virtualdesktopinfo.h>
-
-#include <memory>
+#include "taskbackend.h"
 
 namespace krema
 {
@@ -18,15 +15,14 @@ namespace krema
 /**
  * Central model for the dock's task manager section.
  *
- * Wraps libtaskmanager's TasksModel and configures it for dock usage:
+ * Wraps the runtime-loaded Plasma TasksModel and configures it for dock usage:
  * grouped by application, with pinned launchers + running windows merged.
  * Exposes the model to QML and provides action methods.
  */
 class DockModel : public QObject
 {
     Q_OBJECT
-
-    Q_PROPERTY(TaskManager::TasksModel *tasksModel READ tasksModel CONSTANT)
+    Q_PROPERTY(QAbstractItemModel *tasksModel READ tasksModel CONSTANT)
     Q_PROPERTY(QStringList pinnedLaunchers READ pinnedLaunchers WRITE setPinnedLaunchers NOTIFY pinnedLaunchersChanged)
     Q_PROPERTY(int pinnedTaskCount READ pinnedTaskCount NOTIFY pinnedTaskCountChanged)
     Q_PROPERTY(int chatStateRevision READ chatStateRevision NOTIFY chatStateRevisionChanged)
@@ -37,9 +33,10 @@ public:
     explicit DockModel(QObject *parent = nullptr);
     ~DockModel() override;
 
-    [[nodiscard]] TaskManager::TasksModel *tasksModel() const;
-    [[nodiscard]] TaskManager::VirtualDesktopInfo *virtualDesktopInfo() const;
-    [[nodiscard]] TaskManager::ActivityInfo *activityInfo() const;
+    [[nodiscard]] QAbstractItemModel *tasksModel() const;
+    [[nodiscard]] krema::tasks::TasksModel tasks() const;
+    [[nodiscard]] QObject *virtualDesktopInfo() const;
+    [[nodiscard]] QObject *activityInfo() const;
 
     [[nodiscard]] QStringList pinnedLaunchers() const;
     void setPinnedLaunchers(const QStringList &launchers);
@@ -88,8 +85,8 @@ public:
     /// Publish the delegate geometry for a window task to KWin.
     Q_INVOKABLE void publishDelegateGeometry(int index, QObject *delegate);
 
-    /// Return the TaskManager/KService desktop-entry or executable identity for
-    /// the task at @p index (not necessarily the raw Wayland app_id).
+    /// Return the service desktop-entry or executable identity for the task
+    /// at @p index (not necessarily the raw Wayland app_id).
     Q_INVOKABLE QString appId(int index) const;
 
     /// Return the chat unread state: 0=None, 1=Unread, 2=Mention.
@@ -139,9 +136,9 @@ private:
     int m_chatStateRevision = 0;
     int m_virtualDesktopMode = 0;
     QList<SettledRow> m_settledRows;
-    std::unique_ptr<TaskManager::TasksModel> m_tasksModel;
-    std::shared_ptr<TaskManager::VirtualDesktopInfo> m_virtualDesktopInfo;
-    std::shared_ptr<TaskManager::ActivityInfo> m_activityInfo;
+    QAbstractItemModel *m_tasksModel = nullptr;
+    QObject *m_virtualDesktopInfo = nullptr;
+    QObject *m_activityInfo = nullptr;
 };
 
 } // namespace krema

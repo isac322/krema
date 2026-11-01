@@ -3,7 +3,7 @@
 
 #include "launcherentrytracker.h"
 
-#include <settings.h>
+#include "taskbackend.h"
 
 #include <KConfigGroup>
 #include <KDesktopFile>
@@ -13,6 +13,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QLoggingCategory>
+#include <QMetaObject>
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -46,23 +47,27 @@ static QStringList fallbackDesktopIds(const QString &desktopFile)
         candidates = {QStringLiteral("vesktop.desktop"), QStringLiteral("dev.vencord.Vesktop.desktop"), QStringLiteral("dev.vencord.vesktop.desktop")};
     } else if (stem == QLatin1String("webcord") || stem == QLatin1String("io.github.spacingbat3.webcord")) {
         candidates = {QStringLiteral("webcord.desktop"), QStringLiteral("io.github.spacingbat3.webcord.desktop")};
-    } else if (stem == QLatin1String("mattermost") || stem == QLatin1String("mattermost-desktop")
-               || stem == QLatin1String("com.mattermost.desktop") || stem == QLatin1String("com.mattermost")) {
-        candidates = {QStringLiteral("mattermost.desktop"), QStringLiteral("mattermost-desktop.desktop"),
-                      QStringLiteral("com.mattermost.Desktop.desktop"), QStringLiteral("com.mattermost.desktop.desktop")};
-    } else if (stem == QLatin1String("org.telegram") || stem == QLatin1String("org.telegram.desktop")
-               || stem == QLatin1String("telegram") || stem == QLatin1String("telegram-desktop")
-               || stem == QLatin1String("telegramdesktop")) {
-        candidates = {QStringLiteral("org.telegram.desktop.desktop"), QStringLiteral("telegram.desktop"),
-                      QStringLiteral("telegram-desktop.desktop"), QStringLiteral("telegramdesktop.desktop")};
-    } else if (stem == QLatin1String("io.element.element") || stem == QLatin1String("im.riot.riot")
-               || stem == QLatin1String("element") || stem == QLatin1String("element-desktop")) {
-        candidates = {QStringLiteral("io.element.Element.desktop"), QStringLiteral("io.element.element.desktop"),
-                      QStringLiteral("element-desktop.desktop"), QStringLiteral("element.desktop"),
+    } else if (stem == QLatin1String("mattermost") || stem == QLatin1String("mattermost-desktop") || stem == QLatin1String("com.mattermost.desktop")
+               || stem == QLatin1String("com.mattermost")) {
+        candidates = {QStringLiteral("mattermost.desktop"),
+                      QStringLiteral("mattermost-desktop.desktop"),
+                      QStringLiteral("com.mattermost.Desktop.desktop"),
+                      QStringLiteral("com.mattermost.desktop.desktop")};
+    } else if (stem == QLatin1String("org.telegram") || stem == QLatin1String("org.telegram.desktop") || stem == QLatin1String("telegram")
+               || stem == QLatin1String("telegram-desktop") || stem == QLatin1String("telegramdesktop")) {
+        candidates = {QStringLiteral("org.telegram.desktop.desktop"),
+                      QStringLiteral("telegram.desktop"),
+                      QStringLiteral("telegram-desktop.desktop"),
+                      QStringLiteral("telegramdesktop.desktop")};
+    } else if (stem == QLatin1String("io.element.element") || stem == QLatin1String("im.riot.riot") || stem == QLatin1String("element")
+               || stem == QLatin1String("element-desktop")) {
+        candidates = {QStringLiteral("io.element.Element.desktop"),
+                      QStringLiteral("io.element.element.desktop"),
+                      QStringLiteral("element-desktop.desktop"),
+                      QStringLiteral("element.desktop"),
                       QStringLiteral("im.riot.Riot.desktop")};
     } else if (stem == QLatin1String("ferdium") || stem == QLatin1String("org.ferdium.ferdium")) {
-        candidates = {QStringLiteral("org.ferdium.Ferdium.desktop"), QStringLiteral("org.ferdium.ferdium.desktop"),
-                      QStringLiteral("ferdium.desktop")};
+        candidates = {QStringLiteral("org.ferdium.Ferdium.desktop"), QStringLiteral("org.ferdium.ferdium.desktop"), QStringLiteral("ferdium.desktop")};
     } else {
         return {};
     }
@@ -77,10 +82,16 @@ LauncherEntryTracker::LauncherEntryTracker(QObject *parent)
     : QObject(parent)
     , m_serviceWatcher(QString(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForUnregistration)
 {
-    // Settings — must load() explicitly (constructor doesn't auto-load)
-    m_settings = std::make_unique<NotificationManager::Settings>(this);
-    m_settings->load();
-    connect(m_settings.get(), &NotificationManager::Settings::settingsChanged, this, &LauncherEntryTracker::loadSettings);
+    if (!tasks::Backend::instance().ensureLoaded()) {
+        qCWarning(lcLauncherEntry) << "Notification settings unavailable:" << tasks::Backend::instance().errorString();
+    }
+    m_settings = tasks::Backend::instance().createNotificationSettings(this);
+    if (m_settings) {
+        QMetaObject::invokeMethod(m_settings, "load");
+        tasks::connectSignal(m_settings, "settingsChanged", this, [this] {
+            loadSettings();
+        });
+    }
     loadSettings();
 
     connect(&m_serviceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &LauncherEntryTracker::onServiceUnregistered);
@@ -129,7 +140,7 @@ void LauncherEntryTracker::bumpRevision()
 void LauncherEntryTracker::loadSettings()
 {
     // Desktop entries ("foo"); compared without the storage ID's ".desktop".
-    m_badgeBlacklist = m_settings->badgeBlacklistedApplications();
+    m_badgeBlacklist = m_settings ? m_settings->property("badgeBlacklistedApplications").toStringList() : QStringList();
     for (QString &entry : m_badgeBlacklist) {
         entry = stripDesktopSuffix(entry);
     }
@@ -141,7 +152,7 @@ bool LauncherEntryTracker::countAllowed(const QString &storageId) const
     // Unlike Plasma's task manager, Do Not Disturb does not hide counts:
     // Krema keeps every badge in DND and only suppresses the attention
     // animation (DockItem.qml).
-    return m_settings->badgesInTaskManager() && !m_badgeBlacklist.contains(stripDesktopSuffix(storageId), Qt::CaseInsensitive);
+    return m_settings && m_settings->property("badgesInTaskManager").toBool() && !m_badgeBlacklist.contains(stripDesktopSuffix(storageId), Qt::CaseInsensitive);
 }
 
 QString LauncherEntryTracker::storageIdFor(const QUrl &launcherUrl) const

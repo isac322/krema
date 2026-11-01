@@ -31,6 +31,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Gui
     Widgets
     DBus
+    Qml
     Quick
     QuickControls2
     ShaderTools
@@ -58,8 +59,6 @@ find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS
 find_package(KF6Kirigami ${KF6_MIN_VERSION} REQUIRED)
 find_package(KF6KirigamiAddons REQUIRED)
 find_package(LayerShellQt ${LAYER_SHELL_QT_MIN_VERSION} REQUIRED)
-find_package(LibTaskManager REQUIRED)
-find_package(LibNotificationManager REQUIRED)
 find_package(KPipeWire REQUIRED)
 find_package(Wayland 1.22 REQUIRED COMPONENTS Client)
 find_package(WaylandScanner REQUIRED)

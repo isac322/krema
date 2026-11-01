@@ -8,9 +8,6 @@
 #include "dockmodel.h"
 #include "notificationtracker.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
-
 #include <KLocalizedString>
 
 #include <QApplication>
@@ -31,13 +28,13 @@ DockContextMenu::DockContextMenu(DockModel *model, DockActions *actions, Notific
 
 void DockContextMenu::showForTask(int index)
 {
-    auto *tasksModel = m_model->tasksModel();
-    const QModelIndex idx = tasksModel->index(index, 0);
+    const auto tasksModel = m_model->tasks();
+    const QModelIndex idx = tasksModel.index(index, 0);
     if (!idx.isValid()) {
         return;
     }
 
-    const bool isWindow = idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const bool isWindow = idx.data(tasks::roles().IsWindow).toBool();
     const QString name = idx.data(Qt::DisplayRole).toString();
 
     const bool pinned = m_model->isPinned(index);
@@ -59,7 +56,7 @@ void DockContextMenu::showForTask(int index)
     // Each action is captured by value together with its KService, so it
     // launches the right application even if task rows change while the menu
     // is open.
-    const QList<KServiceAction> appActions = desktopActions(idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl());
+    const QList<KServiceAction> appActions = desktopActions(idx.data(tasks::roles().LauncherUrlWithoutIcon).toUrl());
     if (!appActions.isEmpty()) {
         for (const KServiceAction &action : appActions) {
             if (action.isSeparator()) {

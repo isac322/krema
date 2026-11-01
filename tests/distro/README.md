@@ -107,6 +107,13 @@ What it does (each phase prints `[distro] <phase>: <seconds>s`):
    depfetch` already downloaded the deps the packaging declares (into the
    package-manager cache, installing nothing), so the install mostly runs
    the transaction.
+
+   On Slowroll, this install allows dependency downgrades. Its Plasma/KPipeWire
+   packages can require an older FFmpeg provider than the upgraded runtime
+   image has installed. `zypper install --allow-downgrade` lets the solver
+   select a compatible set without ignoring dependencies or pinning versions.
+   Tumbleweed and Leap keep their existing install policy.
+
 4. **Suite.** `tests/appium/run-e2e.sh` with `KREMA_E2E_IMAGE`,
    `KREMA_E2E_SKIP_BUILD=1` and `KREMA_E2E_BINARY=/usr/bin/krema`: the
    session setup is Tier 2's `entrypoint.sh`, minus the source sync and

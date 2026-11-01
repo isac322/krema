@@ -118,7 +118,13 @@ family_depfetch() {
 }
 
 family_krema() {
-    suse_install --allow-unsigned-rpm /pkgs/*.rpm
+    set -- --allow-unsigned-rpm /pkgs/*.rpm
+    if [ "$TARGET_ID" = opensuse-slowroll ]; then
+        # Slowroll's Plasma dependencies can require older FFmpeg providers
+        # than the runtime image retained after its distribution upgrade.
+        set -- --allow-downgrade "$@"
+    fi
+    suse_install "$@"
     # Shrink the committed diff: no cached packages or metadata.
     zypper --non-interactive clean --all
 }

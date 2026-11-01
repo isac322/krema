@@ -15,6 +15,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(ECM ${KF6_MIN_VERSION} REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(KremaSystemDeps)
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
@@ -92,6 +94,7 @@ if(NOT _HAVE_LAYERSHELLQT_SET_SCREEN)
     add_compile_definitions(KREMA_COMPAT_NO_LAYERSHELL_SCREEN)
 endif()
 
+krema_system_deps_begin()
 add_subdirectory(src)
 
 option(KREMA_E2E_TESTS "Register the Docker-based AT-SPI E2E suite (tests/appium/run-e2e.sh) with CTest" OFF)
@@ -99,6 +102,8 @@ option(KREMA_E2E_TESTS "Register the Docker-based AT-SPI E2E suite (tests/appium
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+krema_system_deps_end()
 
 file(GLOB_RECURSE ALL_CLANG_FORMAT_SOURCE_FILES src/*.cpp src/*.h)
 kde_clang_format(${ALL_CLANG_FORMAT_SOURCE_FILES})

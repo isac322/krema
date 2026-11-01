@@ -124,14 +124,10 @@ family_depfetch() {
 
 family_krema() {
     if [ "$TARGET_ID" = opensuse-slowroll ]; then
-        # Slowroll's current update FFmpeg drops symbols still required by
-        # Plasma's oss KPipeWireRecord. Keep the complete oss codec set and
-        # prevent zypper from choosing the intentionally non-installable
-        # ffmpeg-8-mini-libs flavor as an alternative provider.
-        zypper --non-interactive remove --no-confirm ffmpeg-8-mini-libs || true
+        # The package may satisfy KPipeWireRecord's codec soname through the
+        # intentionally non-installable mini FFmpeg flavor. Lock that flavor
+        # out so zypper keeps the coherent full FFmpeg set from the upgrade.
         zypper --non-interactive addlock ffmpeg-8-mini-libs || true
-        suse_install --oldpackage --from slowroll-oss \
-            libavcodec62 libavfilter11 libavformat62 libavutil60
     fi
     suse_install --allow-unsigned-rpm /pkgs/*.rpm
     # Shrink the committed diff: no cached packages or metadata.

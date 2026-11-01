@@ -222,7 +222,7 @@ sudo pacman -S --needed \
     qt6-base qt6-declarative qt6-wayland qt6-shadertools \
     kwindowsystem kconfig kcoreaddons ki18n \
     kglobalaccel kcolorscheme kiconthemes kcrash kxmlgui kservice kio kjobwidgets \
-    kirigami layer-shell-qt wayland kpipewire \
+    kirigami layer-shell-qt wayland kpipewire plasma-workspace \
     catch2
 ```
 

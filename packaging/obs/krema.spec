@@ -9,6 +9,12 @@ Summary:        A lightweight dock for KDE Plasma 6
 License:        GPL-3.0-or-later AND MIT-CMU
 URL:            https://krema.bhyoo.com/
 Source0:        https://github.com/isac322/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
+# libtaskmanager/libnotificationmanager and Qt private/QPA APIs are pinned to
+# the build-root minor release because their ABI is not stable across minors.
+%global krema_plasma_version %(rpm -q --whatprovides 'cmake(LibTaskManager)' --qf '%%|EPOCH?{%%{EPOCH}:}:{}|%%{VERSION}\n' 2>/dev/null | head -n1 | sed -E 's/[-+~].*$//' | sed -E 's/^([0-9]+:)?([0-9]+\.[0-9]+).*/\1\2/')
+%global krema_plasma_next_minor %(version="%{krema_plasma_version}"; epoch=""; case "$version" in *:*) epoch="${version%:*}:"; version="${version#*:}";; esac; if [ -n "$version" ]; then major="${version%.*}"; minor="${version#*.}"; printf '%%s%%s.%%s' "$epoch" "$major" "$((minor + 1))"; fi)
+%global krema_qt_version %(rpm -q --whatprovides 'cmake(Qt6Gui)' --qf '%%|EPOCH?{%%{EPOCH}:}:{}|%%{VERSION}\n' 2>/dev/null | head -n1 | sed -E 's/[-+~].*$//' | sed -E 's/^([0-9]+:)?([0-9]+\.[0-9]+).*/\1\2/')
+%global krema_qt_next_minor %(version="%{krema_qt_version}"; epoch=""; case "$version" in *:*) epoch="${version%:*}:"; version="${version#*:}";; esac; if [ -n "$version" ]; then major="${version%.*}"; minor="${version#*.}"; printf '%%s%%s.%%s' "$epoch" "$major" "$((minor + 1))"; fi)
 
 BuildRequires:  cmake >= 3.22
 %if 0%{?suse_version}
@@ -73,14 +79,28 @@ Requires:       kf6-kirigami%{?_isa}
 Requires:       kirigami-addons6%{?_isa}
 Requires:       kpipewire6-imports%{?_isa}
 Requires:       qt6-quick3d-imports%{?_isa}
-Requires:       plasma6-workspace%{?_isa}
+%if "%{krema_plasma_version}" != ""
+Requires:       plasma6-workspace%{?_isa} >= %{krema_plasma_version}
+Requires:       plasma6-workspace%{?_isa} < %{krema_plasma_next_minor}
+%endif
+%if "%{krema_qt_version}" != ""
+Requires:       libQt6Gui6%{?_isa} >= %{krema_qt_version}
+Requires:       libQt6Gui6%{?_isa} < %{krema_qt_next_minor}
+%endif
 Requires:       layer-shell-qt6%{?_isa}
 %else
 Requires:       kf6-kirigami%{?_isa}
 Requires:       kf6-kirigami-addons%{?_isa}
 Requires:       kpipewire%{?_isa}
 Requires:       qt6-qtquick3d%{?_isa}
-Requires:       plasma-workspace%{?_isa}
+%if "%{krema_plasma_version}" != ""
+Requires:       plasma-workspace%{?_isa} >= %{krema_plasma_version}
+Requires:       plasma-workspace%{?_isa} < %{krema_plasma_next_minor}
+%endif
+%if "%{krema_qt_version}" != ""
+Requires:       qt6-qtbase%{?_isa} >= %{krema_qt_version}
+Requires:       qt6-qtbase%{?_isa} < %{krema_qt_next_minor}
+%endif
 Requires:       layer-shell-qt%{?_isa}
 %endif
 

@@ -9,6 +9,10 @@ Summary:        A lightweight dock for KDE Plasma 6
 License:        GPL-3.0-or-later AND MIT-CMU
 URL:            https://krema.bhyoo.com/
 Source0:        https://github.com/isac322/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
+# Qt private/QPA APIs are pinned to the build-root minor release because
+# their ABI is not stable across minors.
+%global krema_qt_version %(rpm -q --whatprovides 'cmake(Qt6Gui)' --qf '%%|EPOCH?{%%{EPOCH}:}:{}|%%{VERSION} ' 2>/dev/null | xargs -n1 | grep -E '^([0-9]+:)?[0-9]+[.][0-9]+' | head -n1 | sed -E 's/[-+~].*$//' | cut -d. -f1,2)
+%global krema_qt_next_minor %(v='%{krema_qt_version}'; if [ -n "$v" ]; then e=; r="$v"; if [ "${v#*:}" != "$v" ]; then e="${v%:*}:"; r="${v#*:}"; fi; printf '%%s%%s.%%s' "$e" "${r%.*}" "$((${r#*.} + 1))"; fi)
 
 BuildRequires:  cmake >= 3.22
 %if 0%{?suse_version}
@@ -55,13 +59,9 @@ BuildRequires:  cmake(KF6JobWidgets) >= 6.0.0
 BuildRequires:  cmake(KF6Kirigami) >= 6.0.0
 BuildRequires:  cmake(KF6KirigamiAddons)
 
-# Transitive dependencies (required by LibTaskManager/LibNotificationManager)
-BuildRequires:  cmake(KF6ItemModels) >= 6.0.0
 
 # Plasma and system
 BuildRequires:  cmake(LayerShellQt) >= 6.0.0
-BuildRequires:  cmake(LibTaskManager)
-BuildRequires:  cmake(LibNotificationManager)
 BuildRequires:  cmake(KPipeWire)
 BuildRequires:  pkgconfig(wayland-client) >= 1.22
 # Owns the hicolor icon theme directories used by the installed app icons
@@ -74,6 +74,10 @@ Requires:       kirigami-addons6%{?_isa}
 Requires:       kpipewire6-imports%{?_isa}
 Requires:       qt6-quick3d-imports%{?_isa}
 Requires:       plasma6-workspace%{?_isa}
+%if "%{krema_qt_version}" != ""
+Requires:       libQt6Gui6%{?_isa} >= %{krema_qt_version}
+Requires:       libQt6Gui6%{?_isa} < %{krema_qt_next_minor}
+%endif
 Requires:       layer-shell-qt6%{?_isa}
 %else
 Requires:       kf6-kirigami%{?_isa}
@@ -81,6 +85,10 @@ Requires:       kf6-kirigami-addons%{?_isa}
 Requires:       kpipewire%{?_isa}
 Requires:       qt6-qtquick3d%{?_isa}
 Requires:       plasma-workspace%{?_isa}
+%if "%{krema_qt_version}" != ""
+Requires:       qt6-qtbase%{?_isa} >= %{krema_qt_version}
+Requires:       qt6-qtbase%{?_isa} < %{krema_qt_next_minor}
+%endif
 Requires:       layer-shell-qt%{?_isa}
 %endif
 

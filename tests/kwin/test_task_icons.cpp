@@ -11,8 +11,6 @@
 #include "models/dockmodel.h"
 #include "models/taskiconprovider.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -35,7 +33,6 @@
 namespace
 {
 
-using TaskManager::AbstractTasksModel;
 
 constexpr int kTimeoutMs = 15000;
 const QString kHealthyAppId = QStringLiteral("krema-icon-healthy");
@@ -200,7 +197,7 @@ TEST_CASE("TaskManager named icon reaches DockModel and provider", "[task-icons]
     const QModelIndex index = model().tasksModel()->index(row, 0);
     REQUIRE(index.isValid());
 
-    INFO("TaskManager AppId: " << index.data(AbstractTasksModel::AppId).toString().toStdString());
+    INFO("TaskManager AppId: " << index.data(krema::tasks::roles().AppId).toString().toStdString());
     REQUIRE(appIdMatches(model().appId(row), kHealthyAppId));
     CHECK(model().iconName(row) == kHealthyIcon);
 

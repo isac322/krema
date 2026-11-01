@@ -254,6 +254,8 @@ just package      # Arch: build and install a package from this checkout
 
 `just test` also runs the GUI integration tests on a private, headless `kwin_wayland --virtual` compositor when `kwin_wayland` and `dbus-run-session` are installed; your session and settings are not touched.
 
+After a system upgrade (Qt, KDE Frameworks, Plasma, the compiler, Catch2, ...), the next build recompiles everything once; ccache keeps that fast. A Krema binary built before a Qt minor upgrade can crash against the new Qt private/QPA libraries, so rebuild it. Plasma upgrades do not require a Krema rebuild: Krema loads Plasma's task manager and notification settings through their QML modules. Installed Krema packages require only the Qt minor release they were built against.
+
 </details>
 
 ## Roadmap

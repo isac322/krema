@@ -24,8 +24,6 @@
 #include "shell/outputordermonitor.h"
 #include "shell/previewcontroller.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
 
 #include <KAboutData>
 #include <LayerShellQt/Window>
@@ -57,7 +55,6 @@ static void initResources()
 namespace
 {
 
-using TaskManager::AbstractTasksModel;
 
 constexpr int kTimeoutMs = 15000;
 const QString kHoveredTitle = QStringLiteral("krema-preview-hovered");
@@ -161,7 +158,7 @@ int windowRow(const QString &title)
     auto *tasks = app().model->tasksModel();
     for (int row = 0; row < tasks->rowCount(); ++row) {
         const QModelIndex idx = tasks->index(row, 0);
-        if (idx.data(AbstractTasksModel::IsWindow).toBool() && idx.data(Qt::DisplayRole).toString() == title) {
+        if (idx.data(krema::tasks::roles().IsWindow).toBool() && idx.data(Qt::DisplayRole).toString() == title) {
             return row;
         }
     }

@@ -257,7 +257,8 @@ void runEdge(Edge edge)
 
         // hoveredIndex once it equals i, or its value after a short wait.
         auto hoveredAfterWait = [&] {
-            QTest::qWaitFor(
+            // Timing out is fine: the caller checks the returned value.
+            (void)QTest::qWaitFor(
                 [&] {
                     return root->property("hoveredIndex").toInt() == i;
                 },
@@ -292,7 +293,7 @@ void runEdge(Edge edge)
         // Clicking there activates exactly this launcher.
         launching.clear();
         QTest::mouseClick(view, Qt::LeftButton, {}, ext);
-        QTest::qWaitFor(
+        (void)QTest::qWaitFor(
             [&] {
                 return !launching.isEmpty();
             },
@@ -317,7 +318,7 @@ void runEdge(Edge edge)
             vertical ? QPoint(static_cast<int>(depthPos), static_cast<int>(alongPos)) : QPoint(static_cast<int>(alongPos), static_cast<int>(depthPos));
         const int neighborIndex = next ? i + 1 : -1;
         QTest::mouseMove(view, along);
-        QTest::qWaitFor(
+        (void)QTest::qWaitFor(
             [&] {
                 return root->property("hoveredIndex").toInt() != i;
             },

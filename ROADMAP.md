@@ -3,7 +3,7 @@
 > A lightweight dock for KDE Plasma 6. Spiritual successor to Latte Dock.
 >
 > **Core principle:** Not a generic Qt/Wayland app — a **KDE Plasma-native** application.
-> Actively leverages KDE Frameworks, LibTaskManager, Kirigami, and other official KDE/Plasma libraries.
+> Actively leverages KDE Frameworks, Plasma's QML modules, Kirigami, and other official KDE/Plasma libraries.
 
 ---
 
@@ -13,10 +13,10 @@
 - [x] Wayland platform backend (LayerShellQt — wlr-layer-shell)
 - [x] DockPlatform abstraction layer (Plasma Wayland only)
 - [x] BackgroundStyle abstraction (PanelInheritStyle — inherits Plasma panel style)
-- [x] DockModel (LibTaskManager wrapper — based on TasksModel)
+- [x] DockModel (QML-backed TaskManager model facade)
 - [x] QML dock UI (parabolic zoom, indicator dots, tooltips)
 - [x] Multi-distro packaging setup (Arch, RPM, DEB, OBS)
-- [x] TasksModel C++ initialization (classBegin/componentComplete)
+- [x] TasksModel QML component initialization
 - [x] TaskIconProvider (QIcon::fromTheme → QML Image)
 - [x] Dock visibility modes — 3 types (AlwaysVisible, AutoHide, DodgeWindows, with a DodgeActiveOnly option)
 - [x] QML slide/fade animations (hide/show)
@@ -202,7 +202,7 @@ Extensible widget architecture.
 | Desktop Environment | **KDE Plasma 6** (Wayland only) |
 | UI Framework | Qt 6.8+ / Qt Quick |
 | KDE Frameworks | KDE Frameworks 6.0+ (Config, WindowSystem, I18n, CoreAddons, DBusAddons, GlobalAccel, IconThemes) |
-| KDE Plasma Libraries | LibTaskManager, LibNotificationManager, LayerShellQt, KPipeWire |
+| KDE Plasma Integration | Task Manager and Notification Manager QML modules, LayerShellQt, KPipeWire |
 | Additional KDE Libraries | Kirigami, Kirigami Addons, KColorScheme, KService, KIO, KJobWidgets, KCrash, KXmlGui |
 | Rendering | QRhi (automatic Vulkan/OpenGL selection) |
 | Build System | CMake + ECM + Ninja |

@@ -79,9 +79,8 @@ QList<KServiceAction> desktopActions(const QUrl &launcherUrl)
 
 void launchDesktopAction(const KServiceAction &action)
 {
-    // TaskManager::runApp's pattern (TasksModel::requestNewInstance): KIO
-    // requests the Wayland XDG activation token itself and the notification
-    // delegate reports launch errors.
+    // KIO requests the Wayland XDG activation token itself and the
+    // notification delegate reports launch errors.
     auto *job = new KIO::ApplicationLauncherJob(action);
     job->setUiDelegate(new KNotificationJobUiDelegate(KJobUiDelegate::AutoErrorHandlingEnabled));
     job->start();

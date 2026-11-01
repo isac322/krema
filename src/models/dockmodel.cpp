@@ -6,19 +6,18 @@
 #include "shell/outputordermonitor.h"
 #include "taskiconprovider.h"
 
-#include <taskmanager/abstracttasksmodel.h>
-#include <taskmanager/tasksmodel.h>
-
+#include <QAbstractItemModel>
 #include <algorithm>
+
 #include <QCryptographicHash>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
-#include <QRegularExpression>
 #include <QRect>
-#include <QVariant>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QSet>
+#include <QVariant>
 
 #include <utility>
 
@@ -31,18 +30,18 @@ namespace
 {
 // launcherList() serializes activity-scoped launchers as "[ids]\n<url>", so a
 // string lookup misses them; launcherPosition() matches the URL itself.
-bool isPinnedTask(const TaskManager::TasksModel &model, const QModelIndex &index)
+bool isPinnedTask(const tasks::TasksModel &model, const QModelIndex &index)
 {
     if (!index.isValid()) {
         return false;
     }
-    const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    const QUrl url = index.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
     return url.isValid() && model.launcherPosition(url) != -1;
 }
 
 QStringList windowIdStrings(const QModelIndex &index)
 {
-    const QVariantList windowIds = index.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+    const QVariantList windowIds = index.data(tasks::roles().WinIdList).toList();
     QStringList ids;
     ids.reserve(windowIds.size());
     for (const QVariant &windowId : windowIds) {
@@ -56,13 +55,12 @@ QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &
     // Window IDs are the stable task identity across row movement. Grouped
     // tasks may expose the same IDs in a different order, so canonicalize
     // them before hashing. Launchers use their URL; AppId is only the final
-    // TaskManager/KService identity fallback and is never exposed in the key.
+    // task/KService identity fallback and is never exposed in the key.
     QStringList identityParts;
-    const QVariantList windowIds = index.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+    const QVariantList windowIds = index.data(tasks::roles().WinIdList).toList();
     identityParts.reserve(windowIds.size());
     for (const QVariant &windowId : windowIds) {
-        identityParts.append(QString::fromLatin1(windowId.typeName()) + QLatin1Char('=')
-            + windowId.toString());
+        identityParts.append(QString::fromLatin1(windowId.typeName()) + QLatin1Char('=') + windowId.toString());
     }
     std::sort(identityParts.begin(), identityParts.end());
 
@@ -70,7 +68,7 @@ QString rawIconKey(const QModelIndex &index, const QString &appId, const QIcon &
     if (!identityParts.isEmpty()) {
         identity = identityParts.join(QLatin1Char('\x1f')).toUtf8();
     } else {
-        const QUrl launcherUrl = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        const QUrl launcherUrl = index.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
         identity = launcherUrl.isValid() ? launcherUrl.toString().toUtf8() : appId.toUtf8();
     }
 
@@ -103,9 +101,8 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
     if (const auto match = telegramInstanceSuffix.match(appId); match.hasMatch()) {
         appId = match.captured(1);
     }
-    if (appId == QLatin1String("discord") || appId == QLatin1String("com.discordapp.discord")
-        || appId == QLatin1String("com.discord.app") || appId == QLatin1String("vesktop")
-        || appId == QLatin1String("dev.vencord.vesktop") || appId == QLatin1String("dev.vencord")) {
+    if (appId == QLatin1String("discord") || appId == QLatin1String("com.discordapp.discord") || appId == QLatin1String("com.discord.app")
+        || appId == QLatin1String("vesktop") || appId == QLatin1String("dev.vencord.vesktop") || appId == QLatin1String("dev.vencord")) {
         return ChatTitleAdapter::Discord;
     }
     if (appId == QLatin1String("webcord") || appId == QLatin1String("io.github.spacingbat3.webcord")) {
@@ -115,8 +112,8 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
         || appId == QLatin1String("telegram-desktop") || appId == QLatin1String("telegramdesktop")) {
         return ChatTitleAdapter::Telegram;
     }
-    if (appId == QLatin1String("io.element.element") || appId == QLatin1String("im.riot.riot")
-        || appId == QLatin1String("element") || appId == QLatin1String("element-desktop")) {
+    if (appId == QLatin1String("io.element.element") || appId == QLatin1String("im.riot.riot") || appId == QLatin1String("element")
+        || appId == QLatin1String("element-desktop")) {
         return ChatTitleAdapter::Element;
     }
     return ChatTitleAdapter::None;
@@ -124,10 +121,8 @@ ChatTitleAdapter chatTitleAdapterForAppId(const QString &rawAppId)
 
 int telegramTitleCount(const QStringList &titles)
 {
-    static const QRegularExpression telegramPrefix(
-        QStringLiteral("^Telegram\\s*\\(([1-9][0-9]*)\\)\\s*$"));
-    static const QRegularExpression telegramSuffix(
-        QStringLiteral("[–-]\\s*\\(([1-9][0-9]*)\\)\\s*$"));
+    static const QRegularExpression telegramPrefix(QStringLiteral("^Telegram\\s*\\(([1-9][0-9]*)\\)\\s*$"));
+    static const QRegularExpression telegramSuffix(QStringLiteral("[–-]\\s*\\(([1-9][0-9]*)\\)\\s*$"));
 
     int count = 0;
     for (const QString &title : titles) {
@@ -153,7 +148,8 @@ ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapte
     }
 
     static const QRegularExpression discordMention(
-        QStringLiteral("^\\s*(?:•\\s*)?\\(([1-9][0-9]*)\\)\\s+(?:(?:Discord|Vesktop)(?:\\b|\\s*\\||.*-\\s*(?:Discord|Vesktop)\\s*$)|\\S.*?\\s+[|-]\\s*(?:Discord|Vesktop)\\s*$)"));
+        QStringLiteral("^\\s*(?:•\\s*)?\\(([1-9][0-9]*)\\)\\s+(?:(?:Discord|Vesktop)(?:\\b|\\s*\\||.*-\\s*(?:Discord|Vesktop)\\s*$)|\\S.*?\\s+[|-]\\s*(?:"
+                       "Discord|Vesktop)\\s*$)"));
     static const QRegularExpression discordUnread(
         QStringLiteral("^\\s*•\\s+(?:(?:Discord|Vesktop)(?:\\b|\\s*\\||.*-\\s*(?:Discord|Vesktop)\\s*$)|\\S.*?\\s+[|-]\\s*(?:Discord|Vesktop)\\s*$)"));
     static const QRegularExpression webCordMention(QStringLiteral("^\\s*\\[([1-9][0-9]*)\\]\\s+WebCord\\b"));
@@ -211,81 +207,71 @@ ChatTitleState chatTitleState(const QStringList &titles, ChatTitleAdapter adapte
 
 DockModel::DockModel(QObject *parent)
     : QObject(parent)
-    , m_tasksModel(std::make_unique<TaskManager::TasksModel>(this))
-    , m_virtualDesktopInfo(std::make_shared<TaskManager::VirtualDesktopInfo>(this))
-    , m_activityInfo(std::make_shared<TaskManager::ActivityInfo>(this))
 {
-    // TasksModel implements QQmlParserStatus. When created from C++ (not QML),
-    // classBegin/componentComplete are not called by the QML engine.
-    // We must call them manually to trigger internal model initialization.
-    //
-    // CRITICAL: Mirror QML's initialization order:
-    //   1. classBegin()
-    //   2. All properties set (including virtualDesktop, activity, screenGeometry)
-    //   3. componentComplete() — activates internal source models
-    //
-    // Setting virtualDesktop/activity/screenGeometry AFTER componentComplete()
-    // causes the Wayland window backend to miss running windows.
-    m_tasksModel->classBegin();
-
-    // Configure for dock-style behavior:
-    // - Group windows by application (pinned + running merged)
-    // - Manual sort for drag reordering
-    // - Hide activated launchers (avoid duplicates: pinned + running)
-    m_tasksModel->setGroupMode(TaskManager::TasksModel::GroupApplications);
-    m_tasksModel->setSortMode(TaskManager::TasksModel::SortManual);
-    m_tasksModel->setHideActivatedLaunchers(true);
-    m_tasksModel->setSeparateLaunchers(false);
-    m_tasksModel->setLaunchInPlace(true);
-    m_tasksModel->setGroupInline(false);
-    m_tasksModel->setTaskReorderingEnabled(true);
-
-    // VirtualDesktopInfo and ActivityInfo are required for the Wayland
-    // window backend to properly detect running windows on KDE Plasma.
-    // These MUST be set BEFORE componentComplete() — mirrors QML property binding order.
-    m_tasksModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
-    m_tasksModel->setActivity(m_activityInfo->currentActivity());
-
-    // Screen geometry — Plasma Task Manager always sets this. Use the Plasma
-    // primary (kde_output_order_v1), not the Qt primary which is just the
-    // first wl_output and never tracks KWin's priority changes.
-    if (auto *screen = krema::OutputOrderMonitor::instance()->primaryScreen()) {
-        m_tasksModel->setScreenGeometry(screen->geometry());
+    auto &backend = tasks::Backend::instance();
+    if (!backend.ensureLoaded()) {
+        qCWarning(lcModel) << "Could not load the Plasma task backend:" << backend.errorString();
+        return;
     }
+
+    m_virtualDesktopInfo = backend.createVirtualDesktopInfo(this);
+    m_activityInfo = backend.createActivityInfo(this);
+    if (!m_virtualDesktopInfo || !m_activityInfo) {
+        qCWarning(lcModel) << "Could not create Plasma virtual desktop/activity information";
+        return;
+    }
+
+    QVariantMap initialProperties{
+        {QStringLiteral("hideActivatedLaunchers"), true},
+        {QStringLiteral("separateLaunchers"), false},
+        {QStringLiteral("launchInPlace"), true},
+        {QStringLiteral("groupInline"), false},
+        {QStringLiteral("taskReorderingEnabled"), true},
+        {QStringLiteral("virtualDesktop"), m_virtualDesktopInfo->property("currentDesktop")},
+        {QStringLiteral("activity"), m_activityInfo->property("currentActivity")},
+        {QStringLiteral("filterByVirtualDesktop"), false},
+        {QStringLiteral("filterByScreen"), false},
+        {QStringLiteral("filterByActivity"), false},
+        {QStringLiteral("filterHidden"), false},
+    };
+    if (auto *screen = krema::OutputOrderMonitor::instance()->primaryScreen()) {
+        initialProperties.insert(QStringLiteral("screenGeometry"), screen->geometry());
+    }
+
+    m_tasksModel = backend.createTasksModel(
+        "groupMode: TasksModel.GroupApplications\n"
+        "sortMode: TasksModel.SortManual\n",
+        initialProperties,
+        this);
+    if (!m_tasksModel) {
+        qCWarning(lcModel) << "Could not create the Plasma task model";
+        return;
+    }
+
+    // Plasma's primary output can change independently of Qt's primary screen.
     connect(krema::OutputOrderMonitor::instance(), &krema::OutputOrderMonitor::primaryOutputChanged, this, [this] {
         if (auto *screen = krema::OutputOrderMonitor::instance()->primaryScreen()) {
-            m_tasksModel->setScreenGeometry(screen->geometry());
+            tasks().setProperty("screenGeometry", screen->geometry());
         }
     });
 
-    // Show all windows regardless of desktop/screen/activity.
-    // Filtering can be enabled later (M8: multi-monitor + virtual desktop).
-    m_tasksModel->setFilterByVirtualDesktop(false);
-    m_tasksModel->setFilterByScreen(false);
-    m_tasksModel->setFilterByActivity(false);
-    m_tasksModel->setFilterHidden(false);
-
-    // NOW activate internal source models (launcher model, window model, etc.)
-    // All properties are set, so the backends will correctly discover running windows.
-    m_tasksModel->componentComplete();
-
     // Track desktop/activity changes so the model stays up to date.
-    connect(m_virtualDesktopInfo.get(), &TaskManager::VirtualDesktopInfo::currentDesktopChanged, this, [this]() {
-        m_tasksModel->setVirtualDesktop(m_virtualDesktopInfo->currentDesktop());
+    tasks::connectNotify(m_virtualDesktopInfo, "currentDesktop", this, [this]() {
+        tasks().setProperty("virtualDesktop", m_virtualDesktopInfo->property("currentDesktop"));
         Q_EMIT currentDesktopChanged();
     });
-    connect(m_activityInfo.get(), &TaskManager::ActivityInfo::currentActivityChanged, this, [this]() {
-        m_tasksModel->setActivity(m_activityInfo->currentActivity());
+    tasks::connectNotify(m_activityInfo, "currentActivity", this, [this]() {
+        tasks().setProperty("activity", m_activityInfo->property("currentActivity"));
     });
 
     const auto bumpChatStateRevision = [this]() {
         ++m_chatStateRevision;
         Q_EMIT chatStateRevisionChanged();
     };
-    connect(m_tasksModel.get(), &QAbstractItemModel::dataChanged, this, bumpChatStateRevision);
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, bumpChatStateRevision);
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, bumpChatStateRevision);
-    connect(m_tasksModel.get(), &QAbstractItemModel::modelReset, this, bumpChatStateRevision);
+    connect(m_tasksModel, &QAbstractItemModel::dataChanged, this, bumpChatStateRevision);
+    connect(m_tasksModel, &QAbstractItemModel::rowsInserted, this, bumpChatStateRevision);
+    connect(m_tasksModel, &QAbstractItemModel::rowsRemoved, this, bumpChatStateRevision);
+    connect(m_tasksModel, &QAbstractItemModel::modelReset, this, bumpChatStateRevision);
 
     // Launch in place: a task started for a visible pinned launcher replaces
     // that launcher at its position. libtaskmanager stopped doing this for
@@ -294,70 +280,77 @@ DockModel::DockModel(QObject *parent)
     // the task is appended at the end instead. The deferred pass below
     // compares the model with the order it last settled and moves such a
     // task back into its launcher's slot.
-    connect(m_tasksModel.get(), &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
+    connect(m_tasksModel, &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
         m_settledRows.clear();
     });
 
     // Defer sorting until the source model has finished its current change.
     // Our own moves emit layout signals synchronously; ignore those while
     // reconciling so they cannot recursively queue another sorting pass.
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, &DockModel::scheduleTaskPartition);
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, &DockModel::scheduleTaskPartition);
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsMoved, this, &DockModel::scheduleTaskPartition);
-    connect(m_tasksModel.get(), &QAbstractItemModel::modelReset, this, &DockModel::scheduleTaskPartition);
-    connect(m_tasksModel.get(), &QAbstractItemModel::layoutChanged, this, &DockModel::scheduleTaskPartition);
-    connect(m_tasksModel.get(), &TaskManager::TasksModel::launcherListChanged, this, &DockModel::scheduleTaskPartition);
-    connect(m_tasksModel.get(), &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
-        if (roles.isEmpty() || roles.contains(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon)
-            || roles.contains(TaskManager::AbstractTasksModel::LauncherUrl) || roles.contains(TaskManager::AbstractTasksModel::HasLauncher)
-            || roles.contains(TaskManager::AbstractTasksModel::IsGroupParent)) {
+    connect(m_tasksModel, &QAbstractItemModel::rowsInserted, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel, &QAbstractItemModel::rowsRemoved, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel, &QAbstractItemModel::rowsMoved, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel, &QAbstractItemModel::modelReset, this, &DockModel::scheduleTaskPartition);
+    connect(m_tasksModel, &QAbstractItemModel::layoutChanged, this, &DockModel::scheduleTaskPartition);
+    tasks::connectSignal(m_tasksModel, "launcherListChanged", this, [this]() {
+        scheduleTaskPartition();
+    });
+    connect(m_tasksModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex &, const QModelIndex &, const QList<int> &changedRoles) {
+        if (changedRoles.isEmpty() || changedRoles.contains(tasks::roles().LauncherUrlWithoutIcon) || changedRoles.contains(tasks::roles().LauncherUrl)
+            || changedRoles.contains(tasks::roles().HasLauncher) || changedRoles.contains(tasks::roles().IsGroupParent)) {
             scheduleTaskPartition();
         }
     });
     scheduleTaskPartition();
 
     // Debug logging for model row changes
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsInserted, this, [this]() {
-        qCDebug(lcModel) << "Model rows after insert:" << m_tasksModel->rowCount();
+    connect(m_tasksModel, &QAbstractItemModel::rowsInserted, this, [this]() {
+        qCDebug(lcModel) << "Model rows after insert:" << tasks().rowCount();
     });
-    connect(m_tasksModel.get(), &QAbstractItemModel::rowsRemoved, this, [this]() {
-        qCDebug(lcModel) << "Model rows after remove:" << m_tasksModel->rowCount();
+    connect(m_tasksModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
+        qCDebug(lcModel) << "Model rows after remove:" << tasks().rowCount();
     });
 }
 
 DockModel::~DockModel() = default;
 
-TaskManager::TasksModel *DockModel::tasksModel() const
+QAbstractItemModel *DockModel::tasksModel() const
 {
-    return m_tasksModel.get();
+    return m_tasksModel;
 }
 
-TaskManager::VirtualDesktopInfo *DockModel::virtualDesktopInfo() const
+tasks::TasksModel DockModel::tasks() const
 {
-    return m_virtualDesktopInfo.get();
+    return tasks::TasksModel(m_tasksModel);
 }
 
-TaskManager::ActivityInfo *DockModel::activityInfo() const
+QObject *DockModel::virtualDesktopInfo() const
 {
-    return m_activityInfo.get();
+    return m_virtualDesktopInfo;
+}
+
+QObject *DockModel::activityInfo() const
+{
+    return m_activityInfo;
 }
 
 QStringList DockModel::pinnedLaunchers() const
 {
-    return m_tasksModel->launcherList();
+    return tasks().launcherList();
 }
 
 void DockModel::setPinnedLaunchers(const QStringList &launchers)
 {
-    const QStringList previous = m_tasksModel->launcherList();
-    m_tasksModel->setLauncherList(launchers);
-    if (m_tasksModel->launcherList() != previous) {
+    const auto taskModel = tasks();
+    const QStringList previous = taskModel.launcherList();
+    taskModel.setLauncherList(launchers);
+    if (taskModel.launcherList() != previous) {
         // A new list replaces pinned-order intent, not unpinned task anchors.
         snapshotSettledRows();
         QList<int> positions;
         positions.reserve(m_settledRows.size());
         for (const SettledRow &settled : std::as_const(m_settledRows)) {
-            positions.append(settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1);
+            positions.append(settled.launcherUrl.isValid() ? taskModel.launcherPosition(settled.launcherUrl) : -1);
         }
         // Stable insertion across pinned slots leaves all other rows in place.
         for (qsizetype row = 1; row < m_settledRows.size(); ++row) {
@@ -403,10 +396,11 @@ int DockModel::pinnedTaskCount() const
 
 bool DockModel::moveTask(int fromIndex, int toIndex)
 {
-    if (!m_tasksModel->move(fromIndex, toIndex)) {
+    const auto taskModel = tasks();
+    if (!taskModel.move(fromIndex, toIndex)) {
         return false;
     }
-    m_tasksModel->syncLaunchers();
+    taskModel.syncLaunchers();
     // The user's order is the new settled order: a launcher-slot repair still
     // pending from before the move must not undo it.
     snapshotSettledRows();
@@ -432,19 +426,20 @@ void DockModel::reconcileTaskPartition()
 {
     m_reconcilingPartition = true;
     bool moved = placeStartedTasksInLauncherSlots();
+    const auto taskModel = tasks();
 
     int pinnedCount = 0;
     if (m_separateLaunchers) {
         bool moveFailed = false;
-        const int count = m_tasksModel->rowCount();
+        const int count = taskModel.rowCount();
         // Insertion into the next pinned slot preserves both zones' relative
         // order. Classify each row once; already partitioned rows need no move.
         for (int row = 0; row < count; ++row) {
-            if (!isPinnedTask(*m_tasksModel, m_tasksModel->index(row, 0))) {
+            if (!isPinnedTask(taskModel, taskModel.index(row, 0))) {
                 continue;
             }
             if (row != pinnedCount && !moveFailed) {
-                if (m_tasksModel->move(row, pinnedCount)) {
+                if (taskModel.move(row, pinnedCount)) {
                     moved = true;
                 } else {
                     qCWarning(lcModel) << "Could not move pinned task" << row << "to" << pinnedCount;
@@ -455,7 +450,7 @@ void DockModel::reconcileTaskPartition()
         }
     }
     if (moved) {
-        m_tasksModel->syncLaunchers();
+        taskModel.syncLaunchers();
     }
     snapshotSettledRows();
     m_reconcilingPartition = false;
@@ -467,11 +462,12 @@ void DockModel::reconcileTaskPartition()
 
 bool DockModel::placeStartedTasksInLauncherSlots()
 {
+    const auto taskModel = tasks();
     // Resolve every launcher URL against the launcher list once per pass.
     QList<int> settledPositions;
     settledPositions.reserve(m_settledRows.size());
     for (const SettledRow &settled : std::as_const(m_settledRows)) {
-        const int position = settled.launcherUrl.isValid() ? m_tasksModel->launcherPosition(settled.launcherUrl) : -1;
+        const int position = settled.launcherUrl.isValid() ? taskModel.launcherPosition(settled.launcherUrl) : -1;
         settledPositions.append(position != -1 && settledPositions.contains(position) ? -1 : position);
     }
 
@@ -488,17 +484,17 @@ bool DockModel::placeStartedTasksInLauncherSlots()
         return false;
     }
 
-    const int count = m_tasksModel->rowCount();
+    const int count = taskModel.rowCount();
     QList<CurrentRow> rows;
     rows.reserve(count);
     for (int row = 0; row < count; ++row) {
-        const QModelIndex index = m_tasksModel->index(row, 0);
-        const QUrl url = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        const QModelIndex index = taskModel.index(row, 0);
+        const QUrl url = index.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
         CurrentRow current;
-        current.launcherPosition = url.isValid() ? m_tasksModel->launcherPosition(url) : -1;
-        current.isLauncher = index.data(TaskManager::AbstractTasksModel::IsLauncher).toBool();
+        current.launcherPosition = url.isValid() ? taskModel.launcherPosition(url) : -1;
+        current.isLauncher = index.data(tasks::roles().IsLauncher).toBool();
         current.windowIds = windowIdStrings(index);
-        current.appId = index.data(TaskManager::AbstractTasksModel::AppId).toString();
+        current.appId = index.data(tasks::roles().AppId).toString();
         rows.append(current);
     }
 
@@ -533,7 +529,7 @@ bool DockModel::placeStartedTasksInLauncherSlots()
         if (target == taskRow) {
             continue;
         }
-        if (!m_tasksModel->move(taskRow, target)) {
+        if (!taskModel.move(taskRow, target)) {
             qCWarning(lcModel) << "Could not move started task" << taskRow << "into its launcher slot" << target;
             continue;
         }
@@ -574,17 +570,18 @@ int DockModel::findRow(const QList<CurrentRow> &rows, const SettledRow &settled,
 
 void DockModel::snapshotSettledRows()
 {
-    const int count = m_tasksModel->rowCount();
+    const auto taskModel = tasks();
+    const int count = taskModel.rowCount();
     m_settledRows.clear();
     m_settledRows.reserve(count);
     for (int row = 0; row < count; ++row) {
-        const QModelIndex index = m_tasksModel->index(row, 0);
+        const QModelIndex index = taskModel.index(row, 0);
         SettledRow settled;
-        if (isPinnedTask(*m_tasksModel, index)) {
-            settled.launcherUrl = index.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+        if (isPinnedTask(taskModel, index)) {
+            settled.launcherUrl = index.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
         } else {
             settled.windowIds = windowIdStrings(index);
-            settled.appId = index.data(TaskManager::AbstractTasksModel::AppId).toString();
+            settled.appId = index.data(tasks::roles().AppId).toString();
         }
         m_settledRows.append(settled);
     }
@@ -592,7 +589,8 @@ void DockModel::snapshotSettledRows()
 
 QString DockModel::iconName(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const auto taskModel = tasks();
+    const QModelIndex idx = taskModel.index(index, 0);
     if (!idx.isValid()) {
         return {};
     }
@@ -609,9 +607,9 @@ QString DockModel::iconName(int index) const
         return name;
     }
 
-    // KWin/LibTaskManager can provide these named placeholders when a window
-    // has no resolved decoration. Prefer a resolvable TaskManager/KService
-    // AppId, but preserve the usable placeholder when no fallback exists.
+    // KWin can provide these named placeholders when a window has no resolved
+    // decoration. Prefer a resolvable service identity, but preserve the
+    // usable placeholder when no fallback exists.
     static const QSet<QString> genericPlaceholderIconNames{QStringLiteral("wayland"), QStringLiteral("unknown")};
     if (genericPlaceholderIconNames.contains(name)) {
         const QString app = appId(index);
@@ -621,8 +619,8 @@ QString DockModel::iconName(int index) const
         return name;
     }
 
-    // AppId is the TaskManager/KService desktop-entry or executable identity,
-    // not a promise that the raw Wayland app_id is a theme icon name.
+    // AppId is the service desktop-entry or executable identity, not a
+    // promise that the raw Wayland app_id is a theme icon name.
     if (name.isEmpty() || QIcon::fromTheme(name).isNull()) {
         const QString app = appId(index);
         if (!app.isEmpty() && !QIcon::fromTheme(app).isNull()) {
@@ -635,11 +633,11 @@ QString DockModel::iconName(int index) const
 
 QUrl DockModel::launcherUrl(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const QModelIndex idx = tasks().index(index, 0);
     if (!idx.isValid()) {
         return {};
     }
-    return idx.data(TaskManager::AbstractTasksModel::LauncherUrlWithoutIcon).toUrl();
+    return idx.data(tasks::roles().LauncherUrlWithoutIcon).toUrl();
 }
 
 bool DockModel::isDesktopFile(const QUrl &url) const
@@ -655,30 +653,32 @@ bool DockModel::isDesktopFile(const QUrl &url) const
 
 bool DockModel::isPinned(int index) const
 {
-    return isPinnedTask(*m_tasksModel, m_tasksModel->index(index, 0));
+    const auto taskModel = tasks();
+    return isPinnedTask(taskModel, taskModel.index(index, 0));
 }
 
 QVariantList DockModel::windowIds(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const QModelIndex idx = tasks().index(index, 0);
     if (!idx.isValid()) {
         return {};
     }
-    return idx.data(TaskManager::AbstractTasksModel::WinIdList).toList();
+    return idx.data(tasks::roles().WinIdList).toList();
 }
 
 int DockModel::childCount(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const auto taskModel = tasks();
+    const QModelIndex idx = taskModel.index(index, 0);
     if (!idx.isValid()) {
         return 0;
     }
-    return m_tasksModel->rowCount(idx);
+    return taskModel.rowCount(idx);
 }
 
 QModelIndex DockModel::taskModelIndex(int index) const
 {
-    return m_tasksModel->index(index, 0);
+    return tasks().index(index, 0);
 }
 
 void DockModel::publishDelegateGeometry(int index, QObject *delegate)
@@ -687,23 +687,22 @@ void DockModel::publishDelegateGeometry(int index, QObject *delegate)
         return;
     }
 
-    const QModelIndex idx = m_tasksModel->index(index, 0);
-    if (!idx.isValid()
-        || (!idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()
-            && !idx.data(TaskManager::AbstractTasksModel::IsGroupParent).toBool())) {
+    const auto taskModel = tasks();
+    const QModelIndex idx = taskModel.index(index, 0);
+    if (!idx.isValid() || (!idx.data(tasks::roles().IsWindow).toBool() && !idx.data(tasks::roles().IsGroupParent).toBool())) {
         return;
     }
 
-    m_tasksModel->requestPublishDelegateGeometry(idx, QRect{}, delegate);
+    taskModel.requestPublishDelegateGeometry(idx, QRect{}, delegate);
 }
 
 QString DockModel::appId(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const QModelIndex idx = tasks().index(index, 0);
     if (!idx.isValid()) {
         return {};
     }
-    return idx.data(TaskManager::AbstractTasksModel::AppId).toString();
+    return idx.data(tasks::roles().AppId).toString();
 }
 
 int DockModel::chatStateRevision() const
@@ -749,17 +748,18 @@ int DockModel::taskChatMentionCount(int row) const
 
 QStringList DockModel::windowTitlesForRow(int row) const
 {
-    const QModelIndex index = m_tasksModel->index(row, 0);
+    const auto taskModel = tasks();
+    const QModelIndex index = taskModel.index(row, 0);
     if (!index.isValid()) {
         return {};
     }
 
-    const int childCount = m_tasksModel->rowCount(index);
-    const bool isWindow = index.data(TaskManager::AbstractTasksModel::IsWindow).toBool();
+    const int childCount = taskModel.rowCount(index);
+    const bool isWindow = index.data(tasks::roles().IsWindow).toBool();
     QStringList titles;
     titles.reserve(childCount + (isWindow ? 1 : 0));
     for (int child = 0; child < childCount; ++child) {
-        titles.append(m_tasksModel->index(child, 0, index).data(Qt::DisplayRole).toString());
+        titles.append(taskModel.index(child, 0, index).data(Qt::DisplayRole).toString());
     }
     if (isWindow) {
         titles.append(index.data(Qt::DisplayRole).toString());
@@ -779,35 +779,36 @@ void DockModel::setVirtualDesktopMode(int mode)
     }
     m_virtualDesktopMode = mode;
     // Mode 2 (CurrentOnly): use TasksModel built-in filter
-    m_tasksModel->setFilterByVirtualDesktop(mode == 2);
+    tasks().setProperty("filterByVirtualDesktop", mode == 2);
     Q_EMIT virtualDesktopModeChanged();
 }
 
 QVariant DockModel::currentDesktop() const
 {
-    return m_virtualDesktopInfo->currentDesktop();
+    return m_virtualDesktopInfo ? m_virtualDesktopInfo->property("currentDesktop") : QVariant();
 }
 
 bool DockModel::isOnCurrentDesktop(int index) const
 {
-    const QModelIndex idx = m_tasksModel->index(index, 0);
+    const auto taskModel = tasks();
+    const QModelIndex idx = taskModel.index(index, 0);
     if (!idx.isValid()) {
         return true;
     }
 
     // Launchers (no window) are always considered "on current desktop"
-    if (!idx.data(TaskManager::AbstractTasksModel::IsWindow).toBool()) {
+    if (!idx.data(tasks::roles().IsWindow).toBool()) {
         return true;
     }
 
     // Windows on all desktops are always visible
-    if (idx.data(TaskManager::AbstractTasksModel::IsOnAllVirtualDesktops).toBool()) {
+    if (idx.data(tasks::roles().IsOnAllVirtualDesktops).toBool()) {
         return true;
     }
 
     // Check if any of the task's desktops match the current desktop
-    const QVariant currentDesktop = m_virtualDesktopInfo->currentDesktop();
-    const QVariantList desktops = idx.data(TaskManager::AbstractTasksModel::VirtualDesktops).toList();
+    const QVariant currentDesktop = m_virtualDesktopInfo ? m_virtualDesktopInfo->property("currentDesktop") : QVariant();
+    const QVariantList desktops = idx.data(tasks::roles().VirtualDesktops).toList();
     return desktops.contains(currentDesktop);
 }
 

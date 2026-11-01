@@ -55,9 +55,13 @@ PIP_PACKAGES="Appium-Python-Client==4.5.1 selenium==4.29.0 pytest-timeout==2.3.1
 
 # Rolling releases: images are rebuilt daily, and a job-time full upgrade
 # keeps the package build and the runtime on today's repository state.
+# Fedora stable releases count as rolling here: they ship new Plasma and Qt
+# minor releases as updates, and the krema package requires the Qt minor it
+# was built against, so a stale builder image would produce a package the
+# up-to-date runtime cannot install.
 is_rolling() {
     case "$TARGET_ID" in
-    fedora-rawhide | opensuse-tumbleweed | opensuse-slowroll | arch) return 0 ;;
+    fedora-* | opensuse-tumbleweed | opensuse-slowroll | arch) return 0 ;;
     *) return 1 ;;
     esac
 }

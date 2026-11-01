@@ -78,14 +78,15 @@ RUN cmake -S /src/krema-test-window -B /src/krema-test-window/build -G Ninja -DC
     && cmake --build /src/krema-test-window/build \
     && DESTDIR=/out cmake --install /src/krema-test-window/build
 
-# ctest-image: base plus ccache, without the AT-SPI stack below. A dedicated
-# stage keeps the ccache install out of base's big dnf layer (a one-package
-# addition would otherwise drop its gha cache entry) and out of the appium
-# image, which never compiles.
+# ctest-image: base plus ccache and plasma-workspace, without the AT-SPI stack
+# below. A dedicated stage keeps these installs out of base's big dnf layer (a
+# one-package addition would otherwise drop its gha cache entry). The GUI tests
+# need plasma-workspace for the org.kde.taskmanager and
+# org.kde.notificationmanager QML modules krema loads at runtime.
 FROM base AS ctest-image
 RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \
     dnf -y --setopt=install_weak_deps=False --setopt=keepcache=True install \
-        ccache
+        ccache plasma-workspace
 
 FROM base
 RUN --mount=type=cache,target=/var/cache/libdnf5,sharing=locked \

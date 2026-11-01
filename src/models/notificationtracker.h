@@ -9,16 +9,9 @@
 #include <QHash>
 #include <QImage>
 #include <QSet>
-#include <QTimer>
 #include <QStringList>
+#include <QTimer>
 #include <QVariantMap>
-
-#include <memory>
-
-namespace NotificationManager
-{
-class Settings;
-}
 
 namespace krema
 {
@@ -142,25 +135,24 @@ private:
                           const QString &interfaceName = {},
                           bool iconQuery = false);
     void scheduleSniIconRefresh(const QString &key, const QString &interfaceName);
-    void querySniIconProperties(const QString &key,
-                                quint64 generation,
-                                const QString &service,
-                                const QString &objectPath,
-                                const QString &interfaceName);
+    void querySniIconProperties(const QString &key, quint64 generation, const QString &service, const QString &objectPath, const QString &interfaceName);
     void updateSniIconImage(SniEntry &entry);
     void updateSniChatState(SniEntry &entry);
     void ensureSniMetadataQueried(const QString &key, SniEntry &entry);
     void clearSniItems();
     [[nodiscard]] const SniEntry *sniEntryForApp(const QString &appId) const;
-    enum class ChatRetention : quint8 { None, Pending, Committed };
+    enum class ChatRetention : quint8 {
+        None,
+        Pending,
+        Committed
+    };
     [[nodiscard]] ChatRetention chatSniRetention(const QString &appId) const;
     void clearChatNotificationsUnlessRetained(const QString &appId);
     void replayDeferredChatClears(const QString &itemId);
     [[nodiscard]] QString sniKeyForMessage(const QDBusMessage &message) const;
 
     // Notification settings (badges enabled, blacklist)
-    std::unique_ptr<NotificationManager::Settings> m_notifSettings;
-
+    QObject *m_notifSettings = nullptr;
 
     // Active notification ID -> canonical desktop entry (for reverse lookup).
     QHash<uint, QString> m_notifIdToEntry;

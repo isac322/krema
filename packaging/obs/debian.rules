@@ -9,4 +9,14 @@ override_dh_auto_configure:
 override_dh_auto_build:
 	dh_auto_build
 
+# Qt private/QPA ABI is pinned to the build-time minor release because it is
+# not stable across minor upgrades.
+override_dh_gencontrol:
+	@qt_version=$$(dpkg-query -W -f='$${Version}' qt6-base-dev); \
+	qt_epoch=; \
+	case "$$qt_version" in *:*) qt_epoch=$${qt_version%%:*}:; qt_version=$${qt_version#*:};; *) qt_epoch=;; esac; \
+	qt_version=$${qt_version%%[-+~]*}; \
+	qt_major=$${qt_version%%.*}; qt_minor=$${qt_version#*.}; qt_minor=$${qt_minor%%.*}; \
+	dh_gencontrol -- "-Vkrema:AbiDepends=libqt6gui6 (>= $${qt_epoch}$${qt_major}.$${qt_minor}~), libqt6gui6 (<< $${qt_epoch}$${qt_major}.$$(($${qt_minor} + 1))~)"
+
 override_dh_auto_test:

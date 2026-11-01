@@ -49,6 +49,7 @@ target_link_libraries(krema_notification_tracker_tests PRIVATE
     Qt6::Test
     Qt6::DBus
     krema_lib
+    PW::LibNotificationManager
 )
 
 add_executable(krema_notification_config_writer

@@ -26,11 +26,9 @@ Build-Depends: debhelper-compat (= 13),
                libkf6service-dev (>= 6.0.0),
                libkf6kio-dev (>= 6.0.0),
                libkf6jobwidgets-dev (>= 6.0.0),
-               libkf6itemmodels-dev (>= 6.0.0),
                libkirigami-dev (>= 6.0.0),
                kirigami-addons-dev,
                liblayershellqtinterface-dev (>= 6.0.0),
-               plasma-workspace-dev,
                libkpipewire-dev,
                libwayland-dev (>= 1.22)
 Standards-Version: 4.7.0
@@ -48,6 +46,7 @@ Depends: ${shlibs:Depends},
          qml6-module-qtquick3d,
          qml6-module-qtquick-effects,
          plasma-workspace,
+         ${krema:AbiDepends},
          liblayershellqtinterface6
 Description: A lightweight dock for KDE Plasma 6
  Krema is a lightweight dock for KDE Plasma 6, designed as a spiritual

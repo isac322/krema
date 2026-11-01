@@ -16,18 +16,13 @@ suse_refresh() {
 }
 
 suse_repos() {
-    if [ "$TARGET_ID" = opensuse-slowroll ]; then
-        if ! zypper --non-interactive repos | grep -qw slowroll-oss; then
-            zypper --non-interactive modifyrepo --all --disable || true
-            zypper --non-interactive addrepo --refresh \
-                https://download.opensuse.org/slowroll/repo/oss/ slowroll-oss
-            zypper --non-interactive addrepo --refresh \
-                https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update
-        fi
-        # Slowroll's update repo can carry a newer FFmpeg ABI before the
-        # matching KPipeWireRecord rebuild reaches oss. Prefer its package
-        # set so zypper does not mix incompatible repo snapshots.
-        zypper --non-interactive modifyrepo --priority 90 slowroll-update
+    if [ "$TARGET_ID" = opensuse-slowroll ] \
+        && ! zypper --non-interactive repos | grep -qw slowroll-oss; then
+        zypper --non-interactive modifyrepo --all --disable || true
+        zypper --non-interactive addrepo --refresh \
+            https://download.opensuse.org/slowroll/repo/oss/ slowroll-oss
+        zypper --non-interactive addrepo --refresh \
+            https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update
     fi
     openh264_alias=$(
         zypper --non-interactive repos |
@@ -123,17 +118,6 @@ family_depfetch() {
 }
 
 family_krema() {
-    if [ "$TARGET_ID" = opensuse-slowroll ]; then
-        # The package may satisfy KPipeWireRecord's codec soname through the
-        # intentionally non-installable mini FFmpeg flavor. Lock that flavor
-        # out and keep the complete oss FFmpeg 8.1.2 set, which matches the
-        # Plasma KPipeWireRecord ABI currently published by slowroll-oss.
-        zypper --non-interactive addlock ffmpeg-8-mini-libs || true
-        suse_install --oldpackage \
-            libavcodec62=8.1.2-5.2 libavfilter11=8.1.2-5.2 \
-            libavformat62=8.1.2-5.2 libavutil60=8.1.2-5.2 \
-            libswresample6=8.1.2-5.2 libswscale9=8.1.2-5.2
-    fi
     suse_install --allow-unsigned-rpm /pkgs/*.rpm
     # Shrink the committed diff: no cached packages or metadata.
     zypper --non-interactive clean --all

@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+#
+# Build-time half of KremaSystemDeps.cmake: fingerprints the system
+# dependency paths listed in INPUTS and touches STAMP when they changed.
+
 if(NOT DEFINED INPUTS OR NOT DEFINED FINGERPRINT OR NOT DEFINED STAMP)
     message(FATAL_ERROR "KremaSystemDepsCheck.cmake requires INPUTS, FINGERPRINT, and STAMP")
 endif()

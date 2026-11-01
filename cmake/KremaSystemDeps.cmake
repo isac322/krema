@@ -1,7 +1,12 @@
-# Krema system dependencies can retain package build-time mtimes, so mtime-based
-# incremental builds may reuse objects compiled against old system headers. A ctime/inode
-# fingerprint and touched forced-include header trigger correct rebuilds, while ccache
-# keeps the rebuild cheap.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+#
+# Package managers install files with their build-time mtimes, so after a
+# system upgrade the new headers look older than existing object files and
+# mtime-based incremental builds keep objects compiled against the old
+# headers. A ctime/inode fingerprint of the found dependencies touches a
+# forced-include header when they change, recompiling every object once;
+# the header's content never changes, so ccache keeps that rebuild cheap.
 set(_KREMA_SYSTEM_DEPS_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 function(krema_system_deps_begin)

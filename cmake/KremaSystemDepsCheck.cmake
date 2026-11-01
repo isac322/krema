@@ -118,4 +118,8 @@ elseif(NOT _old_fingerprint STREQUAL _current_fingerprint)
     endif()
     file(TOUCH "${STAMP}")
     message(STATUS "krema: system dependencies changed since the last build; recompiling all objects")
+elseif(NOT EXISTS "${STAMP}")
+    # `ninja clean` removes the stamp (a byproduct) but keeps the fingerprint;
+    # every object force-includes it, so recreate it.
+    file(WRITE "${STAMP}" "${_stamp_content}")
 endif()

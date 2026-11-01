@@ -10,6 +10,7 @@
 - preview-keyboard-activate: Enter to activate focused thumbnail window
 - preview-keyboard-close: Delete to close focused thumbnail window
 - keyboard-escape: Escape to exit keyboard navigation
+- dock-keyboard-menu: Shift+F10 or Shift+Menu opens the dock menu; Menu opens the focused app's menu (CTX-011 in 04-context-menu.md)
 - dock-task-zones: Keyboard focus crosses the pinned and unpinned task zones without focusing the separator
 
 ## Affected Files

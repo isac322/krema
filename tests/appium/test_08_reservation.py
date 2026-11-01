@@ -30,9 +30,7 @@ from test_06_settings import (
     current_choice,
     focus_slider,
     open_page,
-    open_settings,
     pick,
-    reveal_dock,
     scroll_into_view,
     slider_value,
 )
@@ -172,60 +170,31 @@ def _geometry(krema: Krema, win: TestWindow, edge: int, reserved: bool, stage: s
 
 
 def _behavior(krema: Krema, name: str = "Alpha", edge: int = config.EDGE_BOTTOM) -> None:
+    krema.wait_for_item(name)
     if edge != config.EDGE_BOTTOM:
-        from krema_e2e.krema import context_menu_entries
-
-        # Leave any existing preview before revealing off-centre. The shared
-        # settings helper's bottom-specific park lies inside a top dock.
-        _park()
-        wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed before approaching the edge dock")
-        trigger = {
-            config.EDGE_TOP: (60, 0),
-            config.EDGE_LEFT: (0, 60),
-            config.EDGE_RIGHT: (env.SCREEN_WIDTH - 1, 60),
-        }[edge]
-        inp.move(*trigger)
+        assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
+    settings = krema.open_settings()
+    # Park the real pointer beyond the selected edge to cancel keyboard/hover
+    # state and close any preview without leaving it over the dock surface.
+    park = {
+        config.EDGE_TOP: (env.SCREEN_WIDTH // 2, env.SCREEN_HEIGHT - 1),
+        config.EDGE_BOTTOM: (env.SCREEN_WIDTH // 2, 0),
+        config.EDGE_LEFT: (env.SCREEN_WIDTH - 1, env.SCREEN_HEIGHT // 2),
+        config.EDGE_RIGHT: (0, env.SCREEN_HEIGHT // 2),
+    }[edge]
+    inp.move(*park)
+    wait_until(lambda: kwin.cursor_pos() == park, message="pointer parked outside dock/preview")
+    wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed after moving away")
+    if edge != config.EDGE_BOTTOM:
         _wait_shown_at_edge(krema, name)
         surface, rest = wait_stable(
             lambda: (krema.surface_rect("dock"), krema.screen_rect(krema.wait_for_item(name)))
         )
         assert surface is not None and surface.contains(*rest.center)
-        wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed at the off-centre reveal point")
-        near = (rest.center[0], trigger[1]) if edge == config.EDGE_TOP else (trigger[0], rest.center[1])
-        inp.move_path([trigger, near, *inp.line(near, rest.center, 5)], 40)
-
-        # Hovering a running task may legitimately show its preview. Prove the
-        # Settings frontdoor through the native menu at the existing pointer.
-        wait_until(
-            lambda: has_state(krema.wait_for_item(name), "showing"),
-            timeout=5,
-            message=f"{name!r} showing before the native context menu",
-        )
-        assert krema.item_names() == [name], "the native Settings frontdoor must target the sole fixture task"
-        before = {w.internal_id for w in krema.windows()}
-        pointer = kwin.cursor_pos()
-        inp.click(*pointer, button="right")
-        menu = wait_until(
-            lambda: next((w for w in krema.windows() if w.internal_id not in before and not w.normal_window), None),
-            timeout=5,
-            message=f"real context menu of {name!r} on selected edge",
-        )
         _record(krema, "edge-settings-frontdoor", {
-            "edge": edge, "surface": list(surface), "rest_icon": list(rest),
-            "pointer": list(pointer), "menu": list(menu.client_geometry),
+            "edge": edge, "input": "keyboard", "surface": list(surface),
+            "rest_icon": list(rest), "settings": list(settings.client_geometry),
         })
-        krema.choose_context_menu_entry("Settings...", context_menu_entries(pinned=False, is_window=True))
-        wait_until(
-            lambda: next((w for w in krema.windows() if w.normal_window and not w.skip_taskbar and w.title.startswith("Settings")), None),
-            timeout=15,
-            message="Settings window opened through the real edge dock context menu",
-        )
-        _park()
-        wait_until(lambda: not krema.preview_visible(), timeout=8, message="preview closed before driving Settings")
-    else:
-        if not has_state(krema.wait_for_item(name), "showing"):
-            reveal_dock(krema, name)
-        krema.open_settings(name)
     open_page(krema, "Behavior")
 
 

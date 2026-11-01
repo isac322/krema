@@ -11,6 +11,7 @@ QtObject {
     function _record(name, args) { calls = calls.concat([{ name: name, args: Array.from(args) }]) }
     function callsTo(name) { return calls.filter(c => c.name === name) }
     function showForTask(i) { _record("showForTask", arguments) }
+    function showForDock() { _record("showForDock", arguments) }
     // Production: true while the native menu is open. Tests set it directly.
     property bool open: false
 

@@ -151,7 +151,8 @@ While Settings is open, the same application also has a settings frame
    `Qt::Popup` window, which Qt does not expose in the AT-SPI tree. Navigate it
    with the keyboard (Down/Return) or locate entries on a screenshot.
    Menu items are in fixed order: AppName, Pin/Unpin, New Instance, Close,
-   separator, Settings..., About Krema, Quit.
+   with no dock-wide actions. Right-click empty dock space for
+   Settings..., About Krema, separator, Quit Krema.
 
 8. **Dock-to-preview mouse transition**: Moving the pointer from the dock to the
    preview popup must be gradual (step by step, ~20px increments). A direct jump
@@ -172,7 +173,8 @@ Quick reference: which scenarios to re-run when a source file changes.
 | `src/qml/PreviewPopup.qml` | 01, 03 |
 | `src/qml/PreviewThumbnail.qml` (including the fallback icon) | 01, 03 |
 | `src/shell/previewcontroller.*` | 01, 03, 04, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
-| `src/shell/dockshell.*` | 01, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
+| `src/shell/dockshell.*` | 01, 04, 06 (SET-021), 07 (VIS-004, VIS-009, VIS-010) |
+| `src/shell/dockvisibilitycontroller.*` | 01, 05, 06, 07 |
 | `src/models/dockactions.*` | 02, 03, 04, 05, 06 |
 | `src/models/dockcontextmenu.*` | 04 |
 | `src/models/desktopactions.*` | 04 |

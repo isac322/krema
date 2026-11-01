@@ -16,13 +16,18 @@ suse_refresh() {
 }
 
 suse_repos() {
-    if [ "$TARGET_ID" = opensuse-slowroll ] \
-        && ! zypper --non-interactive repos | grep -qw slowroll-oss; then
-        zypper --non-interactive modifyrepo --all --disable || true
-        zypper --non-interactive addrepo --refresh \
-            https://download.opensuse.org/slowroll/repo/oss/ slowroll-oss
-        zypper --non-interactive addrepo --refresh \
-            https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update
+    if [ "$TARGET_ID" = opensuse-slowroll ]; then
+        if ! zypper --non-interactive repos | grep -qw slowroll-oss; then
+            zypper --non-interactive modifyrepo --all --disable || true
+            zypper --non-interactive addrepo --refresh \
+                https://download.opensuse.org/slowroll/repo/oss/ slowroll-oss
+            zypper --non-interactive addrepo --refresh \
+                https://download.opensuse.org/update/slowroll/repo/oss/ slowroll-update
+        fi
+        # Slowroll's update repo can carry a newer FFmpeg ABI before the
+        # matching KPipeWireRecord rebuild reaches oss. Prefer its package
+        # set so zypper does not mix incompatible repo snapshots.
+        zypper --non-interactive modifyrepo --priority 90 slowroll-update
     fi
     openh264_alias=$(
         zypper --non-interactive repos |

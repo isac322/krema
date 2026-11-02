@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Krema Contributors
-"""Opt-in operation timing: ``pytest -p krema_e2e.profile_ops``.
+"""Opt-in operation timing or passive pytest phase reporting.
+
+``KREMA_E2E_PROFILE_OPS_MODE=operations`` (the default) records operation
+timings. ``phases`` records only pytest phase outcomes and collection
+manifests; it deliberately does not import or patch E2E SDK helpers.
 
 ``KREMA_E2E_PROFILE_OPS_OUTPUT`` overrides ``/artifacts/profile-ops.json``.
-Timings include instrumentation overhead and existing waits; self time excludes
-only nested instrumented calls in the same thread. Background-thread operations
-are aggregate-only. This is not a CPU profiler or an uninstrumented benchmark.
-No waits, retries, assertions, or extra calls to wrapped operations are added.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ class _State:
         self.started_ns = 0
         self.finished_ns: int | None = None
         self.exitstatus: int | None = None
+        self.mode = os.environ.get("KREMA_E2E_PROFILE_OPS_MODE", "operations")
         self.aggregate: dict[str, dict[str, Any]] = {}
         self.nodes: dict[str, dict[str, Any]] = {}
         self.collection: list[dict[str, Any]] = []
@@ -58,6 +59,14 @@ class _State:
         self.resource_start: dict[str, Any] = {}
         self.resource_end: dict[str, Any] = {}
         self.local = threading.local()
+
+        if self.mode not in {"operations", "phases"}:
+            self.errors.append({
+                "operation": "config",
+                "exception": "ValueError",
+                "message": f"invalid profile mode: {self.mode}",
+            })
+            self.install_error = "invalid_profile_ops_mode"
 
     def stack(self) -> list[_Frame]:
         stack = getattr(self.local, "stack", None)
@@ -194,9 +203,10 @@ class _State:
         for node in self.nodes.values():
             status = node.get("status", "unknown")
             counts[status if status in counts else "unknown"] += 1
-        return {
+        payload = {
             "schema_version": 1,
             "plugin": "krema_e2e.profile_ops",
+            "mode": self.mode,
             "started_monotonic_ns": self.started_ns,
             "finished_monotonic_ns": finished_ns,
             "run_duration_ns": max(0, finished_ns - self.started_ns),
@@ -204,16 +214,6 @@ class _State:
             "result_counts": counts,
             "topology": _topology(),
             "provenance": self.provenance,
-            "resource_usage": {
-                "start": self.resource_start,
-                "end": self.resource_end,
-                "scope": "pytest process and its children only; external KWin/WebDriver daemons are not measured",
-                "units": {
-                    "cpu": "seconds",
-                    "max_rss": "bytes" if sys.platform == "darwin" else "KiB",
-                    "block_io": "operations, not bytes",
-                },
-            },
             "selected_nodeids": self.selected_nodeids,
             "collection_manifest": self.collection,
             "full_collection_manifest": self.full_collection_manifest,
@@ -224,13 +224,26 @@ class _State:
             "measurements_complete": not (self.errors or self.omitted or self.install_error),
             "install_error": self.install_error,
         }
+        if self.mode == "operations":
+            payload["resource_usage"] = {
+                "start": self.resource_start,
+                "end": self.resource_end,
+                "scope": "pytest process and its children only; external KWin/WebDriver daemons are not measured",
+                "units": {
+                    "cpu": "seconds",
+                    "max_rss": "bytes" if sys.platform == "darwin" else "KiB",
+                    "block_io": "operations, not bytes",
+                },
+            }
+        return payload
 
     def flush(self, exitstatus: int | None = None) -> None:
         if exitstatus is not None:
             self.exitstatus = int(exitstatus)
         if self.finished_ns is None:
             self.finished_ns = _observe(_NOW)
-            self.resource_end = _observe(_resource_snapshot) or {}
+            if self.mode == "operations":
+                self.resource_end = _observe(_resource_snapshot) or {}
         output = Path(os.environ.get("KREMA_E2E_PROFILE_OPS_OUTPUT", "/artifacts/profile-ops.json"))
         try:
             payload = self.snapshot()
@@ -297,6 +310,7 @@ def _manifest_entries(items: Any) -> list[dict[str, Any]]:
         entries.append({
             "nodeid": str(item.nodeid),
             "requested_outputs": marker.args[0] if marker is not None and marker.args else 1,
+            "outputs_marked": marker is not None,
             "session_outputs": session_outputs,
         })
     return entries
@@ -327,14 +341,22 @@ def _binary_sha256(path: str) -> str:
 
 
 def _provenance() -> dict[str, Any]:
-    revision_env = next((name for name in ("KREMA_E2E_SOURCE_REVISION", "GITHUB_SHA") if os.environ.get(name)), None)
+    source_env = next((name for name in ("KREMA_E2E_SOURCE_REVISION", "GITHUB_SHA") if os.environ.get(name)), None)
+    binary_source_env = next(
+        (name for name in ("KREMA_E2E_BINARY_SOURCE_REVISION",) if os.environ.get(name)),
+        None,
+    )
     configured = os.environ.get("KREMA_E2E_BINARY", "krema")
     binary = shutil.which(configured) or configured
     environment = sys.modules.get("krema_e2e.env")
     qt_version = getattr(environment, "QT_VERSION", None)
     return {
-        "source_revision": os.environ[revision_env] if revision_env else None,
-        "source_revision_env": revision_env,
+        "harness_source_revision": os.environ[source_env] if source_env else None,
+        "harness_source_revision_env": source_env,
+        "source_revision": os.environ[source_env] if source_env else None,
+        "source_revision_env": source_env,
+        "binary_source_revision": os.environ[binary_source_env] if binary_source_env else None,
+        "binary_source_revision_env": binary_source_env,
         "binary_path": binary,
         "binary_sha256": _observe(_binary_sha256, binary),
         "qt_runtime_version": list(qt_version) if qt_version is not None else None,
@@ -480,6 +502,9 @@ def _install() -> None:
         return
     _STATE.installed = True
     _STATE.started_ns = _NOW()
+    if _STATE.mode != "operations":
+        _STATE.provenance = _observe(_provenance) or {}
+        return
     _STATE.resource_start = _observe(_resource_snapshot) or {}
     for module_name, class_name, names in (
         ("krema", "Krema", (

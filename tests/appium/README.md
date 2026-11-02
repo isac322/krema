@@ -129,7 +129,9 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 | `KREMA_E2E_OUTPUT_COUNT` | 1 | number of outputs (`--output-count`), laid out left to right; tests marked `@pytest.mark.outputs(n)` run only when the session has exactly `n` |
 | `KREMA_E2E_DOCKER_ARGS` | unset | extra `docker run` arguments, e.g. `--cpus=2` to approximate a slower CI runner |
 | `KREMA_E2E_SHARD` | unset | `<i>/<N>` (0-based): run only every N-th collected test and deselect the rest. `tests/distro/run-distro-e2e.sh` sets it per shard container (`KREMA_E2E_SHARDS`); composes with `-k`/`-m` (sharding applies to the filtered collection). The default build volume gets a `-shard-<i>` suffix |
-| `KREMA_E2E_PROFILE` | unset | any nonempty value loads the diagnostic operation profiler; writes `profile-ops.json` into the existing artifact directory |
+| `KREMA_E2E_PROFILE` | unset | any nonempty value loads the diagnostic profile plugin; writes `profile-ops.json` into the existing artifact directory |
+| `KREMA_E2E_PROFILE_OPS_MODE` | `operations` | `operations` records helper timings; `phases` passively records pytest phases and manifests without importing or patching SDK helpers |
+| `KREMA_E2E_BINARY_SOURCE_REVISION` | unset | optional source revision for the installed binary; it is never inferred from the harness/source revision |
 
 ### CI
 
@@ -196,33 +198,47 @@ profiler and Docker receives no profiling environment variable.
 
 ```sh
 KREMA_E2E_PROFILE=1 tests/appium/run-e2e.sh
+KREMA_E2E_PROFILE=1 KREMA_E2E_PROFILE_OPS_MODE=phases \
+    tests/appium/run-e2e.sh -k zoom
 KREMA_E2E_PROFILE=1 KREMA_E2E_SHARDS=3 \
     tests/distro/run-distro-e2e.sh fedora-43 -rs
 ```
 
-The profiler records the complete pre-filter collection in
-`full_collection_manifest` (including each test's `nodeid`, `requested_outputs`,
-and post-filter `selected` flag), then records the filtered/sharded
-`collection_manifest` and `selected_nodeids`. New output-count markers and
-parameterized tests are discovered from pytest collection; no profiling list
-needs updating.
+Both modes record the complete pre-filter collection in
+`full_collection_manifest` (including each test's `nodeid`,
+`requested_outputs`, `outputs_marked`, and post-filter `selected` flag), then
+record the filtered/sharded `collection_manifest` and `selected_nodeids`.
+New output-count markers and parameterized tests are discovered from pytest
+collection; no profiling list needs updating.
 
-It records per-test setup/call/teardown outcomes and timings. Each phase keeps
-skip and xfail reasons separate from failure details, and labels call failures
-as failures versus setup/teardown errors. Node `status` and session
-`result_counts` distinguish `passed`, `failed`, `skipped`, `xfailed`, `xpassed`,
-and `unknown` using pytest's actual `outcome` and `wasxfail` values. Phase
-outcomes are not rewritten; a strict XPASS therefore remains `failed`.
-Aggregate operation timings are also included.
+Both modes record per-test setup/call/teardown outcomes and timings. Each
+phase keeps skip and xfail reasons separate from failure details, and labels
+call failures as failures versus setup/teardown errors. Node `status` and
+session `result_counts` distinguish `passed`, `failed`, `skipped`, `xfailed`,
+`xpassed`, and `unknown` using pytest's actual `outcome` and `wasxfail`
+values. Phase outcomes are not rewritten; a strict XPASS remains `failed`.
+
+The default `operations` mode also records aggregate operation timings.
+`phases` mode is passive: it leaves `aggregates` and per-node `profile`
+empty and does not import or patch Krema, KWin, input, waits, or Selenium
+helpers. Timed operation-unprofiled variants can therefore use passive phase
+reporting for outcome evidence. The top-level `mode` field identifies the
+configured mode. An invalid mode records a configuration error and
+`measurements_complete: false`, but still reports pytest phases and preserves
+the original pytest exit status; it never falls back to operation profiling.
 
 Session metadata includes topology, Python/runtime details, the installed
 binary's SHA-256, and the Qt runtime version already read by the harness.
-`KREMA_E2E_SOURCE_REVISION` takes precedence over `GITHUB_SHA` when either
-is present inside the test container; otherwise `source_revision` is null.
-The profiler does not invoke Git, run version probes, or repeat metadata
-collection for each test.
+`KREMA_E2E_SOURCE_REVISION` takes precedence over `GITHUB_SHA` for
+`harness_source_revision` and the existing `source_revision` field.
+These identify the test harness/source, not necessarily the installed binary.
+`binary_source_revision` is populated only from the explicit
+`KREMA_E2E_BINARY_SOURCE_REVISION` environment variable; it is otherwise null.
+The profiler does not infer that binary revision, invoke Git, run version
+probes, or repeat metadata collection for each test.
 
-`resource_usage.start` and `.end` contain `getrusage(RUSAGE_SELF)` and
+In `operations` mode, `resource_usage.start` and `.end` contain
+`getrusage(RUSAGE_SELF)` and
 `getrusage(RUSAGE_CHILDREN)` snapshots: user/system CPU seconds, maximum RSS,
 page faults, and block input/output operation counts. These cover the pytest
 process and reaped child processes only, **not all external KWin, WebDriver,
@@ -261,7 +277,7 @@ profiling errors do not replace the test outcome.
 |---|---|
 | `junit.xml` | JUnit report |
 | `pytest.log` | pytest output (also streamed to the console) |
-| `profile-ops.json` | opt-in full/selected collection manifests, topology/provenance, process resource snapshots, per-test phase outcomes/reasons, aggregate operation timings and profiling errors |
+| `profile-ops.json` | opt-in full/selected collection manifests, topology/provenance and per-test phase outcomes/reasons; `operations` mode additionally records process resource snapshots and aggregate operation timings |
 | `session.log` | KWin, D-Bus, AT-SPI and WebDriver stderr, and how `kwin_wayland` ended (`[e2e] kwin_wayland exited with status N` / `killed by signal N`, also printed to the console when the session fails) |
 | `<test id>/krema-N.log` | krema stdout/stderr for the N-th start in that test |
 | `<test id>/failure.png`, `atspi-tree.xml`, `kwin-windows.json`, `kremarc` | written when a test fails |

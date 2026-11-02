@@ -585,5 +585,145 @@ class PytestHookSmokeTests(unittest.TestCase):
         self.assertTrue(payload["errors"])
 
 
+    def test_phase_mode_is_passive_and_preserves_pytest_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            test_file = root / "test_phase_contract.py"
+            test_file.write_text(textwrap.dedent("""\
+                import pytest
+
+                @pytest.mark.outputs(2)
+                @pytest.mark.parametrize("value", [1, 2])
+                def test_param(value):
+                    assert value > 0
+
+                def test_failure():
+                    assert False, "phase failure remains visible"
+
+                @pytest.mark.skip(reason="phase skip reason")
+                def test_skipped():
+                    pass
+
+                @pytest.mark.xfail(reason="phase xfail reason")
+                def test_xfailed():
+                    assert False, "expected phase failure"
+
+                def test_deselected():
+                    raise AssertionError("deselected body must not execute")
+            """), encoding="utf-8")
+            output = root / "profile.json"
+            fake_package = root / "fake_imports" / "krema_e2e"
+            fake_package.mkdir(parents=True)
+            (fake_package / "__init__.py").write_text("", encoding="utf-8")
+            env = os.environ.copy()
+            env.update({
+                "PYTHONPATH": os.pathsep.join((str(fake_package.parent), str(PROFILE_PATH.parent))),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+                "PYTEST_ADDOPTS": "",
+                "KREMA_E2E_PROFILE_OPS_MODE": "phases",
+                "KREMA_E2E_PROFILE_OPS_OUTPUT": str(output),
+                "KREMA_E2E_BINARY": sys.executable,
+                "KREMA_E2E_SOURCE_REVISION": "harness-revision",
+                "KREMA_E2E_BINARY_SOURCE_REVISION": "binary-revision",
+                "KREMA_E2E_OUTPUT_COUNT": "2",
+                "KREMA_E2E_SCREEN_WIDTH": "1280",
+                "KREMA_E2E_SCREEN_HEIGHT": "720",
+            })
+            command = [
+                sys.executable, "-m", "pytest", "-p", "profile_ops", "-p", "no:cacheprovider",
+                "-q", "-k", "not deselected", str(test_file),
+            ]
+            result = subprocess.run(
+                command, cwd=root, env=env, capture_output=True, text=True,
+                timeout=20, check=False,
+            )
+            details = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 1, details)
+            self.assertTrue(output.is_file(), details)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["mode"], "phases")
+        self.assertEqual(payload["exitstatus"], 1)
+        self.assertEqual(payload["aggregates"], {})
+        self.assertTrue(all(node["profile"] == {} for node in payload["nodes"].values()))
+        self.assertEqual(payload["errors"], [])
+        self.assertIsNone(payload["install_error"])
+        self.assertEqual(payload["topology"]["output_count"], 2)
+        self.assertEqual(payload["topology"]["screen_width"], 1280)
+        self.assertEqual(payload["topology"]["screen_height"], 720)
+        provenance = payload["provenance"]
+        self.assertEqual(provenance["harness_source_revision"], "harness-revision")
+        self.assertEqual(provenance["binary_source_revision"], "binary-revision")
+        self.assertNotEqual(provenance["harness_source_revision"], provenance["binary_source_revision"])
+
+        full_manifest = payload["full_collection_manifest"]
+        selected_manifest = payload["collection_manifest"]
+        self.assertEqual(
+            set(payload["selected_nodeids"]),
+            {entry["nodeid"] for entry in selected_manifest},
+        )
+        self.assertEqual(
+            {entry["nodeid"] for entry in full_manifest if entry["selected"]},
+            {entry["nodeid"] for entry in selected_manifest},
+        )
+        self.assertEqual(sum(not entry["selected"] for entry in full_manifest), 1)
+        param_entries = [entry for entry in full_manifest if "test_param[" in entry["nodeid"]]
+        self.assertEqual(len(param_entries), 2)
+        self.assertTrue(all(entry["outputs_marked"] for entry in param_entries))
+        nodes = {nodeid: node for nodeid, node in payload["nodes"].items()}
+        self.assertEqual(nodes[next(nodeid for nodeid in nodes if "test_failure" in nodeid)]["status"], "failed")
+        self.assertEqual(nodes[next(nodeid for nodeid in nodes if "test_skipped" in nodeid)]["status"], "skipped")
+        self.assertEqual(nodes[next(nodeid for nodeid in nodes if "test_xfailed" in nodeid)]["status"], "xfailed")
+        failure = next(node for nodeid, node in nodes.items() if "test_failure" in nodeid)
+        self.assertIn("phase failure remains visible", failure["phases"]["call"]["failure_reason"])
+        xfailed = next(node for nodeid, node in nodes.items() if "test_xfailed" in nodeid)
+        self.assertEqual(xfailed["phases"]["call"]["xfail_reason"], "phase xfail reason")
+        self.assertEqual(payload["result_counts"]["failed"], 1)
+        self.assertEqual(payload["result_counts"]["skipped"], 1)
+        self.assertEqual(payload["result_counts"]["xfailed"], 1)
+    def test_invalid_phase_mode_is_incomplete_without_changing_exit_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            test_file = root / "test_invalid_mode.py"
+            test_file.write_text("def test_failure():\n    assert False, 'original failure'\n", encoding="utf-8")
+            output = root / "profile.json"
+            fake_package = root / "fake_imports" / "krema_e2e"
+            fake_package.mkdir(parents=True)
+            (fake_package / "__init__.py").write_text("", encoding="utf-8")
+            env = os.environ.copy()
+            env.update({
+                "PYTHONPATH": os.pathsep.join((str(fake_package.parent), str(PROFILE_PATH.parent))),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+                "PYTEST_ADDOPTS": "",
+                "KREMA_E2E_PROFILE_OPS_MODE": "not-a-mode",
+                "KREMA_E2E_PROFILE_OPS_OUTPUT": str(output),
+                "KREMA_E2E_BINARY": sys.executable,
+            })
+            result = subprocess.run(
+                [
+                    sys.executable, "-m", "pytest", "-p", "profile_ops", "-p", "no:cacheprovider",
+                    "-q", str(test_file),
+                ],
+                cwd=root, env=env, capture_output=True, text=True,
+                timeout=20, check=False,
+            )
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["mode"], "not-a-mode")
+        self.assertEqual(payload["exitstatus"], 1)
+        self.assertFalse(payload["measurements_complete"])
+        self.assertEqual(payload["install_error"], "invalid_profile_ops_mode")
+        self.assertTrue(payload["nodes"])
+        node = next(iter(payload["nodes"].values()))
+        self.assertEqual(node["status"], "failed")
+        self.assertIn("original failure", node["phases"]["call"]["failure_reason"])
+        self.assertTrue(any(
+            error["operation"] == "config" and "invalid profile mode" in error["message"]
+            for error in payload["errors"]
+        ))
+
 if __name__ == "__main__":
     unittest.main()

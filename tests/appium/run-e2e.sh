@@ -39,8 +39,14 @@
 #                            container resource/provenance collection; writes
 #                            profile-ops.json and profile-resources.* alongside
 #                            the usual artifacts
+#   KREMA_E2E_PROFILE_OPS_MODE
+#                            profile plugin mode: operations (default) or
+#                            phases (passive pytest phase reporting)
 #   KREMA_E2E_SOURCE_REVISION
-#                            revision recorded by profiled container metadata
+#                            harness/source revision recorded by profiled
+#                            container metadata
+#   KREMA_E2E_BINARY_SOURCE_REVISION
+#                            optional source revision of the installed binary
 #
 # If the host has /dev/dri (e.g. after `sudo tests/appium/setup-vgem.sh`), it
 # is passed through so KWin composites with OpenGL on the vgem render node:
@@ -117,6 +123,12 @@ if [ -n "${KREMA_E2E_PROFILE:-}" ]; then
     profile_args="-e KREMA_E2E_PROFILE"
     if [ -n "${KREMA_E2E_SOURCE_REVISION:-}" ]; then
         profile_args="$profile_args -e KREMA_E2E_SOURCE_REVISION"
+    fi
+    if [ -n "${KREMA_E2E_PROFILE_OPS_MODE:-}" ]; then
+        profile_args="$profile_args -e KREMA_E2E_PROFILE_OPS_MODE"
+    fi
+    if [ -n "${KREMA_E2E_BINARY_SOURCE_REVISION:-}" ]; then
+        profile_args="$profile_args -e KREMA_E2E_BINARY_SOURCE_REVISION"
     fi
     profile_cidfile="$artifacts/container.cid"
     python3 "$repo/tests/distro/profile-resources.py" \

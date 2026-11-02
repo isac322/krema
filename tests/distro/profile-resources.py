@@ -3,7 +3,11 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 """Collect opt-in host and Docker-container resource diagnostics.
 
-The caller supplies a cidfile created by ``docker run --cidfile``.  This
+The default cidfile mode watches one running container and samples Docker
+resource metrics. Snapshot mode performs one metadata-only ``docker run
+--rm`` against an existing image and exits.
+
+The caller supplies a cidfile created by ``docker run --cidfile``. This
 process watches only that container, writes one JSON object per stats sample,
 and exits when the container disappears or when it receives TERM/INT.
 """
@@ -11,6 +15,7 @@ and exits when the container disappears or when it receives TERM/INT.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -168,34 +173,167 @@ def _image_metadata(image: str | None) -> dict[str, Any]:
     }
 
 
-def _package_inventory(container_id: str) -> dict[str, Any]:
-    command = (
-        "if command -v rpm >/dev/null 2>&1; then "
-        "printf '%s\\n' rpm; rpm -qa; "
-        "elif command -v dpkg-query >/dev/null 2>&1; then "
-        "printf '%s\\n' dpkg; dpkg-query -W -f='${binary:Package}\\t${Version}\\n'; "
-        "elif command -v pacman >/dev/null 2>&1; then "
-        "printf '%s\\n' pacman; pacman -Q; "
-        "else printf '%s\\n' unavailable; fi"
-    )
-    rc, stdout, stderr = _run(["docker", "exec", container_id, "sh", "-c", command], timeout=30.0)
-    lines = stdout.splitlines()
+def _package_inventory_from_lines(
+    lines: list[str],
+    *,
+    returncode: int,
+    error: str | None = None,
+) -> dict[str, Any]:
     manager = lines[0] if lines else "unavailable"
-    if rc != 0:
+    inventory_hash = hashlib.sha256(
+        "\n".join(sorted(lines[1:])).encode("utf-8")
+    ).hexdigest()
+    if returncode != 0:
         return {
             "status": "incomplete",
             "manager": manager,
             "packages": lines[1:],
-            "error": stderr or "docker exec failed",
+            "inventory_hash": inventory_hash,
+            "error": error or "package inventory command failed",
         }
     if manager == "unavailable":
         return {
             "status": "incomplete",
             "manager": manager,
             "packages": [],
-            "error": "no supported package manager found",
+            "inventory_hash": inventory_hash,
+            "error": error or "no supported package manager found",
         }
-    return {"status": "complete", "manager": manager, "packages": lines[1:]}
+    return {
+        "status": "complete",
+        "manager": manager,
+        "packages": lines[1:],
+        "inventory_hash": inventory_hash,
+    }
+
+
+_PACKAGE_INVENTORY_COMMAND = (
+    "if command -v rpm >/dev/null 2>&1; then "
+    "printf '%s\\n' rpm; rpm -qa; "
+    "elif command -v dpkg-query >/dev/null 2>&1; then "
+    "printf '%s\\n' dpkg; dpkg-query -W -f='${binary:Package}\\t${Version}\\n'; "
+    "elif command -v pacman >/dev/null 2>&1; then "
+    "printf '%s\\n' pacman; pacman -Q; "
+    "else printf '%s\\n' unavailable; fi"
+)
+
+
+def _package_inventory(container_id: str) -> dict[str, Any]:
+    rc, stdout, stderr = _run(
+        ["docker", "exec", container_id, "sh", "-c", _PACKAGE_INVENTORY_COMMAND],
+        timeout=30.0,
+    )
+    return _package_inventory_from_lines(
+        stdout.splitlines(), returncode=rc, error=stderr or None
+    )
+
+
+def _snapshot_metadata(image: str) -> dict[str, Any]:
+    image_info = _image_metadata(image)
+    command = (
+        "printf '%s\\n' __KREMA_CONTAINER__ \"$HOSTNAME\"; "
+        "printf '%s\\n' __KREMA_BINARY__; "
+        "if command -v sha256sum >/dev/null 2>&1; then "
+        "sha256sum /usr/bin/krema; "
+        "else printf '%s\\n' sha256sum-unavailable; fi; "
+        "printf '%s\\n' __KREMA_PACKAGES__; "
+        + _PACKAGE_INVENTORY_COMMAND
+    )
+    rc, stdout, stderr = _run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--pull=never",
+            "--network=none",
+            "--read-only",
+            "--entrypoint",
+            "sh",
+            image,
+            "-c",
+            command,
+        ],
+        timeout=60.0,
+    )
+    lines = stdout.splitlines()
+    container_id = None
+    if "__KREMA_CONTAINER__" in lines:
+        container_marker = lines.index("__KREMA_CONTAINER__")
+        if container_marker + 1 < len(lines):
+            container_id = lines[container_marker + 1] or None
+    binary: dict[str, Any] = {"path": "/usr/bin/krema"}
+    inventory_lines: list[str] = []
+    errors: list[str] = []
+    try:
+        binary_marker = lines.index("__KREMA_BINARY__")
+        package_marker = lines.index("__KREMA_PACKAGES__", binary_marker + 1)
+        binary_output = lines[binary_marker + 1 : package_marker]
+        inventory_lines = lines[package_marker + 1 :]
+        if binary_output:
+            fields = binary_output[0].split()
+            if (
+                len(fields) == 2
+                and fields[1] == "/usr/bin/krema"
+                and re.fullmatch(r"[0-9a-fA-F]{64}", fields[0])
+            ):
+                binary["sha256"] = fields[0].lower()
+                binary["status"] = "complete"
+            else:
+                binary["status"] = "incomplete"
+                binary["error"] = "sha256sum did not report /usr/bin/krema"
+        else:
+            binary["status"] = "incomplete"
+            binary["error"] = "sha256sum returned no output"
+    except ValueError:
+        binary["status"] = "incomplete"
+        binary["error"] = "snapshot output markers missing"
+    if rc != 0:
+        errors.append(stderr or "docker run failed")
+    if binary.get("error"):
+        errors.append(str(binary["error"]))
+    inventory = _package_inventory_from_lines(
+        inventory_lines,
+        returncode=rc,
+        error=stderr or None,
+    )
+    if inventory["status"] != "complete" and inventory.get("error"):
+        errors.append(str(inventory["error"]))
+    runtime_image = os.environ.get("KREMA_E2E_RUNTIME_IMAGE")
+    builder_image = os.environ.get("KREMA_E2E_BUILDER_IMAGE")
+    result: dict[str, Any] = {
+        "schema_version": 2,
+        "mode": "snapshot",
+        "status": (
+            "complete"
+            if rc == 0
+            and binary.get("status") == "complete"
+            and inventory["status"] == "complete"
+            else "incomplete"
+        ),
+        "collected_at": _utc_now(),
+        "source_revision": os.environ.get("KREMA_E2E_SOURCE_REVISION")
+        or os.environ.get("GITHUB_SHA"),
+        "source_revision_env": (
+            "KREMA_E2E_SOURCE_REVISION"
+            if os.environ.get("KREMA_E2E_SOURCE_REVISION")
+            else ("GITHUB_SHA" if os.environ.get("GITHUB_SHA") else None)
+        ),
+        "host": _host_metadata(),
+        "container_id": container_id,
+        "image": image_info,
+        "binary": binary,
+        "package_inventory": inventory,
+        "runtime_image": _image_metadata(runtime_image) if runtime_image else None,
+        "builder_image": _image_metadata(builder_image) if builder_image else None,
+    }
+    for key in ("image", "runtime_image", "builder_image"):
+        value = result[key]
+        if value and value.get("error"):
+            errors.append(str(value["error"]))
+    if errors:
+        result["status"] = "incomplete"
+        result["errors"] = sorted(set(errors))
+    return result
 
 
 def _container_status(container: dict[str, Any] | None) -> str | None:
@@ -375,18 +513,37 @@ def collect(cidfile: Path, output: Path, metadata_path: Path, interval: float) -
         output_handle.close()
 
 
-def main() -> int:
+def collect_snapshot(image: str, metadata_path: Path) -> int:
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(metadata_path, _snapshot_metadata(image))
+    return 0
+
+
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cidfile", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--cidfile", type=Path)
+    mode.add_argument("--snapshot-image")
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--interval", type=float, default=1.0)
     args = parser.parse_args()
     if args.interval <= 0:
         parser.error("--interval must be positive")
+    if args.cidfile is not None and args.output is None:
+        parser.error("--output is required with --cidfile")
+    if args.snapshot_image is not None and args.output is not None:
+        parser.error("--output is only valid with --cidfile")
+    return args
+
+
+def main() -> int:
+    args = _parse_args()
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
     try:
+        if args.snapshot_image is not None:
+            return collect_snapshot(args.snapshot_image, args.metadata)
         return collect(args.cidfile, args.output, args.metadata, args.interval)
     except Exception as exc:  # diagnostics must never affect the suite
         print(f"profile-resources: {exc}", file=sys.stderr)

@@ -173,6 +173,31 @@ measurements. If the container exits before a sample is available, the record
 is marked `incomplete`; unavailable values remain absent rather than being
 reported as zero.
 
+### Manual trial provenance snapshots
+
+Manual workflow dispatches capture `run-provenance.json` in the main target
+artifact directory after the main suite finishes. The collector's one-shot
+mode is:
+
+```sh
+tests/distro/profile-resources.py \
+  --snapshot-image krema-e2e-distro:<target> \
+  --metadata tests/appium/artifacts-distro-<target>/run-provenance.json
+```
+
+It starts a separate, short-lived `docker run --rm` of the already-installed
+image. The snapshot records the image ID and digests, the SHA-256 of
+`/usr/bin/krema`, a canonical `package_inventory.inventory_hash` and package
+list, host metadata, the source revision, and the resolved runtime and builder
+image references when available.
+
+This capture is deliberately outside the timed suite and does not enable
+`KREMA_E2E_PROFILE` or the sampler. It does not start KWin, modify the image,
+pull images, install packages, or contact a package repository. Snapshot
+diagnostic failures are recorded as `incomplete` metadata and do not replace
+the main suite's exit status. Pull-request and scheduled workflows do not
+run this step.
+
 ## Images
 
 One package, `ghcr.io/isac322/krema-ci`, holds every prebuilt CI image.

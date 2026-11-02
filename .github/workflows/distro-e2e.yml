@@ -57,6 +57,8 @@
 # Profiling: the optional profile input loads diagnostic operation timing in
 # every existing shard and output-count leg. profile-ops.json is uploaded
 # with each leg's usual artifacts; profiled runs are not acceptance tests.
+# Manual dispatches additionally capture run-provenance.json after the main
+# suite, outside its timer, without enabling profiling or the sampler.
 
 name: Distro E2E
 
@@ -241,6 +243,21 @@ jobs:
             export LP_NUM_THREADS="$RENDERER_THREADS"
           fi
           tests/distro/run-distro-e2e.sh "$TARGET" -rs
+      - name: Capture manual trial provenance
+        if: always() && github.event_name == 'workflow_dispatch' && (steps.main.outcome == 'success' || steps.main.outcome == 'failure')
+        continue-on-error: true
+        env:
+          KREMA_E2E_SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          artifact_dir="tests/appium/artifacts-distro-$TARGET"
+          mkdir -p "$artifact_dir"
+          KREMA_E2E_RUNTIME_IMAGE="$(tests/distro/image-ref.sh runtime "$TARGET")"
+          KREMA_E2E_BUILDER_IMAGE="$(tests/distro/image-ref.sh builder "$TARGET")"
+          export KREMA_E2E_RUNTIME_IMAGE KREMA_E2E_BUILDER_IMAGE
+          python3 tests/distro/profile-resources.py \
+            --snapshot-image "krema-e2e-distro:$TARGET" \
+            --metadata "$artifact_dir/run-provenance.json"
+
 
       - name: Save ccache
         # Pull requests only restore (see the header). Saving is an

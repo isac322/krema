@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -106,6 +108,145 @@ class ProfileResourcesTests(unittest.TestCase):
             self.assertNotIn("stats", records[0])
             self.assertEqual(run_mock.call_count, 1)
             self.assertEqual(run_mock.call_args.args[0][-1], "cid-1")
+
+    def test_snapshot_binary_digest_comes_from_query_payload(self):
+        digest = "A" * 64
+        payload = (
+            "__KREMA_BINARY__\n"
+            f"{digest}  /usr/bin/krema\n"
+            "__KREMA_PACKAGES__\n"
+            "rpm\n"
+            "pkg-b-2\n"
+            "pkg-a-1\n"
+        )
+        with mock.patch.object(
+            profile_resources,
+            "_image_metadata",
+            return_value={"reference": "krema:test", "id": "image-id"},
+        ), mock.patch.object(
+            profile_resources,
+            "_run",
+            return_value=(0, payload, ""),
+        ):
+            metadata = profile_resources._snapshot_metadata("krema:test")
+
+        self.assertEqual(metadata["status"], "complete")
+        self.assertEqual(metadata["binary"]["status"], "complete")
+        self.assertEqual(metadata["binary"]["sha256"], digest.lower())
+
+    def test_package_inventory_hash_is_order_independent(self):
+        first = profile_resources._package_inventory_from_lines(
+            ["rpm", "pkg-b-2", "pkg-a-1"],
+            returncode=0,
+        )
+        second = profile_resources._package_inventory_from_lines(
+            ["rpm", "pkg-a-1", "pkg-b-2"],
+            returncode=0,
+        )
+        expected = hashlib.sha256("pkg-a-1\npkg-b-2".encode("utf-8")).hexdigest()
+
+        self.assertEqual(first["status"], "complete")
+        self.assertEqual(first["inventory_hash"], expected)
+        self.assertEqual(second["inventory_hash"], expected)
+
+    def test_failed_snapshot_query_is_explicitly_incomplete(self):
+        with mock.patch.object(
+            profile_resources,
+            "_image_metadata",
+            return_value={"reference": "krema:test", "id": "image-id"},
+        ), mock.patch.object(
+            profile_resources,
+            "_run",
+            return_value=(17, "", "docker run failed"),
+        ):
+            metadata = profile_resources._snapshot_metadata("krema:test")
+
+        self.assertEqual(metadata["status"], "incomplete")
+        self.assertEqual(metadata["binary"]["status"], "incomplete")
+        self.assertEqual(metadata["package_inventory"]["status"], "incomplete")
+        self.assertTrue(metadata["errors"])
+
+    def test_unsupported_package_query_is_not_empty_success(self):
+        payload = (
+            "__KREMA_BINARY__\n"
+            f"{'A' * 64}  /usr/bin/krema\n"
+            "__KREMA_PACKAGES__\n"
+            "unavailable\n"
+        )
+        with mock.patch.object(
+            profile_resources,
+            "_image_metadata",
+            return_value={"reference": "krema:test", "id": "image-id"},
+        ), mock.patch.object(
+            profile_resources,
+            "_run",
+            return_value=(0, payload, ""),
+        ):
+            metadata = profile_resources._snapshot_metadata("krema:test")
+
+        self.assertEqual(metadata["status"], "incomplete")
+        self.assertEqual(metadata["package_inventory"]["status"], "incomplete")
+        self.assertEqual(metadata["package_inventory"]["manager"], "unavailable")
+        self.assertTrue(metadata["package_inventory"]["error"])
+
+    def test_main_routes_snapshot_and_sampling_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            metadata = Path(directory) / "metadata.json"
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "profile-resources.py",
+                    "--snapshot-image",
+                    "krema:test",
+                    "--metadata",
+                    str(metadata),
+                ],
+            ), mock.patch.object(
+                profile_resources,
+                "collect_snapshot",
+                return_value=7,
+            ) as snapshot, mock.patch.object(
+                profile_resources,
+                "collect",
+            ) as collect:
+                result = profile_resources.main()
+
+        self.assertEqual(result, 7)
+        snapshot.assert_called_once_with("krema:test", metadata)
+        collect.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as directory:
+            cidfile = Path(directory) / "container.cid"
+            output = Path(directory) / "stats.jsonl"
+            metadata = Path(directory) / "metadata.json"
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "profile-resources.py",
+                    "--cidfile",
+                    str(cidfile),
+                    "--output",
+                    str(output),
+                    "--metadata",
+                    str(metadata),
+                    "--interval",
+                    "0.25",
+                ],
+            ), mock.patch.object(
+                profile_resources,
+                "collect",
+                return_value=11,
+            ) as collect, mock.patch.object(
+                profile_resources,
+                "collect_snapshot",
+            ) as snapshot:
+                result = profile_resources.main()
+
+        self.assertEqual(result, 11)
+        collect.assert_called_once_with(cidfile, output, metadata, 0.25)
+        snapshot.assert_not_called()
 
     def test_package_manager_unavailable_is_incomplete(self):
         with mock.patch.object(

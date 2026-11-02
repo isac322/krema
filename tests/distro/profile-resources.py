@@ -256,11 +256,11 @@ def _snapshot_metadata(image: str) -> dict[str, Any]:
         timeout=60.0,
     )
     lines = stdout.splitlines()
-    container_id = None
+    probe_hostname = None
     if "__KREMA_CONTAINER__" in lines:
         container_marker = lines.index("__KREMA_CONTAINER__")
         if container_marker + 1 < len(lines):
-            container_id = lines[container_marker + 1] or None
+            probe_hostname = lines[container_marker + 1] or None
     binary: dict[str, Any] = {"path": "/usr/bin/krema"}
     inventory_lines: list[str] = []
     errors: list[str] = []
@@ -319,7 +319,7 @@ def _snapshot_metadata(image: str) -> dict[str, Any]:
             else ("GITHUB_SHA" if os.environ.get("GITHUB_SHA") else None)
         ),
         "host": _host_metadata(),
-        "container_id": container_id,
+        "probe_hostname": probe_hostname,
         "image": image_info,
         "binary": binary,
         "package_inventory": inventory,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added Fedora 45 to the OBS packaging targets for x86_64 and aarch64 (#153)
+
 ## [0.13.0] - 2026-11-02
 
 Krema v0.13.0 expanded this KDE Plasma 6 dock for Wayland with chat app unread and mention indicators for Slack, Discord, Mattermost, Telegram, Element, and Ferdium, plus panel-relative floating gaps and reveal triggers. It also added badge position and color options and separated dock and app context menus while preserving pinned app order during startup notifications.

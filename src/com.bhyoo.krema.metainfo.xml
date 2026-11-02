@@ -71,6 +71,11 @@
     <color type="primary" scheme_preference="dark">#231A14</color>
   </branding>
   <releases>
+    <release version="0.13.0" date="2026-11-02">
+      <description>
+        <p>Krema v0.13.0 brought unread and mention signals from Slack, Discord, Mattermost, Telegram, Element, and Ferdium into the dock, while panel-aware gap and reveal controls adapted placement around Plasma panels. New badge styling choices and separate dock and app menus made attention states and everyday actions easier to manage.</p>
+      </description>
+    </release>
     <release version="0.12.0" date="2026-10-12">
       <description>
         <p>A Floating margin setting sets the gap between the floating dock and the screen edge, and the right-click menu now offers each app's own actions such as Firefox's "New Private Window". A magnified icon stays magnified while its context menu is open, and on Plasma 6.8 apps opened from a pinned icon take that icon's place again.</p>

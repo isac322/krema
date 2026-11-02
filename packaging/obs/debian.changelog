@@ -1,3 +1,15 @@
+krema (0.13.0-1) unstable; urgency=medium
+
+  * New upstream release v0.13.0
+  * Chat app unread and mention indicators for Slack, Discord, Mattermost,
+    Telegram, Element, and Ferdium
+  * Panel-relative floating gaps and reveal triggers, with configurable badge
+    positions and colors
+  * Separate dock and application context menus
+  * Preserved pinned app order while startup notifications gave way to windows
+
+ -- Byeonghoon Yoo <isac322@gmail.com>  Mon, 02 Nov 2026 00:00:00 +0900
+
 krema (0.12.0-1) unstable; urgency=medium
 
   * New upstream release v0.12.0

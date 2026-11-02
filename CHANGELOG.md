@@ -7,47 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-02
+
+Krema v0.13.0 expanded this KDE Plasma 6 dock for Wayland with chat app unread and mention indicators for Slack, Discord, Mattermost, Telegram, Element, and Ferdium, plus panel-relative floating gaps and reveal triggers. It also added badge position and color options and separated dock and app context menus while preserving pinned app order during startup notifications.
+
 ### Added
 
-- Added Slack Desktop unread and mention indicators: blue unread dots and red mention badges, with counts when Slack reports them and support for Electron tray identities.
-- Added Discord, Vesktop, and WebCord unread and mention indicators, including the official Arch/Manjaro Discord package without `libunity`. Unread channels show a blue dot; mentions and DMs show a red badge with their count. The count no longer disappears when the popup times out, and clears as soon as you read the messages in the app. WebCord also reports its mention count while it is closed to the tray, and Flatpak and native installs of the same app now share one badge.
-- Added Mattermost Desktop unread and mention indicators. Unread channels show a blue dot and mentions show a red badge, even while Mattermost is closed to the tray. Mention counts stay after the popup times out and clear once you read the mentions in Mattermost.
-- Added Telegram Desktop unread indicators. The dock shows Telegram's unread count even while it is closed to the tray, in red when Telegram's tray icon flags unread messages and in blue for muted chats. Installs from Telegram's own updater are recognized as the same app.
-- Added Element Desktop unread and highlight indicators. Unread rooms show a blue dot and highlights show a red badge with their count, also while Element is closed to the tray or offline.
-- Added Ferdium unread indicators. Direct messages show a red badge with their count and other unread messages show a blue dot, using Ferdium's own unread counts. The badge clears as soon as you read the messages in Ferdium.
-- Added live SNI metadata for dock items: attention and overlay icon names are shown from the app's StatusNotifierItem, and SNI tooltip title/subtitle text is exposed to accessibility while canonical identity matching and generation checks prevent stale tray data.
-- Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64 (#99)
-- Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap now starts at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and follows it live when the panel changes. Hidden auto-hide and dodge panels are ignored; visible same-edge panel frames, including frames with no exclusive zone, can define the panel-relative depth. Without such a panel, or without KWin scripting, the gap was measured from the screen edge as before (#90)
-- Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges could use the system accent color or a custom color with automatic text contrast (#103)
-- Added a persistent attention-only dot to dock badges for live SNI, Unity urgent, and task-manager attention states with no numeric count; Badge display: Off hides numeric badges while keeping the live attention marker visible.
-- Added a "Reveal trigger" setting (Settings → Behavior, Auto hide and Dodge windows) for a hidden dock that rests past an always-visible Plasma panel on the same edge. With Screen edge, the default, pushing the pointer against the screen edge revealed the dock even over the panel, and the panel still got every click there. With Dock position, the dock was revealed only from the panel's inner edge. Without KWin scripting, panel-relative placement is unavailable and both reveal choices used the dock surface's screen-edge strip (#90)
+- Added Slack Desktop unread and mention indicators: blue unread dots and red mention badges, with reported counts and support for Electron tray identities.
+- Added Discord, Vesktop, and WebCord unread and mention indicators, including support for the official Arch/Manjaro Discord package without `libunity`. Unread channels received blue dots; mentions and DMs received red badges with their counts. Counts persisted after popups timed out and cleared when messages were read. WebCord reported mention counts while closed to the tray, and Flatpak and native installs shared one badge.
+- Added Mattermost Desktop unread and mention indicators. Unread channels received blue dots and mentions received red badges, even while Mattermost was closed to the tray. Mention counts persisted after popups timed out and cleared once the mentions were read in Mattermost.
+- Added Telegram Desktop unread indicators. The dock showed Telegram's unread count even while it was closed to the tray, in red when Telegram's tray icon flagged unread messages and in blue for muted chats. Installs from Telegram's own updater were recognized as the same app.
+- Added Element Desktop unread and highlight indicators. Unread rooms received blue dots and highlights received red badges with their counts, including while Element was closed to the tray or offline.
+- Added Ferdium unread indicators. Direct messages received red badges with their counts and other unread messages received blue dots, using Ferdium's own unread counts. The badge cleared as soon as the messages were read in Ferdium.
+- Added live SNI metadata for dock items: attention and overlay icon names were shown from the app's StatusNotifierItem, and SNI tooltip title and subtitle text was exposed to accessibility while canonical identity matching and generation checks prevented stale tray data.
+- Added Ubuntu 26.10 to the OBS packaging targets for x86_64 and aarch64.
+- Added a "Measure gap from" setting (Settings → Layout & Position). With Panels, the default, the dock's gap started at the inner edge of an always-visible Plasma panel, such as the taskbar, on the same screen edge, and followed it live when the panel changed. Hidden auto-hide and dodge panels were ignored; visible same-edge panel frames, including frames with no exclusive zone, could define the panel-relative depth. Without such a panel, or without KWin scripting, the gap fell back to the screen edge as before.
+- Added notification badge position choices (Top-Right, Top-Left, and edge-aware Auto) and color options in Settings → Animations & Badges. Badges used the system accent color or a custom color with automatic text contrast.
+- Added a persistent attention-only dot to dock badges for live SNI, Unity urgent, and task-manager attention states with no numeric count; Badge display: Off hid numeric badges while keeping the live attention marker visible.
+- Added a "Reveal trigger" setting (Settings → Behavior, Auto hide and Dodge windows) for a hidden dock that rested past an always-visible Plasma panel on the same edge. With Screen edge, pushing the pointer against the screen edge revealed the dock even over the panel, and the panel still received every click there. With Dock position, the dock was revealed only from the panel's inner edge. Without KWin scripting, panel-relative placement was unavailable and both reveal choices used the dock surface's screen-edge strip.
 
 ### Changed
 
-- Moved Settings and About Krema into the dock-only context menu, keeping application menus focused on the clicked app (#130)
-- The Floating margin setting went up to 128 px instead of 32 px (#90)
-- Krema packages (Arch, Fedora, openSUSE, Debian, Ubuntu) now require only the Qt minor release they were built against. Plasma upgrades no longer require rebuilding Krema because it loads Plasma's task manager and notification settings through their QML modules.
+- Moved Settings and About Krema into the dock-only context menu, keeping application menus focused on the clicked app.
+- Raised the Floating margin setting to 128 px instead of 32 px.
+- Required Krema packages (Arch, Fedora, openSUSE, Debian, Ubuntu) to use only the Qt minor release they were built against. Plasma upgrades no longer required rebuilding Krema because it loaded Plasma's task manager and notification settings through their QML modules.
 
 ### Fixed
 
-- Builds from source no longer fail to link (for example `undefined reference to vtable for Catch::ITransientExpression`) or produce crashing binaries after a system upgrade of Qt, Plasma, Catch2, or the compiler; the next build recompiles everything against the new libraries.
-- Krema no longer crashed on startup after a Plasma upgrade because it no longer links Plasma's task manager and notification manager C++ libraries.
-- Floating gaps used the effective per-screen Floating state and configured global margin. Shadows no longer shifted the requested gap, screen reservation, or preview position; same-edge panel behavior remained unchanged.
-- With "Measure gap from: Panels", Floating off now follows the visible same-edge panel surface, hidden dodge and auto-hide frames are ignored, and panel-depth updates animate without leaving the dock or its previews at a stale depth.
-- Dock shadows no longer clipped at low light heights by their containing surfaces; when the requested gap is smaller than the outward shadow, pixels may still clip at the layer-surface/output boundary. Screen reservation and window preview placement keep the requested gap, and previews stay interactive after native surface resizes (#118)
-- Fixed a crash when dragging an uninstalled .desktop file onto the dock. Krema now ignores unknown files while still pinning application-menu launchers that point to symlinked files correctly.
-- Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations
-- Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview
-- Kept dock settings and actions accessible from keyboard navigation with Shift+F10 or Shift+Menu, including on populated docks (#130)
-- Moved the dock's quit action out of application context menus into an empty-area dock menu and renamed it "Quit Krema", preventing it from being mistaken for closing the clicked app (#130)
-- Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin (#103)
-- Notification tracking reconnected after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.
-- Long Do Not Disturb periods kept a valid expiry timer on older Qt versions and ended only when their configured deadline passed.
-- Prevented transient duplicate panel reservations while a panel-relative dock probe is reconfigured or remapped across edges; real probe teardown now hands the exclusive zone back to the dock exactly once (#135)
-
-### Removed
-
-- Removed the local notification inbox from Settings and window previews along with retained notification history storage, keeping Krema focused on dock-native unread badges, attention indicators, and StatusNotifierItem metadata.
+- Stopped source builds from failing to link (for example `undefined reference to vtable for Catch::ITransientExpression`) or producing crashing binaries after a system upgrade of Qt, Plasma, Catch2, or the compiler; the next build recompiled everything against the new libraries.
+- Stopped Krema from crashing on startup after a Plasma upgrade because it no longer linked Plasma's task manager and notification manager C++ libraries.
+- Kept floating gaps tied to the effective per-screen Floating state and configured global margin. Shadows no longer shifted the requested gap, screen reservation, or preview position; same-edge panel behavior remained unchanged.
+- Made Floating-off gaps follow the visible same-edge panel surface, ignored hidden dodge and auto-hide frames, and animated panel-depth updates without leaving the dock or its previews at a stale depth.
+- Prevented dock shadows from clipping at low light heights by their containing surfaces; when the requested gap was smaller than the outward shadow, pixels could still clip at the layer-surface/output boundary. Screen reservation and window preview placement kept the requested gap, and previews stayed interactive after native surface resizes.
+- Ignored unknown files when dragging an uninstalled .desktop file onto the dock while still pinning application-menu launchers that pointed to symlinked files correctly.
+- Preserved pinned app order when startup notifications gave way to windows.
+- Kept icons fully visible while a zoomed dock icon bounced during launch or attention animations.
+- Kept window previews open while the pointer crossed the enlarged zoom and bounce reserve between the dock and preview.
+- Kept dock settings and actions accessible from keyboard navigation with Shift+F10 or Shift+Menu, including on populated docks.
+- Moved the dock's quit action out of application context menus into an empty-area dock menu and renamed it "Quit Krema", preventing it from being mistaken for closing the clicked app.
+- Centered dock icons across the panel thickness with equal padding on vertical and horizontal docks, and centered running-window indicator dots within the screen-edge margin.
+- Reconnected notification tracking after Plasma notification and StatusNotifier services restarted or changed owners directly, discarded stale SNI attention, and handled asynchronous SNI state updates.
+- Kept a valid expiry timer during long Do Not Disturb periods on older Qt versions and ended it only when its configured deadline passed.
+- Prevented transient duplicate panel reservations while a panel-relative dock probe was reconfigured or remapped across edges; real probe teardown handed the exclusive zone back to the dock exactly once.
 
 ## [0.12.0] - 2026-10-12
 

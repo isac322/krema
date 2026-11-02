@@ -1,6 +1,6 @@
 Format: 1.0
 Source: krema
-Version: 0.12.0-1
+Version: 0.13.0-1
 Binary: krema
 Maintainer: Byeonghoon Yoo <bhyoo@bhyoo.com>
 Architecture: any
@@ -33,6 +33,6 @@ Build-Depends: debhelper-compat (= 13),
                liblayershellqtinterface-dev (>= 6.0.0),
                libkpipewire-dev,
                libwayland-dev (>= 1.22)
-DEBTRANSFORM-TAR: krema-0.12.0.tar.gz
+DEBTRANSFORM-TAR: krema-0.13.0.tar.gz
 Files:
- 00000000000000000000000000000000 0 krema-0.12.0.tar.gz
+ 00000000000000000000000000000000 0 krema-0.13.0.tar.gz

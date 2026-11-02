@@ -53,6 +53,10 @@
 # duplicate targets.tsv and still start a runner for every unselected
 # target. Measured cost of that job: 5-9 s from run start to matrix jobs
 # being created.
+#
+# Profiling: the optional profile input loads diagnostic operation timing in
+# every existing shard and output-count leg. profile-ops.json is uploaded
+# with each leg's usual artifacts; profiled runs are not acceptance tests.
 
 name: Distro E2E
 
@@ -64,6 +68,21 @@ on:
         type: string
         required: false
         default: all
+      profile:
+        description: "Collect diagnostic operation timings (not acceptance results)"
+        type: boolean
+        required: false
+        default: false
+      shards:
+        description: "Number of test shards for controlled experiments"
+        type: number
+        required: false
+        default: 3
+      renderer_threads:
+        description: "llvmpipe threads per shard (0 selects automatic CPU/shard calculation)"
+        type: number
+        required: false
+        default: 0
   schedule:
     - cron: "41 2 * * 3"
   workflow_dispatch:
@@ -72,13 +91,27 @@ on:
         description: "Targets (comma/space separated ids from tests/distro/targets.tsv or 'arch'), or 'all'"
         required: false
         default: all
+      profile:
+        description: "Collect diagnostic operation timings (not acceptance results)"
+        type: boolean
+        required: false
+        default: false
+      shards:
+        description: "Number of test shards for controlled experiments"
+        type: number
+        required: false
+        default: 3
+      renderer_threads:
+        description: "llvmpipe threads per shard (0 selects automatic CPU/shard calculation)"
+        type: number
+        required: false
+        default: 0
 
 permissions: {}
 
 concurrency:
   group: distro-e2e-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   targets:
     name: Resolve targets
@@ -89,6 +122,7 @@ jobs:
     outputs:
       matrix: ${{ steps.resolve.outputs.matrix }}
     steps:
+
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -100,7 +134,17 @@ jobs:
         id: resolve
         env:
           REQUESTED: ${{ inputs.targets || 'all' }}
+          SHARDS: ${{ inputs.shards }}
+          RENDERER_THREADS: ${{ inputs.renderer_threads }}
         run: |
+          [[ "${SHARDS:-3}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::shards must be a positive integer (got '$SHARDS')"
+            exit 1
+          }
+          [[ "${RENDERER_THREADS:-0}" =~ ^(0|[1-9][0-9]*)$ ]] || {
+            echo "::error::renderer_threads must be 0 or a positive integer (got '$RENDERER_THREADS')"
+            exit 1
+          }
           known="$(awk -F '\t' '/^[[:space:]]*#/ || NF < 4 { next } { print $1 }' tests/distro/targets.tsv; echo arch)"
           if [[ -z ${REQUESTED// } || $REQUESTED == all ]]; then
             selected="$known"
@@ -178,12 +222,25 @@ jobs:
             ${{ steps.ccache.outputs.prefix }}
             ${{ steps.ccache.outputs.target_prefix }}
 
+      - name: Enable diagnostic profiling
+        if: inputs.profile
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          echo "KREMA_E2E_PROFILE=1" >>"$GITHUB_ENV"
+          echo "KREMA_E2E_SOURCE_REVISION=$GITHUB_SHA" >>"$GITHUB_ENV"
+
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
         id: main
         env:
-          KREMA_E2E_SHARDS: "3"
+          KREMA_E2E_SHARDS: ${{ inputs.shards || 3 }}
+          RENDERER_THREADS: ${{ inputs.renderer_threads || 0 }}
           KREMA_CCACHE_DIR: ${{ runner.temp }}/ccache
-        run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
+        run: |
+          if [[ "$RENDERER_THREADS" != 0 ]]; then
+            export LP_NUM_THREADS="$RENDERER_THREADS"
+          fi
+          tests/distro/run-distro-e2e.sh "$TARGET" -rs
 
       - name: Save ccache
         # Pull requests only restore (see the header). Saving is an

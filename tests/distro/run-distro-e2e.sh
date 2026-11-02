@@ -40,6 +40,14 @@
 #                         test, and writes to <artifacts>/shard-<i>/ with a
 #                         [shard i] log prefix; any shard failing fails the
 #                         run. --shell cannot be sharded.
+#   KREMA_E2E_PROFILE=1   opt-in diagnostic operation timings and
+#                         whole-container resource/provenance collection,
+#                         inherited by every shard; each run-e2e container
+#                         writes profile-resources.* into its own artifact
+#                         directory
+#   KREMA_E2E_SOURCE_REVISION
+#                         source revision forwarded to profiled containers
+#                         and recorded in their provenance metadata
 #   Any other KREMA_E2E_* variable of tests/appium/run-e2e.sh.
 
 set -euo pipefail

@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Krema Contributors
+"""Collect opt-in host and Docker-container resource diagnostics.
+
+The caller supplies a cidfile created by ``docker run --cidfile``.  This
+process watches only that container, writes one JSON object per stats sample,
+and exits when the container disappears or when it receives TERM/INT.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import re
+import signal
+import socket
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import Event
+from typing import Any
+
+
+_STOP = Event()
+_SIZE_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]+)\s*$")
+
+
+def _stop(_signum: int, _frame: Any) -> None:
+    _STOP.set()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _run(command: list[str], timeout: float = 10.0) -> tuple[int, str, str]:
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return 127, "", str(exc)
+    return completed.returncode, completed.stdout, completed.stderr.strip()
+
+
+def _read_meminfo() -> int | None:
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemTotal:"):
+                fields = line.split()
+                if len(fields) >= 2:
+                    return int(fields[1]) * 1024
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _host_metadata() -> dict[str, Any]:
+    return {
+        "hostname": socket.gethostname(),
+        "platform": platform.platform(),
+        "kernel": platform.release(),
+        "machine": platform.machine(),
+        "cpu_count": os.cpu_count(),
+        "memory_total_bytes": _read_meminfo(),
+    }
+
+
+def _parse_size(value: str) -> int | float | None:
+    match = _SIZE_RE.match(value)
+    if not match:
+        return None
+    amount = float(match.group(1))
+    unit = match.group(2).lower()
+    multipliers = {
+        "b": 1,
+        "kb": 1000,
+        "kib": 1024,
+        "mb": 1000**2,
+        "mib": 1024**2,
+        "gb": 1000**3,
+        "gib": 1024**3,
+        "tb": 1000**4,
+        "tib": 1024**4,
+    }
+    multiplier = multipliers.get(unit)
+    if multiplier is None:
+        return None
+    result = amount * multiplier
+    return int(result) if result.is_integer() else result
+
+
+def _parse_memory(value: str) -> tuple[int | float | None, int | float | None]:
+    parts = [part.strip() for part in value.split("/", 1)]
+    if len(parts) != 2:
+        return None, None
+    return _parse_size(parts[0]), _parse_size(parts[1])
+
+
+def _parse_block_io(value: str) -> tuple[int | float | None, int | float | None]:
+    parts = [part.strip() for part in value.split("/", 1)]
+    if len(parts) != 2:
+        return None, None
+    return _parse_size(parts[0]), _parse_size(parts[1])
+
+
+def _parse_stats(raw: str) -> dict[str, Any]:
+    decoded = json.loads(raw)
+    cpu = decoded.get("CPUPerc")
+    cpu_percent = None
+    if isinstance(cpu, str) and cpu.rstrip().endswith("%"):
+        try:
+            cpu_percent = float(cpu.rstrip()[:-1])
+        except ValueError:
+            pass
+    memory_used, memory_limit = _parse_memory(str(decoded.get("MemUsage", "")))
+    block_read, block_write = _parse_block_io(str(decoded.get("BlockIO", "")))
+    pids = None
+    try:
+        pids = int(str(decoded.get("PIDs", "")).strip())
+    except ValueError:
+        pass
+    return {
+        "cpu_percent": cpu_percent,
+        "memory_usage_bytes": memory_used,
+        "memory_limit_bytes": memory_limit,
+        "block_read_bytes": block_read,
+        "block_write_bytes": block_write,
+        "pids": pids,
+        "raw": decoded,
+    }
+
+
+def _inspect_container(container_id: str) -> dict[str, Any] | None:
+    rc, stdout, _stderr = _run(["docker", "inspect", container_id])
+    if rc != 0:
+        return None
+    try:
+        value = json.loads(stdout)
+        return value[0] if value else None
+    except (json.JSONDecodeError, IndexError, TypeError):
+        return None
+
+
+def _image_metadata(image: str | None) -> dict[str, Any]:
+    if not image:
+        return {"reference": None, "id": None, "digests": [], "tags": []}
+    rc, stdout, stderr = _run(["docker", "image", "inspect", image])
+    if rc != 0:
+        return {"reference": image, "error": stderr or "docker image inspect failed"}
+    try:
+        inspected = json.loads(stdout)[0]
+    except (json.JSONDecodeError, IndexError, TypeError):
+        return {"reference": image, "error": "invalid docker image inspect output"}
+    return {
+        "reference": image,
+        "id": inspected.get("Id"),
+        "digests": inspected.get("RepoDigests") or [],
+        "tags": inspected.get("RepoTags") or [],
+    }
+
+
+def _package_inventory(container_id: str) -> dict[str, Any]:
+    command = (
+        "if command -v rpm >/dev/null 2>&1; then "
+        "printf '%s\\n' rpm; rpm -qa; "
+        "elif command -v dpkg-query >/dev/null 2>&1; then "
+        "printf '%s\\n' dpkg; dpkg-query -W -f='${binary:Package}\\t${Version}\\n'; "
+        "elif command -v pacman >/dev/null 2>&1; then "
+        "printf '%s\\n' pacman; pacman -Q; "
+        "else printf '%s\\n' unavailable; fi"
+    )
+    rc, stdout, stderr = _run(["docker", "exec", container_id, "sh", "-c", command], timeout=30.0)
+    lines = stdout.splitlines()
+    manager = lines[0] if lines else "unavailable"
+    if rc != 0:
+        return {
+            "status": "incomplete",
+            "manager": manager,
+            "packages": lines[1:],
+            "error": stderr or "docker exec failed",
+        }
+    if manager == "unavailable":
+        return {
+            "status": "incomplete",
+            "manager": manager,
+            "packages": [],
+            "error": "no supported package manager found",
+        }
+    return {"status": "complete", "manager": manager, "packages": lines[1:]}
+
+
+def _container_status(container: dict[str, Any] | None) -> str | None:
+    state = container.get("State") if container else None
+    return state.get("Status") if isinstance(state, dict) else None
+
+
+def _incomplete_sample(
+    cid: str,
+    *,
+    reason: str,
+    status: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "timestamp": _utc_now(),
+        "container_id": cid,
+        "status": "incomplete",
+        "reason": reason,
+    }
+    if status is not None:
+        record["container_status"] = status
+    if error:
+        record["error"] = error
+    return record
+
+
+def _write_json(path: Path, value: Any) -> None:
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _read_container_id(cidfile: Path) -> str | None:
+    try:
+        value = cidfile.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _metadata(cid: str, container: dict[str, Any] | None) -> dict[str, Any]:
+    config = container.get("Config") if container else {}
+    image_ref = config.get("Image") if isinstance(config, dict) else None
+    state = container.get("State") if container else None
+    return {
+        "schema_version": 1,
+        "collected_at": _utc_now(),
+        "source_revision": os.environ.get("KREMA_E2E_SOURCE_REVISION")
+        or os.environ.get("GITHUB_SHA"),
+        "source_revision_env": (
+            "KREMA_E2E_SOURCE_REVISION"
+            if os.environ.get("KREMA_E2E_SOURCE_REVISION")
+            else ("GITHUB_SHA" if os.environ.get("GITHUB_SHA") else None)
+        ),
+        "container_id": cid,
+        "host": _host_metadata(),
+        "container": {
+            "image_id": container.get("Image") if container else None,
+            "image_reference": image_ref,
+            "created": container.get("Created") if container else None,
+            "state": state,
+        },
+        "image": _image_metadata(image_ref),
+        "package_inventory": _package_inventory(cid),
+    }
+
+
+def _sample(cid: str) -> dict[str, Any]:
+    inspected = _inspect_container(cid)
+    status = _container_status(inspected)
+    if inspected is None:
+        return _incomplete_sample(cid, reason="container missing")
+    if status != "running":
+        reason = {
+            "exited": "container exited",
+            "dead": "container dead",
+            "removing": "container removing",
+        }.get(status, "container is not running")
+        return _incomplete_sample(cid, reason=reason, status=status)
+
+    rc, stdout, stderr = _run(
+        ["docker", "stats", "--no-stream", "--format", "{{json .}}", cid],
+        timeout=15.0,
+    )
+    record: dict[str, Any] | None = None
+    if rc == 0:
+        raw = stdout.strip().splitlines()
+        if raw:
+            try:
+                record = {
+                    "timestamp": _utc_now(),
+                    "container_id": cid,
+                    "stats": _parse_stats(raw[0]),
+                }
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                return _incomplete_sample(
+                    cid,
+                    reason="invalid docker stats JSON",
+                    status=status,
+                    error=str(exc),
+                )
+    after_stats = _inspect_container(cid)
+    after_status = _container_status(after_stats)
+    if after_stats is None:
+        return _incomplete_sample(cid, reason="container missing")
+    if after_status != "running":
+        reason = {
+            "exited": "container exited",
+            "dead": "container dead",
+            "removing": "container removing",
+        }.get(after_status, "container is not running")
+        return _incomplete_sample(cid, reason=reason, status=after_status)
+    if record is not None:
+        return record
+    return _incomplete_sample(
+        cid,
+        reason="docker stats unavailable",
+        status=after_status,
+        error=stderr or "docker stats failed",
+    )
+
+
+def _wait_for_running(cid: str, interval: float) -> dict[str, Any] | None:
+    while not _STOP.is_set():
+        inspected = _inspect_container(cid)
+        if inspected is None:
+            return None
+        status = _container_status(inspected)
+        if status == "running":
+            return inspected
+        if status not in {"created", "restarting"}:
+            return inspected
+        _STOP.wait(min(interval, 0.25))
+    return None
+
+
+def collect(cidfile: Path, output: Path, metadata_path: Path, interval: float) -> int:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output_handle = output.open("a", encoding="utf-8")
+    try:
+        cid = None
+        while not _STOP.is_set() and cid is None:
+            cid = _read_container_id(cidfile)
+            if cid is None:
+                _STOP.wait(min(interval, 0.25))
+        if cid is None:
+            return 0
+
+        container = _wait_for_running(cid, interval)
+        if container is None:
+            if not _STOP.is_set():
+                record = _incomplete_sample(cid, reason="container missing")
+                output_handle.write(json.dumps(record, sort_keys=True) + "\n")
+                output_handle.flush()
+            return 0
+        status = _container_status(container)
+        if status != "running":
+            reason = {
+                "exited": "container exited",
+                "dead": "container dead",
+                "removing": "container removing",
+            }.get(status, "container is not running")
+            record = _incomplete_sample(cid, reason=reason, status=status)
+            output_handle.write(json.dumps(record, sort_keys=True) + "\n")
+            output_handle.flush()
+            return 0
+
+        _write_json(metadata_path, _metadata(cid, container))
+        while not _STOP.is_set():
+            record = _sample(cid)
+            output_handle.write(json.dumps(record, sort_keys=True) + "\n")
+            output_handle.flush()
+            if record.get("status") == "incomplete":
+                break
+            _STOP.wait(interval)
+        return 0
+    finally:
+        output_handle.close()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cidfile", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--metadata", type=Path, required=True)
+    parser.add_argument("--interval", type=float, default=1.0)
+    args = parser.parse_args()
+    if args.interval <= 0:
+        parser.error("--interval must be positive")
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        return collect(args.cidfile, args.output, args.metadata, args.interval)
+    except Exception as exc:  # diagnostics must never affect the suite
+        print(f"profile-resources: {exc}", file=sys.stderr)
+        return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

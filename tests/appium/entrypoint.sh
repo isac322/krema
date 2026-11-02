@@ -51,6 +51,11 @@ if [ "${1:-}" = "--inner" ]; then
         break
     done
     cd "$KREMA_E2E_TESTS_DIR"
+    # Diagnostic instrumentation is opt-in; leave the default pytest command
+    # and all test selection arguments unchanged.
+    if [ -n "${KREMA_E2E_PROFILE:-}" ]; then
+        set -- -p krema_e2e.profile_ops "$@"
+    fi
     python3 -m pytest -p no:cacheprovider --junitxml=/artifacts/junit.xml "$@" >>/artifacts/pytest.log 2>&1
     exit $?
 fi

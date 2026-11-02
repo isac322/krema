@@ -129,6 +129,7 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 | `KREMA_E2E_OUTPUT_COUNT` | 1 | number of outputs (`--output-count`), laid out left to right; tests marked `@pytest.mark.outputs(n)` run only when the session has exactly `n` |
 | `KREMA_E2E_DOCKER_ARGS` | unset | extra `docker run` arguments, e.g. `--cpus=2` to approximate a slower CI runner |
 | `KREMA_E2E_SHARD` | unset | `<i>/<N>` (0-based): run only every N-th collected test and deselect the rest. `tests/distro/run-distro-e2e.sh` sets it per shard container (`KREMA_E2E_SHARDS`); composes with `-k`/`-m` (sharding applies to the filtered collection). The default build volume gets a `-shard-<i>` suffix |
+| `KREMA_E2E_PROFILE` | unset | any nonempty value loads the diagnostic operation profiler; writes `profile-ops.json` into the existing artifact directory |
 
 ### CI
 
@@ -187,12 +188,80 @@ changes that only touch this directory's tests and harness (anything but
 the Dockerfile), `tests/distro` (except its two image scripts) or Markdown
 skip `Build & tests`. `CI gate` still reports for them.
 
+### Diagnostic profiling (opt-in)
+
+Set `KREMA_E2E_PROFILE=1` to load the repository's
+`krema_e2e.profile_ops` pytest plugin. Without it, pytest does not load the
+profiler and Docker receives no profiling environment variable.
+
+```sh
+KREMA_E2E_PROFILE=1 tests/appium/run-e2e.sh
+KREMA_E2E_PROFILE=1 KREMA_E2E_SHARDS=3 \
+    tests/distro/run-distro-e2e.sh fedora-43 -rs
+```
+
+The profiler records the complete pre-filter collection in
+`full_collection_manifest` (including each test's `nodeid`, `requested_outputs`,
+and post-filter `selected` flag), then records the filtered/sharded
+`collection_manifest` and `selected_nodeids`. New output-count markers and
+parameterized tests are discovered from pytest collection; no profiling list
+needs updating.
+
+It records per-test setup/call/teardown outcomes and timings. Each phase keeps
+skip and xfail reasons separate from failure details, and labels call failures
+as failures versus setup/teardown errors. Node `status` and session
+`result_counts` distinguish `passed`, `failed`, `skipped`, `xfailed`, `xpassed`,
+and `unknown` using pytest's actual `outcome` and `wasxfail` values. Phase
+outcomes are not rewritten; a strict XPASS therefore remains `failed`.
+Aggregate operation timings are also included.
+
+Session metadata includes topology, Python/runtime details, the installed
+binary's SHA-256, and the Qt runtime version already read by the harness.
+`KREMA_E2E_SOURCE_REVISION` takes precedence over `GITHUB_SHA` when either
+is present inside the test container; otherwise `source_revision` is null.
+The profiler does not invoke Git, run version probes, or repeat metadata
+collection for each test.
+
+`resource_usage.start` and `.end` contain `getrusage(RUSAGE_SELF)` and
+`getrusage(RUSAGE_CHILDREN)` snapshots: user/system CPU seconds, maximum RSS,
+page faults, and block input/output operation counts. These cover the pytest
+process and reaped child processes only, **not all external KWin, WebDriver,
+or desktop daemons**. RSS is a high-water mark (KiB on Linux, bytes on macOS),
+not current memory or an additive delta; block I/O counts are operations, not
+bytes. Snapshots require no sampler thread and are collected only at session
+start and finish.
+
+Check `errors`, `omitted`, and `install_error` before comparing profiles.
+`measurements_complete: false` marks a known instrumentation gap, not a test
+failure, and does not claim test coverage or statistical completeness. Null
+provenance fields mean that metadata was unavailable; a profile without its
+binary checksum must not be treated as a verified binary match.
+
+Each container writes `profile-ops.json` alongside its JUnit report and
+logs. Distro shards therefore write separate
+`artifacts-distro-<target>/shard-<i>/profile-ops.json` files; the existing
+two- and three-output legs use their own `-2out` and `-3out` directories.
+The existing CI artifact uploads include these files.
+
+In `.github/workflows/distro-e2e.yml`, enable the `profile` boolean input
+for manual dispatch or a reusable-workflow call. It defaults to `false`,
+including normal pull-request runs. Profiling uses the same GitHub-hosted
+Linux/vgem path, target selection, shards and output-count legs; it does
+not add package dependencies or select a smaller test subset.
+
+Profiled runs are diagnostic, not acceptance tests: instrumentation adds
+overhead, so use the measurements to choose what to investigate and use an
+ordinary unprofiled run for acceptance. Profiling does not change waits,
+retries, assertions or fixture isolation. Test failures still fail the run;
+profiling errors do not replace the test outcome.
+
 ### Artifacts (`tests/appium/artifacts/`, gitignored, recreated every run)
 
 | File | Content |
 |---|---|
 | `junit.xml` | JUnit report |
 | `pytest.log` | pytest output (also streamed to the console) |
+| `profile-ops.json` | opt-in full/selected collection manifests, topology/provenance, process resource snapshots, per-test phase outcomes/reasons, aggregate operation timings and profiling errors |
 | `session.log` | KWin, D-Bus, AT-SPI and WebDriver stderr, and how `kwin_wayland` ended (`[e2e] kwin_wayland exited with status N` / `killed by signal N`, also printed to the console when the session fails) |
 | `<test id>/krema-N.log` | krema stdout/stderr for the N-th start in that test |
 | `<test id>/failure.png`, `atspi-tree.xml`, `kwin-windows.json`, `kremarc` | written when a test fails |

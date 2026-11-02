@@ -35,6 +35,12 @@
 #                            rest). tests/distro/run-distro-e2e.sh sets it from
 #                            KREMA_E2E_SHARDS; the default build volume then
 #                            gets a -shard-<i> suffix.
+#   KREMA_E2E_PROFILE=1     opt-in diagnostic operation timings and whole-
+#                            container resource/provenance collection; writes
+#                            profile-ops.json and profile-resources.* alongside
+#                            the usual artifacts
+#   KREMA_E2E_SOURCE_REVISION
+#                            revision recorded by profiled container metadata
 #
 # If the host has /dev/dri (e.g. after `sudo tests/appium/setup-vgem.sh`), it
 # is passed through so KWin composites with OpenGL on the vgem render node:
@@ -104,8 +110,38 @@ if [ -n "${KREMA_E2E_BINARY:-}" ]; then
     build_args=
 fi
 
+# Do not add even an empty profiling variable to ordinary test containers.
+profile_args=
+sampler_pid=
+if [ -n "${KREMA_E2E_PROFILE:-}" ]; then
+    profile_args="-e KREMA_E2E_PROFILE"
+    if [ -n "${KREMA_E2E_SOURCE_REVISION:-}" ]; then
+        profile_args="$profile_args -e KREMA_E2E_SOURCE_REVISION"
+    fi
+    profile_cidfile="$artifacts/container.cid"
+    python3 "$repo/tests/distro/profile-resources.py" \
+        --cidfile "$profile_cidfile" \
+        --output "$artifacts/profile-resources.jsonl" \
+        --metadata "$artifacts/profile-resources.json" \
+        >"$artifacts/profile-resources.log" 2>&1 &
+    sampler_pid=$!
+    cleanup_sampler() {
+        kill "$sampler_pid" 2>/dev/null || true
+        wait "$sampler_pid" 2>/dev/null || true
+    }
+    trap cleanup_sampler 0
+fi
+
+run_container() {
+    if [ -n "${profile_cidfile:-}" ]; then
+        docker run --rm --init --cidfile "$profile_cidfile" "$@"
+    else
+        docker run --rm --init "$@"
+    fi
+}
+
 # shellcheck disable=SC2086
-docker run --rm --init $tty_args $platform_args \
+run_container $tty_args $platform_args \
     --shm-size=512m \
     -v "$repo:/src:ro" \
     $build_args \
@@ -113,5 +149,5 @@ docker run --rm --init $tty_args $platform_args \
     -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     -e KREMA_E2E_SCREEN_WIDTH -e KREMA_E2E_SCREEN_HEIGHT -e KREMA_E2E_OUTPUT_COUNT \
     -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD -e LP_NUM_THREADS \
-    $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
+    $profile_args $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
     "$image" sh /src/tests/appium/entrypoint.sh "$@"

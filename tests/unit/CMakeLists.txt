@@ -43,4 +43,18 @@ if(KREMA_TEST_PYTHON_EXECUTABLE)
         COMMAND ${KREMA_TEST_PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_waits.py
     )
     set_tests_properties(krema_e2e_waits PROPERTIES TIMEOUT 30)
+
+    # The E2E profiler contracts run as stdlib unittest tests and skip clearly
+    # when the optional pytest dependency is unavailable.
+    add_test(NAME krema_e2e_profile_ops
+        COMMAND ${KREMA_TEST_PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_profile_ops.py -v
+    )
+    set_tests_properties(krema_e2e_profile_ops PROPERTIES
+        TIMEOUT 30
+        SKIP_REGULAR_EXPRESSION "pytest is required for profiler contract tests"
+    )
+    add_test(NAME krema_profile_resources
+        COMMAND ${KREMA_TEST_PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_profile_resources.py -v
+    )
+    set_tests_properties(krema_profile_resources PROPERTIES TIMEOUT 30)
 endif()

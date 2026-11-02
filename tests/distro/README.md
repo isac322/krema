@@ -150,7 +150,28 @@ Environment:
 | `KREMA_E2E_ARTIFACTS` | artifacts directory (default `tests/appium/artifacts-distro-<target>`) |
 | `KREMA_E2E_PLATFORM` | container platform; defaults to `linux/amd64` for `arch` and `opensuse-slowroll` |
 | `KREMA_E2E_SHARDS` | number of concurrent suite shards (default 1 = one `run-e2e.sh`); with N > 1, `LP_NUM_THREADS` defaults to CPUs / N so the shards' llvmpipe renderers do not oversubscribe the CPUs |
+| `KREMA_E2E_PROFILE=1` | enable operation timing and whole-container resource/provenance diagnostics in each shard's artifact directory |
+| `KREMA_E2E_SOURCE_REVISION` | source revision forwarded into the profiled test container and recorded in the provenance metadata |
 | other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, docker args) |
+
+### Diagnostic resource profiling
+
+Set `KREMA_E2E_PROFILE=1` to collect diagnostics for each suite container. The
+runner writes `container.cid`, starts a sampler scoped to that exact container,
+and stores `profile-resources.jsonl`, `profile-resources.json`, and
+`profile-resources.log` in the selected artifact directory. Shards use their
+own files. The sampler has no effect when profiling is disabled and stops with
+the suite; it does not monitor unrelated Docker containers.
+
+`profile-resources.json` records the runner's CPU count, memory and kernel,
+the container and image IDs/digests, the source revision, and a best-effort
+package inventory from the installed image. Each JSONL sample comes from
+`docker stats --no-stream` and includes container CPU percentage, current
+memory and limit, block I/O bytes, and process count (PIDs). These are
+point-in-time Docker metrics, not wall-clock timings or pytest CPU
+measurements. If the container exits before a sample is available, the record
+is marked `incomplete`; unavailable values remain absent rather than being
+reported as zero.
 
 ## Images
 

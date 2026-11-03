@@ -134,6 +134,9 @@ Kirigami.AbstractApplicationWindow {
 
     // Page components created on first use, keyed by module id.
     property var pageComponents: ({})
+    property Component _shadowSceneComponent: null
+    property Item _shadowScene: null
+    property Item _shadowSceneHost: null
 
     // Entries matching the search text. The current page always stays listed
     // so the selection never disappears from the sidebar.
@@ -154,7 +157,58 @@ Kirigami.AbstractApplicationWindow {
 
     // Called by SettingsWindow to select a page, also while already open.
     function openModule(moduleId) {
-        currentModule = resolveModule(moduleId);
+        const nextModule = resolveModule(moduleId);
+        if (nextModule !== currentModule && _shadowSceneHost) {
+            releaseShadowScene(_shadowSceneHost);
+        }
+        currentModule = nextModule;
+    }
+
+    function acquireShadowScene(hostItem) {
+        if (!hostItem) {
+            return null;
+        }
+        if (!_shadowScene) {
+            if (!_shadowSceneComponent) {
+                _shadowSceneComponent = Qt.createComponent(
+                    Qt.resolvedUrl("settings/ShadowScene3D.qml"),
+                    Component.PreferSynchronous,
+                    root
+                );
+            }
+            if (_shadowSceneComponent.status !== Component.Ready) {
+                console.warn("Failed to load ShadowScene3D.qml:", _shadowSceneComponent.errorString());
+                return null;
+            }
+            _shadowScene = _shadowSceneComponent.createObject(shadowScenePark, {
+                "parked": true,
+                "active": false
+            });
+            if (!_shadowScene) {
+                return null;
+            }
+        }
+        _shadowScene.anchors.fill = undefined;
+        _shadowSceneHost = hostItem;
+        _shadowScene.parent = hostItem;
+        _shadowScene.anchors.fill = hostItem;
+        _shadowScene.parked = false;
+        _shadowScene.active = Qt.binding(() =>
+            root._shadowSceneHost === hostItem
+            && root.visible
+            && root.visibility !== Window.Minimized);
+        return _shadowScene;
+    }
+
+    function releaseShadowScene(hostItem) {
+        if (!_shadowScene || _shadowSceneHost !== hostItem) {
+            return;
+        }
+        _shadowSceneHost = null;
+        _shadowScene.active = false;
+        _shadowScene.parked = true;
+        _shadowScene.anchors.fill = undefined;
+        _shadowScene.parent = shadowScenePark;
     }
 
     function componentFor(moduleId) {
@@ -165,7 +219,11 @@ Kirigami.AbstractApplicationWindow {
             return aboutKdeComponent;
         }
         if (!pageComponents[moduleId]) {
-            pageComponents[moduleId] = Qt.createComponent(Qt.resolvedUrl(pageUrls[moduleId]));
+            pageComponents[moduleId] = Qt.createComponent(
+                Qt.resolvedUrl(pageUrls[moduleId]),
+                Component.PreferSynchronous,
+                root
+            );
         }
         return pageComponents[moduleId];
     }
@@ -188,6 +246,21 @@ Kirigami.AbstractApplicationWindow {
     Component {
         id: aboutKdeComponent
         FormCard.AboutKDE {}
+    }
+
+    // Keeps ShadowScene3D's View3D bound to this QQuickWindow while open.
+    // Unloading a View3D through a Loader clears window() before
+    // ~QQuick3DViewport(), which schedules QQuick3DWindowAttachment::evaluateEol
+    // on the GUI thread and frees backend material/root nodes while
+    // QSGRenderThread still renders the sub-scenegraph. Same-window reparenting
+    // never derefs the window; closing SettingsDialog invalidates the scenegraph
+    // on the render thread before destroying window children.
+    Item {
+        id: shadowScenePark
+        visible: false
+        width: 0
+        height: 0
+        Accessible.ignored: true
     }
 
     RowLayout {

@@ -47,9 +47,27 @@ SettingsPage {
     }
 
     // --- Stage: the 3D light scene with the real shadow as an inset ---
-    // Only loaded while the shadow is on (no scene, no GPU work otherwise).
+    // Only mounted while the shadow is on; the 3D scene itself is parked on
+    // SettingsDialog when hidden so Loader teardown never destroys a live View3D.
 
-    stage: DockSettings.shadowEnabled ? shadowStage : null
+    property bool _stageMounted: DockSettings.shadowEnabled
+    property Item _hostedSceneClip: null
+
+    Connections {
+        target: DockSettings
+        function onShadowEnabledChanged() {
+            if (DockSettings.shadowEnabled) {
+                page._stageMounted = true
+            } else {
+                if (page._hostedSceneClip) {
+                    page._hostedSceneClip.detachShadowScene()
+                }
+                page._stageMounted = false
+            }
+        }
+    }
+
+    stage: _stageMounted ? shadowStage : null
 
     readonly property Component shadowStage: Component {
         ColumnLayout {
@@ -83,10 +101,54 @@ SettingsPage {
                         maskSpreadAtMin: 1.0
                     }
 
-                    ShadowScene3D {
-                        anchors.fill: parent
-                        active: page.windowActive
+                    property var ownerWindow: null
+                    property Item fallbackScene: null
+
+                    function attachShadowScene() {
+                        const win = Window.window
+                        if (!win) {
+                            return
+                        }
+                        if (win.acquireShadowScene) {
+                            if (ownerWindow !== win) {
+                                ownerWindow = win
+                                page._hostedSceneClip = sceneClip
+                                win.acquireShadowScene(sceneClip)
+                            }
+                        } else if (!fallbackScene) {
+                            const comp = Qt.createComponent("ShadowScene3D.qml", Component.PreferSynchronous, sceneClip)
+                            if (comp.status === Component.Ready) {
+                                fallbackScene = comp.createObject(sceneClip, {
+                                    "active": Qt.binding(() => page.windowActive)
+                                })
+                                if (fallbackScene) {
+                                    fallbackScene.anchors.fill = sceneClip
+                                }
+                            }
+                        }
                     }
+
+                    function detachShadowScene() {
+                        if (!ownerWindow) {
+                            return
+                        }
+                        const win = ownerWindow
+                        ownerWindow = null
+                        if (page && page._hostedSceneClip === sceneClip) {
+                            page._hostedSceneClip = null
+                        }
+                        win.releaseShadowScene(sceneClip)
+                    }
+
+                    Component.onCompleted: attachShadowScene()
+                    Window.onWindowChanged: {
+                        if (Window.window) {
+                            attachShadowScene()
+                        } else {
+                            detachShadowScene()
+                        }
+                    }
+                    Component.onDestruction: detachShadowScene()
                 }
 
                 Rectangle {

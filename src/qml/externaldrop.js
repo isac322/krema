@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Krema Contributors
 
-function textUrls(drop) {
-    let data = ""
-    if (typeof drop.getDataAsString === "function") {
-        data = drop.getDataAsString("text/uri-list")
-    }
-    if (!data && typeof drop.text === "string") {
-        data = drop.text
-    }
+function parseUris(data) {
     if (!data) {
         return []
     }
@@ -31,7 +24,13 @@ function isLocalFile(url) {
 }
 
 function normalizedUrls(drop) {
-    let fallback = textUrls(drop)
+    let mimeUrls = typeof drop.getDataAsString === "function"
+        ? parseUris(drop.getDataAsString("text/uri-list")) : []
+    let textUrls = typeof drop.text === "string" ? parseUris(drop.text) : []
+    let fallback = mimeUrls.length > 0 ? mimeUrls : textUrls
+    if (!mimeUrls.some(isLocalFile) && textUrls.some(isLocalFile)) {
+        fallback = textUrls
+    }
     if (!drop.hasUrls || !drop.urls || drop.urls.length === 0) {
         return fallback
     }
@@ -42,8 +41,8 @@ function normalizedUrls(drop) {
     }
 
     // Qt's Wayland portal can replace a local file URL with a synthetic HTTP
-    // transfer URL when portal access fails. The original text/uri-list still
-    // carries the local file and is the authoritative payload in that case.
+    // transfer URL when portal access fails. Its independent text payload can
+    // still carry the original local file URI in that case.
     let hasLocalFallback = fallback.some(isLocalFile)
     let hasLocalUrl = urls.some(isLocalFile)
     if (hasLocalFallback && !hasLocalUrl) {

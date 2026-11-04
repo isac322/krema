@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Krema Contributors
 # Run inside an isolated Appium image with Xvfb, xdotool and ffmpeg installed.
 # /src is read-only source; /artifacts is writable; KREMA_E2E_BINARY is built.
+# Optional arguments select another Appium scenario; the default records notifications.
 set -euo pipefail
 
 : "${GITHUB_SHA:?Set GITHUB_SHA to the revision being recorded}"
@@ -53,7 +54,8 @@ ffmpeg -y -hide_banner -loglevel warning -f x11grab -draw_mouse 1 -video_size 12
     -movflags +faststart /artifacts/notifications.mp4 >/artifacts/ffmpeg.log 2>&1 &
 recorder_pid=$!
 set +e
-timeout 180 sh /src/tests/appium/entrypoint.sh record_notifications.py -q >/artifacts/runner.log 2>&1
+if [ "$#" -eq 0 ]; then set -- record_notifications.py -q; fi
+timeout 180 sh /src/tests/appium/entrypoint.sh "$@" >/artifacts/runner.log 2>&1
 rc=$?
 python3 -c 'import time; print(time.monotonic_ns())' >/artifacts/capture-end-ns.txt
 kill -INT "$recorder_pid" 2>/dev/null

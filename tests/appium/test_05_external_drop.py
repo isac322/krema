@@ -148,12 +148,17 @@ def test_dnd007_external_launcher_and_document_drops(krema, tmp_path):
         for path in desktop_paths], indent=2))
     krema.start()
     krema.wait_for_item(env.TEST_APP_NAME)
+    capture = kwin.can_capture()
+    if capture:
+        krema.screenshot("external-drop-baseline")
     for label, path in [("unknown", unknown), ("repeated-suffix", repeated)]:
         before_names = wait_stable(krema.item_names)
         external_drop(krema, path, env.TEST_APP_NAME, label)
         unchanged_for(krema, expected)
         assert wait_stable(krema.item_names) == before_names
         assert not receipt.exists(), "rejected desktop unexpectedly launched the document receiver"
+        if capture:
+            krema.screenshot(f"external-drop-rejected-{label}")
     for label, path, desktop, name in [
             ("registered", desktop_paths[0], desktop_paths[0], "PR137 installed A"),
             ("symlink", symlink, desktop_paths[1], "PR137 installed B")]:
@@ -163,6 +168,8 @@ def test_dnd007_external_launcher_and_document_drops(krema, tmp_path):
         krema.wait_for_item(name)
         assert krema.item_names().count(name) == 1
         assert "Pinned" in description(krema, name)
+        if capture:
+            krema.screenshot(f"external-drop-registered-{label}")
     # Same installed file a second time must not add a duplicate.
     external_drop(krema, desktop_paths[0], env.TEST_APP_NAME, "registered-again")
     unchanged_for(krema, expected)

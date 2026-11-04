@@ -211,6 +211,8 @@ The external drag source is `tests/appium/tools/krema-test-window --drag-source`
   `applications:<menuId>` identities, with one dock item per application.
 - The installed target's `Exec` receives the document's exact path and content hash.
 - Rejected attempts leave persisted launcher state and AT-SPI pin state unchanged.
+- Local URI text remains usable if Qt's Wayland portal returns a transfer token
+  as a non-local URL; rejected desktop drops do not launch an error dialog.
 - Repeated accepted drops add no duplicate launcher.
 - Accepted launcher identities and order survive restart; the rejected task
   leaves no launcher after it closes or Krema restarts.

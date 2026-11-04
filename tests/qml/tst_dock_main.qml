@@ -57,7 +57,42 @@ Item {
             }
             let urls = ExternalDrop.normalizedUrls(drop)
             compare(urls.length, 1)
-            verify(String(urls[0]).indexOf("file:") === 0)
+            compare(String(urls[0]), "file:///tmp/registered.desktop")
+        }
+
+        function test_externalDrop_prefers_plain_text_when_portal_corrupts_uri_list() {
+            let drop = {
+                hasUrls: true,
+                urls: ["http://i_portal_transfer_failure"],
+                text: "file:///tmp/registered.desktop\n",
+                getDataAsString: function(format) { return "i_portal_transfer_failure" },
+            }
+            compare(String(ExternalDrop.normalizedUrls(drop)[0]), "file:///tmp/registered.desktop")
+        }
+
+        function test_externalDrop_keeps_native_local_urls() {
+            let drop = {
+                hasUrls: true,
+                urls: ["file:///tmp/native.txt"],
+                text: "file:///tmp/text.txt",
+            }
+            compare(ExternalDrop.normalizedUrls(drop), ["file:///tmp/native.txt"])
+        }
+
+        function test_externalDrop_keeps_remote_urls() {
+            let drop = { hasUrls: true, urls: ["https://example.org/document"], text: "A document" }
+            compare(ExternalDrop.normalizedUrls(drop), ["https://example.org/document"])
+        }
+
+        function test_externalDrop_parses_uri_list_without_native_urls() {
+            let drop = {
+                hasUrls: false,
+                getDataAsString: function(format) {
+                    return "# comment\r\nfile:///tmp/a.txt\r\n\r\nfile:///tmp/b.txt\ninvalid"
+                },
+            }
+            let urls = ExternalDrop.normalizedUrls(drop)
+            compare(urls.map(String), ["file:///tmp/a.txt", "file:///tmp/b.txt"])
         }
 
         function addGroupTask(name = "Grouped") {

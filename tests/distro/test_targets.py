@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import csv
 import re
 import unittest
@@ -39,7 +40,7 @@ class DistroTargetMatrixTests(unittest.TestCase):
         self.assertTrue(rows)
         self.assertTrue(all(len(row) == 6 for row in rows))
         self.assertEqual(len({row[0] for row in rows}), len(rows))
-        self.assertEqual({row[4] for row in rows}, obs_repositories())
+        self.assertEqual(Counter(row[4] for row in rows), Counter(obs_repositories()))
         self.assertTrue(all(DIGEST_RE.fullmatch(row[3]) for row in rows))
 
     def test_fedora_45_target_contract(self) -> None:

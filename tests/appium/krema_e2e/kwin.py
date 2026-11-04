@@ -15,6 +15,7 @@ import base64
 import io
 import itertools
 import json
+import math
 import os
 import subprocess
 import tempfile
@@ -234,13 +235,35 @@ class _Oracle:
     def _pump_until(self, token: str, timeout: float) -> str:
         ctx = GLib.MainContext.default()
         deadline = time.monotonic() + timeout
-        while token not in self.results:
-            if time.monotonic() > deadline:
+        if token not in self.results:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 raise TimeoutError(
                     f"KWin script {token} did not report back within {timeout}s"
                 )
-            if not ctx.iteration(False):
-                time.sleep(0.005)
+            timed_out = False
+
+            def _on_deadline(*_args: object) -> bool:
+                nonlocal timed_out
+                timed_out = True
+                return GLib.SOURCE_REMOVE
+
+            deadline_source = GLib.timeout_source_new(
+                max(1, math.ceil(remaining * 1000))
+            )
+            deadline_source.set_callback(_on_deadline)
+            deadline_source.attach(ctx)
+            try:
+                while token not in self.results and not timed_out:
+                    if time.monotonic() >= deadline:
+                        break
+                    ctx.iteration(True)
+            finally:
+                deadline_source.destroy()
+        if token not in self.results:
+            raise TimeoutError(
+                f"KWin script {token} did not report back within {timeout}s"
+            )
         return self.results.pop(token)
 
     def close(self) -> None:

@@ -9,6 +9,7 @@ import json
 import os
 import re
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
@@ -17,6 +18,28 @@ from . import env, kwin
 from . import input as inp
 from .krema import Krema
 from .windows import TestWindows
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("krema_e2e", "Krema AT-SPI E2E options")
+    group.addoption(
+        "--only-matching-outputs",
+        action="store_true",
+        default=False,
+        help=(
+            "Deselect tests whose @pytest.mark.outputs(n) count (default 1) "
+            "differs from KREMA_E2E_OUTPUT_COUNT instead of skipping them."
+        ),
+    )
+    group.addoption(
+        "--list-multi-outputs",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Write each collected @pytest.mark.outputs(n) count >= 2 "
+            "(ascending, one per line) to PATH and exit without running tests."
+        ),
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -54,23 +77,38 @@ def _shard() -> tuple[int, int] | None:
     return index, count
 
 
+def _wanted_outputs(item: pytest.Item) -> int:
+    marker = item.get_closest_marker("outputs")
+    return int(marker.args[0]) if marker is not None else 1
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Select this shard's tests, then skip tests whose output count differs
-    from this session's: a kwin session has a fixed number of outputs, so
-    multi-output tests run in their own ``KREMA_E2E_OUTPUT_COUNT=n
-    run-e2e.sh ...`` invocation."""
+    """Filter or shard collected tests, then skip tests whose output count
+    differs from this session's when ``--only-matching-outputs`` is not set."""
+    list_path = config.getoption("--list-multi-outputs")
+    if list_path:
+        counts = sorted({n for item in items if (n := _wanted_outputs(item)) >= 2})
+        out_file = Path(list_path)
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        out_file.write_text("".join(f"{n}\n" for n in counts), encoding="utf-8")
+        return
+
+    if config.getoption("--only-matching-outputs"):
+        matching: list[pytest.Item] = []
+        mismatched: list[pytest.Item] = []
+        for item in items:
+            (matching if _wanted_outputs(item) == env.OUTPUT_COUNT else mismatched).append(item)
+        if mismatched:
+            config.hook.pytest_deselected(items=mismatched)
+            items[:] = matching
+
     shard = _shard()
-    if shard is not None:
+    workqueue = os.environ.get("KREMA_E2E_WORKQUEUE")
+    if shard is not None and not workqueue:
         index, count = shard
-        # trylast makes this run after pytest's own -k/-m/--deselect filters
-        # (_pytest.mark's impl): items is the post-filter collection, identical
-        # across shards. Positions `pos % count == index` partition it into
-        # disjoint sets — every index belongs to exactly one shard and no
-        # shard sees the same items twice, so the union over i = 0..count-1
-        # is the input list: no test is lost or duplicated. Round-robin
-        # (not contiguous ranges) spreads a long file like test_06_settings
-        # across shards.
+        # Static fallback when KREMA_E2E_WORKQUEUE is unset (e.g. reproducing a
+        # standalone shard locally): deterministic round-robin over post-filter items.
         keep: list[pytest.Item] = []
         deselected: list[pytest.Item] = []
         for pos, item in enumerate(items):
@@ -80,8 +118,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             items[:] = keep
 
     for item in items:
-        marker = item.get_closest_marker("outputs")
-        wanted = int(marker.args[0]) if marker is not None else 1
+        wanted = _wanted_outputs(item)
         if wanted != env.OUTPUT_COUNT:
             item.add_marker(
                 pytest.mark.skip(
@@ -90,6 +127,73 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
                 )
             )
 
+
+class _SessionKeepAlive:
+    """Sentinel ``nextitem`` keeping ``scope='session'`` fixtures alive while
+    tearing down function, class, and module fixtures after each claimed item."""
+
+    def __init__(self, session: pytest.Session) -> None:
+        self._chain = [session]
+
+    def listchain(self) -> list[Any]:
+        return self._chain
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtestloop(session: pytest.Session) -> bool | None:
+    if session.config.getoption("--list-multi-outputs"):
+        if session.testsfailed and not session.config.option.continue_on_collection_errors:
+            raise session.Interrupted(f"{session.testsfailed} error during collection")
+        return True
+
+    queue_env = os.environ.get("KREMA_E2E_WORKQUEUE")
+    if not queue_env:
+        return None
+    if session.testsfailed and not session.config.option.continue_on_collection_errors:
+        raise session.Interrupted(f"{session.testsfailed} error during collection")
+    if session.config.option.collectonly:
+        return True
+
+    queue_dir = Path(queue_env)
+    if not queue_dir.is_dir():
+        raise pytest.UsageError(f"KREMA_E2E_WORKQUEUE directory does not exist: {queue_dir}")
+
+    shard_label = os.environ.get("KREMA_E2E_SHARD", "0/1")
+    all_items = list(session.items)
+    claimed: list[pytest.Item] = []
+    keep_session = _SessionKeepAlive(session)
+    scan_from = 0
+    total = len(all_items)
+
+    try:
+        while scan_from < total:
+            claimed_idx: int | None = None
+            for idx in range(scan_from, total):
+                claim_path = queue_dir / f"claim-{idx:05d}"
+                try:
+                    fd = os.open(claim_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+                except FileExistsError:
+                    continue
+                try:
+                    os.write(fd, f"{shard_label}\t{all_items[idx].nodeid}\n".encode())
+                finally:
+                    os.close(fd)
+                claimed_idx = idx
+                scan_from = idx + 1
+                break
+            if claimed_idx is None:
+                break
+            item = all_items[claimed_idx]
+            claimed.append(item)
+            item.config.hook.pytest_runtest_protocol(item=item, nextitem=keep_session)
+            if session.shouldfail:
+                raise session.Failed(session.shouldfail)
+            if session.shouldstop:
+                raise session.Interrupted(session.shouldstop)
+    finally:
+        session._setupstate.teardown_exact(None)
+        session.items[:] = claimed
+    return True
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Iterator[None]:

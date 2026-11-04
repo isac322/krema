@@ -73,6 +73,7 @@ if(KWIN_WAYLAND_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
         COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_SOURCE_DIR}/tests/run-with-kwin.sh $<TARGET_FILE:krema_notification_tracker_tests>
     )
     set_tests_properties(krema_integration_tests krema_launcher_entry_tests krema_notification_tracker_tests PROPERTIES TIMEOUT 180)
+    set_tests_properties(krema_integration_tests PROPERTIES ENVIRONMENT_MODIFICATION "MALLOC_PERTURB_=set:85")
 else()
     message(STATUS "kwin_wayland or dbus-run-session not found: krema_integration_tests is built but not registered with CTest")
 endif()

@@ -84,6 +84,15 @@ Item {
             compare(ExternalDrop.normalizedUrls(drop), ["https://example.org/document"])
         }
 
+        function test_externalDrop_keeps_remote_url_with_unrelated_local_text() {
+            let drop = {
+                hasUrls: true,
+                urls: ["https://example.org/document"],
+                text: "file:///tmp/unrelated.txt",
+            }
+            compare(ExternalDrop.normalizedUrls(drop), ["https://example.org/document"])
+        }
+
         function test_externalDrop_parses_uri_list_without_native_urls() {
             let drop = {
                 hasUrls: false,

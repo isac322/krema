@@ -23,6 +23,10 @@ function isLocalFile(url) {
     return String(url).toLowerCase().indexOf("file:") === 0
 }
 
+function isPortalTransferToken(url) {
+    return /^https?:\/\/i_[A-Za-z0-9_-]+(?:[/?#].*)?$/.test(String(url))
+}
+
 function normalizedUrls(drop) {
     let mimeUrls = typeof drop.getDataAsString === "function"
         ? parseUris(drop.getDataAsString("text/uri-list")) : []
@@ -44,8 +48,8 @@ function normalizedUrls(drop) {
     // transfer URL when portal access fails. Its independent text payload can
     // still carry the original local file URI in that case.
     let hasLocalFallback = fallback.some(isLocalFile)
-    let hasLocalUrl = urls.some(isLocalFile)
-    if (hasLocalFallback && !hasLocalUrl) {
+    let portalTokensOnly = urls.length > 0 && urls.every(isPortalTransferToken)
+    if (hasLocalFallback && portalTokensOnly) {
         return fallback
     }
     return urls

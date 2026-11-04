@@ -32,6 +32,15 @@ Item {
 
     // Pauses the lamp glow pulse while the window is hidden or minimized.
     property bool active: true
+    // True while parked on SettingsDialog's hidden container between mounts.
+    property bool parked: false
+
+    onParkedChanged: {
+        if (parked) {
+            focus = false
+            elevationHandle.focus = false
+        }
+    }
 
     // Orbit camera angles in degrees (clamped; see the mouse area below).
     readonly property real defaultYaw: 12
@@ -42,16 +51,19 @@ Item {
     implicitWidth: Kirigami.Units.gridUnit * 16
     implicitHeight: Kirigami.Units.gridUnit * 9
 
+    visible: !parked
+    enabled: !parked
     clip: true
-    activeFocusOnTab: true
+    activeFocusOnTab: !parked
 
+    Accessible.ignored: parked
     Accessible.role: Accessible.Slider
     Accessible.name: i18n("Light position")
     Accessible.description: i18nc("@info light source state and keyboard help",
         "X %1, Y %2, height %3, radius %4. Arrow keys move the light (Shift for larger steps), Page Up and Page Down change its height, plus and minus change its radius.",
         DockSettings.shadowLightX, DockSettings.shadowLightY,
         DockSettings.shadowLightZ, DockSettings.shadowLightRadius.toFixed(1))
-    Accessible.focusable: true
+    Accessible.focusable: !parked
     Accessible.focused: activeFocus
 
     // Setters identical to ShadowPage.qml (kcfg ranges + slider granularity).
@@ -242,9 +254,63 @@ Item {
         }
     }
 
+    // Offscreen 2D texture sources parented to `root` so QQuickItemLayer's
+    // sibling QQuickShaderEffectSource shares this QQuickWindow from frame 0
+    // and QQuick3DTexture uses QSGTextureProvider instead of creating its own
+    // m_layer (avoiding Qt 6.10.2's GUI-thread delete m_layer in QTBUG-142663).
+    Item {
+        id: wallpaperSource
+        visible: false
+        width: 2048
+        height: Math.round(2048 / root.screenAspect)
+        layer.enabled: true
+        layer.live: !root.parked
+        Accessible.ignored: true
+
+        // Same theme-derived stand-in DesktopStage uses while no wallpaper
+        // image is known.
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Qt.darker(Kirigami.Theme.highlightColor, 2.2) }
+                GradientStop { position: 0.6; color: Kirigami.Theme.highlightColor }
+                GradientStop { position: 1.0; color: Qt.lighter(Kirigami.Theme.highlightColor, 1.35) }
+            }
+        }
+        Image {
+            anchors.fill: parent
+            source: SettingsWindow.wallpaperUrl
+            visible: status === Image.Ready
+            asynchronous: true
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: width
+            sourceSize.height: height
+        }
+    }
+
+    Item {
+        id: dockTextureSource
+        visible: false
+        width: dockTexture.width
+        height: dockTexture.height
+        layer.enabled: true
+        layer.live: !root.parked
+        Accessible.ignored: true
+
+        MiniDock {
+            id: dockTexture
+            unit: root.texUnit
+            edge: 1
+            floating: false
+            backdrop: null
+            active: false
+        }
+    }
+
     View3D {
         id: view
         anchors.fill: parent
+        visible: !root.parked
         camera: sceneCamera
 
         environment: SceneEnvironment {
@@ -339,30 +405,7 @@ Item {
             materials: PrincipledMaterial {
                 lighting: PrincipledMaterial.NoLighting
                 baseColorMap: Texture {
-                    sourceItem: Item {
-                        width: 2048
-                        height: Math.round(2048 / root.screenAspect)
-
-                        // Same theme-derived stand-in DesktopStage uses while
-                        // no wallpaper image is known.
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: Qt.darker(Kirigami.Theme.highlightColor, 2.2) }
-                                GradientStop { position: 0.6; color: Kirigami.Theme.highlightColor }
-                                GradientStop { position: 1.0; color: Qt.lighter(Kirigami.Theme.highlightColor, 1.35) }
-                            }
-                        }
-                        Image {
-                            anchors.fill: parent
-                            source: SettingsWindow.wallpaperUrl
-                            visible: status === Image.Ready
-                            asynchronous: true
-                            fillMode: Image.PreserveAspectCrop
-                            sourceSize.width: width
-                            sourceSize.height: height
-                        }
-                    }
+                    sourceItem: wallpaperSource
                 }
             }
         }
@@ -423,19 +466,7 @@ Item {
                 lighting: PrincipledMaterial.NoLighting
                 alphaMode: PrincipledMaterial.Blend
                 baseColorMap: Texture {
-                    sourceItem: Item {
-                        width: dockTexture.width
-                        height: dockTexture.height
-
-                        MiniDock {
-                            id: dockTexture
-                            unit: root.texUnit
-                            edge: 1
-                            floating: false
-                            backdrop: null
-                            active: false
-                        }
-                    }
+                    sourceItem: dockTextureSource
                 }
             }
         }
@@ -505,7 +536,7 @@ Item {
             }
 
             SequentialAnimation on pulse {
-                running: root.active
+                running: root.active && !root.parked
                 loops: Animation.Infinite
                 NumberAnimation { from: 0; to: 1; duration: 1600; easing.type: Easing.InOutSine }
                 NumberAnimation { from: 1; to: 0; duration: 1600; easing.type: Easing.InOutSine }
@@ -575,13 +606,14 @@ Item {
         y: root.slabRect.y
         width: Math.max(1, root.slabRect.width)
         height: Math.max(1, root.slabRect.height)
-        visible: root.slabRect.width > 0
-        activeFocusOnTab: true
+        visible: !root.parked && root.slabRect.width > 0
+        activeFocusOnTab: !root.parked
 
+        Accessible.ignored: root.parked
         Accessible.role: Accessible.Slider
         Accessible.name: i18n("Panel elevation")
         Accessible.description: String(DockSettings.shadowElevation)
-        Accessible.focusable: true
+        Accessible.focusable: !root.parked
         Accessible.focused: activeFocus
 
         Keys.onPressed: (event) => {

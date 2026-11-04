@@ -9,6 +9,7 @@ import QtTest
 import org.kde.kirigami as Kirigami
 import com.bhyoo.krema 1.0
 import "TestUtils.js" as T
+import "../../src/qml/externaldrop.js" as ExternalDrop
 
 // TestCase is an invisible Item: visual fixtures live under `stage`, a visible
 // sibling, so effective visibility, layout and pointer delivery are real.
@@ -43,6 +44,20 @@ Item {
         function addTasks(names, extra) {
             for (let n of names)
                 DockModel.tasksModel.addTask(Object.assign({ display: n, AppId: n.toLowerCase(), IsWindow: true }, extra || {}))
+        }
+
+        function test_externalDrop_prefers_local_text_uri_over_portal_transfer_url() {
+            let drop = {
+                hasUrls: true,
+                urls: ["http://i_portal_transfer_failure"],
+                getDataAsString: function(format) {
+                    compare(format, "text/uri-list")
+                    return "file:///tmp/registered.desktop\n"
+                },
+            }
+            let urls = ExternalDrop.normalizedUrls(drop)
+            compare(urls.length, 1)
+            verify(String(urls[0]).indexOf("file:") === 0)
         }
 
         function addGroupTask(name = "Grouped") {

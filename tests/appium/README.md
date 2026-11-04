@@ -34,11 +34,9 @@ session with `n` outputs, placed left to right:
 
 ```sh
 KREMA_E2E_OUTPUT_COUNT=2 KREMA_E2E_ARTIFACTS=tests/appium/artifacts-2out \
-    tests/appium/run-e2e.sh -m outputs -rs \
-    --deselect test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts
+    tests/appium/run-e2e.sh --only-matching-outputs -rs
 KREMA_E2E_OUTPUT_COUNT=3 KREMA_E2E_ARTIFACTS=tests/appium/artifacts-3out \
-    tests/appium/run-e2e.sh \
-    test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts -rs
+    tests/appium/run-e2e.sh --only-matching-outputs -rs
 ```
 
 `--output-count n` creates `n` outputs of `KREMA_E2E_SCREEN_WIDTH` x
@@ -128,7 +126,8 @@ Consumed by `run-e2e.sh`/`entrypoint.sh` (host side) and `krema_e2e.env`
 | `KREMA_E2E_SCREEN_WIDTH`, `KREMA_E2E_SCREEN_HEIGHT` | 1024, 768 | size of each virtual output (px) |
 | `KREMA_E2E_OUTPUT_COUNT` | 1 | number of outputs (`--output-count`), laid out left to right; tests marked `@pytest.mark.outputs(n)` run only when the session has exactly `n` |
 | `KREMA_E2E_DOCKER_ARGS` | unset | extra `docker run` arguments, e.g. `--cpus=2` to approximate a slower CI runner |
-| `KREMA_E2E_SHARD` | unset | `<i>/<N>` (0-based): run only every N-th collected test and deselect the rest. `tests/distro/run-distro-e2e.sh` sets it per shard container (`KREMA_E2E_SHARDS`); composes with `-k`/`-m` (sharding applies to the filtered collection). The default build volume gets a `-shard-<i>` suffix |
+| `KREMA_E2E_SHARD` | unset | `<i>/<N>` (0-based): static round-robin fallback when `KREMA_E2E_WORKQUEUE` is unset. `tests/distro/run-distro-e2e.sh` sets both `KREMA_E2E_SHARD` and `KREMA_E2E_WORKQUEUE` per worker container (`KREMA_E2E_SHARDS`). The default build volume gets a `-shard-<i>` suffix |
+| `KREMA_E2E_WORKQUEUE` | unset | host directory shared across concurrent worker containers; workers claim tests dynamically via atomic lock files instead of static `pos % N` partitioning |
 
 ### CI
 
@@ -170,15 +169,14 @@ source-built krema. Four workflows are involved:
   `kwin_wayland --virtual` with an out-of-tree vgem (`setup-vgem.sh`;
   GitHub's Azure kernel ships no vgem, so the module for the runner kernel
   comes from ghcr.io, or is built in the job on a kernel ci-images.yml has
-  not seen). The suite runs sharded in three containers
-  (`KREMA_E2E_SHARDS=3`, `KREMA_E2E_SHARD` above). The `fedora-43` and
-  `ubuntu-26.04` entries also run two-output SET-008 and SET-012 cases, then
-  the three-output SET-012 subset/shortcut case, reusing the installed
-  package image. Each leg writes
-  `tests/appium/artifacts-distro-<target>-2out/junit.xml` or
-  `tests/appium/artifacts-distro-<target>-3out/junit.xml` and uploads the
-  matching `distro-e2e-<target>-2out` or `distro-e2e-<target>-3out` artifact.
-  Each run adds a JUnit summary to the step summary. See
+  not seen). The suite runs across dynamic atomic-workqueue worker containers
+  (`KREMA_E2E_SHARDS=auto`, `max(1, CPUs - 1)`). The `fedora-43` and
+  `ubuntu-26.04` entries set `KREMA_E2E_MULTI_OUTPUTS=1` to discover every
+  `@pytest.mark.outputs(n)` count (`n >= 2`) and run each matching session in
+  parallel alongside the main suite, reusing the installed package image. Each
+  multi-output leg writes `tests/appium/artifacts-distro-<target>-<n>out/junit.xml`,
+  adds a JUnit summary section, and uploads under
+  `distro-e2e-<target>-multi-output`. See
   [installed-package reproduction commands](../distro/README.md#selected-monitor-reproduction).
 
 On pull requests, changes that only touch `tests/qml`, `tests/unit`,

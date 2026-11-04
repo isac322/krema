@@ -43,4 +43,8 @@ if(KREMA_TEST_PYTHON_EXECUTABLE)
         COMMAND ${KREMA_TEST_PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_waits.py
     )
     set_tests_properties(krema_e2e_waits PROPERTIES TIMEOUT 30)
+    add_test(NAME krema_e2e_scheduling
+        COMMAND ${KREMA_TEST_PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_e2e_scheduling.py
+    )
+    set_tests_properties(krema_e2e_scheduling PROPERTIES TIMEOUT 60)
 endif()

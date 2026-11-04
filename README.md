@@ -141,7 +141,7 @@ In Selected monitors mode, Toggle Dock and app-number shortcuts target the selec
 | Distribution | Versions | Architectures |
 |---|---|---|
 | Arch Linux / Manjaro | Rolling | x86_64, aarch64 |
-| Fedora | 42, 43, 44, Rawhide | x86_64, aarch64 |
+| Fedora | 42, 43, 44, 45, Rawhide | x86_64, aarch64 |
 | openSUSE Tumbleweed | Rolling | x86_64, aarch64 |
 | openSUSE Slowroll | Rolling | x86_64 |
 | openSUSE Leap | 16.0 | x86_64, aarch64 |

@@ -9,6 +9,7 @@ import QtTest
 import org.kde.kirigami as Kirigami
 import com.bhyoo.krema 1.0
 import "TestUtils.js" as T
+import "../../src/qml/externaldrop.js" as ExternalDrop
 
 // TestCase is an invisible Item: visual fixtures live under `stage`, a visible
 // sibling, so effective visibility, layout and pointer delivery are real.
@@ -43,6 +44,55 @@ Item {
         function addTasks(names, extra) {
             for (let n of names)
                 DockModel.tasksModel.addTask(Object.assign({ display: n, AppId: n.toLowerCase(), IsWindow: true }, extra || {}))
+        }
+
+        function test_externalDrop_prefers_local_text_uri_over_portal_transfer_url() {
+            let drop = {
+                hasUrls: true,
+                urls: ["http://i_portal_transfer_failure"],
+                getDataAsString: function(format) {
+                    compare(format, "text/uri-list")
+                    return "file:///tmp/registered.desktop\n"
+                },
+            }
+            let urls = ExternalDrop.normalizedUrls(drop)
+            compare(urls.length, 1)
+            compare(String(urls[0]), "file:///tmp/registered.desktop")
+        }
+
+        function test_externalDrop_prefers_plain_text_when_portal_corrupts_uri_list() {
+            let drop = {
+                hasUrls: true,
+                urls: ["http://i_portal_transfer_failure"],
+                text: "file:///tmp/registered.desktop\n",
+                getDataAsString: function(format) { return "i_portal_transfer_failure" },
+            }
+            compare(String(ExternalDrop.normalizedUrls(drop)[0]), "file:///tmp/registered.desktop")
+        }
+
+        function test_externalDrop_keeps_native_local_urls() {
+            let drop = {
+                hasUrls: true,
+                urls: ["file:///tmp/native.txt"],
+                text: "file:///tmp/text.txt",
+            }
+            compare(ExternalDrop.normalizedUrls(drop), ["file:///tmp/native.txt"])
+        }
+
+        function test_externalDrop_keeps_remote_urls() {
+            let drop = { hasUrls: true, urls: ["https://example.org/document"], text: "A document" }
+            compare(ExternalDrop.normalizedUrls(drop), ["https://example.org/document"])
+        }
+
+        function test_externalDrop_parses_uri_list_without_native_urls() {
+            let drop = {
+                hasUrls: false,
+                getDataAsString: function(format) {
+                    return "# comment\r\nfile:///tmp/a.txt\r\n\r\nfile:///tmp/b.txt\ninvalid"
+                },
+            }
+            let urls = ExternalDrop.normalizedUrls(drop)
+            compare(urls.map(String), ["file:///tmp/a.txt", "file:///tmp/b.txt"])
         }
 
         function addGroupTask(name = "Grouped") {

@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added Fedora 45 to the OBS packaging targets for x86_64 and aarch64 (#153)
+
 ### Fixed
 
+- Kept local file drops working when Qt's Wayland portal returned a transfer token instead of the original file URL.
 - Stopped Krema from crashing when turning off the dock shadow or switching away from the Shadow page while the Settings window remained open.
 
 ## [0.13.0] - 2026-11-02

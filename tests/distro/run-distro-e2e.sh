@@ -34,12 +34,17 @@
 #   KREMA_E2E_ARTIFACTS   default tests/appium/artifacts-distro-<target>
 #   KREMA_E2E_PLATFORM    default linux/amd64 for arch and opensuse-slowroll
 #                         (their repositories are amd64-only), else native
-#   KREMA_E2E_SHARDS=N    run the suite as N shards concurrently (default 1,
-#                         one run-e2e.sh). Shard i (0-based) gets
-#                         KREMA_E2E_SHARD=i/N, selects every N-th collected
-#                         test, and writes to <artifacts>/shard-<i>/ with a
-#                         [shard i] log prefix; any shard failing fails the
-#                         run. --shell cannot be sharded.
+#   KREMA_E2E_SHARDS=N|auto  run the suite across concurrent dynamic-workqueue
+#                            worker containers (default 1; `auto` uses
+#                            max(1, CPUs - 1)). Worker i (0-based) writes to
+#                            <artifacts>/shard-<i>/ with a [shard i] log
+#                            prefix; any worker failing fails the run.
+#   KREMA_E2E_MULTI_OUTPUTS=1  discover every @pytest.mark.outputs(n) count
+#                            (n >= 2) in the filtered collection and run each
+#                            matching multi-output session sequentially in one
+#                            parallel lane alongside the main 1-output suite,
+#                            writing to <artifacts>-<n>out/.
+#   --shell cannot be used with sharding or KREMA_E2E_MULTI_OUTPUTS=1.
 #   Any other KREMA_E2E_* variable of tests/appium/run-e2e.sh.
 
 set -euo pipefail
@@ -197,14 +202,32 @@ export KREMA_E2E_DISTRO="$target"
 export KREMA_E2E_ARTIFACTS="${KREMA_E2E_ARTIFACTS:-$repo/tests/appium/artifacts-distro-$target}"
 
 # ---------------------------------------------------------------------------
-# Suite run: single container, or KREMA_E2E_SHARDS shards concurrently
+# Suite run: single container, dynamic-workqueue shards, and/or multi-output
 # ---------------------------------------------------------------------------
 
+cpus="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+if ! [[ "$cpus" =~ ^[0-9]+$ ]] || (( cpus < 1 )); then
+    cpus=1
+fi
+
 shards="${KREMA_E2E_SHARDS:-1}"
-[[ "$shards" =~ ^[0-9]+$ ]] && (( shards >= 1 )) || {
-    echo "error: KREMA_E2E_SHARDS must be a positive integer (got '$shards')" >&2
+if [[ "$shards" == auto ]]; then
+    shards=$(( cpus > 1 ? cpus - 1 : 1 ))
+fi
+if ! [[ "$shards" =~ ^[0-9]+$ ]] || (( shards < 1 )); then
+    echo "error: KREMA_E2E_SHARDS must be a positive integer or 'auto' (got '$shards')" >&2
+    exit 64
+fi
+
+multi_outputs="${KREMA_E2E_MULTI_OUTPUTS:-0}"
+[[ "$multi_outputs" == 0 || "$multi_outputs" == 1 ]] || {
+    echo "error: KREMA_E2E_MULTI_OUTPUTS must be 0 or 1 (got '$multi_outputs')" >&2
     exit 64
 }
+if [[ "$multi_outputs" == 1 && "${KREMA_E2E_OUTPUT_COUNT:-1}" != 1 ]]; then
+    echo "error: KREMA_E2E_MULTI_OUTPUTS=1 cannot be combined with KREMA_E2E_OUTPUT_COUNT=${KREMA_E2E_OUTPUT_COUNT}" >&2
+    exit 64
+fi
 
 suite_start=$(now)
 finish() {
@@ -213,45 +236,110 @@ finish() {
     exit "$1"
 }
 
-if (( shards == 1 )); then
+if (( shards == 1 )) && [[ "$multi_outputs" == 0 ]]; then
     rc=0
     "$repo/tests/appium/run-e2e.sh" "$@" || rc=$?
     finish "$rc"
 fi
 
-# An interactive debug shell cannot be sharded.
+# An interactive debug shell cannot run across concurrent workers.
 for arg in "$@"; do
     [[ "$arg" != --shell ]] || {
-        echo "error: --shell cannot be sharded (KREMA_E2E_SHARDS=$shards)" >&2
+        echo "error: --shell cannot be used with KREMA_E2E_SHARDS=$shards or KREMA_E2E_MULTI_OUTPUTS=$multi_outputs" >&2
         exit 64
     }
 done
 
-# Each shard: one run-e2e.sh (one container, own kwin session) selecting
-# KREMA_E2E_SHARD=i/N, artifacts in <artifacts>/shard-<i>, its own build
-# volume when KREMA_E2E_VOLUME is set (the default is suffixed inside
-# run-e2e.sh). Status goes to a file (the output pipeline would mask it);
-# stdout/stderr is prefixed so the shards' lines stay distinguishable.
-rm -rf "$KREMA_E2E_ARTIFACTS"
-mkdir -p "$KREMA_E2E_ARTIFACTS"
+base_artifacts="$KREMA_E2E_ARTIFACTS"
+base_volume="${KREMA_E2E_VOLUME:-}"
+rm -rf "$base_artifacts"
+mkdir -p "$base_artifacts"
+if [[ "$multi_outputs" == 1 ]]; then
+    (
+        shopt -s nullglob
+        stale=("$base_artifacts"-*out)
+        (( ${#stale[@]} == 0 )) || rm -rf "${stale[@]}"
+    )
+fi
+
 shard_dir="$(mktemp -d -t krema-e2e-shards.XXXXXX)"
 shard_state="$shard_dir"
-# Split the CPUs between the shards' llvmpipe renderers (kwin and krema);
-# by default each would start one thread per CPU and oversubscribe them.
-threads=$(($(getconf _NPROCESSORS_ONLN) / shards))
-((threads >= 1)) || threads=1
+
+discovered_outputs=()
+if [[ "$multi_outputs" == 1 ]]; then
+    discover_dir="$shard_dir/discover"
+    mkdir -m 01777 "$discover_dir"
+    discover_rc=0
+    KREMA_E2E_LIST_MULTI_OUTPUTS=1 \
+    KREMA_E2E_ARTIFACTS="$discover_dir" \
+        "$repo/tests/appium/run-e2e.sh" "$@" >/dev/null || discover_rc=$?
+    if (( discover_rc != 0 )); then
+        rm -rf "$shard_dir"
+        finish "$discover_rc"
+    fi
+    if [[ -s "$discover_dir/multi-outputs.txt" ]]; then
+        while IFS= read -r out_n; do
+            [[ -n "$out_n" ]] && discovered_outputs+=("$out_n")
+        done <"$discover_dir/multi-outputs.txt"
+    fi
+fi
+
+# Split host CPUs across active concurrent KWin sessions so their llvmpipe
+# renderers do not oversubscribe the runner.
+active_workers=$shards
+(( ${#discovered_outputs[@]} == 0 )) || active_workers=$(( active_workers + 1 ))
+threads=$(( cpus / active_workers ))
+(( threads >= 1 )) || threads=1
 export LP_NUM_THREADS="${LP_NUM_THREADS:-$threads}"
 
-for (( i = 0; i < shards; i++ )); do
+if (( shards == 1 )); then
     (
-        export KREMA_E2E_SHARD="$i/$shards"
-        export KREMA_E2E_ARTIFACTS="$KREMA_E2E_ARTIFACTS/shard-$i"
-        [[ -z "${KREMA_E2E_VOLUME:-}" ]] ||
-            export KREMA_E2E_VOLUME="${KREMA_E2E_VOLUME}-shard-$i"
-        "$repo/tests/appium/run-e2e.sh" "$@" 2>&1
-        echo "$?" >"$shard_dir/rc.$i"
-    ) | awk -v s="$i" '{ print "[shard " s "] " $0; fflush() }' &
-done
+        rc_main=0
+        KREMA_E2E_ARTIFACTS="$base_artifacts" \
+            "$repo/tests/appium/run-e2e.sh" "$@" 2>&1 || rc_main=$?
+        echo "$rc_main" >"$shard_dir/rc.0"
+    ) | awk '{ print "[main] " $0; fflush() }' &
+else
+    workqueue_dir="$shard_dir/workqueue"
+    mkdir -m 01777 "$workqueue_dir"
+    for (( i = 0; i < shards; i++ )); do
+        (
+            rc_shard=0
+            shard_env=(
+                "KREMA_E2E_SHARD=$i/$shards"
+                "KREMA_E2E_WORKQUEUE=$workqueue_dir"
+                "KREMA_E2E_ARTIFACTS=$base_artifacts/shard-$i"
+            )
+            [[ -z "$base_volume" ]] || shard_env+=("KREMA_E2E_VOLUME=${base_volume}-shard-$i")
+            env "${shard_env[@]}" "$repo/tests/appium/run-e2e.sh" "$@" 2>&1 || rc_shard=$?
+            echo "$rc_shard" >"$shard_dir/rc.$i"
+        ) | awk -v s="$i" '{ print "[shard " s "] " $0; fflush() }' &
+    done
+fi
+
+if (( ${#discovered_outputs[@]} > 0 )); then
+    (
+        multi_rc=0
+        for out_n in "${discovered_outputs[@]}"; do
+            out_rc=0
+            (
+                rc_leg=0
+                out_env=(
+                    -u KREMA_E2E_SHARD
+                    -u KREMA_E2E_WORKQUEUE
+                    "KREMA_E2E_OUTPUT_COUNT=$out_n"
+                    "KREMA_E2E_ARTIFACTS=${base_artifacts}-${out_n}out"
+                )
+                [[ -z "$base_volume" ]] || out_env+=("KREMA_E2E_VOLUME=${base_volume}-${out_n}out")
+                env "${out_env[@]}" "$repo/tests/appium/run-e2e.sh" --only-matching-outputs "$@" 2>&1 || rc_leg=$?
+                echo "$rc_leg" >"$shard_dir/rc.out-$out_n"
+            ) | awk -v o="${out_n}out" '{ print "[" o "] " $0; fflush() }'
+            [[ -f "$shard_dir/rc.out-$out_n" ]] && out_rc="$(<"$shard_dir/rc.out-$out_n")"
+            [[ "$out_rc" == 0 ]] || multi_rc=1
+        done
+        echo "$multi_rc" >"$shard_dir/rc.multi"
+    ) &
+fi
 
 wait
 
@@ -261,5 +349,10 @@ for (( i = 0; i < shards; i++ )); do
     [[ -f "$shard_dir/rc.$i" ]] && shard_rc="$(<"$shard_dir/rc.$i")"
     [[ "$shard_rc" == 0 ]] || rc=1
 done
+if (( ${#discovered_outputs[@]} > 0 )); then
+    multi_rc="missing"
+    [[ -f "$shard_dir/rc.multi" ]] && multi_rc="$(<"$shard_dir/rc.multi")"
+    [[ "$multi_rc" == 0 ]] || rc=1
+fi
 rm -rf "$shard_dir"
 finish "$rc"

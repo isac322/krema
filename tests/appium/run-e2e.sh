@@ -35,6 +35,9 @@
 #                            rest). tests/distro/run-distro-e2e.sh sets it from
 #                            KREMA_E2E_SHARDS; the default build volume then
 #                            gets a -shard-<i> suffix.
+#   KREMA_E2E_WORKQUEUE      shared host directory for dynamic atomic test
+#                            claiming across concurrent workers (overrides
+#                            static KREMA_E2E_SHARD partitioning when set)
 #
 # If the host has /dev/dri (e.g. after `sudo tests/appium/setup-vgem.sh`), it
 # is passed through so KWin composites with OpenGL on the vgem render node:
@@ -103,6 +106,15 @@ build_args="-v $volume:/build"
 if [ -n "${KREMA_E2E_BINARY:-}" ]; then
     build_args=
 fi
+workqueue_args=
+if [ -n "${KREMA_E2E_WORKQUEUE:-}" ]; then
+    [ -d "$KREMA_E2E_WORKQUEUE" ] || {
+        echo "KREMA_E2E_WORKQUEUE=$KREMA_E2E_WORKQUEUE is not a directory" >&2
+        exit 64
+    }
+    workqueue_host=$(cd "$KREMA_E2E_WORKQUEUE" && pwd -P)
+    workqueue_args="-v $workqueue_host:/workqueue -e KREMA_E2E_WORKQUEUE=/workqueue"
+fi
 
 # shellcheck disable=SC2086
 docker run --rm --init $tty_args $platform_args \
@@ -110,8 +122,10 @@ docker run --rm --init $tty_args $platform_args \
     -v "$repo:/src:ro" \
     $build_args \
     -v "$artifacts:/artifacts" \
+    $workqueue_args \
     -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     -e KREMA_E2E_SCREEN_WIDTH -e KREMA_E2E_SCREEN_HEIGHT -e KREMA_E2E_OUTPUT_COUNT \
-    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD -e LP_NUM_THREADS \
+    -e KREMA_E2E_BINARY -e KREMA_E2E_DISTRO -e KREMA_E2E_SHARD \
+    -e KREMA_E2E_LIST_MULTI_OUTPUTS -e LP_NUM_THREADS \
     $dri_args ${KREMA_E2E_DOCKER_ARGS:-} \
     "$image" sh /src/tests/appium/entrypoint.sh "$@"

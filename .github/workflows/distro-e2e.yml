@@ -18,9 +18,9 @@
 # Azure runner kernel ships none), compositing with OpenGL through llvmpipe.
 # The module for the runner's kernel comes from ghcr.io (ci-images.yml
 # builds it on the runner kernel); on a kernel it has not seen yet, it is
-# built here. fedora-43 and ubuntu-26.04 additionally rerun the
-# @pytest.mark.outputs(2) tests with two virtual outputs and the selected
-# subset test with three; every other target skips the multi-output tests.
+# built here. fedora-43 and ubuntu-26.04 also discover every
+# @pytest.mark.outputs(n) topology (n >= 2) and run each matching multi-output
+# session concurrently alongside the main suite; other targets skip them.
 #
 # ccache: the package build compiles through ccache (KREMA_CCACHE_DIR),
 # restored per target from the default branch's seed (ci-images.yml runs the
@@ -41,8 +41,9 @@
 # harness is tests/distro. tests/unit, qml, kwin, integration and e2e
 # (scenario docs) and Markdown are never used here.
 #
-# The suite runs sharded in three (KREMA_E2E_SHARDS=3;
-# tests/distro/run-distro-e2e.sh), all shards' JUnit files feed the summary.
+# The suite runs across dynamic atomic-workqueue worker containers
+# (KREMA_E2E_SHARDS=auto, i.e. max(1, CPUs - 1); tests/distro/run-distro-e2e.sh),
+# and all workers' JUnit files feed the summary.
 # A thumbnail whose PipeWire buffer set arrives untyped (an upstream
 # PipeWire/KWin race that load makes likelier; see tests/appium/krema_e2e/
 # preview.py) is renegotiated once by the preview oracle and reported as a
@@ -128,6 +129,7 @@ jobs:
         target: ${{ fromJSON(needs.targets.outputs.matrix) }}
     env:
       TARGET: ${{ matrix.target }}
+      MULTI_OUTPUTS: ${{ (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -181,7 +183,8 @@ jobs:
       - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }})
         id: main
         env:
-          KREMA_E2E_SHARDS: "3"
+          KREMA_E2E_SHARDS: auto
+          KREMA_E2E_MULTI_OUTPUTS: ${{ env.MULTI_OUTPUTS }}
           KREMA_CCACHE_DIR: ${{ runner.temp }}/ccache
         run: tests/distro/run-distro-e2e.sh "$TARGET" -rs
 
@@ -212,57 +215,35 @@ jobs:
           path: tests/appium/artifacts-distro-${{ matrix.target }}
           if-no-files-found: ignore
 
-      - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }}, 2 outputs)
-        # KREMA_E2E_OUTPUT_COUNT=2 gives two side-by-side virtual outputs;
-        # -m outputs collects multi-output tests, with the three-output node
-        # explicitly deselected so this session runs only outputs(2) tests.
-        # Reuses the package and image the main run built, and runs even when
-        # that run failed on a test.
-        if: always() && (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04') && (steps.main.outcome == 'success' || steps.main.outcome == 'failure')
-        env:
-          KREMA_E2E_OUTPUT_COUNT: "2"
-          KREMA_DISTRO_SKIP_IMAGE_BUILD: "1"
-          KREMA_E2E_ARTIFACTS: tests/appium/artifacts-distro-${{ matrix.target }}-2out
+      - name: JUnit summary (${{ matrix.target }}, multi-output)
+        if: always() && env.MULTI_OUTPUTS == '1'
         run: |
-          tests/distro/run-distro-e2e.sh "$TARGET" -m outputs -rs \
-            --deselect test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts
-
-      - name: JUnit summary (${{ matrix.target }}, 2 outputs)
-        if: always() && (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04')
-        run: |
-          python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET (2 outputs)" \
-            "tests/appium/artifacts-distro-$TARGET-2out/junit.xml" \
-            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
+          shopt -s nullglob
+          rc=0
+          mapfile -t out_dirs < <(
+            for d in tests/appium/artifacts-distro-"$TARGET"-*out; do
+              n="${d##*-}"
+              n="${n%out}"
+              [[ "$n" =~ ^[0-9]+$ ]] && printf '%d\t%s\n' "$n" "$d"
+            done | sort -n | cut -f2-
+          )
+          if (( ${#out_dirs[@]} == 0 )); then
+            python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET (multi-output)" \
+              "tests/appium/artifacts-distro-$TARGET-multi-output/junit.xml" >>"$GITHUB_STEP_SUMMARY"
+          else
+            for out_dir in "${out_dirs[@]}"; do
+              n="${out_dir##*-}"
+              n="${n%out}"
+              python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET ($n outputs)" \
+                "$out_dir/junit.xml" \
+                --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY" || rc=1
+            done
+          fi
+          exit "$rc"
 
       - uses: actions/upload-artifact@v7
-        if: always() && (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04')
+        if: always() && env.MULTI_OUTPUTS == '1'
         with:
-          name: distro-e2e-${{ matrix.target }}-2out
-          path: tests/appium/artifacts-distro-${{ matrix.target }}-2out
-          if-no-files-found: ignore
-
-      - name: Run tests/distro/run-distro-e2e.sh (${{ matrix.target }}, 3 outputs)
-        # Exact node selection avoids rerunning the two-output contracts.
-        # Reuse the main run's package and image even if its tests failed.
-        if: always() && (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04') && (steps.main.outcome == 'success' || steps.main.outcome == 'failure')
-        env:
-          KREMA_E2E_OUTPUT_COUNT: "3"
-          KREMA_DISTRO_SKIP_IMAGE_BUILD: "1"
-          KREMA_E2E_ARTIFACTS: tests/appium/artifacts-distro-${{ matrix.target }}-3out
-        run: |
-          tests/distro/run-distro-e2e.sh "$TARGET" \
-            test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts -rs
-
-      - name: JUnit summary (${{ matrix.target }}, 3 outputs)
-        if: always() && (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04')
-        run: |
-          python3 .github/scripts/junit-summary.py "Distro E2E: $TARGET (3 outputs)" \
-            "tests/appium/artifacts-distro-$TARGET-3out/junit.xml" \
-            --forbid-skip 'QPainter|render node' >>"$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v7
-        if: always() && (matrix.target == 'fedora-43' || matrix.target == 'ubuntu-26.04')
-        with:
-          name: distro-e2e-${{ matrix.target }}-3out
-          path: tests/appium/artifacts-distro-${{ matrix.target }}-3out
+          name: distro-e2e-${{ matrix.target }}-multi-output
+          path: tests/appium/artifacts-distro-${{ matrix.target }}-*out
           if-no-files-found: ignore

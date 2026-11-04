@@ -44,21 +44,18 @@ Run the installed-package multi-output cases on both targets:
 for TARGET in fedora-43 ubuntu-26.04; do
     KREMA_E2E_OUTPUT_COUNT=2 \
     KREMA_E2E_ARTIFACTS=tests/appium/artifacts-distro-$TARGET-2out \
-        tests/distro/run-distro-e2e.sh "$TARGET" -m outputs -rs \
-        --deselect test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts
+        tests/distro/run-distro-e2e.sh "$TARGET" --only-matching-outputs -rs
     KREMA_E2E_OUTPUT_COUNT=3 \
     KREMA_E2E_ARTIFACTS=tests/appium/artifacts-distro-$TARGET-3out \
-        tests/distro/run-distro-e2e.sh "$TARGET" \
-        test_06_settings.py::test_set012_selected_subset_preserves_docks_and_routes_shortcuts -rs
+        tests/distro/run-distro-e2e.sh "$TARGET" --only-matching-outputs -rs
 done
 ```
 
-The two-output leg runs SET-008, SET-012's native switch,
-fallback-warning, disconnected-row removal, persistence, and Settings-lock
-checks, the SET-013 shared click-policy persistence case, and the VIS-008
-follow-active-screen preview-hold cases. It explicitly deselects the
-three-output node. The three-output leg runs SET-012's primary-excluding
-subset, retained dock/preview surfaces, and shortcut-routing checks.
+`--only-matching-outputs` selects every test marked `@pytest.mark.outputs(n)`
+for the active `KREMA_E2E_OUTPUT_COUNT` and deselects tests that need a
+different output count. Setting `KREMA_E2E_MULTI_OUTPUTS=1` on a full
+`run-distro-e2e.sh` run discovers all `@pytest.mark.outputs(n)` counts (`n >= 2`)
+automatically and runs each `<n>out` session in parallel with the 1-output suite.
 
 These commands build/install the target package as needed. To reuse an
 image already built for that target, add `KREMA_DISTRO_SKIP_IMAGE_BUILD=1`
@@ -126,14 +123,16 @@ What it does (each phase prints `[distro] <phase>: <seconds>s`):
    declaration also makes krema privileged for xdg-activation; on KWin < 6.5
    without it krema cannot raise its own Settings window from the dock.
    Tier 2 keeps the checks off: a krema built from source has no installed
-   desktop file. With `KREMA_E2E_SHARDS=N` (N > 1) the script instead starts
-   N `run-e2e.sh` containers concurrently: shard `i` (0-based) gets
-   `KREMA_E2E_SHARD=i/N` (the suite deselects all but every N-th collected
-   test), writes to `artifacts-distro-<target>/shard-<i>/`, and is prefixed
-   `[shard i]` in the log; the script fails if any shard fails, after all
-   shards finish. Each shard is a full session — own container, KWin,
-   D-Bus session and WebDriver — so N is bounded by host CPU/RAM, and the
-   llvmpipe compositors contend for CPU.
+
+   With `KREMA_E2E_SHARDS=N` (`N > 1`, or `auto` for `max(1, CPUs - 1)`) the
+   script starts `N` `run-e2e.sh` worker containers concurrently sharing an
+   atomic workqueue (`KREMA_E2E_WORKQUEUE`): worker `i` (0-based) claims tests
+   dynamically as it finishes earlier items, writes to
+   `artifacts-distro-<target>/shard-<i>/`, and is prefixed `[shard i]` in the
+   log; the script fails if any worker fails, after all workers finish. Each
+   worker runs its own container, KWin, D-Bus session, and WebDriver, so `N`
+   is bounded by host CPU/RAM and `LP_NUM_THREADS` splits host CPUs across
+   active sessions.
 
 Without access to ghcr.io (offline, no login, fork) or on an arm64 host
 (only amd64 images are published) every image is built locally from the
@@ -149,7 +148,8 @@ Environment:
 | `KREMA_CI_REGISTRY` | image repository (default `ghcr.io/isac322/krema-ci`) |
 | `KREMA_E2E_ARTIFACTS` | artifacts directory (default `tests/appium/artifacts-distro-<target>`) |
 | `KREMA_E2E_PLATFORM` | container platform; defaults to `linux/amd64` for `arch` and `opensuse-slowroll` |
-| `KREMA_E2E_SHARDS` | number of concurrent suite shards (default 1 = one `run-e2e.sh`); with N > 1, `LP_NUM_THREADS` defaults to CPUs / N so the shards' llvmpipe renderers do not oversubscribe the CPUs |
+| `KREMA_E2E_SHARDS` | number of concurrent dynamic-workqueue workers (default `1`; `auto` = `max(1, CPUs - 1)`); `LP_NUM_THREADS` defaults to `CPUs / active_workers` so llvmpipe renderers do not oversubscribe host CPUs |
+| `KREMA_E2E_MULTI_OUTPUTS` | when `1`, discovers every `@pytest.mark.outputs(n)` count (`n >= 2`) in the filtered collection and runs each matching session sequentially in one parallel lane alongside the 1-output suite, writing to `<artifacts>-<n>out/` |
 | other `KREMA_E2E_*` | as in `tests/appium/run-e2e.sh` (screen size, output count, docker args) |
 
 ## Images
@@ -301,9 +301,9 @@ headers and builds it. The job restores the target's ccache
 (`KREMA_CCACHE_DIR`, keyed on the builder reference; saved only by
 default-branch runs, which is where Actions caches are shared with every
 pull request). It then runs `tests/distro/run-distro-e2e.sh <target> -rs`
-with `KREMA_E2E_SHARDS=3`: three concurrent `kwin_wayland --virtual` sessions
-compositing with OpenGL through llvmpipe on the vgem device, each running
-every third collected test (all targets, including `ubuntu-25.04`; its old
+with `KREMA_E2E_SHARDS=auto` (`3` dynamic atomic-workqueue workers on 4-vCPU
+runners): concurrent `kwin_wayland --virtual` sessions compositing with OpenGL
+through llvmpipe on the vgem device (all targets, including `ubuntu-25.04`; its old
 preview flake was a PipeWire/KWin untyped-buffer race that
 `tests/appium/krema_e2e/preview.py` now renegotiates once). The job adds a
 JUnit summary of every `junit.xml` (one per shard) to the step summary (a
@@ -319,19 +319,17 @@ the rolling targets, weekly for the others and `ctest`, and on demand.
 Pull requests never push; a pull request that changes an image input builds
 the new image in its own jobs.
 
-Back in `distro-e2e.yml`, the `fedora-43` and `ubuntu-26.04` jobs then run
-the two- and three-output legs from
-[Selected monitor reproduction](#selected-monitor-reproduction), adding
-`KREMA_DISTRO_SKIP_IMAGE_BUILD=1` to reuse each job's installed package
-image. These legs are unsharded and have separate JUnit summaries and
-artifacts:
+On `fedora-43` and `ubuntu-26.04`, `distro-e2e.yml` also sets
+`KREMA_E2E_MULTI_OUTPUTS=1` so the multi-output sessions discovered from
+`@pytest.mark.outputs(n)` (`n >= 2`) run concurrently alongside the 3 main
+workers, reusing each job's installed package image. Each discovered output
+count writes its own report and summary section and uploads under
+`distro-e2e-<target>-multi-output`:
 
-| Target | Outputs | JUnit report | Artifact |
+| Target | Discovered outputs (current suite) | JUnit report | Artifact |
 |---|---|---|---|
-| `fedora-43` | 2 | `tests/appium/artifacts-distro-fedora-43-2out/junit.xml` | `distro-e2e-fedora-43-2out` |
-| `fedora-43` | 3 | `tests/appium/artifacts-distro-fedora-43-3out/junit.xml` | `distro-e2e-fedora-43-3out` |
-| `ubuntu-26.04` | 2 | `tests/appium/artifacts-distro-ubuntu-26.04-2out/junit.xml` | `distro-e2e-ubuntu-26.04-2out` |
-| `ubuntu-26.04` | 3 | `tests/appium/artifacts-distro-ubuntu-26.04-3out/junit.xml` | `distro-e2e-ubuntu-26.04-3out` |
+| `fedora-43` | 2, 3 | `tests/appium/artifacts-distro-fedora-43-<n>out/junit.xml` | `distro-e2e-fedora-43-multi-output` |
+| `ubuntu-26.04` | 2, 3 | `tests/appium/artifacts-distro-ubuntu-26.04-<n>out/junit.xml` | `distro-e2e-ubuntu-26.04-multi-output` |
 
 The main one-output run intentionally skips SET-008's two-output cases,
 SET-012's two- and three-output cases, and the SET-013 and VIS-008

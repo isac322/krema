@@ -24,7 +24,10 @@ function isLocalFile(url) {
 }
 
 function isPortalTransferToken(url) {
-    return /^https?:\/\/i_[A-Za-z0-9_-]+(?:[/?#].*)?$/.test(String(url))
+    // Qt's portal transfer key is exposed as an HTTP URL with an opaque,
+    // dotless host containing an underscore (the exact prefix is not stable
+    // across desktop environments).
+    return /^https?:\/\/[A-Za-z0-9-]+_[A-Za-z0-9_-]+(?:[/?#].*)?$/.test(String(url))
 }
 
 function normalizedUrls(drop) {

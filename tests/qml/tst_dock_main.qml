@@ -70,6 +70,15 @@ Item {
             compare(String(ExternalDrop.normalizedUrls(drop)[0]), "file:///tmp/registered.desktop")
         }
 
+        function test_externalDrop_recognizes_other_portal_token_shapes() {
+            let drop = {
+                hasUrls: true,
+                urls: ["http://bdv6bbzxlr4c_d1ku1rowq"],
+                text: "file:///tmp/registered.desktop",
+            }
+            compare(String(ExternalDrop.normalizedUrls(drop)[0]), "file:///tmp/registered.desktop")
+        }
+
         function test_externalDrop_keeps_native_local_urls() {
             let drop = {
                 hasUrls: true,

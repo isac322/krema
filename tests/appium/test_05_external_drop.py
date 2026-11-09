@@ -100,7 +100,9 @@ def recorded_drag(start, end, label):
         time.sleep(1.2)
     finally:
         stop.set()
-        recorder.join(timeout=15)
+        # kwin.screenshot() waits up to 30 seconds for its helper subprocess;
+        # allow that bounded operation to finish before declaring cleanup stuck.
+        recorder.join(timeout=35)
         assert not recorder.is_alive(), "native recorder did not stop"
         (output / "frames.json").write_text(json.dumps(rows, indent=2))
         concat = ["ffconcat version 1.0"]

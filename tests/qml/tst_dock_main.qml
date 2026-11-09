@@ -79,6 +79,15 @@ Item {
             compare(String(ExternalDrop.normalizedUrls(drop)[0]), "file:///tmp/registered.desktop")
         }
 
+        function test_externalDrop_keeps_remote_mime_with_unrelated_local_text_without_native_urls() {
+            let drop = {
+                hasUrls: false,
+                getDataAsString: function(format) { return "https://example.org/document" },
+                text: "file:///tmp/unrelated.txt",
+            }
+            compare(ExternalDrop.normalizedUrls(drop), ["https://example.org/document"])
+        }
+
         function test_externalDrop_keeps_native_local_urls() {
             let drop = {
                 hasUrls: true,

@@ -34,8 +34,9 @@ function normalizedUrls(drop) {
     let mimeUrls = typeof drop.getDataAsString === "function"
         ? parseUris(drop.getDataAsString("text/uri-list")) : []
     let textUrls = typeof drop.text === "string" ? parseUris(drop.text) : []
+    let mimeTokensOnly = mimeUrls.length > 0 && mimeUrls.every(isPortalTransferToken)
     let fallback = mimeUrls.length > 0 ? mimeUrls : textUrls
-    if (!mimeUrls.some(isLocalFile) && textUrls.some(isLocalFile)) {
+    if (mimeTokensOnly && textUrls.some(isLocalFile)) {
         fallback = textUrls
     }
     if (!drop.hasUrls || !drop.urls || drop.urls.length === 0) {

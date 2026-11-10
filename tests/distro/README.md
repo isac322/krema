@@ -249,6 +249,7 @@ plus `arch`:
 | `fedora-42` | fedora | `fedora:42` | amd64, arm64 |
 | `fedora-43` | fedora | `fedora:43` | amd64, arm64 |
 | `fedora-44` | fedora | `fedora:44` | amd64, arm64 |
+| `fedora-45` | fedora | `fedora:45` | amd64, arm64 |
 | `fedora-rawhide` | fedora | `fedora:rawhide` | amd64, arm64 |
 | `opensuse-tumbleweed` | suse | `opensuse/tumbleweed` | amd64, arm64 |
 | `opensuse-slowroll` | suse | `opensuse/tumbleweed` switched to the Slowroll repositories | amd64 |

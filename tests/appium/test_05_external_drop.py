@@ -6,11 +6,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import time
 from xml.etree import ElementTree
+
+from PIL import ImageDraw
 
 import pytest
 
@@ -44,6 +48,71 @@ def unchanged_for(krema, expected, seconds=1.5):
         assert krema.is_running(), str(krema.log_path)
         assert pins(krema) == expected
         time.sleep(0.05)
+
+
+def recorded_drag(start, end, label):
+    """Use the existing native ScreenShot2 path for opt-in drag evidence."""
+    if os.environ.get("KREMA_CAPTURE_EXTERNAL_DROPS") != "1":
+        inp.drag(start, end, steps=24, step_ms=60, hold_ms=400)
+        return
+    assert kwin.can_capture(), "external-drop recording requires native capture"
+    output = env.artifact_path(f"pr137/{label}-video")
+    output.mkdir(parents=True, exist_ok=False)
+    stop = threading.Event()
+    ready = threading.Event()
+    dragging = threading.Event()
+    rows, errors = [], []
+
+    def capture():
+        try:
+            while not stop.is_set():
+                name = f"{len(rows):06d}.png"
+                frame = kwin.screenshot(output / name)
+                x, y = kwin.cursor_pos()
+                draw = ImageDraw.Draw(frame)
+                # ScreenShot2 omits the hardware cursor. Overlay the observed
+                # native position, not an inferred or scripted pointer path.
+                if dragging.is_set():
+                    draw.ellipse((x - 9, y - 9, x + 9, y + 9), outline="orange", width=2)
+                draw.polygon([(x, y), (x + 2, y + 18), (x + 7, y + 13),
+                              (x + 12, y + 22), (x + 16, y + 20), (x + 11, y + 11),
+                              (x + 18, y + 10)], fill="white", outline="black")
+                frame.save(output / name)
+                rows.append({"frame": name, "timestamp_ns": time.monotonic_ns(),
+                             "cursor": [x, y]})
+                ready.set()
+                stop.wait(0.075)
+        except BaseException as error:
+            errors.append(repr(error))
+            ready.set()
+
+    inp.move_path(inp.line(kwin.cursor_pos(), start, 20), step_ms=30)
+    recorder = threading.Thread(target=capture, daemon=True)
+    recorder.start()
+    try:
+        assert ready.wait(15), "no first native frame"
+        assert not errors, errors
+        # Presentation holds only; test readiness remains state-based.
+        time.sleep(0.6)
+        dragging.set()
+        inp.drag(start, end, steps=24, step_ms=60, hold_ms=400)
+        dragging.clear()
+        time.sleep(1.2)
+    finally:
+        stop.set()
+        # kwin.screenshot() waits up to 30 seconds for its helper subprocess;
+        # allow that bounded operation to finish before declaring cleanup stuck.
+        recorder.join(timeout=35)
+        assert not recorder.is_alive(), "native recorder did not stop"
+        (output / "frames.json").write_text(json.dumps(rows, indent=2))
+        concat = ["ffconcat version 1.0"]
+        for a, b in zip(rows, rows[1:]):
+            concat.extend([f"file '{a['frame']}'", "option framerate 1000",
+                           f"duration {(b['timestamp_ns'] - a['timestamp_ns']) / 1e9:.9f}"])
+        if rows:
+            concat.append(f"file '{rows[-1]['frame']}'")
+        (output / "capture.ffconcat").write_text("\n".join(concat) + "\n")
+    assert not errors and len(rows) >= 2, errors
 
 
 @pytest.mark.kremarc(SETTINGS)
@@ -103,7 +172,7 @@ def external_drop(krema, path, target, label):
         start = (window.client_x + window.client_width // 2,
                  window.client_y + window.client_height // 2)
         end = krema.settled_item_center(target)
-        inp.drag(start, end, steps=24, step_ms=60, hold_ms=400)
+        recorded_drag(start, end, label)
         events_seen = wait_until(lambda: records(events) if any(r.get("event") == "drag-finished" for r in records(events)) else None,
                                  message=f"real QDrag {label} finished")
         started = next(r for r in events_seen if r.get("event") == "drag-start")
@@ -148,12 +217,17 @@ def test_dnd007_external_launcher_and_document_drops(krema, tmp_path):
         for path in desktop_paths], indent=2))
     krema.start()
     krema.wait_for_item(env.TEST_APP_NAME)
+    capture = kwin.can_capture()
+    if capture:
+        krema.screenshot("external-drop-baseline")
     for label, path in [("unknown", unknown), ("repeated-suffix", repeated)]:
         before_names = wait_stable(krema.item_names)
         external_drop(krema, path, env.TEST_APP_NAME, label)
         unchanged_for(krema, expected)
         assert wait_stable(krema.item_names) == before_names
         assert not receipt.exists(), "rejected desktop unexpectedly launched the document receiver"
+        if capture:
+            krema.screenshot(f"external-drop-rejected-{label}")
     for label, path, desktop, name in [
             ("registered", desktop_paths[0], desktop_paths[0], "PR137 installed A"),
             ("symlink", symlink, desktop_paths[1], "PR137 installed B")]:
@@ -163,6 +237,8 @@ def test_dnd007_external_launcher_and_document_drops(krema, tmp_path):
         krema.wait_for_item(name)
         assert krema.item_names().count(name) == 1
         assert "Pinned" in description(krema, name)
+        if capture:
+            krema.screenshot(f"external-drop-registered-{label}")
     # Same installed file a second time must not add a duplicate.
     external_drop(krema, desktop_paths[0], env.TEST_APP_NAME, "registered-again")
     unchanged_for(krema, expected)

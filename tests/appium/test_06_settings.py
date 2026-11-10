@@ -246,9 +246,27 @@ def scroll_into_view(krema: Krema, xpath: str):
 def open_page(krema: Krema, name: str) -> None:
     """Show page ``name`` through its Settings sidebar entry."""
     item = krema.wait_for(f"{SIDEBAR}[@name='{name}']")
-    if not has_state(item, "checked"):
+    if has_state(item, "checked"):
+        return
+
+    def ready():
+        if not has_state(item, "showing") or not has_state(item, "sensitive"):
+            return None
+        rect = krema.screen_rect(item, "settings")
+        surface = krema.surface_rect("settings")
+        if rect.width <= 0 or rect.height <= 0 or surface is None:
+            return None
+        return rect if surface.contains(*rect.center) else None
+
+    wait_stable(ready, duration=0.2, timeout=10, accept=lambda rect: rect is not None, interval=0.05)
+    for attempt in range(2):
         click_el(krema, item)
-    wait_until(lambda: current_page(krema) == name, message=f"page {name} selected")
+        try:
+            wait_until(lambda: current_page(krema) == name, timeout=5, message=f"page {name} selected")
+            return
+        except WaitTimeout:
+            if attempt == 1:
+                raise
 
 
 def current_choice(krema: Krema, row: str) -> str:
